@@ -16,7 +16,7 @@ static char* threadRunner(Thread* thread, Blob* body, Variant* arguments, uint32
   lua_pushcfunction(L, luax_getstack);
   int errhandler = lua_gettop(L);
 
-  if (!luaL_loadbuffer(L, body->data, body->size, body->name)) {
+  if (!luax_loadbufferx(L, body->data, body->size, body->name, NULL)) {
     for (uint32_t i = 0; i < argumentCount; i++) {
       luax_pushvariant(L, &arguments[i]);
     }

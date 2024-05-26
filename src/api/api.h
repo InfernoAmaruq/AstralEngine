@@ -93,8 +93,8 @@ typedef struct {
 #undef lua_pushcclosure
 #define lua_pushcfunction(L, fn) lua_pushcclosurek(L, fn, NULL, 0, NULL)
 #define lua_pushcclosure(L, fn, n) lua_pushcclosurek(L, fn, NULL, n, NULL)
-#define luaL_ref lua_ref
-#define luaL_unref lua_unref
+#define luaL_ref(L, idx) lua_ref(L, -1), lua_pop(L, 1)
+#define luaL_unref(L, idx, ref) lua_unref(L, ref)
 #endif
 
 #if LUA_VERSION_NUM > 501
@@ -129,6 +129,7 @@ typedef struct {
 #define luax_pushnilerror(L) lua_pushnil(L), lua_pushstring(L, lovrGetError()), 2
 
 void luax_preload(lua_State* L);
+int luax_require(lua_State* L);
 void _luax_registertype(lua_State* L, const char* name, const luaL_Reg* functions, void (*destructor)(void*));
 void* _luax_totype(lua_State* L, int index, uint64_t hash);
 void* _luax_checktype(lua_State* L, int index, uint64_t hash, const char* debug);
@@ -177,6 +178,7 @@ int luax_pushvariant(lua_State* L, struct Variant* variant);
 #ifndef LOVR_DISABLE_FILESYSTEM
 void* luax_readfile(const char* filename, size_t* bytesRead);
 bool luax_writefile(const char* filename, const void* data, size_t size);
+int luax_loadmodule(lua_State* L);
 #endif
 
 #ifndef LOVR_DISABLE_GRAPHICS

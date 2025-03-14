@@ -251,7 +251,7 @@ static void luax_checkstruct(lua_State* L, int index, const DataField* structure
 
     if (lua_isnil(L, -1)) {
       memset(data + field->offset, 0, MAX(field->length, 1) * field->stride);
-    } else if (typeComponents[field->type] > 1 && lua_type(L, -1) == LUA_TNUMBER) {
+    } else if (field->length == 0 && field->fieldCount == 0 && typeComponents[field->type] > 1 && lua_type(L, -1) == LUA_TNUMBER) {
       // Need to special case situation where number is provided for vector field,
       // luax_checkbufferdata doesn't handle this properly
       int n = typeComponents[field->type];

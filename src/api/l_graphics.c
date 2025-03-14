@@ -579,6 +579,7 @@ static uint32_t luax_checkbufferformat(lua_State* L, int index, DataField* field
     lua_getfield(L, -1, "type");
     if (lua_isnil(L, -1)) lua_pop(L, 1), lua_rawgeti(L, -1, 2);
     if (lua_istable(L, -1)) {
+      field->type = ~0u;
       field->fields = fields + *count;
       field->fieldCount = luax_checkbufferformat(L, -1, fields, count, max);
     } else if (lua_type(L, -1) == LUA_TSTRING) {

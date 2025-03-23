@@ -8646,12 +8646,12 @@ static void mipmapTexture(gpu_stream* stream, Texture* texture, uint32_t base, u
     uint32_t srcExtent[3] = {
       MAX(texture->info.width >> (level - 1), 1),
       MAX(texture->info.height >> (level - 1), 1),
-      volumetric ? MAX(texture->info.layers >> (level - 1), 1) : 1
+      volumetric ? MAX(texture->info.layers >> (level - 1), 1) : texture->info.layers
     };
     uint32_t dstExtent[3] = {
       MAX(texture->info.width >> level, 1),
       MAX(texture->info.height >> level, 1),
-      volumetric ? MAX(texture->info.layers >> level, 1) : 1
+      volumetric ? MAX(texture->info.layers >> level, 1) : texture->info.layers
     };
     gpu_blit(stream, texture->root->gpu, texture->root->gpu, srcOffset, dstOffset, srcExtent, dstExtent, GPU_FILTER_LINEAR);
     if (i != count - 1) {

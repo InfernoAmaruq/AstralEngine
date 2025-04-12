@@ -184,6 +184,7 @@ typedef struct {
   bool scalarBlockLayout;
   bool foveation;
   bool pipelineCacheControl;
+  bool cubicFilter;
 } gpu_extensions;
 
 // State
@@ -1023,7 +1024,8 @@ bool gpu_surface_present(void) {
 bool gpu_sampler_init(gpu_sampler* sampler, gpu_sampler_info* info) {
   static const VkFilter filters[] = {
     [GPU_FILTER_NEAREST] = VK_FILTER_NEAREST,
-    [GPU_FILTER_LINEAR] = VK_FILTER_LINEAR
+    [GPU_FILTER_LINEAR] = VK_FILTER_LINEAR,
+    [GPU_FILTER_CUBIC] = VK_FILTER_CUBIC_IMG
   };
 
   static const VkSamplerMipmapMode mipFilters[] = {
@@ -2658,7 +2660,8 @@ bool gpu_init(gpu_config* config) {
       { "VK_KHR_dynamic_rendering", true, &state.extensions.dynamicRendering },
       { "VK_EXT_scalar_block_layout", true, &state.extensions.scalarBlockLayout },
       { "VK_EXT_fragment_density_map", true, &state.extensions.foveation },
-      { "VK_EXT_pipeline_creation_cache_control", true, &state.extensions.pipelineCacheControl }
+      { "VK_EXT_pipeline_creation_cache_control", true, &state.extensions.pipelineCacheControl },
+      { "VK_IMG_filter_cubic", true, &state.extensions.cubicFilter }
     };
 
     uint32_t extensionCount = 0;
@@ -2818,6 +2821,7 @@ bool gpu_init(gpu_config* config) {
       config->features->float64 = enabled.features.shaderFloat64;
       config->features->int64 = enabled.features.shaderInt64;
       config->features->int16 = enabled.features.shaderInt16;
+      config->features->cubic = state.extensions.cubicFilter;
 
       // Formats
       for (uint32_t i = 0; i < GPU_FORMAT_COUNT; i++) {
@@ -2831,13 +2835,15 @@ bool gpu_init(gpu_config* config) {
             uint32_t sampleMask = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
             uint32_t renderMask = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT | VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT;
             uint32_t blitMask = VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT;
+            uint32_t cubicMask = VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_CUBIC_BIT_IMG;
             uint32_t flags = formatProperties.optimalTilingFeatures;
             config->features->formats[i][j] =
               ((flags & sampleMask) ? GPU_FEATURE_SAMPLE : 0) |
               ((flags & renderMask) == renderMask ? GPU_FEATURE_RENDER : 0) |
               ((flags & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) ? GPU_FEATURE_RENDER : 0) |
               ((flags & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) ? GPU_FEATURE_STORAGE : 0) |
-              ((flags & blitMask) == blitMask ? GPU_FEATURE_BLIT : 0);
+              ((flags & blitMask) == blitMask ? GPU_FEATURE_BLIT : 0) |
+              ((flags & cubicMask) == cubicMask ? GPU_FEATURE_CUBIC : 0);
           }
         }
       }

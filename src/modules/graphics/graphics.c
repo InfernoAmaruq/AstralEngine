@@ -969,6 +969,7 @@ void lovrGraphicsGetFeatures(GraphicsFeatures* features) {
   features->float64 = state.features.float64;
   features->int64 = state.features.int64;
   features->int16 = state.features.int16;
+  features->cubic = state.features.cubic;
 }
 
 void lovrGraphicsGetLimits(GraphicsLimits* limits) {
@@ -1015,7 +1016,8 @@ uint32_t lovrGraphicsGetFormatSupport(uint32_t format, uint32_t features) {
         (((~features & TEXTURE_FEATURE_SAMPLE) || (supports & GPU_FEATURE_SAMPLE)) &&
         ((~features & TEXTURE_FEATURE_RENDER) || (supports & GPU_FEATURE_RENDER)) &&
         ((~features & TEXTURE_FEATURE_STORAGE) || (supports & GPU_FEATURE_STORAGE)) &&
-        ((~features & TEXTURE_FEATURE_BLIT) || (supports & GPU_FEATURE_BLIT))) << i;
+        ((~features & TEXTURE_FEATURE_BLIT) || (supports & GPU_FEATURE_BLIT)) &&
+        ((~features & TEXTURE_FEATURE_CUBIC) || (supports & GPU_FEATURE_CUBIC))) << i;
     } else {
       support |= !!supports << i;
     }
@@ -2945,10 +2947,19 @@ Sampler* lovrSamplerCreate(const SamplerInfo* info) {
   sampler->gpu = (gpu_sampler*) (sampler + 1);
   sampler->info = *info;
 
+  if (sampler->info.mip == FILTER_CUBIC) {
+    sampler->info.mip = FILTER_LINEAR;
+  }
+
+  if (!state.features.cubic) {
+    sampler->info.min = sampler->info.min == FILTER_CUBIC ? FILTER_LINEAR : sampler->info.min;
+    sampler->info.mag = sampler->info.mag == FILTER_CUBIC ? FILTER_LINEAR : sampler->info.mag;
+  }
+
   gpu_sampler_info gpu = {
-    .min = (gpu_filter) info->min,
-    .mag = (gpu_filter) info->mag,
-    .mip = (gpu_filter) info->mip,
+    .min = (gpu_filter) sampler->info.min,
+    .mag = (gpu_filter) sampler->info.mag,
+    .mip = (gpu_filter) sampler->info.mip,
     .wrap[0] = (gpu_wrap) info->wrap[0],
     .wrap[1] = (gpu_wrap) info->wrap[1],
     .wrap[2] = (gpu_wrap) info->wrap[2],

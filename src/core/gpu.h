@@ -190,7 +190,8 @@ bool gpu_surface_present(void);
 
 typedef enum {
   GPU_FILTER_NEAREST,
-  GPU_FILTER_LINEAR
+  GPU_FILTER_LINEAR,
+  GPU_FILTER_CUBIC
 } gpu_filter;
 
 typedef enum {
@@ -667,7 +668,8 @@ enum {
   GPU_FEATURE_SAMPLE  = (1 << 0),
   GPU_FEATURE_RENDER  = (1 << 1),
   GPU_FEATURE_STORAGE = (1 << 2),
-  GPU_FEATURE_BLIT    = (1 << 3)
+  GPU_FEATURE_BLIT    = (1 << 3),
+  GPU_FEATURE_CUBIC   = (1 << 4)
 };
 
 typedef struct {
@@ -685,6 +687,7 @@ typedef struct {
   bool float64;
   bool int64;
   bool int16;
+  bool cubic;
 } gpu_features;
 
 typedef struct {

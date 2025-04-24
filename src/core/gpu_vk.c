@@ -1638,8 +1638,8 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info,
   } else {
     bool depth = info->depth.format;
     uint32_t colorCount = info->attachmentCount;
-    VkAttachmentDescription2 attachments[5];
-    VkAttachmentReference2 references[5];
+    VkAttachmentDescription2 attachments[6];
+    VkAttachmentReference2 references[6];
 
     for (uint32_t i = 0; i < colorCount; i++) {
       references[i] = (VkAttachmentReference2) {
@@ -1679,6 +1679,20 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info,
       };
     }
 
+    if (info->foveated) {
+      uint32_t index = colorCount + depth;
+
+      attachments[index] = (VkAttachmentDescription2) {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+        .format = VK_FORMAT_R8G8_UNORM,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT,
+        .finalLayout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
+      };
+    }
+
     VkSubpassDescription2 subpass = {
       .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
       .viewMask = (1 << info->viewCount) - 1,
@@ -1689,7 +1703,14 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info,
 
     VkRenderPassCreateInfo2 passInfo = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
-      .attachmentCount = colorCount + depth,
+      .pNext = info->foveated ? &(VkRenderPassFragmentDensityMapCreateInfoEXT) {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_CREATE_INFO_EXT,
+        .fragmentDensityMapAttachment = {
+          .attachment = colorCount + depth,
+          .layout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
+        }
+      } : NULL,
+      .attachmentCount = colorCount + depth + info->foveated,
       .pAttachments = attachments,
       .subpassCount = 1,
       .pSubpasses = &subpass

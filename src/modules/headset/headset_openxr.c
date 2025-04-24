@@ -3442,7 +3442,7 @@ static bool openxr_getPass(Pass** pass) {
     return true;
   }
 
-  canvas.foveation = state.swapchains[SWAPCHAIN_COLOR].foveationTextures[state.swapchains[SWAPCHAIN_COLOR].textureIndex];
+  canvas.foveation = state.foveationLevel ? state.swapchains[SWAPCHAIN_COLOR].foveationTextures[state.swapchains[SWAPCHAIN_COLOR].textureIndex] : NULL;
 
   if (!lovrPassSetCanvas(state.pass, &canvas)) {
     return false;

@@ -5964,6 +5964,7 @@ void lovrPassReset(Pass* pass) {
   pass->pipeline->info.depth.format = (gpu_texture_format) (canvas->depth.texture ? canvas->depth.texture->info.format : canvas->depthFormat);
   pass->pipeline->info.multisample.count = canvas->samples;
   pass->pipeline->info.viewCount = pass->views;
+  pass->pipeline->info.foveated = canvas->foveation;
 
   pass->cameraCount = 0;
   pass->viewportCount = 0;

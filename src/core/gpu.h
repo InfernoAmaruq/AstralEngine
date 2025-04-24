@@ -503,6 +503,7 @@ typedef struct {
   gpu_color_state color[4];
   uint32_t attachmentCount;
   uint32_t viewCount;
+  bool foveated;
   const char* label;
 } gpu_pipeline_info;
 

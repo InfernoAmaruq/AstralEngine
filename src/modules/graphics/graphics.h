@@ -50,6 +50,7 @@ typedef struct {
   bool float64;
   bool int64;
   bool int16;
+  bool cubic;
 } GraphicsFeatures;
 
 typedef struct {
@@ -89,7 +90,8 @@ enum {
   TEXTURE_FEATURE_SAMPLE  = (1 << 0),
   TEXTURE_FEATURE_RENDER  = (1 << 1),
   TEXTURE_FEATURE_STORAGE = (1 << 2),
-  TEXTURE_FEATURE_BLIT    = (1 << 3)
+  TEXTURE_FEATURE_BLIT    = (1 << 3),
+  TEXTURE_FEATURE_CUBIC   = (1 << 4)
 };
 
 bool lovrGraphicsInit(GraphicsConfig* config);
@@ -233,7 +235,8 @@ typedef struct {
 
 typedef enum {
   FILTER_NEAREST,
-  FILTER_LINEAR
+  FILTER_LINEAR,
+  FILTER_CUBIC
 } FilterMode;
 
 bool lovrGraphicsGetWindowTexture(Texture** texture);

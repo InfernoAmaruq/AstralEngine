@@ -7963,7 +7963,7 @@ bool lovrPassText(Pass* pass, ColoredString* strings, uint32_t count, float* tra
   wrap /= scale;
 
   Material* material;
-  bool flip = pass->cameras[(pass->cameraCount - 1) * pass->views].projection[5] > 0.f;
+  bool flip = pass->cameraCount > 0 && pass->cameras[(pass->cameraCount - 1) * pass->views].projection[5] > 0.f;
   if (!lovrFontGetVertices(font, strings, count, wrap, halign, valign, vertices, &glyphCount, &lineCount, &material, flip)) {
     stackPop(&thread.stack, stack);
     return false;

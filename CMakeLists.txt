@@ -351,9 +351,14 @@ target_link_libraries(lovr
 )
 
 if(LOVR_SANITIZE)
-  set(LOVR_SANITIZE_FLAGS "-fsanitize=address,undefined" "-O1" "-fno-omit-frame-pointer")
-  target_compile_options(lovr PRIVATE ${LOVR_SANITIZE_FLAGS})
-  target_link_options(lovr PRIVATE ${LOVR_SANITIZE_FLAGS})
+  if(MSVC)
+    target_compile_options(lovr PRIVATE "/fsanitize=address")
+    target_link_options(lovr PRIVATE "/INCREMENTAL:NO")
+  else()
+    set(LOVR_SANITIZE_FLAGS "-fsanitize=address,undefined" "-O1" "-fno-omit-frame-pointer")
+    target_compile_options(lovr PRIVATE ${LOVR_SANITIZE_FLAGS})
+    target_link_options(lovr PRIVATE ${LOVR_SANITIZE_FLAGS})
+  endif()
 endif()
 
 if(LOVR_PROFILE)

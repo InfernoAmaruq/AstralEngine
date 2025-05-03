@@ -409,11 +409,18 @@ group('graphics', function()
       expect({ pass:getDimensions() }).to.equal({ 0, 0 })
     end)
 
-    test(':setCanvas', function()
-      -- depth only
-      texture = lovr.graphics.newTexture(100, 100, { format = 'd32f' })
-      pass = lovr.graphics.newPass({ depth = texture })
-      lovr.graphics.submit(pass)
+    group(':setCanvas', function()
+      test('depth only', function()
+        texture = lovr.graphics.newTexture(100, 100, { format = 'd32f' })
+        pass = lovr.graphics.newPass({ depth = texture })
+        lovr.graphics.submit(pass)
+      end)
+
+      test('no depth', function()
+        texture = lovr.graphics.newTexture(100, 100)
+        pass = lovr.graphics.newPass({ texture, depth = false })
+        lovr.graphics.submit(pass)
+      end)
     end)
 
     test(':send', function()

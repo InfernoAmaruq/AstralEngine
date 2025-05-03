@@ -1605,7 +1605,7 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info,
     .viewMask = (1 << info->viewCount) - 1,
     .colorAttachmentCount = info->attachmentCount,
     .pColorAttachmentFormats = colorFormats,
-    .depthAttachmentFormat = convertFormat(info->depth.format, LINEAR)
+    .depthAttachmentFormat = info->depth.format ? convertFormat(info->depth.format, LINEAR) : VK_FORMAT_UNDEFINED
   };
 
   for (uint32_t i = 0; i < info->attachmentCount; i++) {
@@ -1969,7 +1969,7 @@ void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas) {
       };
     }
 
-    bool hasStencil = canvas->depth.texture->aspect & VK_IMAGE_ASPECT_STENCIL_BIT;
+    bool hasStencil = canvas->depth.texture && (canvas->depth.texture->aspect & VK_IMAGE_ASPECT_STENCIL_BIT);
 
     if (canvas->depth.texture) {
       depth = (VkRenderingAttachmentInfo) {
@@ -2015,7 +2015,7 @@ void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas) {
       .viewMask = (1 << views) - 1,
       .colorAttachmentCount = colorAttachmentCount,
       .pColorAttachments = color,
-      .pDepthAttachment = &depth,
+      .pDepthAttachment = canvas->depth.texture ? &depth : NULL,
       .pStencilAttachment = hasStencil ? &stencil : NULL
     });
   } else {

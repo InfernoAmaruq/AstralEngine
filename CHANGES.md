@@ -24,6 +24,7 @@ dev
 - Fix issue where cube/array textures would only regenerate 1 mipmap.
 - Fix crash in `Pass:send` when using tables to write nested structs to a uniform buffer.
 - Fix crash when drawing text on a pass without a canvas.
+- Fix crash when using a 3D texture as a canvas texture.
 
 v0.18.0 - 2025-02-14
 ---

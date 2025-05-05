@@ -6190,7 +6190,7 @@ bool lovrPassSetCanvas(Pass* pass, Canvas* canvas) {
     lovrRetain(canvas->color[i].resolve);
   }
 
-    if (target->depth.texture && target->depth.texture != tempDepthTexture) {
+  if (target->depth.texture && target->depth.texture != tempDepthTexture) {
     gpu_texture_destroy(pass->target.depth.texture);
     lovrFree(pass->target.depth.texture);
   }

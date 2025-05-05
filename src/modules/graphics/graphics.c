@@ -2526,8 +2526,8 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
   }
 
   // Automatically create a renderable view for renderable non-volume textures
-  if ((info->usage & TEXTURE_RENDER) && info->type != TEXTURE_3D && info->layers <= state.limits.renderSize[2]) {
-    if (info->mipmaps == 1) {
+  if ((info->usage & TEXTURE_RENDER) && info->layers <= state.limits.renderSize[2]) {
+    if (info->mipmaps == 1 && info->type != TEXTURE_3D) {
       texture->renderView = texture->gpu;
     } else {
       gpu_texture_view_info view = {
@@ -2662,7 +2662,7 @@ Texture* lovrTextureCreateView(Texture* parent, const TextureViewInfo* info) {
   }
 
   if ((base->usage & TEXTURE_RENDER) && layers <= state.limits.renderSize[2]) {
-    if (levels == 1) {
+    if (levels == 1 && info->type != TEXTURE_3D) {
       texture->renderView = texture->gpu;
     } else {
       gpu_texture_view_info subview = {

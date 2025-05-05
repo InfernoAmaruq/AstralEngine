@@ -2669,6 +2669,7 @@ Texture* lovrTextureCreateView(Texture* parent, const TextureViewInfo* info) {
         .source = texture->root->gpu,
         .type = GPU_TEXTURE_ARRAY,
         .usage = GPU_TEXTURE_RENDER,
+        .srgb = base->srgb,
         .layerIndex = texture->baseLayer,
         .layerCount = layers,
         .levelIndex = texture->baseLevel,

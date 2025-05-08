@@ -244,6 +244,24 @@ group('graphics', function()
       buffer:setData(blob)
     end)
 
+    test(':setData with normalized data', function()
+      buffer = lovr.graphics.newBuffer('sn8x4')
+      buffer:setData({ -100, 0, 1, 100 })
+      expect({ buffer:getData() }).to.equal({ -1, 0, 1, 1 })
+
+      buffer = lovr.graphics.newBuffer('un8x4')
+      buffer:setData({ .1, .2, .3, .4 })
+      expect({ buffer:getData() }).to.equal({ .1, .2, .3, .4 }, .005)
+
+      buffer = lovr.graphics.newBuffer('sn16x2')
+      buffer:setData({ -.5, .5 })
+      expect({ buffer:getData() }).to.equal({ -.5, .5 }, .0001)
+
+      buffer = lovr.graphics.newBuffer('un16x4')
+      buffer:setData({ .1, .2, .3, .4 })
+      expect({ buffer:getData() }).to.equal({ .1, .2, .3, .4 }, .0001)
+    end)
+
     test(':clear', function()
       buffer = lovr.graphics.newBuffer('int', { 1, 2, 3 })
       buffer:clear()

@@ -10,6 +10,7 @@ dev
 - Fix `ConvexShape:getPoint` to apply the shape's center of mass and scale.
 - Fix memory leak with `ConvexShape` and `MeshShape`.
 - Fix crash when drawing text on a pass without a canvas.
+- Fix issue where normalized buffer fields were rounded incorrectly.
 
 v0.18.0 - 2025-02-14
 ---

@@ -25,6 +25,7 @@ dev
 - Fix crash in `Pass:send` when using tables to write nested structs to a uniform buffer.
 - Fix crash when drawing text on a pass without a canvas.
 - Fix crash when using a 3D texture as a canvas texture.
+- Fix issue where normalized buffer fields were rounded incorrectly.
 
 v0.18.0 - 2025-02-14
 ---

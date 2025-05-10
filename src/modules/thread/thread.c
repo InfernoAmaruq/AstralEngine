@@ -169,7 +169,10 @@ bool lovrThreadStart(Thread* thread, Variant* arguments, uint32_t argumentCount)
 }
 
 void lovrThreadWait(Thread* thread) {
-  if (thread->handle) thrd_join(thread->handle, NULL);
+  if (thread->handle) {
+    thrd_join(thread->handle, NULL);
+    thread->handle = 0;
+  }
 }
 
 bool lovrThreadIsRunning(Thread* thread) {

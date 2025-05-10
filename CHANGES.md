@@ -11,6 +11,7 @@ dev
 - Fix memory leak with `ConvexShape` and `MeshShape`.
 - Fix crash when drawing text on a pass without a canvas.
 - Fix issue where normalized buffer fields were rounded incorrectly.
+- Fix possible crash related to Thread:wait.
 
 v0.18.0 - 2025-02-14
 ---

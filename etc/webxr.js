@@ -444,7 +444,7 @@ var webxr = {
     return true;
   },
 
-  webxr_isActive: Function() {
+  webxr_isActive: function() {
     return !!state.session;
   },
 

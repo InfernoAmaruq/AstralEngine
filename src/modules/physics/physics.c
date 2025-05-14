@@ -295,6 +295,9 @@ static void onContactRemoved(void* userdata, const JPH_SubShapeIDPair* pair) {
 static void queueJob(void* context, JPH_JobFunction* function, void* arg) {
   World* world = context;
 
+#ifdef LOVR_DISABLE_THREAD
+  function(arg);
+#else
   // If there are too many jobs, fall back to single threaded
   if (atomic_load(&world->jobCount) >= COUNTOF(world->jobs)) {
     function(arg);
@@ -306,6 +309,7 @@ static void queueJob(void* context, JPH_JobFunction* function, void* arg) {
       world->jobs[index] = job;
     }
   }
+#endif
 }
 
 static void queueJobs(void* context, JPH_JobFunction* function, void** args, uint32_t count) {
@@ -387,7 +391,11 @@ World* lovrWorldCreate(WorldInfo* info) {
     .context = world,
     .queueJob = queueJob,
     .queueJobs = queueJobs,
+#ifdef LOVR_DISABLE_THREAD
+    .maxConcurrency = 1,
+#else
     .maxConcurrency = lovrThreadGetWorkerCount(),
+#endif
     .maxBarriers = 1
   });
 
@@ -524,9 +532,11 @@ void lovrWorldUpdate(World* world, float dt) {
 
   JPH_PhysicsSystem_Update(world->system, dt, 1, world->jobSystem);
 
+#ifndef LOVR_DISABLE_THREAD
   for (uint32_t i = 0; i < world->jobCount; i++) {
     job_wait(world->jobs[i]);
   }
+#endif
 
   world->inverseDelta = 1.f / dt;
   world->interpolation = 0.f;

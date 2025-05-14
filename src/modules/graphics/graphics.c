@@ -1201,6 +1201,13 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
     bool slow;
     lovrAssert(gpu_pipeline_init_graphics(job->pipeline, job->info, &slow), "Failed to create GPU pipeline: %s", gpu_get_error());
 
+#ifdef LOVR_DISABLE_THREAD
+    if (slow) {
+      compilePipeline(job);
+      slow = false;
+    }
+#endif
+
     if (slow) {
       // The pipeline is going to be slow to compile, offload it to a worker thread
       job->handle = job_start(compilePipeline, job);

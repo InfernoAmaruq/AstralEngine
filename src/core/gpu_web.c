@@ -200,6 +200,14 @@ bool gpu_surface_init(gpu_surface_info* info) {
   return false; // TODO
 }
 
+gpu_texture_format gpu_surface_get_format(void) {
+  return GPU_FORMAT_RGBA8; // TODO
+}
+
+bool gpu_surface_is_hdr(void) {
+  return false;
+}
+
 bool gpu_surface_resize(uint32_t width, uint32_t height) {
   return false; // TODO
 }
@@ -417,7 +425,7 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
 
 // Pipeline
 
-bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info) {
+bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info, bool* slow) {
   static const WGPUPrimitiveTopology topologies[] = {
     [GPU_DRAW_POINTS] = WGPUPrimitiveTopology_PointList,
     [GPU_DRAW_LINES] = WGPUPrimitiveTopology_LineList,
@@ -581,7 +589,7 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info)
       .writeMask = info->color[i].mask
     };
 
-    if (info->blend[i].enabled) {
+    if (info->color[i].blend.enabled) {
       blends[i] = (WGPUBlendState) {
         .color.operation = blendOps[info->color[i].blend.color.op],
         .color.srcFactor = blendFactors[info->color[i].blend.color.src],
@@ -609,6 +617,10 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info)
     .multisample = multisample,
     .fragment = &fragment
   };
+
+  if (slow) {
+    *slow = false;
+  }
 
   return pipeline->render = wgpuDeviceCreateRenderPipeline(state.device, &pipelineInfo);
 }
@@ -1037,6 +1049,10 @@ void gpu_destroy(void) {
   memset(&state, 0, sizeof(state));
 }
 
+const char* gpu_get_error(void) {
+  return NULL; // TODO
+}
+
 bool gpu_begin(uint32_t* tick) {
   *tick = state.tick++;
   return true;
@@ -1083,7 +1099,7 @@ static WGPUTextureFormat convertFormat(gpu_texture_format format, bool srgb) {
     [GPU_FORMAT_R8] = { WGPUTextureFormat_R8Unorm, WGPUTextureFormat_R8Unorm },
     [GPU_FORMAT_RG8] = { WGPUTextureFormat_RG8Unorm, WGPUTextureFormat_RG8Unorm },
     [GPU_FORMAT_RGBA8] = { WGPUTextureFormat_RGBA8Unorm, WGPUTextureFormat_RGBA8UnormSrgb },
-    [GPU_FORMAT_BGRA8] = { WGPUTextureFormat_BGAR8Unorm, WGPUTextureFormat_BGRA8UnormSrgb },
+    [GPU_FORMAT_BGRA8] = { WGPUTextureFormat_BGRA8Unorm, WGPUTextureFormat_BGRA8UnormSrgb },
     [GPU_FORMAT_R16] = { WGPUTextureFormat_Undefined, WGPUTextureFormat_Undefined },
     [GPU_FORMAT_RG16] = { WGPUTextureFormat_Undefined, WGPUTextureFormat_Undefined },
     [GPU_FORMAT_RGBA16] = { WGPUTextureFormat_Undefined, WGPUTextureFormat_Undefined },

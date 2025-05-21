@@ -10,6 +10,7 @@ dev
 - Add `bgra8` TextureFormat.
 - Add `t.graphics.hdr` and `lovr.graphics.isHDR`.
 - Add `pqToLinear`, `linearToPQ`, `sRGBToRec2020`, and `rec2020ToSRGB` shader helpers.
+- Add support for custom array strides in buffer formats.
 
 ### Change
 

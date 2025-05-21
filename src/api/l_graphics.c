@@ -628,6 +628,10 @@ static uint32_t luax_checkbufferformat(lua_State* L, int index, DataField* field
     field->offset = lua_isnil(L, -1) ? 0 : luax_checku32(L, -1);
     lua_pop(L, 1);
 
+    lua_getfield(L, -1, "stride");
+    field->stride = lua_isnil(L, -1) ? 0 : luax_checku32(L, -1);
+    lua_pop(L, 1);
+
     lua_pop(L, 1);
   }
 

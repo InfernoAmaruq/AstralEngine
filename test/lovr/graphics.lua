@@ -224,6 +224,15 @@ group('graphics', function()
       end).to.fail()
     end)
 
+    test('format: array field with custom stride', function()
+      buffer = lovr.graphics.newBuffer({ { name = 'a', length = 2, type = 'vec3', stride = 16 } })
+      expect(buffer:getSize()).to.equal(32)
+      expect(buffer:getLength()).to.equal(0)
+      expect(buffer:getFormat()).to.equal({
+        { name = 'a', length = 2, type = 'f32x3', stride = 16, offset = 0 }
+      })
+    end)
+
     test(':setData offset', function()
       buffer = lovr.graphics.newBuffer('int', { 1, 2, 3 })
       expect(buffer:getSize()).to.be(12)

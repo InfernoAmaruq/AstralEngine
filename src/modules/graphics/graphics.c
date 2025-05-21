@@ -2073,7 +2073,7 @@ uint32_t lovrGraphicsAlignFields(DataField* parent, DataLayout layout) {
 
       if (field->length > 0) {
         subalign = layout == LAYOUT_STD140 ? MAX(subalign, 16) : subalign;
-        field->stride = MAX(subalign, table[field->type].size);
+        field->stride = field->stride ? field->stride : MAX(subalign, table[field->type].size);
       } else {
         field->stride = table[field->type].size;
       }

@@ -8626,7 +8626,15 @@ static bool getBundles(Layout* layout, gpu_bundle** bundles, uint32_t count) {
   const uint32_t POOL_SIZE = 512;
 
   while (count > 0) {
-    if (!pool || !gpu_is_complete(pool->tick)) {
+    if (pool && pool->cursor >= POOL_SIZE) {
+      if (gpu_is_complete(pool->tick)) {
+        pool->cursor = 0;
+      } else {
+        pool = NULL;
+      }
+    }
+
+    if (!pool) {
       pool = lovrMalloc(sizeof(BundlePool));
       gpu_bundle_pool* gpu = lovrMalloc(gpu_sizeof_bundle_pool());
       gpu_bundle* bundles = lovrMalloc(POOL_SIZE * gpu_sizeof_bundle());
@@ -8667,7 +8675,6 @@ static bool getBundles(Layout* layout, gpu_bundle** bundles, uint32_t count) {
       layout->head = pool->next;
       pool->next = NULL;
       pool->tick = state.tick;
-      pool->cursor = 0;
       pool = layout->head;
     }
   }

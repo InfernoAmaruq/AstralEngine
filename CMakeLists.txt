@@ -672,7 +672,6 @@ if(NOT ANDROID AND NOT EMSCRIPTEN)
     set(NOGAME_BUNDLE "$<TARGET_FILE:lovr>")
   endif()
   add_custom_command(TARGET lovr POST_BUILD
-    DEPENDS "etc/nogame"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/etc/nogame"
     COMMAND ${CMAKE_COMMAND} -E tar c "${CMAKE_CURRENT_BINARY_DIR}/nogame.zip" --format=zip .
     COMMAND ${CMAKE_COMMAND} -E cat "${CMAKE_CURRENT_BINARY_DIR}/nogame.zip" >> ${NOGAME_BUNDLE}

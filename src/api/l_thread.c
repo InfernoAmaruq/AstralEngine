@@ -13,6 +13,11 @@ static char* threadRunner(Thread* thread, Blob* body, Variant* arguments, uint32
   luaL_openlibs(L);
   luax_preload(L);
 
+#ifdef LOVR_USE_LUAU
+  lua_pushcfunction(L, luax_require);
+  lua_setfield(L, LUA_GLOBALSINDEX, "require");
+#endif
+
   lua_pushcfunction(L, luax_getstack);
   int errhandler = lua_gettop(L);
 

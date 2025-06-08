@@ -189,6 +189,7 @@ end
 troublemakers = {
   os_android = '-Wno-format-pedantic',
   miniaudio = '-Wno-unused-function -Wno-pedantic',
+  stb_vorbis = '-Wno-tautological-compare'
 }
 
 for file, flags in pairs(troublemakers) do

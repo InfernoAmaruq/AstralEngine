@@ -764,7 +764,9 @@ elseif(ANDROID)
   )
 
   # Build Lua libraries with global symbols, so plugins don't need to explicitly link against Lua
-  target_link_options(${LOVR_LUA} PRIVATE "-Wl,-z,global")
+  foreach(target ${LOVR_LUA})
+    target_link_options(${target} PRIVATE "-Wl,-z,global")
+  endforeach()
 
   if(LOVR_BUILD_EXE)
     set(ANDROID_JAR "${ANDROID_SDK}/platforms/${ANDROID_PLATFORM}/android.jar")

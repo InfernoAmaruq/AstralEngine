@@ -3707,6 +3707,9 @@ static bool openxr_update(double* dt) {
         lovrEventPush((Event) { .type = EVENT_MOUNT, .data.mount.mounted = state.mounted });
         break;
       }
+      case XR_TYPE_EVENT_DATA_INTERACTION_RENDER_MODELS_CHANGED_EXT:
+        lovrEventPush((Event) { .type = EVENT_MODELSCHANGED });
+        break;
       default: break;
     }
     e.type = XR_TYPE_EVENT_DATA_BUFFER;

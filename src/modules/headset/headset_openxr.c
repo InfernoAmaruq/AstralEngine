@@ -286,6 +286,7 @@ static struct {
     bool handTrackingMesh;
     bool handTrackingMotionRange;
     bool headless;
+    bool interactionRenderModel;
     bool keyboardTracking;
     bool layerAutoFilter;
     bool layerColor;
@@ -304,6 +305,7 @@ static struct {
     bool picoController;
     bool presence;
     bool questPassthrough;
+    bool renderModel;
     bool swapchainUpdate;
     bool refreshRate;
     bool threadHint;
@@ -898,8 +900,10 @@ static bool openxr_init(HeadsetConfig* config) {
     { "XR_EXT_hand_joints_motion_range", &state.extensions.handTrackingMotionRange, true },
     { "XR_EXT_hand_tracking", &state.extensions.handTracking, true },
     { "XR_EXT_hand_tracking_data_source", &state.extensions.handTrackingDataSource, true },
+    { "XR_EXT_interaction_render_model", &state.extensions.interactionRenderModel, true },
     { "XR_EXT_local_floor", &state.extensions.localFloor, true },
     { "XR_EXT_palm_pose", &state.extensions.palmPose, true },
+    { "XR_EXT_render_model", &state.extensions.renderModel, true },
     { "XR_EXT_user_presence", &state.extensions.presence, true },
     { "XR_BD_controller_interaction", &state.extensions.picoController, true },
     { "XR_FB_composition_layer_depth_test", &state.extensions.layerDepthTest, true },

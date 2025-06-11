@@ -28,6 +28,7 @@ dev
 - Fix crash when using a 3D texture as a canvas texture.
 - Fix issue where normalized buffer fields were rounded incorrectly.
 - Fix possible crash related to Thread:wait.
+- Fix possible crash in Model animation.
 
 v0.18.0 - 2025-02-14
 ---

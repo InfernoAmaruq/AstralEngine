@@ -5568,7 +5568,7 @@ static bool lovrModelAnimateVertices(Model* model) {
       float* joints = view.pointer;
       for (uint32_t j = 0; j < skin->jointCount; j++) {
         mat4_init(transform, model->globalTransforms + 16 * skin->joints[j]);
-        mat4_mul(transform, skin->inverseBindMatrices + 16 * j);
+        if (skin->inverseBindMatrices) mat4_mul(transform, skin->inverseBindMatrices + 16 * j);
         memcpy(joints, transform, sizeof(transform));
         joints += 16;
       }

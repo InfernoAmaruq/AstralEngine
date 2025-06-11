@@ -737,6 +737,7 @@ static int l_lovrModelDataGetSkinInverseBindMatrix(lua_State* L) {
   ModelSkin* skin = &model->skins[index];
   uint32_t joint = luax_checku32(L, 3) - 1;
   luax_check(L, index < skin->jointCount, "Invalid joint index '%d'", joint + 1);
+  if (!skin->inverseBindMatrices) return lua_pushnil(L), 1;
   float* m = skin->inverseBindMatrices + joint * 16;
   for (uint32_t i = 0; i < 16; i++) {
     lua_pushnumber(L, m[i]);

@@ -12,6 +12,7 @@ dev
 - Fix crash when drawing text on a pass without a canvas.
 - Fix issue where normalized buffer fields were rounded incorrectly.
 - Fix possible crash related to Thread:wait.
+- Fix possible crash in Model animation.
 
 v0.18.0 - 2025-02-14
 ---

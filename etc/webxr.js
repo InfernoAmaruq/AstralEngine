@@ -422,6 +422,11 @@ var webxr = {
     return; // TODO
   },
 
+  webxr_getModelKeys: function(count) {
+    HEAPU32[count >> 2] = 0;
+    return 0; /* NULL */
+  },
+
   webxr_newModelData: function(device, animated) {
     return 0; /* NULL */
   },

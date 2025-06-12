@@ -304,6 +304,10 @@ static void simulator_stopVibration(Device device) {
   //
 }
 
+static const uint64_t* simulator_getModelKeys(uint32_t* count) {
+  return *count = 0, NULL;
+}
+
 static struct ModelData* simulator_newModelData(Device device, bool animated) {
   return NULL;
 }
@@ -651,6 +655,7 @@ HeadsetInterface lovrHeadsetSimulatorDriver = {
   .getSkeleton = simulator_getSkeleton,
   .vibrate = simulator_vibrate,
   .stopVibration = simulator_stopVibration,
+  .getModelKeys = simulator_getModelKeys,
   .newModelData = simulator_newModelData,
   .animate = simulator_animate,
   .setBackground = simulator_setBackground,

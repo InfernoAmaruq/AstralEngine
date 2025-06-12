@@ -629,6 +629,17 @@ static int l_lovrHeadsetStopVibration(lua_State* L) {
   return 0;
 }
 
+static int l_lovrHeadsetGetModelKeys(lua_State* L) {
+  uint32_t count;
+  const uint64_t* keys = lovrHeadsetInterface->getModelKeys(&count);
+  lua_createtable(L, (int) count, 0);
+  for (uint32_t i = 0; i < count; i++) {
+    lua_pushlightuserdata(L, (void*) (uintptr_t) keys[i]);
+    lua_rawseti(L, -2, i + 1);
+  }
+  return 1;
+}
+
 static int l_lovrHeadsetNewModel(lua_State* L) {
   Device device = luax_optdevice(L, 1);
   bool animated = false;
@@ -1003,6 +1014,7 @@ static const luaL_Reg lovrHeadset[] = {
   { "getSkeleton", l_lovrHeadsetGetSkeleton },
   { "vibrate", l_lovrHeadsetVibrate },
   { "stopVibration", l_lovrHeadsetStopVibration },
+  { "getModelKeys", l_lovrHeadsetGetModelKeys },
   { "newModel", l_lovrHeadsetNewModel },
   { "animate", l_lovrHeadsetAnimate },
   { "setBackground", l_lovrHeadsetSetBackground },

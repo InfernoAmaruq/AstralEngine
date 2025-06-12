@@ -2705,6 +2705,11 @@ static void openxr_stopVibration(Device device) {
   xrStopHapticFeedback(state.session, &info);
 }
 
+static const uint64_t* openxr_getModelKeys(uint32_t* count) {
+  *count = state.modelCount;
+  return state.modelIds;
+}
+
 static ModelData* openxr_newModelDataFB(XrHandTrackerEXT tracker, bool animated) {
   if (!state.extensions.handTrackingMesh) {
     return NULL;

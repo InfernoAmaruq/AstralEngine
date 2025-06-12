@@ -175,6 +175,7 @@ typedef struct {
 
 typedef struct ModelData {
   uint32_t ref;
+  uint64_t id;
   void* data;
 
   void* metadata;

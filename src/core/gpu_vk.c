@@ -1731,7 +1731,7 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info,
   if (constants != stackConstants) state.config.fnFree(constants);
   if (entries != stackEntries) state.config.fnFree(entries);
 
-  if (result < 0) {
+  if (!vkcheck(result, "vkCreateGraphicsPipelines")) {
     return false;
   } else if (result == VK_PIPELINE_COMPILE_REQUIRED_EXT) {
     *slow = true;

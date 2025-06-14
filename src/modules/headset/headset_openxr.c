@@ -525,6 +525,84 @@ static XrHandTrackerEXT getHandTracker(Device device) {
   return *tracker;
 }
 
+static bool loadControllerModels(void) {
+  uint32_t count = 0;
+  XrInteractionRenderModelIdsEnumerateInfoEXT enumerateInfo = { .type = XR_TYPE_INTERACTION_RENDER_MODEL_IDS_ENUMERATE_INFO_EXT };
+  XR(xrEnumerateInteractionRenderModelIdsEXT(state.session, &enumerateInfo, 0, &count, NULL), "xrEnumerateInteractionRenderModelIdsEXT");
+  XrRenderModelIdEXT* ids = lovrMalloc(count * sizeof(XrRenderModelIdEXT));
+  XR(xrEnumerateInteractionRenderModelIdsEXT(state.session, &enumerateInfo, count, &count, ids), "xrEnumerateInteractionRenderModelIdsEXT");
+
+  // Destroy models that were removed
+  for (uint32_t i = 0; i < state.modelCount; i++) {
+    bool destroy = true;
+
+    for (uint32_t j = 0; j < count; j++) {
+      if (state.modelIds[i] == ids[j]) {
+        destroy = false;
+        break;
+      }
+    }
+
+    if (destroy) {
+      xrDestroyRenderModelEXT(state.models[i].handle);
+      xrDestroySpace(state.models[i].space);
+      state.models[i] = state.models[state.modelCount - 1];
+      state.modelIds[i] = state.modelIds[state.modelCount - 1];
+      state.modelCount--;
+      i--;
+    }
+  }
+
+  state.models = lovrRealloc(state.models, count * sizeof(RenderModel));
+  state.modelIds = lovrRealloc(state.modelIds, count * sizeof(XrRenderModelIdEXT));
+
+  // Add new models
+  for (uint32_t i = 0; i < count; i++) {
+    bool found = false;
+
+    for (uint32_t j = 0; j < state.modelCount; j++) {
+      if (ids[i] == state.modelIds[j]) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      RenderModel* model = &state.models[state.modelCount];
+      state.modelIds[state.modelCount] = ids[i];
+      state.modelCount++;
+
+      const char* gltfExtensions[] = {
+        "KHR_texture_transform"
+      };
+
+      XrRenderModelCreateInfoEXT createInfo = {
+        .type = XR_TYPE_RENDER_MODEL_CREATE_INFO_EXT,
+        .renderModelId = ids[i],
+        .gltfExtensionCount = COUNTOF(gltfExtensions),
+        .gltfExtensions = gltfExtensions
+      };
+
+      XR(xrCreateRenderModelEXT(state.session, &createInfo, &model->handle), "xrCreateRenderModelEXT");
+
+      XrRenderModelPropertiesGetInfoEXT info = { .type = XR_TYPE_RENDER_MODEL_PROPERTIES_GET_INFO_EXT };
+      XrRenderModelPropertiesEXT properties = { .type = XR_TYPE_RENDER_MODEL_PROPERTIES_EXT };
+      XR(xrGetRenderModelPropertiesEXT(model->handle, &info, &properties), "xrGetRenderModelPropertiesEXT");
+      model->animatedNodeCount = properties.animatableNodeCount;
+
+      XrRenderModelSpaceCreateInfoEXT spaceInfo = {
+        .type = XR_TYPE_RENDER_MODEL_SPACE_CREATE_INFO_EXT,
+        .renderModel = model->handle
+      };
+
+      XR(xrCreateRenderModelSpaceEXT(state.session, &spaceInfo, &model->space), "xrCreateRenderModelSpaceEXT");
+    }
+  }
+
+  lovrFree(ids);
+  return true;
+}
+
 // Controller model keys are created lazily because the runtime is allowed to
 // return XR_NULL_CONTROLLER_MODEL_KEY_MSFT until it is ready.
 static XrControllerModelKeyMSFT getControllerModelKey(Device device) {
@@ -3734,81 +3812,10 @@ static bool openxr_update(double* dt) {
         break;
       }
       case XR_TYPE_EVENT_DATA_INTERACTION_RENDER_MODELS_CHANGED_EXT: {
-        uint32_t count = 0;
-        XrInteractionRenderModelIdsEnumerateInfoEXT enumerateInfo = { .type = XR_TYPE_INTERACTION_RENDER_MODEL_IDS_ENUMERATE_INFO_EXT };
-        XR(xrEnumerateInteractionRenderModelIdsEXT(state.session, &enumerateInfo, 0, &count, NULL), "xrEnumerateInteractionRenderModelIdsEXT");
-        XrRenderModelIdEXT* ids = lovrMalloc(count * sizeof(XrRenderModelIdEXT));
-        XR(xrEnumerateInteractionRenderModelIdsEXT(state.session, &enumerateInfo, count, &count, ids), "xrEnumerateInteractionRenderModelIdsEXT");
-
-        // Destroy models that were removed
-        for (uint32_t i = 0; i < state.modelCount; i++) {
-          bool destroy = true;
-
-          for (uint32_t j = 0; j < count; j++) {
-            if (state.modelIds[i] == ids[j]) {
-              destroy = false;
-              break;
-            }
-          }
-
-          if (destroy) {
-            xrDestroyRenderModelEXT(state.models[i].handle);
-            xrDestroySpace(state.models[i].space);
-            state.models[i] = state.models[state.modelCount - 1];
-            state.modelIds[i] = state.modelIds[state.modelCount - 1];
-            state.modelCount--;
-            i--;
-          }
+        if (!loadControllerModels()) {
+          return false;
         }
-
-        state.models = lovrRealloc(state.models, count * sizeof(RenderModel));
-        state.modelIds = lovrRealloc(state.modelIds, count * sizeof(XrRenderModelIdEXT));
-
-        // Add new models
-        for (uint32_t i = 0; i < count; i++) {
-          bool found = false;
-
-          for (uint32_t j = 0; j < state.modelCount; j++) {
-            if (ids[i] == state.modelIds[j]) {
-              found = true;
-              break;
-            }
-          }
-
-          if (!found) {
-            RenderModel* model = &state.models[state.modelCount];
-            state.modelIds[state.modelCount] = ids[i];
-            state.modelCount++;
-
-            const char* gltfExtensions[] = {
-              "KHR_texture_transform"
-            };
-
-            XrRenderModelCreateInfoEXT createInfo = {
-              .type = XR_TYPE_RENDER_MODEL_CREATE_INFO_EXT,
-              .renderModelId = ids[i],
-              .gltfExtensionCount = COUNTOF(gltfExtensions),
-              .gltfExtensions = gltfExtensions
-            };
-
-            XR(xrCreateRenderModelEXT(state.session, &createInfo, &model->handle), "xrCreateRenderModelEXT");
-
-            XrRenderModelPropertiesGetInfoEXT info = { .type = XR_TYPE_RENDER_MODEL_PROPERTIES_GET_INFO_EXT };
-            XrRenderModelPropertiesEXT properties = { .type = XR_TYPE_RENDER_MODEL_PROPERTIES_EXT };
-            XR(xrGetRenderModelPropertiesEXT(model->handle, &info, &properties), "xrGetRenderModelPropertiesEXT");
-            model->animatedNodeCount = properties.animatableNodeCount;
-
-            XrRenderModelSpaceCreateInfoEXT spaceInfo = {
-              .type = XR_TYPE_RENDER_MODEL_SPACE_CREATE_INFO_EXT,
-              .renderModel = model->handle
-            };
-
-            XR(xrCreateRenderModelSpaceEXT(state.session, &spaceInfo, &model->space), "xrCreateRenderModelSpaceEXT");
-          }
-        }
-
         lovrEventPush((Event) { .type = EVENT_MODELSCHANGED });
-        lovrFree(ids);
         break;
       }
       default: break;

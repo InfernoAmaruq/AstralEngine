@@ -35,7 +35,7 @@ extern bool webxr_getSkeleton(Device device, float* poses, SkeletonSource* sourc
 extern bool webxr_vibrate(Device device, float strength, float duration, float frequency);
 extern void webxr_stopVibration(Device device);
 extern const uint64_t* getModelKeys(uint32_t* count);
-extern struct ModelData* webxr_newModelData(Device device, bool animated);
+extern struct ModelData* webxr_newModelData(uint64_t key);
 extern bool webxr_animate(struct Model* model);
 extern bool webxr_getTexture(struct Texture** texture);
 extern bool webxr_getPass(struct Pass** pass);

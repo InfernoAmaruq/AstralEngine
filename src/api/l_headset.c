@@ -641,16 +641,21 @@ static int l_lovrHeadsetGetModelKeys(lua_State* L) {
 }
 
 static int l_lovrHeadsetNewModel(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
-  bool animated = false;
+  uint64_t key;
 
-  if (lua_istable(L, 2)) {
-    lua_getfield(L, 2, "animated");
-    animated = lua_toboolean(L, -1);
-    lua_pop(L, 1);
+  if (lua_islightuserdata(L, 1)) {
+    key = (uint64_t) (uintptr_t) lua_topointer(L, 1);
+  } else if (lua_type(L, 1) == LUA_TSTRING) { // Deprecated
+    switch (luax_optdevice(L, 1)) {
+      case DEVICE_HAND_LEFT: key = 1; break;
+      case DEVICE_HAND_RIGHT: key = 2; break;
+      default: return 0;
+    }
+  } else {
+    return luax_typeerror(L, 1, "lightuserdata");
   }
 
-  ModelData* modelData = lovrHeadsetInterface->newModelData(device, animated);
+  ModelData* modelData = lovrHeadsetInterface->newModelData(key);
 
   if (modelData) {
     ModelInfo info = { .data = modelData, .mipmaps = true };

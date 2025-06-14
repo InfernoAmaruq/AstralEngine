@@ -115,12 +115,12 @@ uintptr_t gpu_vk_get_queue(uint32_t* queueFamilyIndex, uint32_t* queueIndex);
   X(xrDestroyRenderModelEXT)\
   X(xrGetRenderModelPropertiesEXT)\
   X(xrCreateRenderModelSpaceEXT)\
+  X(xrCreateRenderModelAssetEXT)\
+  X(xrDestroyRenderModelAssetEXT)\
+  X(xrGetRenderModelAssetPropertiesEXT)\
+  X(xrGetRenderModelAssetDataEXT)\
   X(xrEnumerateInteractionRenderModelIdsEXT)\
   X(xrGetHandMeshFB)\
-  X(xrGetControllerModelKeyMSFT)\
-  X(xrLoadControllerModelMSFT)\
-  X(xrGetControllerModelPropertiesMSFT)\
-  X(xrGetControllerModelStateMSFT)\
   X(xrGetDisplayRefreshRateFB)\
   X(xrEnumerateDisplayRefreshRatesFB)\
   X(xrRequestDisplayRefreshRateFB)\
@@ -227,7 +227,8 @@ enum {
 
 typedef struct {
   XrRenderModelEXT handle;
-  uint32_t animatedNodeCount;
+  XrRenderModelPropertiesEXT properties;
+  XrRenderModelAssetNodePropertiesEXT* nodeNames;
   XrSpace space;
 } RenderModel;
 
@@ -274,7 +275,6 @@ static struct {
   XrAction actions[MAX_ACTIONS];
   XrPath actionFilters[MAX_DEVICES];
   XrHandTrackerEXT handTrackers[2];
-  XrControllerModelKeyMSFT controllerModelKeys[2];
   XrRenderModelIdEXT* modelIds;
   RenderModel* models;
   uint32_t modelCount;
@@ -546,6 +546,7 @@ static bool loadControllerModels(void) {
     if (destroy) {
       xrDestroyRenderModelEXT(state.models[i].handle);
       xrDestroySpace(state.models[i].space);
+      lovrFree(state.models[i].nodeNames);
       state.models[i] = state.models[state.modelCount - 1];
       state.modelIds[i] = state.modelIds[state.modelCount - 1];
       state.modelCount--;
@@ -586,9 +587,7 @@ static bool loadControllerModels(void) {
       XR(xrCreateRenderModelEXT(state.session, &createInfo, &model->handle), "xrCreateRenderModelEXT");
 
       XrRenderModelPropertiesGetInfoEXT info = { .type = XR_TYPE_RENDER_MODEL_PROPERTIES_GET_INFO_EXT };
-      XrRenderModelPropertiesEXT properties = { .type = XR_TYPE_RENDER_MODEL_PROPERTIES_EXT };
-      XR(xrGetRenderModelPropertiesEXT(model->handle, &info, &properties), "xrGetRenderModelPropertiesEXT");
-      model->animatedNodeCount = properties.animatableNodeCount;
+      XR(xrGetRenderModelPropertiesEXT(model->handle, &info, &model->properties), "xrGetRenderModelPropertiesEXT");
 
       XrRenderModelSpaceCreateInfoEXT spaceInfo = {
         .type = XR_TYPE_RENDER_MODEL_SPACE_CREATE_INFO_EXT,
@@ -601,30 +600,6 @@ static bool loadControllerModels(void) {
 
   lovrFree(ids);
   return true;
-}
-
-// Controller model keys are created lazily because the runtime is allowed to
-// return XR_NULL_CONTROLLER_MODEL_KEY_MSFT until it is ready.
-static XrControllerModelKeyMSFT getControllerModelKey(Device device) {
-  if (!state.extensions.controllerModel || (device != DEVICE_HAND_LEFT && device != DEVICE_HAND_RIGHT)) {
-    return XR_NULL_CONTROLLER_MODEL_KEY_MSFT;
-  }
-
-  XrControllerModelKeyMSFT* modelKey = &state.controllerModelKeys[device == DEVICE_HAND_RIGHT];
-
-  if (!*modelKey) {
-    XrControllerModelKeyStateMSFT modelKeyState = {
-      .type = XR_TYPE_CONTROLLER_MODEL_KEY_STATE_MSFT,
-    };
-
-    if (XR_FAILED(xrGetControllerModelKeyMSFT(state.session, state.actionFilters[device], &modelKeyState))) {
-      return XR_NULL_CONTROLLER_MODEL_KEY_MSFT;
-    }
-
-    *modelKey = modelKeyState.modelKey;
-  }
-
-  return *modelKey;
 }
 
 static bool loadVisibilityMask(void) {
@@ -1013,7 +988,6 @@ static bool openxr_init(HeadsetConfig* config) {
     { "XR_META_passthrough_preferences", &state.extensions.passthroughPreferences, true },
     { "XR_ML_ml2_controller_interaction", &state.extensions.ml2Controller, true },
     { "XR_MND_headless", &state.extensions.headless, true },
-    { "XR_MSFT_controller_model", &state.extensions.controllerModel, true },
     { "XR_ULTRALEAP_hand_tracking_forearm", &state.extensions.handTrackingElbow, true },
     { "XR_EXTX_overlay", &state.extensions.overlay, config->overlay },
     { "XR_HTCX_vive_tracker_interaction", &state.extensions.viveTrackers, true }
@@ -2010,6 +1984,15 @@ static bool openxr_start(void) {
     lovrLog(LOG_WARN, "XR", "Failed to load headset mask: %s", lovrGetError());
   }
 
+  if (state.extensions.handTrackingMesh && !state.extensions.renderModel) {
+    state.modelCount = 2;
+    state.modelIds = lovrMalloc(state.modelCount * sizeof(XrRenderModelIdEXT));
+    state.modelIds[0] = 1;
+    state.modelIds[1] = 2;
+    state.models = lovrCalloc(state.modelCount * sizeof(XrRenderModelIdEXT));
+    lovrEventPush((Event) { .type = EVENT_MODELSCHANGED });
+  }
+
   state.showMainLayer = true;
 
   return true;
@@ -2052,8 +2035,9 @@ static void openxr_stop(void) {
   state.mask = NULL;
 
   for (uint32_t i = 0; i < state.modelCount; i++) {
-    xrDestroyRenderModelEXT(state.models[i].handle);
-    xrDestroySpace(state.models[i].space);
+    if (state.models[i].handle) xrDestroyRenderModelEXT(state.models[i].handle);
+    if (state.models[i].space) xrDestroySpace(state.models[i].space);
+    if (state.models[i].nodeNames) lovrFree(state.models[i].nodeNames);
   }
   lovrFree(state.modelIds);
   lovrFree(state.models);
@@ -2788,8 +2772,77 @@ static const uint64_t* openxr_getModelKeys(uint32_t* count) {
   return state.modelIds;
 }
 
-static ModelData* openxr_newModelDataFB(XrHandTrackerEXT tracker, bool animated) {
-  if (!state.extensions.handTrackingMesh) {
+static ModelData* openxr_newModelDataEXT(uint64_t key) {
+  for (uint32_t i = 0; i < state.modelCount; i++) {
+    if (state.modelIds[i] != key) {
+      continue;
+    }
+
+    RenderModel* model = &state.models[i];
+
+    XrRenderModelAssetCreateInfoEXT assetInfo = {
+      .type = XR_TYPE_RENDER_MODEL_ASSET_CREATE_INFO_EXT,
+      .cacheId = model->properties.cacheId
+    };
+
+    XrRenderModelAssetEXT asset;
+    XR(xrCreateRenderModelAssetEXT(state.session, &assetInfo, &asset), "xrCreateRenderModelAssetEXT");
+
+    XrRenderModelAssetDataGetInfoEXT dataInfo = { .type = XR_TYPE_RENDER_MODEL_ASSET_DATA_GET_INFO_EXT };
+    XrRenderModelAssetDataEXT data = { .type = XR_TYPE_RENDER_MODEL_ASSET_DATA_EXT };
+    XR(xrGetRenderModelAssetDataEXT(asset, &dataInfo, &data), "xrGetRenderModelAssetDataEXT");
+
+    data.bufferCapacityInput = data.bufferCountOutput;
+    data.buffer = lovrMalloc(data.bufferCountOutput);
+
+    XR(xrGetRenderModelAssetDataEXT(asset, &dataInfo, &data), "xrGetRenderModelAssetDataEXT");
+    Blob* blob = lovrBlobCreate(data.buffer, data.bufferCountOutput, "Headset Render Model Data");
+
+    ModelData* modelData = lovrModelDataCreate(blob, NULL);
+    xrDestroyRenderModelAssetEXT(asset);
+    lovrRelease(blob, lovrBlobDestroy);
+
+    if (!modelData) {
+      return NULL;
+    }
+
+    if (!model->nodeNames) {
+      model->nodeNames = lovrMalloc(model->properties.animatableNodeCount * sizeof(model->nodeNames[0]));
+      XrRenderModelAssetPropertiesGetInfoEXT propertyInfo = { .type = XR_TYPE_RENDER_MODEL_ASSET_PROPERTIES_GET_INFO_EXT };
+
+      XrRenderModelAssetPropertiesEXT properties = {
+        .type = XR_TYPE_RENDER_MODEL_ASSET_PROPERTIES_EXT,
+        .nodePropertyCount = model->properties.animatableNodeCount,
+        .nodeProperties = model->nodeNames
+      };
+
+      XrResult result = xrGetRenderModelAssetPropertiesEXT(asset, &propertyInfo, &properties);
+
+      if (XR_FAILED(result)) {
+        xrthrow(result, "xrGetRenderModelAssetPropertiesEXT");
+        lovrRelease(modelData, lovrModelDataDestroy);
+        lovrFree(model->nodeNames);
+        model->nodeNames = NULL;
+        return NULL;
+      }
+    }
+
+    return modelData;
+  }
+
+  lovrSetError("Unknown model key");
+  return NULL;
+}
+
+static ModelData* openxr_newModelDataFB(uint64_t key) {
+  if (!state.extensions.handTrackingMesh || state.extensions.renderModel) {
+    return NULL;
+  }
+
+  Device device = key == 1 ? DEVICE_HAND_LEFT : DEVICE_HAND_RIGHT;
+  XrHandTrackerEXT tracker = getHandTracker(device);
+
+  if (!tracker) {
     return NULL;
   }
 
@@ -2846,6 +2899,7 @@ static ModelData* openxr_newModelDataFB(XrHandTrackerEXT tracker, bool animated)
 
   ModelData* model = lovrCalloc(sizeof(ModelData));
   model->ref = 1;
+  model->id = key;
   model->blobCount = 1;
   model->bufferCount = 6;
   model->attributeCount = 6;
@@ -2855,11 +2909,6 @@ static ModelData* openxr_newModelDataFB(XrHandTrackerEXT tracker, bool animated)
   model->childCount = jointCount + 1;
   model->nodeCount = 2 + jointCount;
   lovrModelDataAllocate(model);
-
-  model->metadata = lovrMalloc(sizeof(XrHandTrackerEXT));
-  *((XrHandTrackerEXT*)model->metadata) = tracker;
-  model->metadataSize = sizeof(XrHandTrackerEXT);
-  model->metadataType = META_HANDTRACKING_FB;
 
   model->blobs[0] = lovrBlobCreate(meshData, totalSize, "Hand Mesh Data");
 
@@ -2988,80 +3037,22 @@ static ModelData* openxr_newModelDataFB(XrHandTrackerEXT tracker, bool animated)
   return model;
 }
 
-typedef struct {
-  XrControllerModelKeyMSFT modelKey;
-  uint32_t* nodeIndices;
-} MetadataControllerMSFT;
+static ModelData* openxr_newModelData(uint64_t key) {
+  ModelData* model = NULL;
 
-static ModelData* openxr_newModelDataMSFT(XrControllerModelKeyMSFT modelKey, bool animated) {
-  uint32_t size;
-  if (XR_FAILED(xrLoadControllerModelMSFT(state.session, modelKey, 0, &size, NULL))) {
-    return NULL;
+  if ((model = openxr_newModelDataEXT(key))) {
+    return model;
   }
 
-  unsigned char* modelData = lovrMalloc(size);
-
-  if (XR_FAILED(xrLoadControllerModelMSFT(state.session, modelKey, size, &size, modelData))) {
-    lovrFree(modelData);
-    return NULL;
-  }
-
-  XrControllerModelNodePropertiesMSFT nodeProperties[16];
-  for (uint32_t i = 0; i < COUNTOF(nodeProperties); i++) {
-    nodeProperties[i].type = XR_TYPE_CONTROLLER_MODEL_NODE_PROPERTIES_MSFT;
-    nodeProperties[i].next = 0;
-  }
-
-  XrControllerModelPropertiesMSFT properties = {
-    .type = XR_TYPE_CONTROLLER_MODEL_PROPERTIES_MSFT,
-    .nodeCapacityInput = COUNTOF(nodeProperties),
-    .nodeProperties = nodeProperties
-  };
-
-  if (XR_FAILED(xrGetControllerModelPropertiesMSFT(state.session, modelKey, &properties))) {
-    return false;
-  }
-
-  Blob* blob = lovrBlobCreate(modelData, size, "Controller Model Data");
-  ModelData* model = lovrModelDataCreate(blob, NULL);
-  lovrRelease(blob, lovrBlobDestroy);
-
-  lovrFree(model->metadata);
-  model->metadataType = META_CONTROLLER_MSFT;
-  model->metadataSize = sizeof(MetadataControllerMSFT) + sizeof(uint32_t) * properties.nodeCountOutput;
-  model->metadata = lovrMalloc(model->metadataSize);
-
-  MetadataControllerMSFT* metadata = model->metadata;
-  metadata->modelKey = modelKey;
-  metadata->nodeIndices = (uint32_t*)((char*) model->metadata + sizeof(MetadataControllerMSFT));
-
-  for (uint32_t i = 0; i < properties.nodeCountOutput; i++) {
-    const char* name = nodeProperties[i].nodeName;
-    uint64_t nodeIndex = map_get(model->nodeMap, hash64(name, strlen(name)));
-    lovrCheck(nodeIndex != MAP_NIL, "ModelData has no node named '%s'", name);
-    metadata->nodeIndices[i] = nodeIndex;
-  }
-
-  return model;
-}
-
-static ModelData* openxr_newModelData(Device device, bool animated) {
-  XrHandTrackerEXT tracker;
-  if ((tracker = getHandTracker(device))) {
-    return openxr_newModelDataFB(tracker, animated);
-  }
-
-  XrControllerModelKeyMSFT modelKey;
-  if ((modelKey = getControllerModelKey(device))) {
-    return openxr_newModelDataMSFT(modelKey, animated);
+  if ((model = openxr_newModelDataFB(key))) {
+    return model;
   }
 
   return NULL;
 }
 
-static bool openxr_animateFB(Model* model, const ModelInfo* info) {
-  XrHandTrackerEXT tracker = *(XrHandTrackerEXT*) info->data->metadata;
-  Device device = tracker == state.handTrackers[0] ? DEVICE_HAND_LEFT : DEVICE_HAND_RIGHT;
+static bool openxr_animateFB(Model* model, Device device) {
+  XrHandTrackerEXT tracker = state.handTrackers[device == DEVICE_HAND_RIGHT];
 
   XrHandJointsLocateInfoEXT locateInfo = {
     .type = XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT,
@@ -3139,42 +3130,13 @@ static bool openxr_animateFB(Model* model, const ModelInfo* info) {
   return true;
 }
 
-static bool openxr_animateMSFT(Model* model, const ModelInfo* info) {
-  MetadataControllerMSFT* metadata = info->data->metadata;
-
-  XrControllerModelNodeStateMSFT nodeStates[16];
-  for (uint32_t i = 0; i < COUNTOF(nodeStates); i++) {
-    nodeStates[i].type = XR_TYPE_CONTROLLER_MODEL_NODE_STATE_MSFT;
-    nodeStates[i].next = 0;
-  }
-  XrControllerModelStateMSFT modelState = {
-    .type = XR_TYPE_CONTROLLER_MODEL_STATE_MSFT,
-    .nodeCapacityInput = COUNTOF(nodeStates),
-    .nodeStates = nodeStates
-  };
-
-  if (XR_FAILED(xrGetControllerModelStateMSFT(state.session, metadata->modelKey, &modelState))) {
-    return false;
-  }
-
-  for (uint32_t i = 0; i < modelState.nodeCountOutput; i++) {
-    float position[3], rotation[4];
-    vec3_init(position, (vec3)&nodeStates[i].nodePose.position);
-    quat_init(rotation, (quat)&nodeStates[i].nodePose.orientation);
-    lovrModelSetNodeTransform(model, metadata->nodeIndices[i], position, NULL, rotation, 1);
+static bool openxr_animate(Model* model) {
+  if (!state.extensions.renderModel) {
+    Device device = lovrModelGetInfo(model)->data->id == 1 ? DEVICE_HAND_LEFT : DEVICE_HAND_RIGHT;
+    return openxr_animateFB(model, device);
   }
 
   return false;
-}
-
-static bool openxr_animate(Model* model) {
-  const ModelInfo* info = lovrModelGetInfo(model);
-
-  switch (info->data->metadataType) {
-    case META_HANDTRACKING_FB: return openxr_animateFB(model, info);
-    case META_CONTROLLER_MSFT: return openxr_animateMSFT(model, info);
-    default: return false;
-  }
 }
 
 static Texture* openxr_setBackground(uint32_t width, uint32_t height, uint32_t layers) {

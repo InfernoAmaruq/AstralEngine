@@ -427,7 +427,7 @@ var webxr = {
     return 0; /* NULL */
   },
 
-  webxr_newModelData: function(device, animated) {
+  webxr_newModelData: function(device) {
     return 0; /* NULL */
   },
 

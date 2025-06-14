@@ -276,7 +276,6 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   model->metadata = lovrMalloc(jsonLength);
   memcpy(model->metadata, json, jsonLength);
   model->metadataSize = jsonLength;
-  model->metadataType = META_GLTF_JSON;
 
   // Prepass: Basically we iterate over the tokens once and figure out how much memory we need and
   // record the locations of tokens that we'll use later to fill in the memory once it's allocated.

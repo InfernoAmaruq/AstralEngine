@@ -64,7 +64,7 @@ uint32_t luax_checknodeindex(lua_State* L, int index, ModelData* model) {
 static int l_lovrModelDataGetMetadata(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
 
-  if (!model->metadata || model->metadataSize == 0 || model->metadataType != META_GLTF_JSON) {
+  if (!model->metadata || model->metadataSize == 0) {
     lua_pushnil(L);
   } else {
     lua_pushlstring(L, model->metadata, model->metadataSize);

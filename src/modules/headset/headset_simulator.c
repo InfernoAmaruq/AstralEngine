@@ -308,7 +308,7 @@ static const uint64_t* simulator_getModelKeys(uint32_t* count) {
   return *count = 0, NULL;
 }
 
-static struct ModelData* simulator_newModelData(Device device, bool animated) {
+static struct ModelData* simulator_newModelData(uint64_t key) {
   return NULL;
 }
 

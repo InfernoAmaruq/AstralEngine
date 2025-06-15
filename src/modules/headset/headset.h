@@ -232,6 +232,7 @@ typedef struct HeadsetInterface {
   void (*stopVibration)(Device device);
   const uint64_t* (*getModelKeys)(uint32_t* count);
   struct ModelData* (*newModelData)(uint64_t key);
+  bool (*getModelPose)(struct Model* model, float* position, float* orientation);
   bool (*animate)(struct Model* model);
   struct Texture* (*setBackground)(uint32_t width, uint32_t height, uint32_t layers);
   Layer* (*newLayer)(const LayerInfo* info);

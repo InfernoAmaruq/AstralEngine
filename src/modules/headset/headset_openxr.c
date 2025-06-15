@@ -3066,9 +3066,35 @@ static ModelData* openxr_newModelData(uint64_t key) {
   }
 }
 
+static bool openxr_getModelPose(Model* model, float* position, float* orientation) {
+  if (state.extensions.renderModel) {
+    uint64_t key = lovrModelGetInfo(model)->data->id;
+
+    for (uint32_t i = 0; i < state.modelCount; i++) {
+      if (state.modelIds[i] != key) {
+        continue;
+      }
+
+      RenderModel* renderModel = &state.models[i];
+      XrSpaceLocation location = { .type = XR_TYPE_SPACE_LOCATION };
+      xrLocateSpace(renderModel->space, state.referenceSpace, state.frameState.predictedDisplayTime, &location);
+      memcpy(orientation, &location.pose.orientation, 4 * sizeof(float));
+      memcpy(position, &location.pose.position, 3 * sizeof(float));
+      return location.locationFlags & (XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT);
+    }
+
+    return false;
+  } else if (state.extensions.handTrackingMesh) {
+    Device device = lovrModelGetInfo(model)->data->id == 1 ? DEVICE_HAND_LEFT : DEVICE_HAND_RIGHT;
+    return openxr_getPose(device, position, orientation);
+  }
+}
+
 static bool openxr_animateEXT(Model* model) {
+  uint64_t key = lovrModelGetInfo(model)->data->id;
+
   for (uint32_t i = 0; i < state.modelCount; i++) {
-    if (state.modelIds[i] != lovrModelGetInfo(model)->data->id) {
+    if (state.modelIds[i] != key) {
       continue;
     }
 
@@ -3921,7 +3947,9 @@ HeadsetInterface lovrHeadsetOpenXRDriver = {
   .getSkeleton = openxr_getSkeleton,
   .vibrate = openxr_vibrate,
   .stopVibration = openxr_stopVibration,
+  .getModelKeys = openxr_getModelKeys,
   .newModelData = openxr_newModelData,
+  .getModelPose = openxr_getModelPose,
   .animate = openxr_animate,
   .setBackground = openxr_setBackground,
   .newLayer = openxr_newLayer,

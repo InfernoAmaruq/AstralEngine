@@ -431,6 +431,10 @@ var webxr = {
     return 0; /* NULL */
   },
 
+  webxr_getModelPose: function(device) {
+    return false;
+  },
+
   webxr_animate: function(model) {
     return false;
   },

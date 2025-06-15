@@ -381,17 +381,25 @@ static int l_lovrHeadsetGetBoundsGeometry(lua_State* L) {
   return 1;
 }
 
+static bool luax_getpose(lua_State* L, int index, float* position, float* orientation) {
+  if (lua_type(L, index) == LUA_TUSERDATA) {
+    Model* model = luax_checktype(L, index, Model);
+    return lovrHeadsetInterface->getModelPose(model, position, orientation);
+  } else {
+    Device device = luax_optdevice(L, index);
+    return lovrHeadsetInterface->getPose(device, position, orientation);
+  }
+}
+
 static int l_lovrHeadsetIsTracked(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
   float position[3], orientation[4];
-  lua_pushboolean(L, lovrHeadsetInterface->getPose(device, position, orientation));
+  lua_pushboolean(L, luax_getpose(L, 1, position, orientation));
   return 1;
 }
 
 static int l_lovrHeadsetGetPose(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
   float position[3], orientation[4];
-  if (lovrHeadsetInterface->getPose(device, position, orientation)) {
+  if (luax_getpose(L, 1, position, orientation)) {
     float angle, ax, ay, az;
     quat_getAngleAxis(orientation, &angle, &ax, &ay, &az);
     lua_pushnumber(L, position[0]);
@@ -410,9 +418,8 @@ static int l_lovrHeadsetGetPose(lua_State* L) {
 }
 
 static int l_lovrHeadsetGetPosition(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
   float position[3], orientation[4];
-  if (lovrHeadsetInterface->getPose(device, position, orientation)) {
+  if (luax_getpose(L, 1, position, orientation)) {
     lua_pushnumber(L, position[0]);
     lua_pushnumber(L, position[1]);
     lua_pushnumber(L, position[2]);
@@ -425,9 +432,8 @@ static int l_lovrHeadsetGetPosition(lua_State* L) {
 }
 
 static int l_lovrHeadsetGetOrientation(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
   float position[3], orientation[4];
-  if (lovrHeadsetInterface->getPose(device, position, orientation)) {
+  if (luax_getpose(L, 1, position, orientation)) {
     float angle, ax, ay, az;
     quat_getAngleAxis(orientation, &angle, &ax, &ay, &az);
     lua_pushnumber(L, angle);
@@ -443,9 +449,8 @@ static int l_lovrHeadsetGetOrientation(lua_State* L) {
 }
 
 static int l_lovrHeadsetGetDirection(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
   float position[3], orientation[4];
-  if (lovrHeadsetInterface->getPose(device, position, orientation)) {
+  if (luax_getpose(L, 1, position, orientation)) {
     float direction[3];
     quat_getDirection(orientation, direction);
     lua_pushnumber(L, direction[0]);

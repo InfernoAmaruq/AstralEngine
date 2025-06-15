@@ -312,6 +312,10 @@ static struct ModelData* simulator_newModelData(uint64_t key) {
   return NULL;
 }
 
+static bool simulator_getModelPose(struct Model* model, float* position, float* orientation) {
+  return false;
+}
+
 static bool simulator_animate(struct Model* model) {
   return false;
 }
@@ -657,6 +661,7 @@ HeadsetInterface lovrHeadsetSimulatorDriver = {
   .stopVibration = simulator_stopVibration,
   .getModelKeys = simulator_getModelKeys,
   .newModelData = simulator_newModelData,
+  .getModelPose = simulator_getModelPose,
   .animate = simulator_animate,
   .setBackground = simulator_setBackground,
   .newLayer = simulator_newLayer,

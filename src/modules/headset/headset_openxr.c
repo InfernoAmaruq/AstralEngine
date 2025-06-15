@@ -277,7 +277,7 @@ static struct {
   XrAction actions[MAX_ACTIONS];
   XrPath actionFilters[MAX_DEVICES];
   XrHandTrackerEXT handTrackers[2];
-  XrRenderModelIdEXT* modelIds;
+  XrRenderModelIdEXT* modelKeys;
   RenderModel* models;
   uint32_t modelCount;
   FoveationLevel foveationLevel;
@@ -531,15 +531,15 @@ static bool loadControllerModels(void) {
   uint32_t count = 0;
   XrInteractionRenderModelIdsEnumerateInfoEXT enumerateInfo = { .type = XR_TYPE_INTERACTION_RENDER_MODEL_IDS_ENUMERATE_INFO_EXT };
   XR(xrEnumerateInteractionRenderModelIdsEXT(state.session, &enumerateInfo, 0, &count, NULL), "xrEnumerateInteractionRenderModelIdsEXT");
-  XrRenderModelIdEXT* ids = lovrMalloc(count * sizeof(XrRenderModelIdEXT));
-  XR(xrEnumerateInteractionRenderModelIdsEXT(state.session, &enumerateInfo, count, &count, ids), "xrEnumerateInteractionRenderModelIdsEXT");
+  XrRenderModelIdEXT* keys = lovrMalloc(count * sizeof(XrRenderModelIdEXT));
+  XR(xrEnumerateInteractionRenderModelIdsEXT(state.session, &enumerateInfo, count, &count, keys), "xrEnumerateInteractionRenderModelIdsEXT");
 
   // Destroy models that were removed
   for (uint32_t i = 0; i < state.modelCount; i++) {
     bool destroy = true;
 
     for (uint32_t j = 0; j < count; j++) {
-      if (state.modelIds[i] == ids[j]) {
+      if (state.modelKeys[i] == keys[j]) {
         destroy = false;
         break;
       }
@@ -551,21 +551,21 @@ static bool loadControllerModels(void) {
       lovrFree(state.models[i].nodeStates);
       lovrFree(state.models[i].nodes);
       state.models[i] = state.models[state.modelCount - 1];
-      state.modelIds[i] = state.modelIds[state.modelCount - 1];
+      state.modelKeys[i] = state.modelKeys[state.modelCount - 1];
       state.modelCount--;
       i--;
     }
   }
 
   state.models = lovrRealloc(state.models, count * sizeof(RenderModel));
-  state.modelIds = lovrRealloc(state.modelIds, count * sizeof(XrRenderModelIdEXT));
+  state.modelKeys = lovrRealloc(state.modelKeys, count * sizeof(XrRenderModelIdEXT));
 
   // Add new models
   for (uint32_t i = 0; i < count; i++) {
     bool found = false;
 
     for (uint32_t j = 0; j < state.modelCount; j++) {
-      if (ids[i] == state.modelIds[j]) {
+      if (keys[i] == state.modelKeys[j]) {
         found = true;
         break;
       }
@@ -573,7 +573,7 @@ static bool loadControllerModels(void) {
 
     if (!found) {
       RenderModel* model = &state.models[state.modelCount];
-      state.modelIds[state.modelCount] = ids[i];
+      state.modelKeys[state.modelCount] = keys[i];
       state.modelCount++;
 
       const char* gltfExtensions[] = {
@@ -582,7 +582,7 @@ static bool loadControllerModels(void) {
 
       XrRenderModelCreateInfoEXT createInfo = {
         .type = XR_TYPE_RENDER_MODEL_CREATE_INFO_EXT,
-        .renderModelId = ids[i],
+        .renderModelId = keys[i],
         .gltfExtensionCount = COUNTOF(gltfExtensions),
         .gltfExtensions = gltfExtensions
       };
@@ -601,7 +601,7 @@ static bool loadControllerModels(void) {
     }
   }
 
-  lovrFree(ids);
+  lovrFree(keys);
   return true;
 }
 
@@ -1989,9 +1989,9 @@ static bool openxr_start(void) {
 
   if (state.extensions.handTrackingMesh && !state.extensions.renderModel) {
     state.modelCount = 2;
-    state.modelIds = lovrMalloc(state.modelCount * sizeof(XrRenderModelIdEXT));
-    state.modelIds[0] = 1;
-    state.modelIds[1] = 2;
+    state.modelKeys = lovrMalloc(state.modelCount * sizeof(XrRenderModelIdEXT));
+    state.modelKeys[0] = 1;
+    state.modelKeys[1] = 2;
     state.models = lovrCalloc(state.modelCount * sizeof(XrRenderModelIdEXT));
     lovrEventPush((Event) { .type = EVENT_MODELSCHANGED });
   }
@@ -2043,7 +2043,7 @@ static void openxr_stop(void) {
     if (state.models[i].nodeStates) lovrFree(state.models[i].nodeStates);
     if (state.models[i].nodes) lovrFree(state.models[i].nodes);
   }
-  lovrFree(state.modelIds);
+  lovrFree(state.modelKeys);
   lovrFree(state.models);
 
   if (state.handTrackers[0]) xrDestroyHandTrackerEXT(state.handTrackers[0]);
@@ -2773,12 +2773,12 @@ static void openxr_stopVibration(Device device) {
 
 static const uint64_t* openxr_getModelKeys(uint32_t* count) {
   *count = state.modelCount;
-  return state.modelIds;
+  return state.modelKeys;
 }
 
 static ModelData* openxr_newModelDataEXT(uint64_t key) {
   for (uint32_t i = 0; i < state.modelCount; i++) {
-    if (state.modelIds[i] != key) {
+    if (state.modelKeys[i] != key) {
       continue;
     }
 
@@ -3071,7 +3071,7 @@ static bool openxr_getModelPose(Model* model, float* position, float* orientatio
     uint64_t key = lovrModelGetInfo(model)->data->id;
 
     for (uint32_t i = 0; i < state.modelCount; i++) {
-      if (state.modelIds[i] != key) {
+      if (state.modelKeys[i] != key) {
         continue;
       }
 
@@ -3088,13 +3088,15 @@ static bool openxr_getModelPose(Model* model, float* position, float* orientatio
     Device device = lovrModelGetInfo(model)->data->id == 1 ? DEVICE_HAND_LEFT : DEVICE_HAND_RIGHT;
     return openxr_getPose(device, position, orientation);
   }
+
+  return false;
 }
 
 static bool openxr_animateEXT(Model* model) {
   uint64_t key = lovrModelGetInfo(model)->data->id;
 
   for (uint32_t i = 0; i < state.modelCount; i++) {
-    if (state.modelIds[i] != key) {
+    if (state.modelKeys[i] != key) {
       continue;
     }
 

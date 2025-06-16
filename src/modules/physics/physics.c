@@ -171,9 +171,6 @@ static bool broadPhaseLayerFilter(void* userdata, JPH_BroadPhaseLayer layer) {
 static JPH_BroadPhaseLayerFilter* getBroadPhaseLayerFilter(World* world, uint32_t filter) {
   if (!thread.broadPhaseLayerFilter) {
     thread.broadPhaseLayerFilter = JPH_BroadPhaseLayerFilter_Create(NULL);
-    JPH_BroadPhaseLayerFilter_SetProcs(&(JPH_BroadPhaseLayerFilter_Procs) {
-      .ShouldCollide = broadPhaseLayerFilter
-    });
   }
 
   thread.broadPhaseLayerMask = 0;
@@ -190,9 +187,6 @@ static bool objectLayerFilter(void* userdata, JPH_ObjectLayer layer) {
 static JPH_ObjectLayerFilter* getObjectLayerFilter(World* world, uint32_t filter) {
   if (!thread.objectLayerFilter) {
     thread.objectLayerFilter = JPH_ObjectLayerFilter_Create(NULL);
-    JPH_ObjectLayerFilter_SetProcs(&(JPH_ObjectLayerFilter_Procs) {
-      .ShouldCollide = objectLayerFilter
-    });
   }
 
   // Never include objects on the last layer, reserved for colliders without shapes
@@ -332,6 +326,33 @@ bool lovrPhysicsInit(void (*freeUserData)(void* object, uintptr_t userdata)) {
   JPH_EmptyShapeSettings* settings = JPH_EmptyShapeSettings_Create(vec3_toJolt(center));
   state.emptyShape = (JPH_Shape*) JPH_EmptyShapeSettings_CreateShape(settings);
   JPH_ShapeSettings_Destroy((JPH_ShapeSettings*) settings);
+
+  // The memory for the callbacks has to remain valid...
+  static const JPH_BroadPhaseLayerFilter_Procs broadPhaseLayerFilterProcs = {
+    .ShouldCollide = broadPhaseLayerFilter
+  };
+
+  static const JPH_ObjectLayerFilter_Procs objectLayerFilterProcs = {
+    .ShouldCollide = objectLayerFilter
+  };
+
+  static const JPH_BodyActivationListener_Procs bodyActivationListenerProcs = {
+    .OnBodyActivated = onAwake,
+    .OnBodyDeactivated = onSleep
+  };
+
+  static const JPH_ContactListener_Procs contactListenerProcs = {
+    .OnContactValidate = onContactValidate,
+    .OnContactAdded = onContactAdded,
+    .OnContactPersisted = onContactPersisted,
+    .OnContactRemoved = onContactRemoved
+  };
+
+  JPH_BroadPhaseLayerFilter_SetProcs(&broadPhaseLayerFilterProcs);
+  JPH_ObjectLayerFilter_SetProcs(&objectLayerFilterProcs);
+  JPH_BodyActivationListener_SetProcs(&bodyActivationListenerProcs);
+  JPH_ContactListener_SetProcs(&contactListenerProcs);
+
   state.freeUserData = freeUserData;
   return state.initialized = true;
 }
@@ -423,10 +444,6 @@ World* lovrWorldCreate(WorldInfo* info) {
 
   world->activeColliders = lovrMalloc(info->maxColliders * sizeof(Collider*));
   world->activationListener = JPH_BodyActivationListener_Create(world);
-  JPH_BodyActivationListener_SetProcs(&(JPH_BodyActivationListener_Procs) {
-    .OnBodyActivated = onAwake,
-    .OnBodyDeactivated = onSleep
-  });
 
   JPH_PhysicsSystem_SetBodyActivationListener(world->system, world->activationListener);
 
@@ -782,13 +799,6 @@ void lovrWorldSetCallbacks(World* world, WorldCallbacks* callbacks) {
   } else {
     world->callbacks = *callbacks;
     world->listener = JPH_ContactListener_Create(world);
-    JPH_ContactListener_SetProcs(&(JPH_ContactListener_Procs) {
-      .OnContactValidate = onContactValidate,
-      .OnContactAdded = onContactAdded,
-      .OnContactPersisted = onContactPersisted,
-      .OnContactRemoved = onContactRemoved
-    });
-
     JPH_PhysicsSystem_SetContactListener(world->system, world->listener);
   }
 }

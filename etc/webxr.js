@@ -422,8 +422,17 @@ var webxr = {
     return; // TODO
   },
 
-  webxr_newModelData: function(device, animated) {
+  webxr_getModelKeys: function(count) {
+    HEAPU32[count >> 2] = 0;
     return 0; /* NULL */
+  },
+
+  webxr_newModelData: function(device) {
+    return 0; /* NULL */
+  },
+
+  webxr_getModelPose: function(device) {
+    return false;
   },
 
   webxr_animate: function(model) {

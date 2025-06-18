@@ -381,17 +381,25 @@ static int l_lovrHeadsetGetBoundsGeometry(lua_State* L) {
   return 1;
 }
 
+static bool luax_getpose(lua_State* L, int index, float* position, float* orientation) {
+  if (lua_type(L, index) == LUA_TUSERDATA) {
+    Model* model = luax_checktype(L, index, Model);
+    return lovrHeadsetInterface->getModelPose(model, position, orientation);
+  } else {
+    Device device = luax_optdevice(L, index);
+    return lovrHeadsetInterface->getPose(device, position, orientation);
+  }
+}
+
 static int l_lovrHeadsetIsTracked(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
   float position[3], orientation[4];
-  lua_pushboolean(L, lovrHeadsetInterface->getPose(device, position, orientation));
+  lua_pushboolean(L, luax_getpose(L, 1, position, orientation));
   return 1;
 }
 
 static int l_lovrHeadsetGetPose(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
   float position[3], orientation[4];
-  if (lovrHeadsetInterface->getPose(device, position, orientation)) {
+  if (luax_getpose(L, 1, position, orientation)) {
     float angle, ax, ay, az;
     quat_getAngleAxis(orientation, &angle, &ax, &ay, &az);
     lua_pushnumber(L, position[0]);
@@ -410,9 +418,8 @@ static int l_lovrHeadsetGetPose(lua_State* L) {
 }
 
 static int l_lovrHeadsetGetPosition(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
   float position[3], orientation[4];
-  if (lovrHeadsetInterface->getPose(device, position, orientation)) {
+  if (luax_getpose(L, 1, position, orientation)) {
     lua_pushnumber(L, position[0]);
     lua_pushnumber(L, position[1]);
     lua_pushnumber(L, position[2]);
@@ -425,9 +432,8 @@ static int l_lovrHeadsetGetPosition(lua_State* L) {
 }
 
 static int l_lovrHeadsetGetOrientation(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
   float position[3], orientation[4];
-  if (lovrHeadsetInterface->getPose(device, position, orientation)) {
+  if (luax_getpose(L, 1, position, orientation)) {
     float angle, ax, ay, az;
     quat_getAngleAxis(orientation, &angle, &ax, &ay, &az);
     lua_pushnumber(L, angle);
@@ -443,9 +449,8 @@ static int l_lovrHeadsetGetOrientation(lua_State* L) {
 }
 
 static int l_lovrHeadsetGetDirection(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
   float position[3], orientation[4];
-  if (lovrHeadsetInterface->getPose(device, position, orientation)) {
+  if (luax_getpose(L, 1, position, orientation)) {
     float direction[3];
     quat_getDirection(orientation, direction);
     lua_pushnumber(L, direction[0]);
@@ -629,17 +634,33 @@ static int l_lovrHeadsetStopVibration(lua_State* L) {
   return 0;
 }
 
-static int l_lovrHeadsetNewModel(lua_State* L) {
-  Device device = luax_optdevice(L, 1);
-  bool animated = false;
+static int l_lovrHeadsetGetModelKeys(lua_State* L) {
+  uint32_t count;
+  const uint64_t* keys = lovrHeadsetInterface->getModelKeys(&count);
+  lua_createtable(L, (int) count, 0);
+  for (uint32_t i = 0; i < count; i++) {
+    lua_pushlightuserdata(L, (void*) (uintptr_t) keys[i]);
+    lua_rawseti(L, -2, i + 1);
+  }
+  return 1;
+}
 
-  if (lua_istable(L, 2)) {
-    lua_getfield(L, 2, "animated");
-    animated = lua_toboolean(L, -1);
-    lua_pop(L, 1);
+static int l_lovrHeadsetNewModel(lua_State* L) {
+  uint64_t key;
+
+  if (lua_islightuserdata(L, 1)) {
+    key = (uint64_t) (uintptr_t) lua_topointer(L, 1);
+  } else if (lua_type(L, 1) == LUA_TSTRING) { // Deprecated
+    switch (luax_optdevice(L, 1)) {
+      case DEVICE_HAND_LEFT: key = 1; break;
+      case DEVICE_HAND_RIGHT: key = 2; break;
+      default: return 0;
+    }
+  } else {
+    return luax_typeerror(L, 1, "lightuserdata");
   }
 
-  ModelData* modelData = lovrHeadsetInterface->newModelData(device, animated);
+  ModelData* modelData = lovrHeadsetInterface->newModelData(key);
 
   if (modelData) {
     ModelInfo info = { .data = modelData, .mipmaps = true };
@@ -1003,6 +1024,7 @@ static const luaL_Reg lovrHeadset[] = {
   { "getSkeleton", l_lovrHeadsetGetSkeleton },
   { "vibrate", l_lovrHeadsetVibrate },
   { "stopVibration", l_lovrHeadsetStopVibration },
+  { "getModelKeys", l_lovrHeadsetGetModelKeys },
   { "newModel", l_lovrHeadsetNewModel },
   { "animate", l_lovrHeadsetAnimate },
   { "setBackground", l_lovrHeadsetSetBackground },

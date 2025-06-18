@@ -19,6 +19,7 @@ StringEntry lovrEventType[] = {
   [EVENT_FOCUS] = ENTRY("focus"),
   [EVENT_MOUNT] = ENTRY("mount"),
   [EVENT_RECENTER] = ENTRY("recenter"),
+  [EVENT_MODELSCHANGED] = ENTRY("modelschanged"),
   [EVENT_RESIZE] = ENTRY("resize"),
   [EVENT_KEYPRESSED] = ENTRY("keypressed"),
   [EVENT_KEYRELEASED] = ENTRY("keyreleased"),
@@ -218,6 +219,9 @@ static int nextEvent(lua_State* L) {
       return 2;
 
     case EVENT_RECENTER:
+      return 1;
+
+    case EVENT_MODELSCHANGED:
       return 1;
 
     case EVENT_RESIZE:

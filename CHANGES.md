@@ -11,10 +11,15 @@ dev
 - Add `t.graphics.hdr` and `lovr.graphics.isHDR`.
 - Add `pqToLinear`, `linearToPQ`, `sRGBToRec2020`, and `rec2020ToSRGB` shader helpers.
 - Add support for custom array strides in buffer formats.
+- Add `lovr.modelschanged` event.
+- Add `lovr.headset.getModelKeys`.
 
 ### Change
 
 - Change `require` to have better errors when files/plugins aren't found.
+- Change `lovr.headset.newModel` to also take a lightuserdata.
+- Change `lovr.headset.isTracked` to also take a `Model`.
+- Change `lovr.headset.getPosition/Orientation/Direction/Pose` to also take a `Model`.
 
 ### Fix
 
@@ -29,6 +34,14 @@ dev
 - Fix issue where normalized buffer fields were rounded incorrectly.
 - Fix possible crash related to Thread:wait.
 - Fix possible crash in Model animation.
+
+### Deprecate
+
+- Deprecate variant of `lovr.headset.newModel` that takes a `Device`.
+
+### Remove
+
+- Remove `animated` flag in `lovr.headset.newModel` (all models are animated now).
 
 v0.18.0 - 2025-02-14
 ---

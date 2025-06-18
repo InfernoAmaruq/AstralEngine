@@ -34,7 +34,9 @@ extern bool webxr_getAxis(Device device, DeviceAxis axis, float* value);
 extern bool webxr_getSkeleton(Device device, float* poses, SkeletonSource* source);
 extern bool webxr_vibrate(Device device, float strength, float duration, float frequency);
 extern void webxr_stopVibration(Device device);
-extern struct ModelData* webxr_newModelData(Device device, bool animated);
+extern const uint64_t* webxr_getModelKeys(uint32_t* count);
+extern struct ModelData* webxr_newModelData(uint64_t key);
+extern bool webxr_getModelPose(struct Model* model, float* position, float* orientation);
 extern bool webxr_animate(struct Model* model);
 extern bool webxr_getTexture(struct Texture** texture);
 extern bool webxr_getPass(struct Pass** pass);
@@ -102,7 +104,9 @@ HeadsetInterface lovrHeadsetWebXRDriver = {
   .getSkeleton = webxr_getSkeleton,
   .vibrate = webxr_vibrate,
   .stopVibration = webxr_stopVibration,
+  .getModelKeys = webxr_getModelKeys,
   .newModelData = webxr_newModelData,
+  .getModelPose = webxr_getModelPose,
   .animate = webxr_animate,
   .getTexture = webxr_getTexture,
   .getPass = webxr_getPass,

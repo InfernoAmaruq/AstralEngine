@@ -230,7 +230,9 @@ typedef struct HeadsetInterface {
   bool (*getSkeleton)(Device device, float* poses, SkeletonSource* source);
   bool (*vibrate)(Device device, float strength, float duration, float frequency);
   void (*stopVibration)(Device device);
-  struct ModelData* (*newModelData)(Device device, bool animated);
+  const uint64_t* (*getModelKeys)(uint32_t* count);
+  struct ModelData* (*newModelData)(uint64_t key);
+  bool (*getModelPose)(struct Model* model, float* position, float* orientation);
   bool (*animate)(struct Model* model);
   struct Texture* (*setBackground)(uint32_t width, uint32_t height, uint32_t layers);
   Layer* (*newLayer)(const LayerInfo* info);

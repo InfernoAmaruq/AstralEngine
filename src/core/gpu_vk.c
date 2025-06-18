@@ -8,6 +8,9 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
+#ifdef __APPLE__
+#include <stdlib.h>
+#endif
 #define THREAD_LOCAL __thread
 #include <dlfcn.h>
 #endif
@@ -2548,8 +2551,10 @@ bool gpu_init(gpu_config* config) {
   ASSERT(state.library, "Failed to load vulkan library") goto fail;
   vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr) GetProcAddress(state.library, "vkGetInstanceProcAddr");
 #elif __APPLE__
-  state.library = dlopen("libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
+  state.library = dlopen("libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
+  if (!state.library) state.library = dlopen("libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
   if (!state.library) state.library = dlopen("libMoltenVK.dylib", RTLD_NOW | RTLD_LOCAL);
+  if (!state.library && !getenv("DYLD_FALLBACK_LIBRARY_PATH")) state.library = dlopen("/usr/local/lib/libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
   ASSERT(state.library, "Failed to load vulkan library") goto fail;
   vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr) dlsym(state.library, "vkGetInstanceProcAddr");
 #else

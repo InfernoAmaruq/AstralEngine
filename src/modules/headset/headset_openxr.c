@@ -599,6 +599,9 @@ static bool loadControllerModels(void) {
       };
 
       XR(xrCreateRenderModelSpaceEXT(state.session, &spaceInfo, &model->space), "xrCreateRenderModelSpaceEXT");
+
+      model->nodeStates = NULL;
+      model->nodes = NULL;
     }
   }
 
@@ -2042,8 +2045,8 @@ static void openxr_stop(void) {
   for (uint32_t i = 0; i < state.modelCount; i++) {
     if (state.models[i].handle) xrDestroyRenderModelEXT(state.models[i].handle);
     if (state.models[i].space) xrDestroySpace(state.models[i].space);
-    if (state.models[i].nodeStates) lovrFree(state.models[i].nodeStates);
-    if (state.models[i].nodes) lovrFree(state.models[i].nodes);
+    lovrFree(state.models[i].nodeStates);
+    lovrFree(state.models[i].nodes);
   }
   lovrFree(state.modelKeys);
   lovrFree(state.models);
@@ -2794,28 +2797,12 @@ static ModelData* openxr_newModelDataEXT(uint64_t key) {
     XrRenderModelAssetEXT asset;
     XR(xrCreateRenderModelAssetEXT(state.session, &assetInfo, &asset), "xrCreateRenderModelAssetEXT");
 
-    XrRenderModelAssetDataGetInfoEXT dataInfo = { .type = XR_TYPE_RENDER_MODEL_ASSET_DATA_GET_INFO_EXT };
-    XrRenderModelAssetDataEXT data = { .type = XR_TYPE_RENDER_MODEL_ASSET_DATA_EXT };
-    XR(xrGetRenderModelAssetDataEXT(asset, &dataInfo, &data), "xrGetRenderModelAssetDataEXT");
-
-    data.bufferCapacityInput = data.bufferCountOutput;
-    data.buffer = lovrMalloc(data.bufferCountOutput);
-
-    XR(xrGetRenderModelAssetDataEXT(asset, &dataInfo, &data), "xrGetRenderModelAssetDataEXT");
-    Blob* blob = lovrBlobCreate(data.buffer, data.bufferCountOutput, "Headset Render Model Data");
-
-    ModelData* modelData = lovrModelDataCreate(blob, NULL);
-    xrDestroyRenderModelAssetEXT(asset);
-    lovrRelease(blob, lovrBlobDestroy);
-
-    if (!modelData) {
-      return NULL;
-    }
+    XrRenderModelAssetNodePropertiesEXT* nodeProperties = NULL;
 
     if (!model->nodes) {
       uint32_t nodeCount = model->properties.animatableNodeCount;
       XrRenderModelAssetPropertiesGetInfoEXT propertyInfo = { .type = XR_TYPE_RENDER_MODEL_ASSET_PROPERTIES_GET_INFO_EXT };
-      XrRenderModelAssetNodePropertiesEXT* nodeProperties = lovrMalloc(nodeCount * sizeof(XrRenderModelAssetNodePropertiesEXT));
+      nodeProperties = lovrMalloc(nodeCount * sizeof(XrRenderModelAssetNodePropertiesEXT));
 
       XrRenderModelAssetPropertiesEXT properties = {
         .type = XR_TYPE_RENDER_MODEL_ASSET_PROPERTIES_EXT,
@@ -2827,32 +2814,43 @@ static ModelData* openxr_newModelDataEXT(uint64_t key) {
 
       if (XR_FAILED(result)) {
         xrthrow(result, "xrGetRenderModelAssetPropertiesEXT");
-        lovrRelease(modelData, lovrModelDataDestroy);
+        xrDestroyRenderModelAssetEXT(asset);
         lovrFree(nodeProperties);
         return NULL;
       }
-
-      model->nodes = lovrMalloc(nodeCount * sizeof(uint32_t));
-      model->nodeStates = lovrMalloc(nodeCount * sizeof(XrRenderModelNodeStateEXT));
-
-      for (uint32_t n = 0; n < nodeCount; n++) {
-        const char* name = nodeProperties[n].uniqueName;
-        size_t length = strlen(nodeProperties[n].uniqueName);
-        model->nodes[n] = map_get(modelData->nodeMap, hash64(name, length));
-
-        if (model->nodes[n] == ~0u) {
-          lovrSetError("Invalid render model node name %s", name);
-          lovrRelease(modelData, lovrModelDataDestroy);
-          lovrFree(model->nodeStates);
-          lovrFree(model->nodes);
-          lovrFree(nodeProperties);
-          return NULL;
-        }
-      }
-
-      lovrFree(nodeProperties);
     }
 
+    XrRenderModelAssetDataGetInfoEXT dataInfo = { .type = XR_TYPE_RENDER_MODEL_ASSET_DATA_GET_INFO_EXT };
+    XrRenderModelAssetDataEXT data = { .type = XR_TYPE_RENDER_MODEL_ASSET_DATA_EXT };
+    XR(xrGetRenderModelAssetDataEXT(asset, &dataInfo, &data), "xrGetRenderModelAssetDataEXT");
+
+    data.bufferCapacityInput = data.bufferCountOutput;
+    data.buffer = lovrMalloc(data.bufferCountOutput);
+
+    XR(xrGetRenderModelAssetDataEXT(asset, &dataInfo, &data), "xrGetRenderModelAssetDataEXT");
+    Blob* blob = lovrBlobCreate(data.buffer, data.bufferCountOutput, "Headset Render Model Data");
+    xrDestroyRenderModelAssetEXT(asset);
+
+    ModelData* modelData = lovrModelDataCreate(blob, NULL);
+    lovrRelease(blob, lovrBlobDestroy);
+
+    if (modelData) {
+      modelData->id = key;
+
+      if (!model->nodes) {
+        uint32_t nodeCount = model->properties.animatableNodeCount;
+        model->nodes = lovrMalloc(nodeCount * sizeof(uint32_t));
+        model->nodeStates = lovrMalloc(nodeCount * sizeof(XrRenderModelNodeStateEXT));
+
+        for (uint32_t n = 0; n < nodeCount; n++) {
+          const char* name = nodeProperties[n].uniqueName;
+          size_t length = strlen(nodeProperties[n].uniqueName);
+          model->nodes[n] = map_get(modelData->nodeMap, hash64(name, length));
+        }
+      }
+    }
+
+    lovrFree(nodeProperties);
     return modelData;
   }
 
@@ -3121,6 +3119,10 @@ static bool openxr_animateEXT(Model* model) {
 
     for (uint32_t n = 0; n < modelState.nodeStateCount; n++) {
       XrRenderModelNodeStateEXT nodeState = renderModel->nodeStates[n];
+
+      if (renderModel->nodes[n] == ~0u) {
+        continue;
+      }
 
       float position[3], orientation[4];
       vec3_init(position, &nodeState.nodePose.position.x);

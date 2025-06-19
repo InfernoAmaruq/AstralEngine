@@ -325,6 +325,7 @@ static struct {
     bool swapchainUpdate;
     bool refreshRate;
     bool threadHint;
+    bool uuid;
     bool visibilityMask;
     bool viveTrackers;
   } extensions;
@@ -975,6 +976,7 @@ static bool openxr_init(HeadsetConfig* config) {
     { "XR_EXT_palm_pose", &state.extensions.palmPose, true },
     { "XR_EXT_render_model", &state.extensions.renderModel, true },
     { "XR_EXT_user_presence", &state.extensions.presence, true },
+    { "XR_EXT_uuid", &state.extensions.uuid, true },
     { "XR_BD_controller_interaction", &state.extensions.picoController, true },
     { "XR_FB_composition_layer_depth_test", &state.extensions.layerDepthTest, true },
     { "XR_FB_composition_layer_settings", &state.extensions.layerSettings, true },

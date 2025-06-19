@@ -211,6 +211,14 @@ bool lovrSystemWasMouseReleased(int button) {
   return state.prevMouseState[button] && !state.mouseState[button];
 }
 
+bool lovrSystemIsMouseGrabbed(void) {
+  return os_get_mouse_mode() == MOUSE_MODE_GRABBED;
+}
+
+void lovrSystemSetMouseGrabbed(bool grabbed) {
+  os_set_mouse_mode(grabbed ? MOUSE_MODE_GRABBED : MOUSE_MODE_NORMAL);
+}
+
 // This is kind of a hacky thing for the simulator, since we're kinda bad at event dispatch
 float lovrSystemGetScrollDelta(void) {
   return state.scrollDelta;

@@ -322,6 +322,18 @@ static int l_lovrSystemWasMouseReleased(lua_State* L) {
   return 1;
 }
 
+static int l_lovrSystemIsMouseGrabbed(lua_State* L) {
+  bool grabbed = lovrSystemIsMouseGrabbed();
+  lua_pushboolean(L, grabbed);
+  return 1;
+}
+
+static int l_lovrSystemSetMouseGrabbed(lua_State* L) {
+  bool grabbed = lua_toboolean(L, 1);
+  lovrSystemSetMouseGrabbed(grabbed);
+  return 0;
+}
+
 static int l_lovrSystemGetClipboardText(lua_State* L) {
   const char* text = lovrSystemGetClipboardText();
   lua_pushstring(L, text);
@@ -359,6 +371,8 @@ static const luaL_Reg lovrSystem[] = {
   { "isMouseDown", l_lovrSystemIsMouseDown },
   { "wasMousePressed", l_lovrSystemWasMousePressed },
   { "wasMouseReleased", l_lovrSystemWasMouseReleased },
+  { "isMouseGrabbed", l_lovrSystemIsMouseGrabbed },
+  { "setMouseGrabbed", l_lovrSystemSetMouseGrabbed },
   { "getClipboardText", l_lovrSystemGetClipboardText },
   { "setClipboardText", l_lovrSystemSetClipboardText },
   { NULL, NULL }

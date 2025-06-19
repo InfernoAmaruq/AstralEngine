@@ -172,12 +172,13 @@ function lovr.run()
     end
     local dt = 0
     if lovr.timer then dt = lovr.timer.step() end
-    if lovr.headset and lovr.headset.isActive() then dt = lovr.headset.update() end
+    if lovr.headset then dt = lovr.headset.update() end
+    if not lovr.headset.isActive() then lovr.simulate(dt) end
     if lovr.update then lovr.update(dt) end
     if lovr.graphics then
+      local window = lovr.graphics.getWindowPass()
       local headset = lovr.headset and lovr.headset.getPass()
       if headset and (not lovr.draw or lovr.draw(headset)) then headset = nil end
-      local window = lovr.graphics.getWindowPass()
       if window and (not lovr.mirror or lovr.mirror(window)) then window = nil end
       lovr.graphics.submit(headset, window)
       lovr.graphics.present()
@@ -188,14 +189,64 @@ function lovr.run()
 end
 
 function lovr.mirror(pass)
-  if lovr.headset and lovr.headset.isActive() then
-    local texture = lovr.headset.getTexture()
+  if lovr.headset then
+    local texture = lovr.headset.isActive() and lovr.headset.getTexture()
     if texture then
       pass:fill(texture)
+    else
+      return true
     end
   else
     return lovr.draw and lovr.draw(pass)
   end
+end
+
+local mx, my, pitch, yaw = 0, 0, 0, 0
+
+function lovr.simulate(dt)
+  local movespeed = 3
+  local sprintspeed = 15
+  local walkspeed = .5
+  local turnspeed = .005
+  local turnsmooth = 30
+
+  local click = lovr.system.isMouseDown(1)
+
+  lovr.system.setMouseGrabbed(click)
+
+  local mxprev, myprev = mx, my
+  mx, my = lovr.system.getMousePosition()
+
+  if click then
+    pitch = pitch - (my - myprev) * turnspeed
+    pitch = math.min(pitch, math.pi / 2)
+    pitch = math.max(pitch, -math.pi / 2)
+    yaw = yaw - (mx - mxprev) * turnspeed
+  end
+
+  local angle, ax, ay, az = lovr.headset.getOrientation()
+  local target = quat(yaw, 0, 1, 0) * quat(pitch, 1, 0, 0)
+  local orientation = quat(angle, ax, ay, az):slerp(target, 1 - math.exp(-turnsmooth * dt))
+
+  local sprint = lovr.system.isKeyDown('lshift', 'rshift')
+  local walk = lovr.system.isKeyDown('lctrl', 'rctrl')
+  local forward = lovr.system.isKeyDown('w', 'up')
+  local backward = lovr.system.isKeyDown('s', 'down')
+  local left = lovr.system.isKeyDown('a', 'left')
+  local right = lovr.system.isKeyDown('d', 'right')
+  local up = lovr.system.isKeyDown('q')
+  local down = lovr.system.isKeyDown('e')
+
+  local vx = left and -1 or right and 1 or 0
+  local vy = down and -1 or up and 1 or 0
+  local vz = forward and -1 or backward and 1 or 0
+  local speed = sprint and sprintspeed or walk and walkspeed or movespeed
+  local velocity = vec3(vx, vy, vz):normalize():mul(speed * dt)
+  local position = vec3(lovr.headset.getSimulatedPosition('head')) + orientation * velocity
+  lovr.headset.setSimulatedPose('head', position, orientation)
+
+  lovr.headset.setSimulatedButton('hand/left', 'trigger', lovr.system.isMouseDown(2))
+  lovr.headset.setSimulatedButton('hand/left/point', 'trigger', lovr.system.isMouseDown(2))
 end
 
 local function formatTraceback(s)

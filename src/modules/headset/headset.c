@@ -5,6 +5,8 @@
 #include "event/event.h"
 #include "graphics/graphics.h"
 #include "math/math.h"
+#include "system/system.h"
+#include "timer/timer.h"
 #include "core/maf.h"
 #include "core/os.h"
 #include "util.h"
@@ -194,6 +196,12 @@ typedef struct {
   XrSpace space;
 } RenderModel;
 
+typedef struct {
+  float poses[MAX_DEVICES][7];
+  uint32_t lastButtons[MAX_DEVICES];
+  uint32_t buttons[MAX_DEVICES];
+} Simulator;
+
 enum {
   ACTION_NONE,
   ACTION_GRIP_POSE,
@@ -237,6 +245,7 @@ enum {
 static struct {
   bool initialized;
   HeadsetConfig config;
+  Simulator simulator;
   XrInstance instance;
   XrSystemId system;
   XrSession session;
@@ -356,6 +365,8 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
   if (state.initialized) return true;
   state.initialized = true;
   state.config = *config;
+
+  lovrHeadsetSetClipDistance(.01f, 0.f);
 
   XrResult result;
 
@@ -1207,7 +1218,6 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
     }
   }
 
-  lovrHeadsetSetClipDistance(.01f, 0.f);
   state.frameState.type = XR_TYPE_FRAME_STATE;
   return true;
 }
@@ -1602,6 +1612,8 @@ bool lovrHeadsetIsMounted(void) {
 
 bool lovrHeadsetUpdate(double* dt) {
   if (!state.session) {
+    memcpy(state.simulator.lastButtons, state.simulator.buttons, sizeof(state.simulator.buttons));
+    *dt = lovrTimerGetDelta();
     return true;
   }
 
@@ -1737,8 +1749,12 @@ double lovrHeadsetGetDisplayTime(void) {
 }
 
 void lovrHeadsetGetDisplayDimensions(uint32_t* width, uint32_t* height) {
-  *width = state.width;
-  *height = state.height;
+  if (state.session) {
+    *width = state.width;
+    *height = state.height;
+  } else {
+    lovrSystemGetWindowSize(width, height);
+  }
 }
 
 float lovrHeadsetGetRefreshRate(void) {
@@ -1982,6 +1998,13 @@ uint32_t lovrHeadsetGetViewCount(void) {
 }
 
 bool lovrHeadsetGetViewPose(uint32_t view, float* position, float* orientation) {
+  if (!state.session) {
+    vec3_init(position, state.simulator.poses[DEVICE_HEAD]);
+    quat_init(orientation, state.simulator.poses[DEVICE_HEAD] + 3);
+    if (!state.config.seated) position[1] += 1.7;
+    return view == 0;
+  }
+
   uint32_t count;
   XrView views[2];
   XrViewStateFlags flags = getViews(views, &count);
@@ -2006,6 +2029,18 @@ bool lovrHeadsetGetViewPose(uint32_t view, float* position, float* orientation) 
 }
 
 bool lovrHeadsetGetViewAngles(uint32_t view, float* left, float* right, float* up, float* down) {
+  if (!state.session) {
+    uint32_t width, height;
+    lovrHeadsetGetDisplayDimensions(&width, &height);
+    float aspect = (float) width / height;
+    float fov = .7f;
+    *left = atanf(tanf(fov) * aspect);
+    *right = atanf(tanf(fov) * aspect);
+    *up = fov;
+    *down = fov;
+    return view == 0;
+  }
+
   uint32_t count;
   XrView views[2];
   XrViewStateFlags flags = getViews(views, &count);
@@ -2048,6 +2083,11 @@ const float* lovrHeadsetGetBoundsGeometry(uint32_t* count) {
 }
 
 bool lovrHeadsetGetPose(Device device, float* position, float* orientation) {
+  if (!state.session) {
+    lovrHeadsetGetSimulatedPose(device, position, orientation);
+    return true;
+  }
+
   if (state.frameState.predictedDisplayTime <= 0) {
     return false;
   }
@@ -2126,6 +2166,13 @@ bool lovrHeadsetGetVelocity(Device device, float* linearVelocity, float* angular
 }
 
 bool lovrHeadsetIsDown(Device device, DeviceButton button, bool* down, bool* changed) {
+  if (!state.session) {
+    uint32_t mask = 1u << button;
+    *down = state.simulator.buttons[device] & mask;
+    *changed = (state.simulator.lastButtons[device] & mask) ^ (state.simulator.buttons[device] & mask);
+    return true;
+  }
+
   static const uint8_t actions[MAX_DEVICES][MAX_BUTTONS] = {
     [DEVICE_HAND_LEFT] = {
       [BUTTON_TRIGGER] = ACTION_TRIGGER_DOWN,
@@ -2273,6 +2320,25 @@ bool lovrHeadsetGetAxis(Device device, DeviceAxis axis, float* value) {
     *value = actionState.currentState;
     return actionState.isActive;
   }
+}
+
+void lovrHeadsetGetSimulatedPose(Device device, float* position, float* orientation) {
+  vec3_init(position, state.simulator.poses[device] + 0);
+  quat_init(orientation, state.simulator.poses[device] + 3);
+}
+
+void lovrHeadsetSetSimulatedPose(Device device, float* position, float* orientation) {
+  vec3_init(state.simulator.poses[device] + 0, position);
+  quat_init(state.simulator.poses[device] + 3, orientation);
+}
+
+bool lovrHeadsetGetSimulatedButton(Device device, DeviceButton button) {
+  return state.simulator.buttons[device] & (1u << button);
+}
+
+void lovrHeadsetSetSimulatedButton(Device device, DeviceButton button, bool down) {
+  state.simulator.buttons[device] &= ~(1u << button);
+  state.simulator.buttons[device] |= down << button;
 }
 
 bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source) {
@@ -2921,6 +2987,10 @@ bool lovrHeadsetSetLayers(Layer** layers, uint32_t count, bool main) {
 }
 
 bool lovrHeadsetGetTexture(Texture** texture) {
+  if (!state.session) {
+    return lovrGraphicsGetWindowTexture(texture);
+  }
+
   if (!SESSION_RUNNING(state.sessionState)) {
     *texture = NULL;
     return true;
@@ -2963,6 +3033,25 @@ bool lovrHeadsetGetDepthTexture(Texture** texture) {
 }
 
 bool lovrHeadsetGetPass(Pass** pass) {
+  if (!state.session) {
+    if (!lovrGraphicsGetWindowPass(pass)) {
+      return false;
+    }
+
+    float position[3], orientation[4], viewMatrix[16];
+    lovrHeadsetGetViewPose(0, position, orientation);
+    mat4_fromPose(viewMatrix, position, orientation);
+    mat4_invert(viewMatrix);
+
+    float left, right, up, down, projection[16];
+    lovrHeadsetGetViewAngles(0, &left, &right, &up, &down);
+    mat4_fov(projection, left, right, up, down, state.clipNear, state.clipFar);
+
+    lovrPassSetViewMatrix(*pass, 0, viewMatrix);
+    lovrPassSetProjection(*pass, 0, projection);
+    return true;
+  }
+
   if (state.began) {
     *pass = state.frameState.shouldRender ? state.pass : NULL;
     return true;

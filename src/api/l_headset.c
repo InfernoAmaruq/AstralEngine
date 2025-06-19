@@ -663,7 +663,12 @@ static int l_lovrHeadsetNewModel(lua_State* L) {
   ModelData* modelData = lovrHeadsetInterface->newModelData(key);
 
   if (modelData) {
-    ModelInfo info = { .data = modelData, .mipmaps = true };
+    ModelInfo info = {
+      .data = modelData,
+      .materials = true,
+      .mipmaps = true
+    };
+
     Model* model = lovrModelCreate(&info);
     lovrRelease(modelData, lovrModelDataDestroy);
     luax_assert(L, model);

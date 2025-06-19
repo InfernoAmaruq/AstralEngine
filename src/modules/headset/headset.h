@@ -240,6 +240,7 @@ struct Pass* lovrLayerGetPass(Layer* layer);
 
 // Private
 
+bool lovrHeadsetIsSupported(void);
 void lovrHeadsetGetVulkanPhysicalDevice(void* instance, uintptr_t physicalDevice);
 uint32_t lovrHeadsetCreateVulkanInstance(void* instanceCreateInfo, void* allocator, uintptr_t instance, void* getInstanceProcAddr);
 uint32_t lovrHeadsetCreateVulkanDevice(void* instance, void* deviceCreateInfo, void* allocatoor, uintptr_t device, void* getInstanceProcAddr);

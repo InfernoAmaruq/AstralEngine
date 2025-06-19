@@ -15,7 +15,7 @@ end
 function lovr.draw(pass)
   local padding = .1
   local font = lovr.graphics.getDefaultFont()
-  local fade = .315 + .685 * math.abs(math.sin(lovr.headset.getTime() * 2))
+  local fade = .315 + .685 * math.abs(math.sin(lovr.timer.getTime() * 2))
   local titlePosition = 1.5 - padding
   local subtitlePosition = titlePosition - font:getHeight() * .25 - padding
 

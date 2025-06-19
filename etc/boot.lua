@@ -146,7 +146,7 @@ function lovr.boot()
   end
 
   if lovr.headset and conf.headset.start then
-    assert(lovr.headset.start())
+    lovr.headset.start()
   end
 
   if not ok and failure then

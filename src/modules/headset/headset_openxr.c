@@ -1979,7 +1979,7 @@ static bool openxr_start(void) {
   // On Quest, ask for the default passthrough mode at startup (will check preference and enable
   // passthrough if needed)
   if (state.extensions.passthroughPreferences && state.extensions.questPassthrough) {
-    lovrHeadsetInterface->setPassthrough(PASSTHROUGH_DEFAULT);
+    lovrHeadsetSetPassthrough(PASSTHROUGH_DEFAULT);
   }
 
   if (state.extensions.refreshRate) {
@@ -3911,75 +3911,3 @@ static bool openxr_update(double* dt) {
   *dt = openxr_getDeltaTime();
   return true;
 }
-
-HeadsetInterface lovrHeadsetOpenXRDriver = {
-  .driverType = DRIVER_OPENXR,
-  .getVulkanPhysicalDevice = openxr_getVulkanPhysicalDevice,
-  .createVulkanInstance = openxr_createVulkanInstance,
-  .createVulkanDevice = openxr_createVulkanDevice,
-  .getOpenXRInstanceHandle = openxr_getOpenXRInstanceHandle,
-  .getOpenXRSessionHandle = openxr_getOpenXRSessionHandle,
-  .init = openxr_init,
-  .start = openxr_start,
-  .stop = openxr_stop,
-  .destroy = openxr_destroy,
-  .getDriverName = openxr_getDriverName,
-  .getFeatures = openxr_getFeatures,
-  .getName = openxr_getName,
-  .isSeated = openxr_isSeated,
-  .getDisplayDimensions = openxr_getDisplayDimensions,
-  .getRefreshRate = openxr_getRefreshRate,
-  .setRefreshRate = openxr_setRefreshRate,
-  .getRefreshRates = openxr_getRefreshRates,
-  .getFoveation = openxr_getFoveation,
-  .setFoveation = openxr_setFoveation,
-  .getPassthrough = openxr_getPassthrough,
-  .setPassthrough = openxr_setPassthrough,
-  .isPassthroughSupported = openxr_isPassthroughSupported,
-  .getDisplayTime = openxr_getDisplayTime,
-  .getDeltaTime = openxr_getDeltaTime,
-  .getViewCount = openxr_getViewCount,
-  .getViewPose = openxr_getViewPose,
-  .getViewAngles = openxr_getViewAngles,
-  .getClipDistance = openxr_getClipDistance,
-  .setClipDistance = openxr_setClipDistance,
-  .getBoundsDimensions = openxr_getBoundsDimensions,
-  .getBoundsGeometry = openxr_getBoundsGeometry,
-  .getPose = openxr_getPose,
-  .getVelocity = openxr_getVelocity,
-  .isDown = openxr_isDown,
-  .isTouched = openxr_isTouched,
-  .getAxis = openxr_getAxis,
-  .getSkeleton = openxr_getSkeleton,
-  .vibrate = openxr_vibrate,
-  .stopVibration = openxr_stopVibration,
-  .getModelKeys = openxr_getModelKeys,
-  .newModelData = openxr_newModelData,
-  .getModelPose = openxr_getModelPose,
-  .animate = openxr_animate,
-  .setBackground = openxr_setBackground,
-  .newLayer = openxr_newLayer,
-  .destroyLayer = openxr_destroyLayer,
-  .getLayers = openxr_getLayers,
-  .setLayers = openxr_setLayers,
-  .getLayerPose = openxr_getLayerPose,
-  .setLayerPose = openxr_setLayerPose,
-  .getLayerDimensions = openxr_getLayerDimensions,
-  .setLayerDimensions = openxr_setLayerDimensions,
-  .getLayerCurve = openxr_getLayerCurve,
-  .setLayerCurve = openxr_setLayerCurve,
-  .getLayerColor = openxr_getLayerColor,
-  .setLayerColor = openxr_setLayerColor,
-  .getLayerViewport = openxr_getLayerViewport,
-  .setLayerViewport = openxr_setLayerViewport,
-  .getLayerTexture = openxr_getLayerTexture,
-  .getLayerPass = openxr_getLayerPass,
-  .getTexture = openxr_getTexture,
-  .getPass = openxr_getPass,
-  .submit = openxr_submit,
-  .isActive = openxr_isActive,
-  .isVisible = openxr_isVisible,
-  .isFocused = openxr_isFocused,
-  .isMounted = openxr_isMounted,
-  .update = openxr_update
-};

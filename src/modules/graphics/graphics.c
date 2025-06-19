@@ -670,9 +670,9 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
     .vk.cacheSize = config->cacheSize,
 #endif
 #if defined(LOVR_VK) && !defined(LOVR_DISABLE_HEADSET)
-    .vk.getPhysicalDevice = lovrHeadsetInterface ? lovrHeadsetInterface->getVulkanPhysicalDevice : NULL,
-    .vk.createInstance = lovrHeadsetInterface ? lovrHeadsetInterface->createVulkanInstance : NULL,
-    .vk.createDevice = lovrHeadsetInterface ? lovrHeadsetInterface->createVulkanDevice : NULL,
+    .vk.getPhysicalDevice = lovrHeadsetGetVulkanPhysicalDevice,
+    .vk.createInstance = lovrHeadsetCreateVulkanInstance,
+    .vk.createDevice = lovrHeadsetCreateVulkanDevice
 #endif
   };
 
@@ -877,9 +877,7 @@ void lovrGraphicsDestroy(void) {
   // If there's an active headset session it needs to be stopped so it can clean up its Pass and
   // swapchain textures before gpu_destroy is called.  This is really hacky and should be solved
   // with module-level refcounting in the future.
-  if (lovrHeadsetInterface && lovrHeadsetInterface->stop) {
-    lovrHeadsetInterface->stop();
-  }
+  lovrHeadsetStop();
 #endif
   Readback* readback = state.oldestReadback;
   while (readback) {
@@ -1371,7 +1369,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
 #ifdef LOVR_DISABLE_HEADSET
   global->time = os_get_time();
 #else
-  global->time = lovrHeadsetInterface ? lovrHeadsetInterface->getDisplayTime() : os_get_time();
+  global->time = lovrHeadsetIsActive() ? lovrHeadsetGetDisplayTime() : os_get_time();
 #endif
 
   // Cameras
@@ -2317,7 +2315,7 @@ bool lovrGraphicsGetWindowTexture(Texture** texture) {
 
     bool vsync = state.config.vsync;
 #ifndef LOVR_DISABLE_HEADSET
-    if (lovrHeadsetInterface && lovrHeadsetInterface->driverType != DRIVER_SIMULATOR) {
+    if (lovrHeadsetIsActive()) {
       vsync = false;
     }
 #endif

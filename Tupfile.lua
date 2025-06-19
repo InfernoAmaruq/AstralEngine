@@ -7,6 +7,7 @@ config = {
   strict = true,
   glfw = true,
   luajit = false,
+  openxr = '/path/to/openxr',
   glslang = true,
   utf8 = true,
   modules = {
@@ -21,11 +22,6 @@ config = {
     system = true,
     thread = true,
     timer = true
-  },
-  headsets = {
-    simulator = true,
-    openxr = false,
-    webxr = false
   },
   renderers = {
     vulkan = true,
@@ -54,7 +50,7 @@ config = {
 -- supercharge adds dangerous/aggressive optimizations that may reduce stability
 -- sanitize adds checks for memory leaks and undefined behavior (reduces performance)
 -- strict will make warnings fail the build
--- luajit and headsets.openxr should be a path to a folder with the lib (tup can't build them yet)
+-- luajit should be a path to a folder with the lib (tup can't build it yet)
 -- android.package should be something like 'org.lovr.app'
 -- android.project is a path to a lovr project folder that will be included in the apk
 -- tup.config can also be used to override properties without modifying this file:
@@ -155,11 +151,7 @@ if target == 'wasm' then
   cflags += '-std=gnu11'
   cflags += '-D_POSIX_C_SOURCE=200809L'
   lflags += '-s FORCE_FILESYSTEM'
-  exported_functions = { '_main', '_lovrDestroy' }
-  if config.headsets.webxr then
-    exported_functions += { '_webxr_attach', '_webxr_detach' }
-    lflags += '--js-library etc/webxr.js'
-  end
+  exported_functions = { '_main' }
   lflags += '--shell-file etc/lovr.html'
   lflags += '-s EXPORTED_FUNCTIONS=' .. table.concat(exported_functions, ',')
   extras += { 'bin/lovr.js', 'bin/lovr.wasm' }
@@ -174,7 +166,6 @@ if target == 'wasm' then
 end
 
 if target == 'android' then
-  assert(config.headsets.openxr, 'You probably want to enable OpenXR')
   hosts = { win32 = 'windows-x86_64', macos = 'darwin-x86_64', linux = 'linux-x86_64' }
   cc = ('%s/toolchains/llvm/prebuilt/%s/bin/clang'):format(config.android.ndk, hosts[host])
   cxx = cc .. '++'
@@ -304,19 +295,10 @@ if config.modules.physics then
   error('Compiling Jolt is not supported yet')
 end
 
-if config.headsets.openxr then
-  if target == 'android' then
-    cflags_headset_openxr += '-Ideps/openxr/include'
-    lflags += '-lopenxr_loader'
-    copy('deps/oculus-openxr/Libs/Android/arm64-v8a/Release/libopenxr_loader.so', '$(bin)/%b')
-  else
-    if type(config.headsets.openxr) ~= 'string' then
-      error('Sorry, building OpenXR is not supported yet.  However, you can set config.headsets.openxr to a path to a folder containing the OpenXR library.')
-    end
-    cflags_headset_openxr += '-Ideps/openxr/include'
-    lflags += '-L' .. config.headsets.openxr
-    lflags += '-lopenxr_loader'
-  end
+if config.modules.headset then
+  cflags_headset += '-Ideps/openxr/include'
+  lflags += '-L' .. config.openxr
+  lflags += '-lopenxr_loader'
 end
 
 if config.spatializers.oculus then
@@ -357,20 +339,12 @@ src = {
 for module, enabled in pairs(config.modules) do
   if enabled then
     override = {
-      audio = 'src/modules/audio/audio.c',
-      headset = 'src/modules/headset/headset.c'
+      audio = 'src/modules/audio/audio.c'
     }
     src += override[module] or ('src/modules/%s/*.c'):format(module)
     src += ('src/api/l_%s*.c'):format(module)
   else
     cflags += '-DLOVR_DISABLE_' .. module:upper()
-  end
-end
-
-for headset, enabled in pairs(config.headsets) do
-  if enabled then
-    cflags += '-DLOVR_USE_' .. headset:upper()
-    src += ('src/modules/headset/headset_%s.c'):format(headset)
   end
 end
 

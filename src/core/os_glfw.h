@@ -73,6 +73,10 @@ void os_get_mouse_position(double* x, double* y) {
   *x = *y = 0.;
 }
 
+os_mouse_mode os_get_mouse_mode(void) {
+  return MOUSE_MODE_NORMAL;
+}
+
 void os_set_mouse_mode(os_mouse_mode mode) {
   //
 }
@@ -487,6 +491,14 @@ void os_get_mouse_position(double* x, double* y) {
     glfwGetCursorPos(glfwState.window, x, y);
   } else {
     *x = *y = 0.;
+  }
+}
+
+os_mouse_mode os_get_mouse_mode(void) {
+  if (glfwGetInputMode(glfwState.window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
+    return MOUSE_MODE_GRABBED;
+  } else {
+    return MOUSE_MODE_NORMAL;
   }
 }
 

@@ -31,6 +31,8 @@ void lovrSystemGetMousePosition(double* x, double* y);
 bool lovrSystemIsMouseDown(int button);
 bool lovrSystemWasMousePressed(int button);
 bool lovrSystemWasMouseReleased(int button);
+bool lovrSystemIsMouseGrabbed(void);
+void lovrSystemSetMouseGrabbed(bool grabbed);
 float lovrSystemGetScrollDelta(void);
 const char* lovrSystemGetClipboardText(void);
 void lovrSystemSetClipboardText(const char* text);

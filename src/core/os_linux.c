@@ -547,6 +547,10 @@ void os_get_mouse_position(double* x, double* y) {
   *y = state.mouseY;
 }
 
+os_mouse_mode os_get_mouse_mode(void) {
+  return state.mouseMode;
+}
+
 void os_set_mouse_mode(os_mouse_mode mode) {
   if (!state.connection || state.mouseMode == mode) return;
   state.mouseMode = mode;

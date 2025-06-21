@@ -77,7 +77,7 @@ function lovr.arg(arg)
     end
 
     if arg.simulator then
-      conf.headset.drivers = { 'simulator' }
+      conf.headset.start = false
     end
 
     if arg.watch then

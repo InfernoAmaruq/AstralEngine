@@ -25,9 +25,6 @@ option(LOVR_USE_LUAJIT "Use LuaJIT instead of Lua" ON)
 option(LOVR_USE_GLSLANG "Use glslang to compile GLSL shaders" ON)
 option(LOVR_USE_VULKAN "Use the Vulkan renderer" ON)
 option(LOVR_USE_WEBGPU "Use the WebGPU renderer" OFF)
-option(LOVR_USE_OPENXR "Enable the OpenXR backend for the headset module" ON)
-option(LOVR_USE_WEBXR "Enable the WebXR backend for the headset module" OFF)
-option(LOVR_USE_SIMULATOR "Enable the keyboard/mouse backend for the headset module" ON)
 option(LOVR_USE_STEAM_AUDIO "Enable the Steam Audio spatializer (be sure to also set LOVR_STEAM_AUDIO_PATH)" OFF)
 option(LOVR_USE_OCULUS_AUDIO "Enable the Oculus Audio spatializer (be sure to also set LOVR_OCULUS_AUDIO_PATH)" OFF)
 
@@ -50,9 +47,8 @@ if(EMSCRIPTEN)
     "-sUSE_WEBGPU=1 "
     "-sFORCE_FILESYSTEM=1 "
     "-sINITIAL_HEAP=1677721600 "
-    "-sEXPORTED_FUNCTIONS=_main,_webxr_attach,_webxr_detach "
+    "-sEXPORTED_FUNCTIONS=_main "
     "-sEXPORTED_RUNTIME_METHODS=getValue,setValue "
-    "--js-library \"${CMAKE_CURRENT_SOURCE_DIR}/etc/webxr.js\" "
     "--shell-file \"${CMAKE_CURRENT_SOURCE_DIR}/etc/lovr.html\""
   )
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os")
@@ -62,8 +58,6 @@ if(EMSCRIPTEN)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
   endif()
   set(CMAKE_EXECUTABLE_SUFFIX ".html")
-  set(LOVR_USE_WEBXR ON)
-  set(LOVR_USE_OPENXR OFF)
   set(LOVR_USE_WEBGPU ON)
   set(LOVR_USE_VULKAN OFF)
 elseif(MSVC)
@@ -77,9 +71,7 @@ elseif(ANDROID)
   endif()
 elseif(UNIX)
   find_package(PkgConfig)
-  if(APPLE)
-    set(LOVR_USE_OPENXR OFF)
-  else()
+  if(NOT APPLE)
     set(CMAKE_SKIP_RPATH OFF)
   endif()
 endif()
@@ -213,7 +205,7 @@ if(LOVR_USE_VULKAN)
 endif()
 
 # OpenXR
-if(LOVR_ENABLE_HEADSET AND LOVR_USE_OPENXR)
+if(LOVR_ENABLE_HEADSET)
   if(LOVR_SYSTEM_OPENXR AND NOT ANDROID)
     pkg_search_module(OPENXR openxr REQUIRED)
     list(APPEND LOVR_INCLUDES ${OPENXR_INCLUDE_DIRS})
@@ -541,19 +533,6 @@ if(LOVR_ENABLE_HEADSET)
     src/api/l_headset.c
     src/api/l_headset_layer.c
   )
-
-  if(LOVR_USE_OPENXR)
-    target_compile_definitions(lovr PRIVATE LOVR_USE_OPENXR)
-    target_sources(lovr PRIVATE src/modules/headset/headset_openxr.c)
-  endif()
-  if(LOVR_USE_WEBXR)
-    target_compile_definitions(lovr PRIVATE LOVR_USE_WEBXR)
-    target_sources(lovr PRIVATE src/modules/headset/headset_webxr.c)
-  endif()
-  if(LOVR_USE_SIMULATOR)
-    target_compile_definitions(lovr PRIVATE LOVR_USE_SIMULATOR)
-    target_sources(lovr PRIVATE src/modules/headset/headset_simulator.c)
-  endif()
 else()
   target_compile_definitions(lovr PRIVATE LOVR_DISABLE_HEADSET)
 endif()
@@ -796,6 +775,7 @@ elseif(APPLE)
   move_lib(${LOVR_MSDF})
   move_lib(${LOVR_OCULUS_AUDIO})
   move_lib(${LOVR_PHONON})
+  move_lib(${LOVR_OPENXR})
   foreach(target ${ALL_PLUGIN_TARGETS})
     move_lib(${target})
   endforeach()
@@ -835,15 +815,13 @@ elseif(ANDROID)
     set(ANDROID_TOOLS "${ANDROID_SDK}/build-tools/${ANDROID_BUILD_TOOLS_VERSION}")
     set(ANDROID_ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/etc/nogame" CACHE STRING "The project folder to include in the APK")
 
-    if(LOVR_USE_OPENXR)
-      add_custom_command(TARGET move_files POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-        $<TARGET_SONAME_FILE:${LOVR_OPENXR}>
-        raw/lib/${ANDROID_ABI}/libopenxr_loader.so
-      )
+    add_custom_command(TARGET move_files POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy
+      $<TARGET_SONAME_FILE:${LOVR_OPENXR}>
+      raw/lib/${ANDROID_ABI}/libopenxr_loader.so
+    )
 
-      configure_file("${ANDROID_NDK}/toolchains/llvm/prebuilt/${ANDROID_HOST_TAG}/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "raw/lib/${ANDROID_ABI}/libc++_shared.so" COPYONLY)
-    endif()
+    configure_file("${ANDROID_NDK}/toolchains/llvm/prebuilt/${ANDROID_HOST_TAG}/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "raw/lib/${ANDROID_ABI}/libc++_shared.so" COPYONLY)
 
     if(LOVR_USE_OCULUS_AUDIO)
       get_target_property(OCULUS_AUDIO_LIB ${LOVR_OCULUS_AUDIO} IMPORTED_LOCATION)

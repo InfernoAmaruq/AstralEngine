@@ -2616,7 +2616,7 @@ float lovrJointGetTorque(Joint* joint) {
   World* world = b->world;
 
   JPH_Vec3 v;
-  float torque[3], x, y;
+  float torque[3];
   switch (joint->type) {
     case JOINT_WELD:
       JPH_FixedConstraint_GetTotalLambdaRotation((JPH_FixedConstraint*) joint->constraint, &v);

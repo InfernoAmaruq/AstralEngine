@@ -193,6 +193,7 @@ float os_window_get_pixel_density(void);
 void os_window_message_box(const char* message);
 
 void os_get_mouse_position(double* x, double* y);
+os_mouse_mode os_get_mouse_mode(void);
 void os_set_mouse_mode(os_mouse_mode mode);
 bool os_is_mouse_down(os_mouse_button button);
 bool os_is_key_down(os_key key);

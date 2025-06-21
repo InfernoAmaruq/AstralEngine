@@ -370,6 +370,11 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
     state.simulator.poses[DEVICE_HEAD][1] = 1.7;
   }
 
+  // Normalize simulator quaternions
+  for (uint32_t i = 0; i < MAX_DEVICES; i++) {
+    state.simulator.poses[i][6] = 1.f;
+  }
+
   lovrHeadsetSetClipDistance(.01f, 0.f);
 
   XrResult result;

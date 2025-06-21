@@ -1754,6 +1754,8 @@ void lovrHeadsetGetDisplayDimensions(uint32_t* width, uint32_t* height) {
     *height = state.height;
   } else {
     lovrSystemGetWindowSize(width, height);
+    *width *= state.config.supersample;
+    *height *= state.config.supersample;
   }
 }
 

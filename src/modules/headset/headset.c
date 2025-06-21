@@ -367,7 +367,7 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
   state.config = *config;
 
   if (!state.config.seated) {
-    state.simulator.poses[DEVICE_HEAD][1] = 1.7;
+    state.simulator.poses[DEVICE_HEAD][1] = 1.7f;
   }
 
   // Normalize simulator quaternions
@@ -1713,6 +1713,8 @@ bool lovrHeadsetPollEvents(void) {
   if (SESSION_RUNNING(state.sessionState) && visibilityMaskDirty && !loadVisibilityMask()) {
     lovrLog(LOG_WARN, "XR", "Failed to load headset mask: %s", lovrGetError());
   }
+
+  return true;
 }
 
 bool lovrHeadsetUpdate(double* dt) {

@@ -1240,6 +1240,7 @@ void lovrHeadsetDestroy(void) {
 }
 
 bool lovrHeadsetGetName(char* name, size_t length) {
+  if (!state.instance) return false;
   XrSystemProperties properties = { .type = XR_TYPE_SYSTEM_PROPERTIES };
   if (XR_FAILED(xrGetSystemProperties(state.instance, state.system, &properties))) return false;
   strncpy(name, properties.systemName, length - 1);
@@ -1285,6 +1286,10 @@ bool lovrHeadsetIsSeated(void) {
 bool lovrHeadsetStart(void) {
   if (!state.instance) {
     return lovrSetError("No headset available");
+  }
+
+  if (state.session) {
+    return lovrSetError("Already started");
   }
 
 #ifdef LOVR_DISABLE_GRAPHICS
@@ -1771,14 +1776,14 @@ void lovrHeadsetGetDisplayDimensions(uint32_t* width, uint32_t* height) {
 
 float lovrHeadsetGetRefreshRate(void) {
   float refreshRate;
-  if (state.extensions.refreshRate && XR_SUCCEEDED(xrGetDisplayRefreshRateFB(state.session, &refreshRate))) {
+  if (state.session && state.extensions.refreshRate && XR_SUCCEEDED(xrGetDisplayRefreshRateFB(state.session, &refreshRate))) {
     return refreshRate;
   }
   return 0.f;
 }
 
 bool lovrHeadsetSetRefreshRate(float refreshRate) {
-  if (!state.extensions.refreshRate) return false;
+  if (!state.extensions.refreshRate || !state.session) return false;
   return XR_SUCCEEDED(xrRequestDisplayRefreshRateFB(state.session, refreshRate));
 }
 
@@ -1873,6 +1878,8 @@ PassthroughMode lovrHeadsetGetPassthrough(void) {
 }
 
 bool lovrHeadsetSetPassthrough(PassthroughMode mode) {
+  if (!state.session) return false;
+
   if (state.extensions.questPassthrough) {
     if (mode == PASSTHROUGH_ADD) {
       return false;
@@ -2079,18 +2086,13 @@ void lovrHeadsetSetClipDistance(float clipNear, float clipFar) {
 
 void lovrHeadsetGetBoundsDimensions(float* width, float* depth) {
   XrExtent2Df bounds;
-  if (XR_SUCCEEDED(xrGetReferenceSpaceBoundsRect(state.session, XR_REFERENCE_SPACE_TYPE_STAGE, &bounds))) {
+  if (state.session && XR_SUCCEEDED(xrGetReferenceSpaceBoundsRect(state.session, XR_REFERENCE_SPACE_TYPE_STAGE, &bounds))) {
     *width = bounds.width;
     *depth = bounds.height;
   } else {
     *width = 0.f;
     *depth = 0.f;
   }
-}
-
-const float* lovrHeadsetGetBoundsGeometry(uint32_t* count) {
-  *count = 0;
-  return NULL;
 }
 
 bool lovrHeadsetGetPose(Device device, float* position, float* orientation) {
@@ -2164,7 +2166,7 @@ bool lovrHeadsetGetPose(Device device, float* position, float* orientation) {
 }
 
 bool lovrHeadsetGetVelocity(Device device, float* linearVelocity, float* angularVelocity) {
-  if (!state.spaces[device] || state.frameState.predictedDisplayTime <= 0) {
+  if (!state.session || !state.spaces[device] || state.frameState.predictedDisplayTime <= 0) {
     return false;
   }
 
@@ -2236,6 +2238,8 @@ bool lovrHeadsetIsDown(Device device, DeviceButton button, bool* down, bool* cha
 }
 
 bool lovrHeadsetIsTouched(Device device, DeviceButton button, bool* touched) {
+  if (!state.session) return false;
+
   static const uint8_t actions[MAX_DEVICES][MAX_BUTTONS] = {
     [DEVICE_HAND_LEFT] = {
       [BUTTON_TRIGGER] = ACTION_TRIGGER_TOUCH,
@@ -2283,6 +2287,8 @@ bool lovrHeadsetIsTouched(Device device, DeviceButton button, bool* touched) {
 }
 
 bool lovrHeadsetGetAxis(Device device, DeviceAxis axis, float* value) {
+  if (!state.session) return false;
+
   static const uint8_t actions[MAX_DEVICES][MAX_AXES] = {
     [DEVICE_HAND_LEFT] = {
       [AXIS_TRIGGER] = ACTION_TRIGGER_AXIS,
@@ -2421,7 +2427,7 @@ bool lovrHeadsetVibrate(Device device, float power, float duration, float freque
     [DEVICE_STYLUS] = ACTION_STYLUS_VIBRATE
   };
 
-  if (!actions[device]) {
+  if (!state.session || !actions[device]) {
     return false;
   }
 
@@ -2448,7 +2454,7 @@ void lovrHeadsetStopVibration(Device device) {
     [DEVICE_STYLUS] = ACTION_STYLUS_VIBRATE
   };
 
-  if (!actions[device]) {
+  if (!state.session || !actions[device]) {
     return;
   }
 
@@ -3842,7 +3848,7 @@ static XrAction getPoseActionForDevice(Device device) {
 // Hand trackers are created lazily because on some implementations xrCreateHandTrackerEXT will
 // return XR_ERROR_FEATURE_UNSUPPORTED if called too early.
 static XrHandTrackerEXT getHandTracker(Device device) {
-  if (!state.extensions.handTracking || (device != DEVICE_HAND_LEFT && device != DEVICE_HAND_RIGHT)) {
+  if (!state.session || !state.extensions.handTracking || (device != DEVICE_HAND_LEFT && device != DEVICE_HAND_RIGHT)) {
     return XR_NULL_HANDLE;
   }
 

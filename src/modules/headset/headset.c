@@ -1243,6 +1243,7 @@ bool lovrHeadsetGetName(char* name, size_t length) {
 }
 
 bool lovrHeadsetGetDriver(char* name, size_t length) {
+  if (!state.instance) return false;
   XrInstanceProperties properties = { .type = XR_TYPE_INSTANCE_PROPERTIES };
   if (XR_FAILED(xrGetInstanceProperties(state.instance, &properties))) return false;
   strncpy(name, properties.runtimeName, length - 1);

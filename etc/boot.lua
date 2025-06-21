@@ -313,7 +313,7 @@ function lovr.errhand(message)
       elseif name == 'keypressed' and a == 'escape' then lovr.event.quit() end
     end
 
-    if lovr.headset and lovr.headset.getDriver() ~= 'simulator' then
+    if lovr.headset and lovr.headset.isActive() then
       lovr.headset.update()
       local pass = lovr.headset.getPass()
       if pass then

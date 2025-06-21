@@ -200,9 +200,11 @@ function lovr.mirror(pass)
   end
 end
 
-local mx, my, pitch, yaw = 0, 0, 0, 0
+local mouseX, mouseY, handX, handY, distance, pitch, yaw = 0, 0, 0, 0, .5, 0, 0
 
 function lovr.simulate(dt)
+  if not lovr.math then return end
+
   local movespeed = 3
   local sprintspeed = 15
   local walkspeed = .5
@@ -213,15 +215,23 @@ function lovr.simulate(dt)
 
   lovr.system.setMouseGrabbed(click)
 
-  local mxprev, myprev = mx, my
-  mx, my = lovr.system.getMousePosition()
+  local lastX, lastY = mouseX, mouseY
+  mouseX, mouseY = lovr.system.getMousePosition()
 
   if click then
-    pitch = pitch - (my - myprev) * turnspeed
+    yaw = yaw - (mouseX - lastX) * turnspeed
+    pitch = pitch - (mouseY - lastY) * turnspeed
     pitch = math.min(pitch, math.pi / 2)
     pitch = math.max(pitch, -math.pi / 2)
-    yaw = yaw - (mx - mxprev) * turnspeed
+  else
+    handX, handY = mouseX, mouseY
   end
+
+  local trigger = lovr.system.isMouseDown(2)
+  lovr.headset.setSimulatedButton('hand/left', 'trigger', trigger)
+  lovr.headset.setSimulatedButton('hand/left/point', 'trigger', trigger)
+
+  -- Head
 
   local angle, ax, ay, az = lovr.headset.getOrientation()
   local target = quat(yaw, 0, 1, 0) * quat(pitch, 1, 0, 0)
@@ -244,8 +254,25 @@ function lovr.simulate(dt)
   local position = vec3(lovr.headset.getSimulatedPosition('head')) + orientation * velocity
   lovr.headset.setSimulatedPose('head', position, orientation)
 
-  lovr.headset.setSimulatedButton('hand/left', 'trigger', lovr.system.isMouseDown(2))
-  lovr.headset.setSimulatedButton('hand/left/point', 'trigger', lovr.system.isMouseDown(2))
+  -- Hand
+
+  local left, right, up, down = lovr.headset.getViewAngles(1)
+  local near, far = lovr.headset.getClipDistance()
+  local inverseProjection = mat4():fov(left, right, up, down, near, far):invert()
+
+  local width, height = lovr.system.getWindowDimensions()
+  local coordinate = vec3(handX / width * 2 - 1, handY / height * 2 - 1, 1)
+  local direction = (orientation * (inverseProjection * coordinate)):normalize()
+
+  distance = distance * (1 + lovr.system._getScrollDelta() * .05)
+  distance = math.min(distance, 10)
+  distance = math.max(distance, .05)
+
+  local handPosition = position + direction * distance
+  local handOrientation = quat(mat4():target(vec3.zero, direction, orientation * vec3.up))
+
+  lovr.headset.setSimulatedPose('hand/left', handPosition, handOrientation)
+  lovr.headset.setSimulatedPose('hand/left/point', handPosition, handOrientation)
 end
 
 local function formatTraceback(s)

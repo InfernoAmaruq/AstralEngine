@@ -366,6 +366,10 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
   state.initialized = true;
   state.config = *config;
 
+  if (!state.config.seated) {
+    state.simulator.poses[DEVICE_HEAD][1] = 1.7;
+  }
+
   lovrHeadsetSetClipDistance(.01f, 0.f);
 
   XrResult result;
@@ -2003,7 +2007,6 @@ bool lovrHeadsetGetViewPose(uint32_t view, float* position, float* orientation) 
   if (!state.session) {
     vec3_init(position, state.simulator.poses[DEVICE_HEAD]);
     quat_init(orientation, state.simulator.poses[DEVICE_HEAD] + 3);
-    if (!state.config.seated) position[1] += 1.7;
     return view == 0;
   }
 

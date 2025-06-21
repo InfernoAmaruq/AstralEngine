@@ -217,6 +217,10 @@ bool lovrSystemIsMouseGrabbed(void) {
 
 void lovrSystemSetMouseGrabbed(bool grabbed) {
   os_set_mouse_mode(grabbed ? MOUSE_MODE_GRABBED : MOUSE_MODE_NORMAL);
+
+  if (!grabbed) {
+    os_get_mouse_position(&state.mouseX, &state.mouseY);
+  }
 }
 
 // This is kind of a hacky thing for the simulator, since we're kinda bad at event dispatch

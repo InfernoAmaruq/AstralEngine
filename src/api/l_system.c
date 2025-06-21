@@ -346,6 +346,10 @@ static int l_lovrSystemSetClipboardText(lua_State* L) {
   return 0;
 }
 
+static int l_lovrSystemGetScrollDelta(lua_State* L) {
+  return lua_pushnumber(L, lovrSystemGetScrollDelta()), 1;
+}
+
 static const luaL_Reg lovrSystem[] = {
   { "getOS", l_lovrSystemGetOS },
   { "getCoreCount", l_lovrSystemGetCoreCount },
@@ -375,6 +379,7 @@ static const luaL_Reg lovrSystem[] = {
   { "setMouseGrabbed", l_lovrSystemSetMouseGrabbed },
   { "getClipboardText", l_lovrSystemGetClipboardText },
   { "setClipboardText", l_lovrSystemSetClipboardText },
+  { "_getScrollDelta", l_lovrSystemGetScrollDelta },
   { NULL, NULL }
 };
 

@@ -229,8 +229,8 @@ function lovr.simulate(dt)
   end
 
   local trigger = lovr.system.isMouseDown(2)
-  lovr.headset.setSimulatedButton('hand/left', 'trigger', trigger)
-  lovr.headset.setSimulatedButton('hand/left/point', 'trigger', trigger)
+  lovr.headset.setButton('hand/left', 'trigger', trigger)
+  lovr.headset.setButton('hand/left/point', 'trigger', trigger)
 
   -- Head
 
@@ -252,8 +252,8 @@ function lovr.simulate(dt)
   local vz = forward and -1 or backward and 1 or 0
   local speed = sprint and sprintspeed or walk and walkspeed or movespeed
   local velocity = vec3(vx, vy, vz):normalize():mul(speed * dt)
-  local position = vec3(lovr.headset.getSimulatedPosition('head')) + orientation * velocity
-  lovr.headset.setSimulatedPose('head', position, orientation)
+  local position = vec3(lovr.headset.getPosition('head')) + orientation * velocity
+  lovr.headset.setPose('head', position, orientation)
 
   -- Hand
 
@@ -272,8 +272,8 @@ function lovr.simulate(dt)
   local handPosition = position + direction * distance
   local handOrientation = quat(mat4():target(vec3.zero, direction, orientation * vec3.up))
 
-  lovr.headset.setSimulatedPose('hand/left', handPosition, handOrientation)
-  lovr.headset.setSimulatedPose('hand/left/point', handPosition, handOrientation)
+  lovr.headset.setPose('hand/left', handPosition, handOrientation)
+  lovr.headset.setPose('hand/left/point', handPosition, handOrientation)
 end
 
 local function formatTraceback(s)

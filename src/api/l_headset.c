@@ -638,87 +638,6 @@ static int l_lovrHeadsetStopVibration(lua_State* L) {
   return 0;
 }
 
-static int l_lovrHeadsetGetSimulatedPose(lua_State* L) {
-  Device device = luax_checkenum(L, 1, Device, NULL);
-  float position[3], orientation[4], angle, ax, ay, az;
-  lovrHeadsetGetSimulatedPose(device, position, orientation);
-  quat_getAngleAxis(orientation, &angle, &ax, &ay, &az);
-  lua_pushnumber(L, position[0]);
-  lua_pushnumber(L, position[1]);
-  lua_pushnumber(L, position[2]);
-  lua_pushnumber(L, angle);
-  lua_pushnumber(L, ax);
-  lua_pushnumber(L, ay);
-  lua_pushnumber(L, az);
-  return 7;
-}
-
-static int l_lovrHeadsetGetSimulatedPosition(lua_State* L) {
-  Device device = luax_checkenum(L, 1, Device, NULL);
-  float position[3], orientation[4];
-  lovrHeadsetGetSimulatedPose(device, position, orientation);
-  lua_pushnumber(L, position[0]);
-  lua_pushnumber(L, position[1]);
-  lua_pushnumber(L, position[2]);
-  return 3;
-}
-
-static int l_lovrHeadsetGetSimulatedOrientation(lua_State* L) {
-  Device device = luax_checkenum(L, 1, Device, NULL);
-  float position[3], orientation[4], angle, ax, ay, az;
-  lovrHeadsetGetSimulatedPose(device, position, orientation);
-  quat_getAngleAxis(orientation, &angle, &ax, &ay, &az);
-  lua_pushnumber(L, angle);
-  lua_pushnumber(L, ax);
-  lua_pushnumber(L, ay);
-  lua_pushnumber(L, az);
-  return 4;
-}
-
-static int l_lovrHeadsetSetSimulatedPose(lua_State* L) {
-  Device device = luax_checkenum(L, 1, Device, NULL);
-  int index = 2;
-  float position[3], orientation[4];
-  index = luax_readvec3(L, index, position, NULL);
-  index = luax_readquat(L, index, orientation, NULL);
-  lovrHeadsetSetSimulatedPose(device, position, orientation);
-  return 0;
-}
-
-static int l_lovrHeadsetSetSimulatedPosition(lua_State* L) {
-  Device device = luax_checkenum(L, 1, Device, NULL);
-  float position[3], orientation[4];
-  lovrHeadsetGetSimulatedPose(device, position, orientation);
-  luax_readvec3(L, 2, position, NULL);
-  lovrHeadsetSetSimulatedPose(device, position, orientation);
-  return 0;
-}
-
-static int l_lovrHeadsetSetSimulatedOrientation(lua_State* L) {
-  Device device = luax_checkenum(L, 1, Device, NULL);
-  float position[3], orientation[4];
-  lovrHeadsetGetSimulatedPose(device, position, orientation);
-  luax_readquat(L, 2, orientation, NULL);
-  lovrHeadsetSetSimulatedPose(device, position, orientation);
-  return 0;
-}
-
-static int l_lovrHeadsetGetSimulatedButton(lua_State* L) {
-  Device device = luax_checkenum(L, 1, Device, NULL);
-  DeviceButton button = luax_checkenum(L, 2, DeviceButton, NULL);
-  bool down = lovrHeadsetGetSimulatedButton(device, button);
-  lua_pushboolean(L, down);
-  return 1;
-}
-
-static int l_lovrHeadsetSetSimulatedButton(lua_State* L) {
-  Device device = luax_checkenum(L, 1, Device, NULL);
-  DeviceButton button = luax_checkenum(L, 2, DeviceButton, NULL);
-  bool down = lua_toboolean(L, 3);
-  lovrHeadsetSetSimulatedButton(device, button, down);
-  return 0;
-}
-
 static int l_lovrHeadsetGetModelKeys(lua_State* L) {
   uint32_t count;
   const uint64_t* keys = lovrHeadsetGetModelKeys(&count);
@@ -910,6 +829,42 @@ static int l_lovrHeadsetSubmit(lua_State* L) {
   return 0;
 }
 
+static int l_lovrHeadsetSetPosition(lua_State* L) {
+  Device device = luax_checkenum(L, 1, Device, NULL);
+  float position[3], orientation[4];
+  lovrHeadsetGetPose(device, position, orientation);
+  luax_readvec3(L, 2, position, NULL);
+  lovrHeadsetSetPose(device, position, orientation);
+  return 0;
+}
+
+static int l_lovrHeadsetSetOrientation(lua_State* L) {
+  Device device = luax_checkenum(L, 1, Device, NULL);
+  float position[3], orientation[4];
+  lovrHeadsetGetPose(device, position, orientation);
+  luax_readquat(L, 2, orientation, NULL);
+  lovrHeadsetSetPose(device, position, orientation);
+  return 0;
+}
+
+static int l_lovrHeadsetSetPose(lua_State* L) {
+  Device device = luax_checkenum(L, 1, Device, NULL);
+  int index = 2;
+  float position[3], orientation[4];
+  index = luax_readvec3(L, index, position, NULL);
+  index = luax_readquat(L, index, orientation, NULL);
+  lovrHeadsetSetPose(device, position, orientation);
+  return 0;
+}
+
+static int l_lovrHeadsetSetButton(lua_State* L) {
+  Device device = luax_checkenum(L, 1, Device, NULL);
+  DeviceButton button = luax_checkenum(L, 2, DeviceButton, NULL);
+  bool down = lua_toboolean(L, 3);
+  lovrHeadsetSetButton(device, button, down);
+  return 0;
+}
+
 static int l_lovrHeadsetNewLayer(lua_State* L) {
   LayerInfo info = { .filter = true };
 
@@ -1076,14 +1031,6 @@ static const luaL_Reg lovrHeadset[] = {
   { "getSkeleton", l_lovrHeadsetGetSkeleton },
   { "vibrate", l_lovrHeadsetVibrate },
   { "stopVibration", l_lovrHeadsetStopVibration },
-  { "getSimulatedPose", l_lovrHeadsetGetSimulatedPose },
-  { "getSimulatedPosition", l_lovrHeadsetGetSimulatedPosition },
-  { "getSimulatedOrientation", l_lovrHeadsetGetSimulatedOrientation },
-  { "setSimulatedPose", l_lovrHeadsetSetSimulatedPose },
-  { "setSimulatedPosition", l_lovrHeadsetSetSimulatedPosition },
-  { "setSimulatedOrientation", l_lovrHeadsetSetSimulatedOrientation },
-  { "getSimulatedButton", l_lovrHeadsetGetSimulatedButton },
-  { "setSimulatedButton", l_lovrHeadsetSetSimulatedButton },
   { "getModelKeys", l_lovrHeadsetGetModelKeys },
   { "newModel", l_lovrHeadsetNewModel },
   { "animate", l_lovrHeadsetAnimate },
@@ -1093,6 +1040,10 @@ static const luaL_Reg lovrHeadset[] = {
   { "getTexture", l_lovrHeadsetGetTexture },
   { "getPass", l_lovrHeadsetGetPass },
   { "submit", l_lovrHeadsetSubmit },
+  { "setPosition", l_lovrHeadsetSetPosition },
+  { "setOrientation", l_lovrHeadsetSetOrientation },
+  { "setPose", l_lovrHeadsetSetPose },
+  { "setButton", l_lovrHeadsetSetButton },
   { "newLayer", l_lovrHeadsetNewLayer },
   { "getHands", l_lovrHeadsetGetHands },
   { "getHandles", l_lovrHeadsetGetHandles },

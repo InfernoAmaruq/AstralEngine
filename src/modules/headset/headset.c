@@ -2103,7 +2103,8 @@ void lovrHeadsetGetBoundsDimensions(float* width, float* depth) {
 
 bool lovrHeadsetGetPose(Device device, float* position, float* orientation) {
   if (!state.session) {
-    lovrHeadsetGetSimulatedPose(device, position, orientation);
+    vec3_init(position, state.simulator.poses[device] + 0);
+    quat_init(orientation, state.simulator.poses[device] + 3);
     return true;
   }
 
@@ -2343,25 +2344,6 @@ bool lovrHeadsetGetAxis(Device device, DeviceAxis axis, float* value) {
     *value = actionState.currentState;
     return actionState.isActive;
   }
-}
-
-void lovrHeadsetGetSimulatedPose(Device device, float* position, float* orientation) {
-  vec3_init(position, state.simulator.poses[device] + 0);
-  quat_init(orientation, state.simulator.poses[device] + 3);
-}
-
-void lovrHeadsetSetSimulatedPose(Device device, float* position, float* orientation) {
-  vec3_init(state.simulator.poses[device] + 0, position);
-  quat_init(state.simulator.poses[device] + 3, orientation);
-}
-
-bool lovrHeadsetGetSimulatedButton(Device device, DeviceButton button) {
-  return state.simulator.buttons[device] & (1u << button);
-}
-
-void lovrHeadsetSetSimulatedButton(Device device, DeviceButton button, bool down) {
-  state.simulator.buttons[device] &= ~(1u << button);
-  state.simulator.buttons[device] |= down << button;
 }
 
 bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source) {
@@ -3261,6 +3243,16 @@ bool lovrHeadsetSubmit(void) {
   state.began = false;
   state.waited = false;
   return true;
+}
+
+void lovrHeadsetSetPose(Device device, float* position, float* orientation) {
+  vec3_init(state.simulator.poses[device] + 0, position);
+  quat_init(state.simulator.poses[device] + 3, orientation);
+}
+
+void lovrHeadsetSetButton(Device device, DeviceButton button, bool down) {
+  state.simulator.buttons[device] &= ~(1u << button);
+  state.simulator.buttons[device] |= down << button;
 }
 
 // Layer

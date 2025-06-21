@@ -201,7 +201,7 @@ function lovr.mirror(pass)
   end
 end
 
-local mouseX, mouseY, handX, handY, distance, pitch, yaw = 0, 0, 0, 0, .5, 0, 0
+local mouseX, mouseY, handX, handY, distance, pitch, yaw = nil, nil, 0, 0, .5, 0, 0
 
 function lovr.simulate(dt)
   if not lovr.math then return end
@@ -220,8 +220,8 @@ function lovr.simulate(dt)
   mouseX, mouseY = lovr.system.getMousePosition()
 
   if click then
-    yaw = yaw - (mouseX - lastX) * turnspeed
-    pitch = pitch - (mouseY - lastY) * turnspeed
+    yaw = yaw - (mouseX - lastX or mouseX) * turnspeed
+    pitch = pitch - (mouseY - lastY or mouseY) * turnspeed
     pitch = math.min(pitch, math.pi / 2)
     pitch = math.max(pitch, -math.pi / 2)
   else

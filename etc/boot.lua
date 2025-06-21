@@ -31,7 +31,6 @@ local conf = {
     shadercache = true
   },
   headset = {
-    drivers = { 'openxr', 'webxr', 'simulator' },
     start = true,
     debug = false,
     seated = false,

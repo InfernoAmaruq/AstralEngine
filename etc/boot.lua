@@ -161,6 +161,7 @@ function lovr.run()
   if lovr.timer then lovr.timer.step() end
   if lovr.load then lovr.load(arg) end
   return function()
+    if lovr.headset then lovr.headset.pollEvents() end
     if lovr.system then lovr.system.pollEvents() end
     if lovr.event then
       for name, a, b, c, d in lovr.event.poll() do

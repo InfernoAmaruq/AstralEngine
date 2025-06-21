@@ -1625,17 +1625,8 @@ bool lovrHeadsetIsMounted(void) {
   return state.extensions.presence ? state.mounted : true;
 }
 
-bool lovrHeadsetUpdate(double* dt) {
-  if (!state.session) {
-    memcpy(state.simulator.lastButtons, state.simulator.buttons, sizeof(state.simulator.buttons));
-    *dt = lovrTimerGetDelta();
-    return true;
-  }
-
-  if (state.waited) {
-    *dt = lovrHeadsetGetDeltaTime();
-    return true;
-  }
+bool lovrHeadsetPollEvents(void) {
+  if (!state.session) return true;
 
   XrEventDataBuffer e; // Not using designated initializers here to avoid an implicit 4k zero
   e.type = XR_TYPE_EVENT_DATA_BUFFER;
@@ -1719,11 +1710,24 @@ bool lovrHeadsetUpdate(double* dt) {
     e.type = XR_TYPE_EVENT_DATA_BUFFER;
   }
 
-  if (SESSION_RUNNING(state.sessionState)) {
-    if (visibilityMaskDirty && !loadVisibilityMask()) {
-      lovrLog(LOG_WARN, "XR", "Failed to load headset mask: %s", lovrGetError());
-    }
+  if (SESSION_RUNNING(state.sessionState) && visibilityMaskDirty && !loadVisibilityMask()) {
+    lovrLog(LOG_WARN, "XR", "Failed to load headset mask: %s", lovrGetError());
+  }
+}
 
+bool lovrHeadsetUpdate(double* dt) {
+  if (!state.session) {
+    memcpy(state.simulator.lastButtons, state.simulator.buttons, sizeof(state.simulator.buttons));
+    *dt = lovrTimerGetDelta();
+    return true;
+  }
+
+  if (state.waited) {
+    *dt = lovrHeadsetGetDeltaTime();
+    return true;
+  }
+
+  if (SESSION_RUNNING(state.sessionState)) {
     state.lastDisplayTime = state.frameState.predictedDisplayTime;
     XR(xrWaitFrame(state.session, NULL, &state.frameState), "xrWaitFrame");
     state.waited = true;

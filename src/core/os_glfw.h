@@ -375,6 +375,9 @@ bool os_window_open(const os_window_config* config) {
 #ifdef __APPLE__
   glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
 #endif
+#ifdef __linux__
+  glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+#endif
   if (!glfwInit()) {
     return false;
   }

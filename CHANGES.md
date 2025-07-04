@@ -20,6 +20,7 @@ dev
 - Change `lovr.headset.newModel` to also take a lightuserdata.
 - Change `lovr.headset.isTracked` to also take a `Model`.
 - Change `lovr.headset.getPosition/Orientation/Direction/Pose` to also take a `Model`.
+- Change `TerrainShape` to support `nil` heights (treated as holes).
 
 ### Fix
 

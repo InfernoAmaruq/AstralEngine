@@ -152,7 +152,8 @@ Shape* luax_newterrainshape(lua_State* L, int index) {
       lua_call(L, 2, 1);
       int heightType = lua_type(L, -1);
       if (heightType == LUA_TNUMBER) {
-        vertices[i] = luax_tofloat(L, -1);
+        double h = lua_tonumber(L, -1);
+        vertices[i] = (h == -HUGE_VAL || h == HUGE_VAL) ? FLT_MAX : (float) h;
       } else if (heightType == LUA_TNIL) {
         vertices[i] = FLT_MAX;
       } else {

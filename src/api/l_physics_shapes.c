@@ -150,8 +150,14 @@ Shape* luax_newterrainshape(lua_State* L, int index) {
       lua_pushnumber(L, x);
       lua_pushnumber(L, z);
       lua_call(L, 2, 1);
-      luax_check(L, lua_type(L, -1) == LUA_TNUMBER, "Expected TerrainShape callback to return a number");
-      vertices[i] = luax_tofloat(L, -1);
+      int height_type = lua_type(L, -1);
+      if (height_type == LUA_TNUMBER) {
+        vertices[i] = luax_tofloat(L, -1);
+      } else if (height_type == LUA_TNIL) {
+        vertices[i] = FLT_MAX;
+      } else {
+        luax_check(L, 0, "Expected TerrainShape callback to return a number or nil");
+      }
       lua_pop(L, 1);
     }
     TerrainShape* shape = lovrTerrainShapeCreate(vertices, n, scaleXZ, 1.f);

@@ -173,7 +173,7 @@ function lovr.run()
     local dt = 0
     if lovr.timer then dt = lovr.timer.step() end
     if lovr.headset then
-      dt = lovr.headset.update() end
+      dt = lovr.headset.update()
       if not lovr.headset.isActive() then lovr.simulate(dt) end
     end
     if lovr.update then lovr.update(dt) end

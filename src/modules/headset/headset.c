@@ -1236,7 +1236,9 @@ void lovrHeadsetDestroy(void) {
   if (state.actionSet) xrDestroyActionSet(state.actionSet);
   if (state.messenger) xrDestroyDebugUtilsMessengerEXT(state.messenger);
   if (state.instance) xrDestroyInstance(state.instance);
+  Simulator simulator = state.simulator; // Keep simulator state between restarts, for convenience
   memset(&state, 0, sizeof(state));
+  state.simulator = simulator;
 }
 
 bool lovrHeadsetGetName(char* name, size_t length) {

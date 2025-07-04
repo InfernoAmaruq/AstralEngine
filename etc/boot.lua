@@ -172,8 +172,10 @@ function lovr.run()
     end
     local dt = 0
     if lovr.timer then dt = lovr.timer.step() end
-    if lovr.headset then dt = lovr.headset.update() end
-    if not lovr.headset.isActive() then lovr.simulate(dt) end
+    if lovr.headset then
+      dt = lovr.headset.update() end
+      if not lovr.headset.isActive() then lovr.simulate(dt) end
+    end
     if lovr.update then lovr.update(dt) end
     if lovr.graphics then
       local window = lovr.graphics.getWindowPass()

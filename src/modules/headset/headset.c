@@ -200,6 +200,7 @@ typedef struct {
   float poses[MAX_DEVICES][7];
   uint32_t lastButtons[MAX_DEVICES];
   uint32_t buttons[MAX_DEVICES];
+  bool initialized;
 } Simulator;
 
 enum {
@@ -366,13 +367,17 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
   state.initialized = true;
   state.config = *config;
 
-  if (!state.config.seated) {
-    state.simulator.poses[DEVICE_HEAD][1] = 1.7f;
-  }
+  if (!state.simulator.initialized) {
+    if (!state.config.seated) {
+      state.simulator.poses[DEVICE_HEAD][1] = 1.7f;
+    }
 
-  // Normalize simulator quaternions
-  for (uint32_t i = 0; i < MAX_DEVICES; i++) {
-    state.simulator.poses[i][6] = 1.f;
+    // Normalize simulator quaternions
+    for (uint32_t i = 0; i < MAX_DEVICES; i++) {
+      quat_identity(state.simulator.poses[i] + 3);
+    }
+
+    state.simulator.initialized = true;
   }
 
   lovrHeadsetSetClipDistance(.01f, 0.f);

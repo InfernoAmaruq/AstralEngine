@@ -201,10 +201,14 @@ function lovr.mirror(pass)
   end
 end
 
-local mouseX, mouseY, handX, handY, distance, pitch, yaw = nil, nil, 0, 0, .5, 0, 0
+local mouseX, mouseY, handX, handY, distance, pitch, yaw = nil, nil, 0, 0, .5, nil, nil
 
 function lovr.simulate(dt)
   if not lovr.math then return end
+
+  if not pitch or not yaw then
+    pitch, yaw = quat(lovr.headset.getOrientation()):getEuler()
+  end
 
   local movespeed = 3
   local sprintspeed = 15

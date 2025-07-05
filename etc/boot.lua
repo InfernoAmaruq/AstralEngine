@@ -210,6 +210,7 @@ function lovr.simulate(dt)
 
   if not pitch or not yaw then
     pitch, yaw = quat(lovr.headset.getOrientation()):getEuler()
+    mouseX, mouseY = lovr.system.getMousePosition()
   end
 
   local movespeed = 3

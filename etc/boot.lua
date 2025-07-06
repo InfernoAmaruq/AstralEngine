@@ -196,7 +196,6 @@ function lovr.run()
     elseif lovr.headset then
       lovr.headset.submit()
     end
-    if lovr.math then lovr.math.drain() end
   end
 end
 
@@ -219,7 +218,7 @@ function lovr.simulate(dt)
   if not lovr.math then return end
 
   if not pitch or not yaw then
-    pitch, yaw = quat(lovr.headset.getOrientation()):getEuler()
+    pitch, yaw = quaternion(lovr.headset.getOrientation()):toeuler()
     mouseX, mouseY = lovr.system.getMousePosition()
   end
 
@@ -252,8 +251,8 @@ function lovr.simulate(dt)
   -- Head
 
   local angle, ax, ay, az = lovr.headset.getOrientation()
-  local target = quat(yaw, 0, 1, 0) * quat(pitch, 1, 0, 0)
-  local orientation = quat(angle, ax, ay, az):slerp(target, 1 - math.exp(-turnsmooth * dt))
+  local target = quaternion(yaw, 0, 1, 0) * quaternion(pitch, 1, 0, 0)
+  local orientation = quaternion(angle, ax, ay, az):slerp(target, 1 - math.exp(-turnsmooth * dt))
 
   local sprint = lovr.system.isKeyDown('lshift', 'rshift')
   local walk = lovr.system.isKeyDown('lctrl', 'rctrl')
@@ -268,7 +267,7 @@ function lovr.simulate(dt)
   local vy = down and -1 or up and 1 or 0
   local vz = forward and -1 or backward and 1 or 0
   local speed = sprint and sprintspeed or walk and walkspeed or movespeed
-  local velocity = vec3(vx, vy, vz):normalize():mul(speed * dt)
+  local velocity = vec3(vx, vy, vz):normalize() * speed * dt
   local position = vec3(lovr.headset.getPosition('head')) + orientation * velocity
   lovr.headset.setPose('head', position, orientation)
 
@@ -279,7 +278,7 @@ function lovr.simulate(dt)
   local inverseProjection = mat4():fov(left, right, up, down, near, far):invert()
 
   local width, height = lovr.system.getWindowDimensions()
-  local coordinate = vec3(handX / width * 2 - 1, handY / height * 2 - 1, 1)
+  local coordinate = vector(handX / width * 2 - 1, handY / height * 2 - 1, 1, 1)
   local direction = (orientation * (inverseProjection * coordinate)):normalize()
 
   distance = distance * (1 + lovr.system._getScrollDelta() * .05)
@@ -287,7 +286,7 @@ function lovr.simulate(dt)
   distance = math.max(distance, .05)
 
   local handPosition = position + direction * distance
-  local handOrientation = quat(mat4():target(vec3.zero, direction, orientation * vec3.up))
+  local handOrientation = quaternion.lookdir(direction, orientation * vector(0, 1, 0))
 
   lovr.headset.setPose('hand/left', handPosition, handOrientation)
   lovr.headset.setPose('hand/left/point', handPosition, handOrientation)
@@ -379,8 +378,6 @@ function lovr.errhand(message)
         lovr.graphics.present()
       end
     end
-
-    lovr.math.drain()
   end
 end
 

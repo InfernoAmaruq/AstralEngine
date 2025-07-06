@@ -24,7 +24,7 @@ function lovr.draw(pass)
   pass:plane(0, 2, -3)
   pass:setShader()
 
-  pass:text('LÖVR', -.012, titlePosition, -3, .25, quat(0, 0, 1, 0), nil, 'center', 'top')
+  pass:text('LÖVR', -.012, titlePosition, -3, .25, nil, nil, 'center', 'top')
 
   pass:setColor(.9, .9, .9, fade)
   pass:text('No game :(', -.005, subtitlePosition, -3, .15, 0, 0, 1, 0, nil, 'center', 'top')

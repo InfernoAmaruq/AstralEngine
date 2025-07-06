@@ -1,6 +1,7 @@
 #include "api.h"
 #include "graphics/graphics.h"
 #include "data/blob.h"
+#include "math/math.h"
 #include "util.h"
 #include <stdlib.h>
 #include <string.h>
@@ -41,14 +42,6 @@ static const uint32_t typeComponents[] = {
   [TYPE_MAT4] = 16,
   [TYPE_INDEX16] = 1,
   [TYPE_INDEX32] = 1
-};
-
-static const uint32_t vectorComponents[] = {
-  [V_VEC2] = 2,
-  [V_VEC3] = 3,
-  [V_VEC4] = 4,
-  [V_QUAT] = 4,
-  [V_MAT4] = 16
 };
 
 typedef union {
@@ -166,17 +159,11 @@ static void luax_checkfieldn(lua_State* L, int index, const DataField* field, vo
   }
 }
 
+#ifdef LOVR_USE_LUAU
 static void luax_checkfieldv(lua_State* L, int index, const DataField* field, void* data) {
   DataPointer p = { .raw = data };
-  VectorType vectorType;
-  float* v = luax_tovector(L, index, &vectorType);
-  uint32_t n = typeComponents[field->type];
-  luax_fieldcheck(L, v && n > 1, index, field, false);
-  if (field->type >= TYPE_MAT2 && field->type <= TYPE_MAT4) {
-    luax_check(L, vectorType == V_MAT4, "Tried to send a non-matrix to a matrix type");
-  } else {
-    luax_check(L, vectorComponents[vectorType] == n, "Expected %d vector components, got %d", n, vectorComponents[vectorType]);
-  }
+  const float* v = lua_tovector(L, index);
+  luax_fieldcheck(L, v && (field->type < TYPE_MAT2 || field->type > TYPE_MAT4), index, field, false);
   switch (field->type) {
     case TYPE_I8x4: for (int i = 0; i < 4; i++) p.i8[i] = (int8_t) v[i]; break;
     case TYPE_U8x4: for (int i = 0; i < 4; i++) p.u8[i] = (uint8_t) v[i]; break;
@@ -203,9 +190,20 @@ static void luax_checkfieldv(lua_State* L, int index, const DataField* field, vo
     case TYPE_F32x2: memcpy(data, v, 2 * sizeof(float)); break;
     case TYPE_F32x3: memcpy(data, v, 3 * sizeof(float)); break;
     case TYPE_F32x4: memcpy(data, v, 4 * sizeof(float)); break;
-    case TYPE_MAT2: for (int i = 0; i < 2; i++) memcpy(p.f32 + 2 * i, v + 4 * i, 2 * sizeof(float)); break;
-    case TYPE_MAT3: for (int i = 0; i < 3; i++) memcpy(p.f32 + 4 * i, v + 4 * i, 3 * sizeof(float)); break;
-    case TYPE_MAT4: memcpy(data, v, 16 * sizeof(float)); break;
+    default: lovrUnreachable();
+  }
+}
+#endif
+
+static void luax_checkfieldm(lua_State* L, int index, const DataField* field, void* data) {
+  DataPointer p = { .raw = data };
+  Mat4* matrix = luax_totype(L, index, Mat4);
+  luax_fieldcheck(L, matrix && (field->type >= TYPE_MAT2 && field->type <= TYPE_MAT4), index, field, false);
+  const float* m = lovrMat4GetData(matrix);
+  switch (field->type) {
+    case TYPE_MAT2: for (int i = 0; i < 2; i++) memcpy(p.f32 + 2 * i, m + 4 * i, 2 * sizeof(float)); break;
+    case TYPE_MAT3: for (int i = 0; i < 3; i++) memcpy(p.f32 + 4 * i, m + 4 * i, 3 * sizeof(float)); break;
+    case TYPE_MAT4: memcpy(data, m, 16 * sizeof(float)); break;
     default: lovrUnreachable();
   }
 }
@@ -294,12 +292,20 @@ static void luax_checkarray(lua_State* L, int index, int start, int count, const
         luax_checkfieldn(L, -n, array, data);
         lua_pop(L, n);
       }
-    } else if (type == LUA_TUSERDATA || type == LUA_TLIGHTUSERDATA) {
+    } else if (type == LUA_TUSERDATA) {
+      for (int i = 0; i < count; i++, data += array->stride) {
+        lua_rawgeti(L, index, start + i);
+        luax_checkfieldm(L, -1, array, data);
+        lua_pop(L, 1);
+      }
+#ifdef LOVR_USE_LUAU
+    } else if (type == LUA_TVECTOR) {
       for (int i = 0; i < count; i++, data += array->stride) {
         lua_rawgeti(L, index, start + i);
         luax_checkfieldv(L, -1, array, data);
         lua_pop(L, 1);
       }
+#endif
     } else if (type == LUA_TTABLE) {
       for (int i = 0; i < count; i++, data += array->stride) {
         lua_rawgeti(L, index, start + i);
@@ -323,8 +329,12 @@ void luax_checkbufferdata(lua_State* L, int index, const DataField* field, char*
     luax_checkstruct(L, index, field, data);
   } else if (type == LUA_TNUMBER) {
     luax_checkfieldn(L, index, field, data);
-  } else if (type == LUA_TUSERDATA || type == LUA_TLIGHTUSERDATA) {
+  } else if (type == LUA_TUSERDATA) {
+    luax_checkfieldm(L, index, field, data);
+#ifdef LOVR_USE_LUAU
+  } else if (type == LUA_TVECTOR) {
     luax_checkfieldv(L, index, field, data);
+#endif
   } else if (type == LUA_TTABLE) {
     luax_checkfieldt(L, index, field, data);
   } else {

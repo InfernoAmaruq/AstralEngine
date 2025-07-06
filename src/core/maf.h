@@ -108,7 +108,7 @@ MAF vec3 vec3_set(vec3 v, float x, float y, float z) {
   return v;
 }
 
-MAF vec3 vec3_init(vec3 v, const vec3 u) {
+MAF vec3 vec3_init(vec3 v, const float* u) {
   return memcpy(v, u, 3 * sizeof(float));
 }
 

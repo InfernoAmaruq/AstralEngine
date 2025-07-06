@@ -1,6 +1,7 @@
 #include "api.h"
 #include "graphics/graphics.h"
 #include "data/modelData.h"
+#include "math/math.h"
 #include "core/maf.h"
 #include "util.h"
 
@@ -156,14 +157,13 @@ static int l_lovrModelSetNodeTransform(lua_State* L) {
   Model* model = luax_checktype(L, 1, Model);
   uint32_t node = luax_checknodeindex(L, 2, lovrModelGetMetadata(model));
   int index = 3;
-  VectorType type;
   float position[3], scale[3], rotation[4];
-  float* m = luax_tovector(L, index, &type);
-  if (m && type == V_MAT4) {
+  Mat4* matrix = luax_totype(L, index, Mat4);
+  if (matrix) {
+    float* m = lovrMat4GetData(matrix);
     mat4_getPosition(m, position);
     mat4_getScale(m, scale);
     mat4_getOrientation(m, rotation);
-    index = 4;
   } else {
     index = luax_readvec3(L, index, position, NULL);
     index = luax_readscale(L, index, scale, 3, NULL);

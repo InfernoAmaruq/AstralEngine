@@ -92,33 +92,16 @@ static void _luax_checkvariant(lua_State* L, int index, Variant* variant, int de
         lovrRetain(proxy->object);
         lua_pop(L, 1);
         break;
-      } else {
-        lua_pop(L, 2);
       }
-      /* fallthrough */
 
-    case LUA_TLIGHTUSERDATA: {
-      VectorType type;
-      float* v = luax_tovector(L, index, &type);
-      if (v) {
-        if (type == V_MAT4) {
-          variant->type = TYPE_MATRIX;
-          variant->value.matrix.data = lovrMalloc(16 * sizeof(float));
-          memcpy(variant->value.matrix.data, v, 16 * sizeof(float));
-          break;
-        } else {
-          variant->type = TYPE_VECTOR;
-          variant->value.vector.type = type;
-          memcpy(variant->value.vector.data, v, (type == V_VEC2 ? 2 : 4) * sizeof(float));
-          break;
-        }
-      } else if (lua_type(L, index) == LUA_TLIGHTUSERDATA) {
-        variant->type = TYPE_POINTER;
-        variant->value.pointer = lua_touserdata(L, index);
-        break;
-      }
+      lua_pop(L, 2);
       luaL_error(L, "Bad userdata variant for argument %d (expected object, vector, or lightuserdata)", index);
-    }
+      break;
+
+    case LUA_TLIGHTUSERDATA:
+      variant->type = TYPE_POINTER;
+      variant->value.pointer = lua_touserdata(L, index);
+      break;
 
     case LUA_TTABLE:
       if (index < 0) { index += lua_gettop(L) + 1; }
@@ -172,8 +155,6 @@ int luax_pushvariant(lua_State* L, Variant* variant) {
     case TYPE_MINISTRING: lua_pushlstring(L, variant->value.ministring.data, variant->value.ministring.length); return 1;
     case TYPE_POINTER: lua_pushlightuserdata(L, variant->value.pointer); return 1;
     case TYPE_OBJECT: _luax_pushtype(L, variant->value.object.type, hash64(variant->value.object.type, strlen(variant->value.object.type)), variant->value.object.pointer); return 1;
-    case TYPE_VECTOR: memcpy(luax_newtempvector(L, variant->value.vector.type), variant->value.vector.data, (variant->value.vector.type == V_VEC2 ? 2 : 4) * sizeof(float)); return 1;
-    case TYPE_MATRIX: memcpy(luax_newtempvector(L, V_MAT4), variant->value.vector.data, 16 * sizeof(float)); return 1;
     case TYPE_TABLE:
       lua_newtable(L);
       for (size_t i = 0; i < variant->value.table.length; i++) {

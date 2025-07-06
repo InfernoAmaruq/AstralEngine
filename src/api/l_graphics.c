@@ -4,6 +4,7 @@
 #include "data/image.h"
 #include "data/modelData.h"
 #include "data/rasterizer.h"
+#include "math/math.h"
 #include "util.h"
 #include <stdlib.h>
 #include <string.h>
@@ -667,6 +668,7 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
   BufferInfo info = { 0 };
   DataLayout layout = LAYOUT_PACKED;
   bool hasData = false;
+  Mat4* matrix = NULL;
   Blob* blob = NULL;
 
   int type = lua_type(L, 1);
@@ -776,12 +778,12 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
             info.size = (uint32_t) blob->size;
             format->length = info.size / format->stride;
             break;
-          } else if (luax_tovector(L, 2, NULL)) {
+          } else if ((matrix = luax_totype(L, 2, Mat4)) != NULL) {
             format->length = 0;
             hasData = true;
             break;
           }
-          return luax_typeerror(L, 2, "nil, number, vector, table, or Blob"), 0;
+          return luax_typeerror(L, 2, "nil, number, table, Blob, or Mat4"), 0;
       }
     }
   }
@@ -1289,10 +1291,6 @@ static int l_lovrGraphicsNewMaterial(lua_State* L) {
     info.data.uvShift[0] = luax_optfloat(L, -2, 0.f);
     info.data.uvShift[1] = luax_optfloat(L, -1, 0.f);
     lua_pop(L, 2);
-  } else if (!lua_isnil(L, -1)) {
-    float* v = luax_checkvector(L, -1, V_VEC2, "vec2, table, or nil");
-    info.data.uvShift[0] = v[0];
-    info.data.uvShift[1] = v[1];
   }
   lua_pop(L, 1);
 
@@ -1310,10 +1308,6 @@ static int l_lovrGraphicsNewMaterial(lua_State* L) {
     info.data.uvScale[0] = luax_optfloat(L, -2, 1.f);
     info.data.uvScale[1] = luax_optfloat(L, -1, 1.f);
     lua_pop(L, 2);
-  } else {
-    float* v = luax_checkvector(L, -1, V_VEC2, "vec2, table, or nil");
-    info.data.uvScale[0] = v[0];
-    info.data.uvScale[1] = v[1];
   }
   lua_pop(L, 1);
 

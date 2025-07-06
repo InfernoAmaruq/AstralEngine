@@ -1,6 +1,5 @@
 #include "math.h"
 #include "core/maf.h"
-#include "core/os.h"
 #include "util.h"
 #include "lib/noise/simplexnoise1234.h"
 #include <math.h>
@@ -16,12 +15,9 @@ struct Curve {
   arr_t(float) points;
 };
 
-struct Pool {
+struct Mat4 {
   uint32_t ref;
-  float* data;
-  uint32_t count;
-  uint32_t cursor;
-  uint32_t generation;
+  float m[16];
 };
 
 struct RandomGenerator {
@@ -283,73 +279,21 @@ float lovrCurveStep(Curve* curve, float distance, int iterations) {
   return (tMin + tMax) * 0.5f;
 }
 
-// Pool
+// Mat4
 
-static const size_t vectorComponents[] = {
-  [V_VEC2] = 2,
-  [V_VEC3] = 4,
-  [V_VEC4] = 4,
-  [V_QUAT] = 4,
-  [V_MAT4] = 16
-};
-
-Pool* lovrPoolCreate(void) {
-  Pool* pool = lovrCalloc(sizeof(Pool));
-  pool->ref = 1;
-  pool->data = os_vm_init((1 << 24) * sizeof(float));
-  lovrPoolGrow(pool, 1 << 12);
-  return pool;
+Mat4* lovrMat4Create(void) {
+  Mat4* matrix = lovrMalloc(sizeof(Mat4));
+  matrix->ref = 1;
+  mat4_identity(matrix->m);
+  return matrix;
 }
 
-void lovrPoolDestroy(void* ref) {
-  Pool* pool = ref;
-  os_vm_free(pool->data, (1 << 24) * sizeof(float));
-  lovrFree(pool);
+void lovrMat4Destroy(void* ref) {
+  lovrFree(ref);
 }
 
-bool lovrPoolGrow(Pool* pool, size_t count) {
-  lovrAssert(count <= (1 << 24), "Temporary vector space exhausted.  Try using lovr.math.drain to drain the vector pool periodically.");
-  pool->count = (uint32_t) count; // Assert guarantees safe
-  bool result = os_vm_commit(pool->data, count * sizeof(float));
-  lovrAssert(result, "Out of memory");
-  return true;
-}
-
-Vector lovrPoolAllocate(Pool* pool, VectorType type, float** data) {
-  if (!pool) {
-    lovrSetError("The math module must be initialized to create vectors");
-    return (Vector) { 0 };
-  }
-
-  size_t count = vectorComponents[type];
-
-  if (pool->cursor + count > pool->count) {
-    if (!lovrPoolGrow(pool, pool->count * 2)) {
-      return (Vector) { 0 };
-    }
-  }
-
-  Vector v = {
-    .handle = {
-      .type = type,
-      .generation = pool->generation,
-      .index = pool->cursor
-    }
-  };
-
-  *data = pool->data + pool->cursor;
-  pool->cursor += (uint32_t) count; // Cast safe because vectorComponents members are known
-  return v;
-}
-
-float* lovrPoolResolve(Pool* pool, Vector vector) {
-  lovrCheck(vector.handle.generation == pool->generation, "Attempt to use a temporary vector from a previous frame");
-  return pool->data + vector.handle.index;
-}
-
-void lovrPoolDrain(Pool* pool) {
-  pool->cursor = 0;
-  pool->generation = (pool->generation + 1) & 0xf;
+float* lovrMat4GetData(Mat4* matrix) {
+  return matrix->m;
 }
 
 // RandomGenerator (compatible with LÖVE's)

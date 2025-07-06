@@ -47,7 +47,6 @@ typedef enum {
   TYPE_POINTER,
   TYPE_OBJECT,
   TYPE_VECTOR,
-  TYPE_MATRIX,
   TYPE_TABLE
 } VariantType;
 
@@ -72,9 +71,6 @@ typedef union {
     int type;
     float data[4];
   } vector;
-  struct {
-    float* data;
-  } matrix;
   struct {
     struct Variant* keys;
     struct Variant* vals;

@@ -35,6 +35,7 @@ dev
 - Fix issue where normalized buffer fields were rounded incorrectly.
 - Fix possible crash related to Thread:wait.
 - Fix possible crash in Model animation.
+- Fix `Collider:setDegreesOfFreedom` to preserve mass/inertia.
 
 ### Deprecate
 

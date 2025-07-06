@@ -64,6 +64,13 @@ group('physics', function()
       c:setDegreesOfFreedom('z', 'x')
       expect({ c:getDegreesOfFreedom() }).to.equal({ 'z', 'x' })
     end)
+
+    test(':setDegreesOfFreedom', function()
+      local ball = world:newSphereCollider(0, 0, 0, 10)
+      ball:setMass(.6)
+      ball:setDegreesOfFreedom('xyz', 'xyz')
+      expect(ball:getMass()).to.equal(.6, .01)
+    end)
   end)
 
   group('Shape', function()

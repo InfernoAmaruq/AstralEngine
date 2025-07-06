@@ -1622,10 +1622,21 @@ void lovrColliderSetDegreesOfFreedom(Collider* collider, bool translation[3], bo
   if (rotation[2]) dofs |= JPH_AllowedDOFs_RotationZ;
 
   JPH_MotionProperties* motion = JPH_Body_GetMotionProperties(collider->body);
+
+  float inverseMass = JPH_MotionProperties_GetInverseMassUnchecked(motion);
+
+  JPH_Vec3 inertiaDiagonal;
+  JPH_MotionProperties_GetInverseInertiaDiagonal(motion, &inertiaDiagonal);
+
+  JPH_Quat inertiaRotation;
+  JPH_MotionProperties_GetInertiaRotation(motion, &inertiaRotation);
+
   JPH_MassProperties mass;
   const JPH_Shape* shape = JPH_BodyInterface_GetShape(getBodyInterface(collider, READ), collider->id);
   JPH_Shape_GetMassProperties(shape, &mass);
   JPH_MotionProperties_SetMassProperties(motion, dofs, &mass);
+  JPH_MotionProperties_SetInverseMass(motion, inverseMass);
+  JPH_MotionProperties_SetInverseInertia(motion, &inertiaDiagonal, &inertiaRotation);
 }
 
 void lovrColliderGetPosition(Collider* collider, float position[3]) {

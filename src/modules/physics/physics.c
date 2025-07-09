@@ -2252,6 +2252,7 @@ float lovrCapsuleShapeGetRadius(CapsuleShape* shape) {
 }
 
 bool lovrCapsuleShapeSetRadius(CapsuleShape* shape, float radius) {
+  lovrCheck(radius > 0.f, "CapsuleShape radius must be positive");
   float length = lovrCapsuleShapeGetLength(shape);
   return lovrShapeReplace(shape, makeCapsule(length / 2.f, radius));
 }
@@ -2261,6 +2262,7 @@ float lovrCapsuleShapeGetLength(CapsuleShape* shape) {
 }
 
 bool lovrCapsuleShapeSetLength(CapsuleShape* shape, float length) {
+  lovrCheck(length > 0.f, "CapsuleShape length must be positive");
   float radius = lovrCapsuleShapeGetRadius(shape);
   return lovrShapeReplace(shape, makeCapsule(radius, length));
 }
@@ -2292,6 +2294,7 @@ float lovrCylinderShapeGetRadius(CylinderShape* shape) {
 }
 
 bool lovrCylinderShapeSetRadius(CylinderShape* shape, float radius) {
+  lovrCheck(radius > 0.f, "CylinderShape radius must be positive");
   float length = lovrCylinderShapeGetLength(shape);
   return lovrShapeReplace(shape, makeCylinder(radius, length));
 }
@@ -2301,6 +2304,7 @@ float lovrCylinderShapeGetLength(CylinderShape* shape) {
 }
 
 bool lovrCylinderShapeSetLength(CylinderShape* shape, float length) {
+  lovrCheck(length > 0.f, "CylinderShape length must be positive");
   float radius = lovrCylinderShapeGetRadius(shape);
   return lovrShapeReplace(shape, makeCylinder(radius, length));
 }

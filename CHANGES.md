@@ -36,6 +36,7 @@ dev
 - Fix possible crash related to Thread:wait.
 - Fix possible crash in Model animation.
 - Fix `Collider:setDegreesOfFreedom` to preserve mass/inertia.
+- Fix missing error in `CapsuleShape:setRadius/Length` and `CylinderShape:setRadius/Length`.
 
 ### Deprecate
 

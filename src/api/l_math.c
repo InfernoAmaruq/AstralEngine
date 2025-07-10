@@ -182,6 +182,8 @@ int luaopen_lovr_math(lua_State* L) {
 
   lua_getfield(L, -1, "newMat4");
   lua_setglobal(L, "mat4");
+
+  lua_getfield(L, -1, "newMat4");
   lua_setglobal(L, "Mat4");
 
   return 1;

@@ -1612,6 +1612,10 @@ void lovrColliderGetDegreesOfFreedom(Collider* collider, bool translation[3], bo
 }
 
 void lovrColliderSetDegreesOfFreedom(Collider* collider, bool translation[3], bool rotation[3]) {
+  if (lovrColliderIsKinematic(collider)) {
+    return;
+  }
+
   JPH_AllowedDOFs dofs = 0;
 
   if (translation[0]) dofs |= JPH_AllowedDOFs_TranslationX;

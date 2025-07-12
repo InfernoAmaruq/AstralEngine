@@ -591,7 +591,7 @@ if(NOT EMSCRIPTEN AND NOT LOVR_USE_LUAU)
 endif()
 
 # Resources
-file(GLOB LOVR_RESOURCES "etc/*.ttf" "etc/*.lua" "etc/shaders/*.glsl")
+file(GLOB LOVR_RESOURCES "etc/*.ttf" "etc/*.lua" "etc/shaders/*.glsl" "src/api/l_math.lua")
 foreach(path ${LOVR_RESOURCES})
 
   # Turn the absolute path into a C variable like etc_boot_lua

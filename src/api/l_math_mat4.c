@@ -120,7 +120,7 @@ int l_lovrMat4Set(lua_State* L) {
     m[14] = position[2];
 
     // 1 more arg or 4 numbers: rotation, otherwise scale + rotation
-    if (top - index == 1 || ((top - index) == 3 && lua_type(L, top) == LUA_TNUMBER)) {
+    if (top == index || ((top - index) == 3 && lua_type(L, top) == LUA_TNUMBER)) {
       luax_readquat(L, index, orientation, NULL);
       mat4_rotateQuat(m, orientation);
     } else {
@@ -298,6 +298,22 @@ static int l_lovrMat4__mul(lua_State* L) {
     mat4_init(lovrMat4GetData(result), lovrMat4GetData(self));
     mat4_mul(lovrMat4GetData(self), lovrMat4GetData(other));
     luax_pushtype(L, Mat4, result);
+    return 1;
+  }
+
+  if (lua_istable(L, 2)) {
+    float v[3];
+    luax_readvec3(L, 2, v, NULL);
+    mat4_mulPoint(lovrMat4GetData(self), v);
+    lua_createtable(L, 3, 0);
+    lua_pushnumber(L, v[0]);
+    lua_setfield(L, -2, "x");
+    lua_pushnumber(L, v[1]);
+    lua_setfield(L, -2, "y");
+    lua_pushnumber(L, v[2]);
+    lua_setfield(L, -2, "z");
+    lua_getmetatable(L, 2);
+    lua_setmetatable(L, -2);
     return 1;
   }
 

@@ -3,6 +3,9 @@
 #include "core/os.h"
 #include "util.h"
 #include "boot.lua.h"
+#ifndef LOVR_USE_LUAU
+#include <lualib.h>
+#endif
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>

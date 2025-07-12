@@ -1,5 +1,6 @@
 #include "api.h"
 #include "math/math.h"
+#include "l_math.lua.h"
 #include "util.h"
 #include <threads.h>
 #include <string.h>
@@ -167,24 +168,51 @@ int luaopen_lovr_math(lua_State* L) {
   lovrMathInit();
   luax_atexit(L, lovrMathDestroy);
 
-  // Compatibility constructors
-  lua_getglobal(L, "vector");
-  lua_setglobal(L, "vec2");
+#ifndef LOVR_USE_LUAU
+  // Table vectors
+  if (!luaL_loadbuffer(L, (const char*) src_api_l_math_lua, src_api_l_math_lua_len, "@math.lua")) {
+    luaL_newmetatable(L, "Vec2");
+    luaL_newmetatable(L, "Vec3");
+    luaL_newmetatable(L, "Vec4");
+    luaL_newmetatable(L, "Quat");
+    luaL_newmetatable(L, "Mat4");
+    lua_call(L, 5, 0);
+  } else {
+    lua_error(L);
+    lua_pop(L, 1);
+  }
+  #endif
 
-  lua_getglobal(L, "vector");
-  lua_setglobal(L, "vec3");
+  // Backwards compatibility
+  luax_pushconf(L);
+  if (lua_istable(L, -1)) {
+    lua_getfield(L, -1, "math");
+    if (lua_istable(L, -1)) {
+      lua_getfield(L, -1, "globals");
+      if (lua_toboolean(L, -1)) {
+        lua_getglobal(L, "vector");
+        lua_setglobal(L, "vec2");
 
-  lua_getglobal(L, "vector");
-  lua_setglobal(L, "vec4");
+        lua_getglobal(L, "vector");
+        lua_setglobal(L, "vec3");
 
-  lua_getglobal(L, "quaternion");
-  lua_setglobal(L, "quat");
+        lua_getglobal(L, "vector");
+        lua_setglobal(L, "vec4");
 
-  lua_getfield(L, -1, "newMat4");
-  lua_setglobal(L, "mat4");
+        lua_getglobal(L, "quaternion");
+        lua_setglobal(L, "quat");
 
-  lua_getfield(L, -1, "newMat4");
-  lua_setglobal(L, "Mat4");
+        lua_pushcfunction(L, l_lovrMathNewMat4);
+        lua_setglobal(L, "mat4");
+
+        lua_pushcfunction(L, l_lovrMathNewMat4);
+        lua_setglobal(L, "Mat4");
+      }
+      lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+  }
+  lua_pop(L, 1);
 
   return 1;
 }

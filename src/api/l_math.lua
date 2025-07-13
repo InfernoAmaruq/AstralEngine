@@ -4,7 +4,9 @@ vector = {}
 vector.__index = vector
 
 function vector.pack(x, y, z)
-  return setmetatable({ x = x or 0, y = y or 0, z = z or 0 }, vector)
+  local v = { x = x or 0, y = y or 0, z = z or 0 }
+  setmetatable(v, vector)
+  return v
 end
 
 function vector.unpack(v)
@@ -16,12 +18,16 @@ function vector.length(v)
 end
 
 function vector.normalize(v)
-  local length = v:length()
-  if length > 0 then
-    return setmetatable({ x = v.x / length, y = v.y / length, z = v.z / length }, vector)
-  else
-    return setmetatable({ x = 0, y = 0, z = 0 }, vector)
+  local x, y, z = v.x, v.y, v.z
+  local length = sqrt(x * x + y * y + z * z)
+
+  if length == 0 then
+    return v
   end
+
+  local normalized = { x = x / length, y = y / length, z = z / length }
+  setmetatable(normalized, vector)
+  return normalized
 end
 
 function vector.distance(v, u)
@@ -30,11 +36,14 @@ function vector.distance(v, u)
 end
 
 function vector.cross(v, u)
-  return setmetatable({
+  local cross = {
     x = v.y * u.z - v.z * u.y,
     y = v.z * u.x - v.x * u.z,
     z = v.x * u.y - v.y * u.x
-  }, vector)
+  }
+
+  setmetatable(cross, vector)
+  return cross
 end
 
 function vector.dot(v, u)
@@ -55,55 +64,108 @@ function vector.angle(v, u, axis)
 end
 
 function vector.lerp(v, u, t)
-  return setmetatable({
+  local lerped = {
     x = v.x + (u.x - v.x) * t,
     y = v.y + (u.y - v.y) * t,
     z = v.z + (u.z - v.z) * t
-  }, vector)
+  }
+
+  setmetatable(lerped, vector)
+  return lerped
 end
 
 function vector.__add(a, b)
+  local x, y, z
+
   if type(a) == 'number' then
-    return setmetatable({ x = a + b.x, y = a + b.y, z = a + b.z }, vector)
+    x = a + b.x
+    y = a + b.y
+    z = a + b.z
   elseif type(b) == 'number' then
-    return setmetatable({ x = a.x + b, y = a.y + b, z = a.z + b }, vector)
+    x = a.x + b
+    y = a.y + b
+    z = a.z + b
   else
-    return setmetatable({ x = a.x + b.x, y = a.y + b.y, z = a.z + b.z }, vector)
+    x = a.x + b.x
+    y = a.y + b.y
+    z = a.z + b.z
   end
+
+  local v = { x = x, y = y, z = z }
+  setmetatable(v, vector)
+  return v
 end
 
 function vector.__sub(a, b)
+  local x, y, z
+
   if type(a) == 'number' then
-    return setmetatable({ x = a - b.x, y = a - b.y, z = a - b.z }, vector)
+    x = a - b.x
+    y = a - b.y
+    z = a - b.z
   elseif type(b) == 'number' then
-    return setmetatable({ x = a.x - b, y = a.y - b, z = a.z - b }, vector)
+    x = a.x - b
+    y = a.y - b
+    z = a.z - b
   else
-    return setmetatable({ x = a.x - b.x, y = a.y - b.y, z = a.z - b.z }, vector)
+    x = a.x - b.x
+    y = a.y - b.y
+    z = a.z - b.z
   end
+
+  local v = { x = x, y = y, z = z }
+  setmetatable(v, vector)
+  return v
 end
 
 function vector.__mul(a, b)
+  local x, y, z
+
   if type(a) == 'number' then
-    return setmetatable({ x = a * b.x, y = a * b.y, z = a * b.z }, vector)
+    x = a * b.x
+    y = a * b.y
+    z = a * b.z
   elseif type(b) == 'number' then
-    return setmetatable({ x = a.x * b, y = a.y * b, z = a.z * b }, vector)
+    x = a.x * b
+    y = a.y * b
+    z = a.z * b
   else
-    return setmetatable({ x = a.x * b.x, y = a.y * b.y, z = a.z * b.z }, vector)
+    x = a.x * b.x
+    y = a.y * b.y
+    z = a.z * b.z
   end
+
+  local v = { x = x, y = y, z = z }
+  setmetatable(v, vector)
+  return v
 end
 
 function vector.__div(a, b)
+  local x, y, z
+
   if type(a) == 'number' then
-    return setmetatable({ x = a / b.x, y = a / b.y, z = a / b.z }, vector)
+    x = a / b.x
+    y = a / b.y
+    z = a / b.z
   elseif type(b) == 'number' then
-    return setmetatable({ x = a.x / b, y = a.y / b, z = a.z / b }, vector)
+    x = a.x / b
+    y = a.y / b
+    z = a.z / b
   else
-    return setmetatable({ x = a.x / b.x, y = a.y / b.y, z = a.z / b.z }, vector)
+    x = a.x / b.x
+    y = a.y / b.y
+    z = a.z / b.z
   end
+
+  local v = { x = x, y = y, z = z }
+  setmetatable(v, vector)
+  return v
 end
 
 function vector.__unm(v)
-  return setmetatable({ x = -v.x, y = -v.y, z = -v.z }, vector)
+  local result = { x = -v.x, y = -v.y, z = -v.z }
+  setmetatable(result, vector)
+  return result
 end
 
 function vector.__tostring(v)
@@ -112,7 +174,9 @@ end
 
 setmetatable(vector, {
   __call = function(self, x, y, z)
-    return setmetatable({ x = x, y = y, z = z }, self)
+    local instance = { x = x, y = y, z = z }
+    setmetatable(instance, self)
+    return instance
   end
 })
 
@@ -127,7 +191,9 @@ quaternion = {}
 quaternion.__index = quaternion
 
 function quaternion.pack(x, y, z, w)
-  return setmetatable({ x = x, y = y, z = z, w = w }, quaternion)
+  local result = { x = x, y = y, z = z, w = w }
+  setmetatable(result, quaternion)
+  return result
 end
 
 function quaternion.unpack(q)
@@ -135,7 +201,8 @@ function quaternion.unpack(q)
 end
 
 function quaternion.conjugate(q)
-  return setmetatable({ x = -q.x, y = -q.y, z = -q.z, w = q.w }, quaternion)
+  local result = { x = -q.x, y = -q.y, z = -q.z, w = q.w }
+  setmetatable(result, quaternion)
 end
 
 function quaternion.angleaxis(angle, ax, ay, az)
@@ -148,7 +215,9 @@ function quaternion.angleaxis(angle, ax, ay, az)
     s = s / length
   end
 
-  return setmetatable({ x = ax * s, y = ay * s, z = az * s, w = c }, quaternion)
+  local result = { x = ax * s, y = ay * s, z = az * s, w = c }
+  setmetatable(result, quaternion)
+  return result
 end
 
 function quaternion.toangleaxis(q)
@@ -163,12 +232,15 @@ function quaternion.euler(x, y, z)
   local cy, sy = cos(y * .5), sin(y * .5)
   local cz, sz = cos(z * .5), sin(z * .5)
 
-  return setmetatable({
+  local result = {
     x = cy * sx * cz + sy * cx * sz,
     y = sy * cx * cz - cy * sx * sz,
     z = cy * cx * sz - sy * sx * cz,
     w = cy * cx * cz + sy * sx * sz
-  }, quaternion)
+  }
+
+  setmetatable(result, quaternion)
+  return result
 end
 
 function quaternion.toeuler(q)
@@ -208,7 +280,9 @@ function quaternion.between(a, b)
 
   local length = sqrt(x * x + y * y + z * z + w * w)
 
-  return setmetatable({ x = x / length, y = y / length, z = z / length, w = w / length }, quaternion)
+  local result = { x = x / length, y = y / length, z = z / length, w = w / length }
+  setmetatable(result, quaternion)
+  return result
 end
 
 function quaternion.lookdir(dir, up)
@@ -244,27 +318,45 @@ function quaternion.lookdir(dir, up)
   local m10, m11, m12 = ry, uy, fy
   local m20, m21, m22 = rz, uz, fz
 
+  local x, y, z, w
+
   if m22 < 0 then
     if m00 > m11 then
       local t = 1 + m00 - m11 - m22
       local s = .5 / sqrt(t)
-      return setmetatable({ x = t * s, y = (m01 + m10) * s, z = (m20 + m02) * s, w = (m12 - m21) * s }, quaternion)
+      x = t * s
+      y = (m01 + m10) * s
+      z = (m20 + m02) * s
+      w = (m12 - m21) * s
     else
       local t = 1 - m00 + m11 - m22
       local s = .5 / sqrt(t)
-      return setmetatable({ x = (m01 + m10) * s, y = t * s, z = (m12 + m21) * s, w = (m20 - m02) * s }, quaternion)
+      x = (m01 + m10) * s
+      y = t * s
+      z = (m12 + m21) * s
+      w = (m20 - m02) * s
     end
   else
     if m00 < -m11 then
       local t = 1 - m00 - m11 + m22
       local s = .5 / sqrt(t)
-      return setmetatable({ x = (m20 + m02) * s, y = (m12 + m21) * s, z = t * s, w = (m01 - m10) * s }, quaternion)
+      x = (m20 + m02) * s
+      y = (m12 + m21) * s
+      z = t * s
+      w = (m01 - m10) * s
     else
       local t = 1 + m00 + m11 + m22
       local s = .5 / sqrt(t)
-      return setmetatable({ x = (m12 - m21) * s, y = (m20 - m02) * s, z = (m01 - m10) * s, w = t * s }, quaternion)
+      x = (m12 - m21) * s
+      y = (m20 - m02) * s
+      z = (m01 - m10) * s
+      w = t * s
     end
   end
+
+  local result = { x = x, y = y, z = z, w = w }
+  setmetatable(result, quaternion)
+  return result
 end
 
 function quaternion.direction(q)
@@ -291,33 +383,42 @@ function quaternion.slerp(q, r, t)
   local sinHalfTheta = sqrt(1 - dot * dot)
 
   if abs(sinHalfTheta) < .001 then
-    return setmetatable({
+    local result = {
       x = x * .5 + r.x * .5,
       y = y * .5 + r.y * .5,
       z = z * .5 + r.z * .5,
       w = w * .5 + r.w * .5
-    }, quaternion)
+    }
+
+    setmetatable(result, quaternion)
+    return result
   end
 
   local a = sin((1 - t) * halfTheta) / sinHalfTheta
   local b = sin(t * halfTheta) / sinHalfTheta
 
-  return setmetatable({
+  local result = {
     x = x * a + r.x * b,
     y = y * a + r.y * b,
     z = z * a + r.z * b,
     w = w * a + r.w * b
-  }, quaternion)
+  }
+
+  setmetatable(result, quaternion)
+  return result
 end
 
 function quaternion.__mul(q, b)
   if b.w then
-    return setmetatable({
+    local result = {
       x = q.x * b.w + q.w * b.x + q.y * b.z - q.z * b.y,
       y = q.y * b.w + q.w * b.y + q.z * b.x - q.x * b.z,
       z = q.z * b.w + q.w * b.z + q.x * b.y - q.y * b.x,
       w = q.w * b.w - q.x * b.x - q.y * b.y - q.z * b.z
-    }, quaternion)
+    }
+
+    setmetatable(result, quaternion)
+    return result
   else
     local ux, uy, uz = q.x, q.y, q.z
     local cx, cy, cz = q.y * b.z - q.z * b.y, q.z * b.x - q.x * b.z, q.x * b.y - q.y * b.z
@@ -326,11 +427,14 @@ function quaternion.__mul(q, b)
     local uv = ux * b.x + uy * b.y + uz * b.z
     local s = q.w * q.w - uu
 
-    return setmetatable({
+    local result = {
       x = b.x * s + ux * 2 * uv + cx * 2 * q.w,
       y = b.y * s + uy * 2 * uv + cy * 2 * q.w,
       z = b.z * s + uz * 2 * uv + cz * 2 * q.w
-    }, vector)
+    }
+
+    setmetatable(result, vector)
+    return result
   end
 end
 

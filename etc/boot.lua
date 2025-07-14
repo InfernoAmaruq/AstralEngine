@@ -267,8 +267,8 @@ function lovr.simulate(dt)
   local vy = down and -1 or up and 1 or 0
   local vz = forward and -1 or backward and 1 or 0
   local speed = sprint and sprintspeed or walk and walkspeed or movespeed
-  local velocity = vec3(vx, vy, vz):normalize() * speed * dt
-  local position = vec3(lovr.headset.getPosition('head')) + orientation * velocity
+  local velocity = vector(vx, vy, vz):normalize() * speed * dt
+  local position = vector(lovr.headset.getPosition('head')) + orientation * velocity
   lovr.headset.setPose('head', position, orientation)
 
   -- Hand
@@ -286,7 +286,7 @@ function lovr.simulate(dt)
   distance = math.max(distance, .05)
 
   local handPosition = position + direction * distance
-  local handOrientation = quaternion.lookdir(direction, orientation * vector(0, 1, 0))
+  local handOrientation = quaternion.lookdir(direction, orientation * vector.up)
 
   lovr.headset.setPose('hand/left', handPosition, handOrientation)
   lovr.headset.setPose('hand/left/point', handPosition, handOrientation)

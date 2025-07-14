@@ -3,11 +3,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <lua.h>
-#ifdef LOVR_USE_LUAU
-#include <lualib.h>
-#else
 #include <lauxlib.h>
-#endif
 
 #pragma once
 

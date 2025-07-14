@@ -819,7 +819,7 @@ int luax_readquat(lua_State* L, int index, quat q, const char* expected) {
         q[1] = luax_tofloat(L, -3);
         q[2] = luax_tofloat(L, -2);
         q[3] = luax_tofloat(L, -1);
-        lua_pop(L, 3);
+        lua_pop(L, 4);
       }
       return index + 1;
 #ifdef LOVR_USE_LUAU

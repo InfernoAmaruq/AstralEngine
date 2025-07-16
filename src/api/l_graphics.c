@@ -772,6 +772,12 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
           lua_pop(L, 1);
           hasData = true;
           break;
+#ifdef LOVR_USE_LUAU
+        case LUA_TVECTOR:
+          format->length = 0;
+          hasData = true;
+          break;
+#endif
         default:
           if ((blob = luax_totype(L, 2, Blob)) != NULL) {
             luax_check(L, blob->size < UINT32_MAX, "Blob is too big to create a Buffer (max size is 1GB)");
@@ -783,7 +789,7 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
             hasData = true;
             break;
           }
-          return luax_typeerror(L, 2, "nil, number, table, Blob, or Mat4"), 0;
+          return luax_typeerror(L, 2, "nil, number, table, vector, Blob, or Mat4"), 0;
       }
     }
   }

@@ -73,8 +73,8 @@ group('graphics', function()
       buffer:setData({ { 9, 8 }, { 7, 6, 5 }, { 4, 3, 2, 1 } })
       expect(buffer:getData()).to.equal({ { 9, 8 }, { 7, 6, 5 }, { 4, 3, 2, 1 } })
 
-      buffer:setData({ vec2(1, 2), vec3(3, 4, 5), vec4(6, 7, 8, 9) })
-      expect(buffer:getData()).to.equal({ { 1, 2 }, { 3, 4, 5 }, { 6, 7, 8, 9 } })
+      buffer:setData({ vector(1, 2, 3), vector(2, 3, 4), vector(3, 4, 5) })
+      expect(buffer:getData()).to.equal({ { 1, 2 }, { 2, 3, 4 }, { 3, 4, 5, 1 } })
     end)
 
     test('format: anonymous struct array', function()
@@ -89,7 +89,7 @@ group('graphics', function()
       buffer:setData({ { { 4, 4 }, { 3, 3, 3 } }, { { 2, 2 }, { 1, 1, 1 } }, -0 })
       expect(buffer:getData()).to.equal({ { { 4, 4 }, { 3, 3, 3 } }, { { 2, 2 }, { 1, 1, 1 } } })
 
-      buffer:setData({ { vec2(7), vec3(6) }, { vec2(4), vec3(5) } })
+      buffer:setData({ { vector(7), vector(6) }, { vector(4), vector(5) } })
       expect(buffer:getData()).to.equal({ { { 7, 7 }, { 6, 6, 6 } }, { { 4, 4 }, { 5, 5, 5 } } })
     end)
 

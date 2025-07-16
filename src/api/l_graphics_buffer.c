@@ -162,8 +162,9 @@ static void luax_checkfieldn(lua_State* L, int index, const DataField* field, vo
 #ifdef LOVR_USE_LUAU
 static void luax_checkfieldv(lua_State* L, int index, const DataField* field, void* data) {
   DataPointer p = { .raw = data };
-  const float* v = lua_tovector(L, index);
-  luax_fieldcheck(L, v && (field->type < TYPE_MAT2 || field->type > TYPE_MAT4), index, field, false);
+  const float* vector = lua_tovector(L, index);
+  luax_fieldcheck(L, vector && (field->type < TYPE_MAT2 || field->type > TYPE_MAT4), index, field, false);
+  float v[4] = { vector[0], vector[1], vector[2], 1.f };
   switch (field->type) {
     case TYPE_I8x4: for (int i = 0; i < 4; i++) p.i8[i] = (int8_t) v[i]; break;
     case TYPE_U8x4: for (int i = 0; i < 4; i++) p.u8[i] = (uint8_t) v[i]; break;

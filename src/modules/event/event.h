@@ -47,6 +47,7 @@ typedef enum {
   TYPE_POINTER,
   TYPE_OBJECT,
   TYPE_VECTOR,
+  TYPE_QUATERNION,
   TYPE_TABLE
 } VariantType;
 
@@ -68,9 +69,11 @@ typedef union {
     void (*destructor)(void*);
   } object;
   struct {
-    int type;
-    float data[4];
+    float data[3];
   } vector;
+  struct {
+    int16_t data[4];
+  } quaternion;
   struct {
     struct Variant* keys;
     struct Variant* vals;

@@ -85,7 +85,7 @@ RandomGenerator* lovrMathGetRandomGenerator(void) {
 // Curve
 
 // Explicit curve evaluation, unroll simple cases to avoid pow overhead
-static void evaluate(float* restrict P, size_t n, float t, vec4 p) {
+static void evaluate(float* restrict P, size_t n, float t, float* p) {
   if (n == 2) {
     p[0] = P[0] + (P[4] - P[0]) * t;
     p[1] = P[1] + (P[5] - P[1]) * t;
@@ -138,19 +138,22 @@ void lovrCurveDestroy(void* ref) {
   lovrFree(curve);
 }
 
-bool lovrCurveEvaluate(Curve* curve, float t, vec4 p) {
+bool lovrCurveEvaluate(Curve* curve, float t, float* p) {
   lovrCheck(curve->points.length >= 8, "Need at least 2 points to evaluate a Curve");
   lovrCheck(t >= 0.f && t <= 1.f, "Curve evaluation interval must be within [0, 1]");
   evaluate(curve->points.data, curve->points.length / 4, t, p);
   return true;
 }
 
-void lovrCurveGetTangent(Curve* curve, float t, vec4 p) {
+void lovrCurveGetTangent(Curve* curve, float t, float* p) {
   float q[4];
   size_t n = curve->points.length / 4;
   evaluate(curve->points.data, n - 1, t, q);
   evaluate(curve->points.data + 4, n - 1, t, p);
-  vec4_add(p, vec4_scale(q, -1.f));
+  p[0] -= q[0];
+  p[1] -= q[1];
+  p[2] -= q[2];
+  p[3] -= q[3];
   vec3_normalize(p);
 }
 
@@ -169,14 +172,14 @@ Curve* lovrCurveSlice(Curve* curve, float t1, float t2) {
     evaluate(curve->points.data + 4 * i, n - i, t1, new->points.data + 4 * i);
   }
 
-  vec4_init(new->points.data + 4 * (n - 1), curve->points.data + 4 * (n - 1));
+  memcpy(new->points.data + 4 * (n - 1), curve->points.data + 4 * (n - 1), 4 * sizeof(float));
 
   // Split segment at t2, taking left half
   float t = (t2 - t1) / (1.f - t1);
   for (size_t i = n - 1; i >= 1; i--) {
     float point[4];
     evaluate(new->points.data, i + 1, t, point);
-    vec4_init(new->points.data + 4 * i, point);
+    memcpy(new->points.data + 4 * i, point, 4 * sizeof(float));
   }
 
   return new;
@@ -186,15 +189,15 @@ size_t lovrCurveGetPointCount(Curve* curve) {
   return curve->points.length / 4;
 }
 
-void lovrCurveGetPoint(Curve* curve, size_t index, vec4 point) {
-  vec4_init(point, curve->points.data + 4 * index);
+void lovrCurveGetPoint(Curve* curve, size_t index, float* point) {
+  memcpy(point, curve->points.data + 4 * index, 4 * sizeof(float));
 }
 
-void lovrCurveSetPoint(Curve* curve, size_t index, vec4 point) {
-  vec4_init(curve->points.data + 4 * index, point);
+void lovrCurveSetPoint(Curve* curve, size_t index, float* point) {
+  memcpy(curve->points.data + 4 * index, point, 4 * sizeof(float));
 }
 
-void lovrCurveAddPoint(Curve* curve, vec4 point, size_t index) {
+void lovrCurveAddPoint(Curve* curve, float* point, size_t index) {
 
   // Reserve enough memory for 4 more floats, then record destination once memory is allocated
   arr_reserve(&curve->points, curve->points.length + 4);
@@ -214,7 +217,7 @@ void lovrCurveRemovePoint(Curve* curve, size_t index) {
   arr_splice(&curve->points, index * 4, 4);
 }
 
-static void evaluateDerivative(float* restrict P, size_t n, float t, vec4 dp) {
+static void evaluateDerivative(float* restrict P, size_t n, float t, float* dp) {
   if (n < 2) {
     dp[0] = dp[1] = dp[2] = dp[3] = 0.f;
     return;

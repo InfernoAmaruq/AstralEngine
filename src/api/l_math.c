@@ -181,7 +181,7 @@ int luaopen_lovr_math(lua_State* L) {
     lua_error(L);
     lua_pop(L, 1);
   }
-  #endif
+#endif
 
   // Backwards compatibility
   luax_pushconf(L);
@@ -191,21 +191,26 @@ int luaopen_lovr_math(lua_State* L) {
       lua_getfield(L, -1, "globals");
       if (lua_toboolean(L, -1)) {
         lua_getglobal(L, "vector");
+        lua_getglobal(L, "vector");
+        lua_getglobal(L, "vector");
+        lua_getglobal(L, "vector");
+        lua_getglobal(L, "vector");
+        lua_getglobal(L, "vector");
         lua_setglobal(L, "vec2");
-
-        lua_getglobal(L, "vector");
         lua_setglobal(L, "vec3");
-
-        lua_getglobal(L, "vector");
         lua_setglobal(L, "vec4");
+        lua_setglobal(L, "Vec2");
+        lua_setglobal(L, "Vec3");
+        lua_setglobal(L, "Vec4");
 
         lua_getglobal(L, "quaternion");
+        lua_getglobal(L, "quaternion");
         lua_setglobal(L, "quat");
+        lua_setglobal(L, "Quat");
 
+        lua_pushcfunction(L, l_lovrMathNewMat4);
         lua_pushcfunction(L, l_lovrMathNewMat4);
         lua_setglobal(L, "mat4");
-
-        lua_pushcfunction(L, l_lovrMathNewMat4);
         lua_setglobal(L, "Mat4");
       }
       lua_pop(L, 1);

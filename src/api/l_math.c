@@ -143,6 +143,10 @@ static int l_lovrMathLinearToGamma(lua_State* L) {
   }
 }
 
+static int l_lovrMathDrain(lua_State* L) {
+  return 0;
+}
+
 static const luaL_Reg lovrMath[] = {
   { "newCurve", l_lovrMathNewCurve },
   { "newMat4", l_lovrMathNewMat4 },
@@ -154,6 +158,10 @@ static const luaL_Reg lovrMath[] = {
   { "setRandomSeed", l_lovrMathSetRandomSeed },
   { "gammaToLinear", l_lovrMathGammaToLinear },
   { "linearToGamma", l_lovrMathLinearToGamma },
+
+  // Deprecated
+  { "drain", l_lovrMathDrain },
+
   { NULL, NULL }
 };
 

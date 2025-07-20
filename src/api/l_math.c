@@ -227,5 +227,29 @@ int luaopen_lovr_math(lua_State* L) {
   }
   lua_pop(L, 1);
 
+  lua_getglobal(L, "vector");
+  lua_setfield(L, -2, "vec2");
+
+  lua_getglobal(L, "vector");
+  lua_setfield(L, -2, "vec3");
+
+  lua_getglobal(L, "vector");
+  lua_setfield(L, -2, "vec4");
+
+  lua_getglobal(L, "vector");
+  lua_setfield(L, -2, "newVec2");
+
+  lua_getglobal(L, "vector");
+  lua_setfield(L, -2, "newVec3");
+
+  lua_getglobal(L, "vector");
+  lua_setfield(L, -2, "newVec4");
+
+  lua_getglobal(L, "quaternion");
+  lua_setfield(L, -2, "quat");
+
+  lua_getglobal(L, "quaternion");
+  lua_setfield(L, -2, "newQuat");
+
   return 1;
 }

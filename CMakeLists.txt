@@ -6,6 +6,9 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment ve
 project(lovr)
 
 # Options
+set(LOVR_LUA "LuaJIT" CACHE STRING "Lua implementation to use")
+set_property(CACHE LOVR_LUA PROPERTY STRINGS "Lua" "LuaJIT" "Luau")
+
 option(LOVR_ENABLE_AUDIO "Enable the audio module" ON)
 option(LOVR_ENABLE_DATA "Enable the data module" ON)
 option(LOVR_ENABLE_EVENT "Enable the event module" ON)
@@ -21,8 +24,6 @@ option(LOVR_ENABLE_TIMER "Enable the timer module" ON)
 option(LOVR_ENABLE_UTF8 "Enable the utf8 module" ON)
 
 option(LOVR_USE_GLFW "Use GLFW for desktop windows" ON)
-option(LOVR_USE_LUAU "Use Luau instead of Lua" ON)
-option(LOVR_USE_LUAJIT "Use LuaJIT instead of Lua" OFF)
 option(LOVR_USE_GLSLANG "Use glslang to compile GLSL shaders" ON)
 option(LOVR_USE_VULKAN "Use the Vulkan renderer" ON)
 option(LOVR_USE_WEBGPU "Use the WebGPU renderer" OFF)
@@ -100,7 +101,7 @@ if(LOVR_USE_GLFW AND NOT (EMSCRIPTEN OR ANDROID))
 endif()
 
 # Lua
-if(LOVR_USE_LUAU)
+if(LOVR_LUA STREQUAL "Luau")
   set(LOVR_ENABLE_UTF8 OFF)
   set(LUAU_BUILD_TESTS OFF CACHE BOOL "")
   set(LUAU_BUILD_CLI OFF CACHE BOOL "")
@@ -111,14 +112,14 @@ if(LOVR_USE_LUAU)
     list(FILTER defs EXCLUDE REGEX [[LUA.*_API]])
     set_target_properties(${target} PROPERTIES INTERFACE_COMPILE_DEFINITIONS "${defs}")
   endforeach()
-  set(LOVR_LUA Luau.VM Luau.Compiler Luau.Ast)
-elseif(LOVR_USE_LUAJIT AND NOT EMSCRIPTEN)
+  set(LOVR_LUA_LIB Luau.VM Luau.Compiler Luau.Ast)
+elseif(LOVR_LUA STREQUAL "LuaJIT")
   if(LOVR_SYSTEM_LUA)
     pkg_search_module(LUAJIT REQUIRED luajit)
     list(APPEND LOVR_LIB_DIRS ${LUAJIT_LIBRARY_DIRS})
     set(LOVR_LUA_INCLUDE ${LUAJIT_INCLUDE_DIRS})
     set(LOVR_LUA_LIB_DIR ${LUAJIT_LIBRARY_DIRS})
-    set(LOVR_LUA ${LUAJIT_LIBRARIES})
+    set(LOVR_LUA_LIB ${LUAJIT_LIBRARIES})
   else()
     set(BUILD_SHARED_LIBS ON)
     add_subdirectory(deps/luajit luajit)
@@ -129,15 +130,15 @@ elseif(LOVR_USE_LUAJIT AND NOT EMSCRIPTEN)
       target_compile_definitions(buildvm PRIVATE _CRT_SECURE_NO_WARNINGS)
     endif()
     set(LOVR_LUA_INCLUDE deps/luajit/src ${CMAKE_BINARY_DIR}/luajit)
-    set(LOVR_LUA libluajit)
+    set(LOVR_LUA_LIB libluajit)
   endif()
-else()
+elseif(LOVR_LUA STREQUAL "Lua")
   if(LOVR_SYSTEM_LUA)
     pkg_search_module(LUA REQUIRED lua)
     list(APPEND LOVR_LIB_DIRS ${LUA_LIBRARY_DIRS})
     set(LOVR_LUA_INCLUDE ${LUA_INCLUDE_DIRS})
     set(LOVR_LUA_LIB_DIR ${LUA_LIBRARY_DIRS})
-    set(LOVR_LUA ${LUA_LIBRARIES})
+    set(LOVR_LUA_LIB ${LUA_LIBRARIES})
   else()
     set(LUA_SRC
       lapi.c lauxlib.c lbaselib.c lcode.c ldblib.c ldebug.c ldo.c ldump.c lfunc.c lgc.c linit.c
@@ -155,8 +156,10 @@ else()
       target_link_libraries(lua dl)
       target_compile_definitions(lua PRIVATE LUA_USE_DLOPEN)
     endif()
-    set(LOVR_LUA lua)
+    set(LOVR_LUA_LIB lua)
   endif()
+else()
+  message(FATAL_ERROR "Invalid value for LOVR_LUA, expected Lua, LuaJIT, or Luau")
 endif()
 
 # MSDF
@@ -297,7 +300,7 @@ target_link_directories(lovr PRIVATE ${LOVR_LIB_DIRS})
 
 target_link_libraries(lovr
   ${LOVR_GLFW}
-  ${LOVR_LUA}
+  ${LOVR_LUA_LIB}
   ${LOVR_MSDF}
   ${LOVR_JOLT}
   ${LOVR_GLSLANG}
@@ -328,7 +331,7 @@ if(LOVR_PROFILE)
   target_include_directories(lovr PRIVATE deps/tracy/public/tracy)
 endif()
 
-if(LOVR_USE_LUAU)
+if(LOVR_LUA STREQUAL "Luau")
   target_compile_definitions(lovr PRIVATE LOVR_USE_LUAU)
 endif()
 
@@ -558,7 +561,7 @@ else()
 endif()
 
 # Plugins
-if(NOT EMSCRIPTEN AND NOT LOVR_USE_LUAU)
+if(NOT EMSCRIPTEN AND NOT LOVR_LUA STREQUAL "Luau")
   set(LOVR 1)
   if(NOT DEFINED LOVR_PLUGINS)
     file(GLOB LOVR_PLUGINS ${CMAKE_SOURCE_DIR}/plugins/*)
@@ -583,7 +586,7 @@ if(NOT EMSCRIPTEN AND NOT LOVR_USE_LUAU)
       foreach(PLUGIN_TARGET ${PLUGIN_TARGETS})
         target_include_directories(${PLUGIN_TARGET} PRIVATE ${LOVR_LUA_INCLUDE})
         target_link_directories(${PLUGIN_TARGET} PRIVATE ${LOVR_LUA_LIB_DIR})
-        target_link_libraries(${PLUGIN_TARGET} ${LOVR_LUA})
+        target_link_libraries(${PLUGIN_TARGET} ${LOVR_LUA_LIB})
       endforeach()
       list(APPEND ALL_PLUGIN_TARGETS ${PLUGIN_TARGETS})
     endif()
@@ -673,7 +676,7 @@ if(WIN32)
   endfunction()
 
   move_dll(${LOVR_GLFW})
-  move_dll(${LOVR_LUA})
+  move_dll(${LOVR_LUA_LIB})
   move_dll(${LOVR_MSDF})
   move_dll(${LOVR_JOLT})
   move_dll(${LOVR_GLSLANG})
@@ -725,7 +728,7 @@ elseif(APPLE)
     endif()
   endfunction()
   move_lib(${LOVR_GLFW})
-  move_lib(${LOVR_LUA})
+  move_lib(${LOVR_LUA_LIB})
   move_lib(${LOVR_MSDF})
   move_lib(${LOVR_JOLT})
   move_lib(${LOVR_GLSLANG})
@@ -758,13 +761,13 @@ elseif(ANDROID)
     lovr
     ${LOVR_JOLT}
     ${LOVR_MSDF}
-    ${LOVR_LUA}
+    ${LOVR_LUA_LIB}
     ${LOVR_GLSLANG}
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/raw/lib/${ANDROID_ABI}"
   )
 
   # Build Lua libraries with global symbols, so plugins don't need to explicitly link against Lua
-  foreach(target ${LOVR_LUA})
+  foreach(target ${LOVR_LUA_LIB})
     target_link_options(${target} PRIVATE "-Wl,-z,global")
   endforeach()
 
@@ -878,7 +881,7 @@ elseif(UNIX)
     endif()
   endfunction()
   move_lib(${LOVR_GLFW})
-  move_lib(${LOVR_LUA})
+  move_lib(${LOVR_LUA_LIB})
   move_lib(${LOVR_MSDF})
   move_lib(${LOVR_JOLT})
   move_lib(${LOVR_GLSLANG})

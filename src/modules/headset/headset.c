@@ -1769,11 +1769,19 @@ bool lovrHeadsetUpdate(double* dt) {
 }
 
 double lovrHeadsetGetDeltaTime(void) {
-  return (state.frameState.predictedDisplayTime - state.lastDisplayTime) / 1e9;
+  if (state.session) {
+    return (state.frameState.predictedDisplayTime - state.lastDisplayTime) / 1e9;
+  } else {
+    return lovrTimerGetDelta();
+  }
 }
 
 double lovrHeadsetGetDisplayTime(void) {
-  return (state.frameState.predictedDisplayTime - state.epoch) / 1e9;
+  if (state.session) {
+    return (state.frameState.predictedDisplayTime - state.epoch) / 1e9;
+  } else {
+    return lovrTimerGetTime();
+  }
 }
 
 void lovrHeadsetGetDisplayDimensions(uint32_t* width, uint32_t* height) {
@@ -2026,7 +2034,7 @@ static XrViewStateFlags getViews(XrView views[2], uint32_t* count) {
 }
 
 uint32_t lovrHeadsetGetViewCount(void) {
-  return 2;
+  return state.session ? 2 : 1;
 }
 
 bool lovrHeadsetGetViewPose(uint32_t view, float* position, float* orientation) {

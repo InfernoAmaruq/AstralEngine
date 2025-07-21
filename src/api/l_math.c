@@ -20,15 +20,31 @@ static int l_lovrMathNewCurve(lua_State* L) {
   if (lua_istable(L, 1)) {
     int pointIndex = 0;
     int length = luax_len(L, 1);
-    for (int i = 1; i <= length;) {
-      lua_rawgeti(L, 1, i + 0);
-      lua_rawgeti(L, 1, i + 1);
-      lua_rawgeti(L, 1, i + 2);
-      float point[4];
-      int components = luax_readvec3(L, -3, point, "vec3 or number");
-      lovrCurveAddPoint(curve, point, pointIndex++);
-      i += 3 + components;
-      lua_pop(L, 3);
+
+    lua_rawgeti(L, 1, 1);
+    bool number = lua_type(L, 1) == LUA_TNUMBER;
+    lua_pop(L, 1);
+
+    if (number) {
+      for (int i = 1; i <= length; i += 3) {
+        float point[4];
+        lua_rawgeti(L, 1, i + 0);
+        lua_rawgeti(L, 1, i + 1);
+        lua_rawgeti(L, 1, i + 2);
+        point[0] = luax_tofloat(L, -3);
+        point[1] = luax_tofloat(L, -2);
+        point[2] = luax_tofloat(L, -1);
+        lovrCurveAddPoint(curve, point, pointIndex++);
+        lua_pop(L, 3);
+      }
+    } else {
+      for (int i = 1; i <= length; i++) {
+        lua_rawgeti(L, 1, i);
+        float point[4];
+        luax_readvec3(L, -1, point, "vec3 or number");
+        lovrCurveAddPoint(curve, point, pointIndex++);
+        lua_pop(L, 1);
+      }
     }
   } else if (top == 1 && lua_type(L, 1) == LUA_TNUMBER) {
     float point[4] = { 0.f };

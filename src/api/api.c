@@ -689,6 +689,7 @@ int luax_readvec3(lua_State* L, int index, vec3 v, const char* expected) {
       v[2] = luax_optfloat(L, index + 2, v[0]);
       return index + 3;
     case LUA_TTABLE:
+      index = index > 0 ? index : (index + lua_gettop(L) + 1);
       if (luax_len(L, index) > 0) {
         lua_rawgeti(L, index, 1);
         lua_rawgeti(L, index, 2);
@@ -744,6 +745,7 @@ int luax_readscale(lua_State* L, int index, vec3 v, int components, const char* 
       }
       return index + components;
     case LUA_TTABLE:
+      index = index > 0 ? index : (index + lua_gettop(L) + 1);
       if (luax_len(L, index) > 0) {
         lua_rawgeti(L, index, 1);
         lua_rawgeti(L, index, 2);
@@ -792,6 +794,7 @@ int luax_readquat(lua_State* L, int index, quat q, const char* expected) {
       quat_fromAngleAxis(q, angle, ax, ay, az);
       return index + 4;
     case LUA_TTABLE:
+      index = index > 0 ? index : (index + lua_gettop(L) + 1);
       if (luax_len(L, index) > 0) {
         lua_rawgeti(L, index, 1);
         lua_rawgeti(L, index, 2);

@@ -213,8 +213,19 @@ static void luax_checkfieldt(lua_State* L, int index, const DataField* field, vo
   luax_fieldcheck(L, lua_istable(L, index), index, field, false);
   if (index < 0) index += lua_gettop(L) + 1;
   int n = typeComponents[field->type];
-  for (int i = 1; i <= n; i++) {
-    lua_rawgeti(L, index, i);
+  if (luax_len(L, index) == 0 && n <= 4) {
+    const char* fields[] = { "x", "y", "z", "w" };
+    for (int i = 0; i < n; i++) {
+      lua_getfield(L, index, fields[i]);
+      if (lua_isnil(L, -1)) {
+        lua_pushnumber(L, i == 3 ? 1.f : 0.f);
+        lua_replace(L, -2);
+      }
+    }
+  } else {
+    for (int i = 1; i <= n; i++) {
+      lua_rawgeti(L, index, i);
+    }
   }
   luax_checkfieldn(L, -n, field, data);
   lua_pop(L, n);

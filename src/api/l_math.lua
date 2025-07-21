@@ -174,7 +174,8 @@ end
 
 setmetatable(vector, {
   __call = function(self, x, y, z)
-    local instance = { x = x, y = y, z = z }
+    x = x or 0
+    local instance = { x = x, y = y or x, z = z or x }
     setmetatable(instance, self)
     return instance
   end

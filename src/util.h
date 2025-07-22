@@ -22,10 +22,17 @@
 #define BREAK() __asm("int $3")
 
 // Allocation
+#if defined(__clang__) || defined(__GNUC__)
+void* lovrMalloc(size_t size) __attribute__((malloc, returns_nonnull, alloc_size(1)));
+void* lovrCalloc(size_t size) __attribute__((malloc, returns_nonnull, alloc_size(1)));
+void* lovrRealloc(void* data, size_t size) __attribute__((returns_nonnull, alloc_size(2)));
+void lovrFree(void* data);
+#else
 void* lovrMalloc(size_t size);
 void* lovrCalloc(size_t size);
 void* lovrRealloc(void* data, size_t size);
 void lovrFree(void* data);
+#endif
 
 #define lovrStrdup(s) (s ? memcpy(lovrMalloc(strlen(s) + 1), s, strlen(s) + 1) : NULL)
 

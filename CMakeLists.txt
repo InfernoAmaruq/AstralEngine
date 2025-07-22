@@ -192,15 +192,10 @@ if(LOVR_USE_GLSLANG)
   endif()
   add_subdirectory(deps/glslang glslang)
   target_include_directories(glslang INTERFACE deps/glslang/glslang/Include deps/glslang/glslang/Public)
+  target_sources(glslang PRIVATE ${PROJECT_SOURCE_DIR}/deps/glslang/glslang/ResourceLimits/ResourceLimits.cpp)
+  target_sources(glslang PRIVATE ${PROJECT_SOURCE_DIR}/deps/glslang/glslang/ResourceLimits/resource_limits_c.cpp)
+  set_target_properties(glslang-standalone PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/glslang/glslang")
   set(LOVR_GLSLANG glslang)
-
-  # Make a static version of the resource limits library so we can have a single glslang library
-  add_library(glslang-resource-limits STATIC
-    deps/glslang/glslang/ResourceLimits/ResourceLimits.cpp
-    deps/glslang/glslang/ResourceLimits/resource_limits_c.cpp
-  )
-  target_include_directories(glslang-resource-limits PRIVATE deps/glslang)
-  target_link_libraries(glslang glslang-resource-limits)
 endif()
 
 # OpenXR

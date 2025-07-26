@@ -28,9 +28,6 @@ static int l_lovrCurveRender(lua_State* L) {
   int n = luaL_optinteger(L, 2, 32);
   float t1 = luax_optfloat(L, 3, 0.);
   float t2 = luax_optfloat(L, 4, 1.);
-  if (lovrCurveGetPointCount(curve) == 2) {
-    n = 2;
-  }
   lua_createtable(L, n * 3, 0);
   float step = 1.f / (n - 1);
   for (int i = 0; i < n; i++) {

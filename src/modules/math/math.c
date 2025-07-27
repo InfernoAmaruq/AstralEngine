@@ -235,9 +235,8 @@ static void evaluateDerivative(float* restrict P, size_t n, float t, vec4 dp) {
   lovrFree(points);
 }
 
-float lovrCurveLengthFromT(Curve* curve, float t, int iterations) {
-  lovrCheck(curve->points.length >= 8, "Need at least 2 points to compute curve length");
-  lovrCheck(t >= 0.f && t <= 1.f, "Parameter t must be within [0, 1]");
+float lovrCurveGetLength(Curve* curve, float t, int iterations) {
+  t = CLAMP(t, 0.f, 1.f);
   if (t == 0.f) return 0.f;
   size_t n = curve->points.length / 4;
   float length = 0.f;
@@ -260,21 +259,19 @@ float lovrCurveLengthFromT(Curve* curve, float t, int iterations) {
   return length;
 }
 
-float lovrCurveTFromLength(Curve* curve, float length, int iterations) {
-  lovrCheck(curve->points.length >= 8, "Need at least 2 points to compute curve parameter from length");
-  lovrCheck(length >= 0.f, "Arc length must be non-negative");
-  if (length == 0.f) return 0.f;
+float lovrCurveStep(Curve* curve, float distance, int iterations) {
+  if (distance <= 0.f) return 0.f;
   // Binary search for t
   float tMin = 0.f;
   float tMax = 1.f;
   const float epsilon = 1e-6f;
   for (int i = 0; i < iterations; i++) {
     float tMid = (tMin + tMax) * 0.5f;
-    float lengthAtT = lovrCurveLengthFromT(curve, tMid, iterations);
-    if (fabsf(lengthAtT - length) < epsilon) {
+    float lengthAtT = lovrCurveGetLength(curve, tMid, iterations);
+    if (fabsf(lengthAtT - distance) < epsilon) {
       return tMid;
     }
-    if (lengthAtT < length) {
+    if (lengthAtT < distance) {
       tMin = tMid;
     } else {
       tMax = tMid;

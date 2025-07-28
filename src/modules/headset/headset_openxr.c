@@ -463,7 +463,7 @@ static XrAction getPoseActionForDevice(Device device) {
     case DEVICE_STYLUS:
       return state.extensions.mxInk ? state.actions[ACTION_STYLUS_POSE] : XR_NULL_HANDLE;
     case DEVICE_EYE_GAZE:
-      return state.actions[ACTION_GAZE_POSE];
+      return state.extensions.gaze ? state.actions[ACTION_GAZE_POSE] : XR_NULL_HANDLE;
     default:
       return XR_NULL_HANDLE;
   }

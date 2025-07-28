@@ -13,6 +13,7 @@ dev
 - Add support for custom array strides in buffer formats.
 - Add `lovr.modelschanged` event.
 - Add `lovr.headset.getModelKeys`.
+- Add `Curve:getLength` and `Curve:step`.
 
 ### Change
 
@@ -21,6 +22,7 @@ dev
 - Change `lovr.headset.isTracked` to also take a `Model`.
 - Change `lovr.headset.getPosition/Orientation/Direction/Pose` to also take a `Model`.
 - Change `TerrainShape` to support `nil` heights (treated as holes).
+- Change `Curve:render` to no longer always return 2 points for curves with 2 control points.
 
 ### Fix
 

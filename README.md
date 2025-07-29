@@ -92,6 +92,24 @@ cmake --build .
 
 See the [Compiling Guide](https://lovr.org/docs/Compiling) for more info.
 
+Testing
+---
+
+All of LÖVR tests can be found within the ./test/lovr/ directory.
+
+You can also run all of LÖVR tests locally from the command line with the following:
+
+```console
+./build/bin/lovr test
+```
+
+To run a single test, use the test filename without the extension
+(e.g test/lovr/data.lua becomes data):
+
+```console
+./build/bin/lovr test data
+```
+
 Resources
 ---
 

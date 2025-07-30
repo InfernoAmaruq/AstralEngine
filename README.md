@@ -95,16 +95,16 @@ See the [Compiling Guide](https://lovr.org/docs/Compiling) for more info.
 Testing
 ---
 
-All of LÖVR tests can be found within the ./test/lovr/ directory.
+Tests can be found in the `test/lovr` directory.
 
-You can also run all of LÖVR tests locally from the command line with the following:
+You can run all of LÖVR tests from the command line with the following:
 
 ```console
 ./build/bin/lovr test
 ```
 
-To run a single test, use the test filename without the extension
-(e.g test/lovr/data.lua becomes data):
+To run tests for a single module, pass the name of the module as an argument
+(e.g. this runs the tests for the data module):
 
 ```console
 ./build/bin/lovr test data

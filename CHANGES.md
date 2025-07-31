@@ -14,6 +14,8 @@ dev
 - Add `lovr.modelschanged` event.
 - Add `lovr.headset.getModelKeys`.
 - Add `Curve:getLength` and `Curve:step`.
+- Add `thumbrest` HeadsetAxis.
+- Add support for Touch Pro controllers.
 
 ### Change
 

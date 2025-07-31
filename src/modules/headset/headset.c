@@ -223,6 +223,7 @@ enum {
   ACTION_THUMBSTICK_TOUCH,
   ACTION_THUMBSTICK_AXIS,
   ACTION_THUMBREST_TOUCH,
+  ACTION_THUMBREST_AXIS,
   ACTION_MENU_DOWN,
   ACTION_MENU_TOUCH,
   ACTION_GRIP_DOWN,
@@ -336,6 +337,7 @@ static struct {
     bool swapchainUpdate;
     bool refreshRate;
     bool threadHint;
+    bool touchPro;
     bool uuid;
     bool visibilityMask;
     bool viveTrackers;
@@ -473,6 +475,7 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
     { "XR_FB_keyboard_tracking", &state.extensions.keyboardTracking, true },
     { "XR_FB_passthrough", &state.extensions.questPassthrough, true },
     { "XR_FB_swapchain_update_state", &state.extensions.swapchainUpdate, true },
+    { "XR_FB_touch_controller_pro", &state.extensions.touchPro, true },
     { "XR_LOGITECH_mx_ink_stylus_interaction", &state.extensions.mxInk, true },
     { "XR_META_automatic_layer_filter", &state.extensions.layerAutoFilter, true },
     { "XR_META_passthrough_preferences", &state.extensions.passthroughPreferences, true },
@@ -702,6 +705,7 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
     { 0, NULL, "thumbstick_touch", XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Thumbstick Touch" },
     { 0, NULL, "thumbstick_axis" , XR_ACTION_TYPE_VECTOR2F_INPUT,   2, hands, "Thumbstick Axis" },
     { 0, NULL, "thumbrest_touch",  XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Thumbrest Touch" },
+    { 0, NULL, "thumbrest_axis",   XR_ACTION_TYPE_FLOAT_INPUT  ,    2, hands, "Thumbrest Axis" },
     { 0, NULL, "menu_down",        XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Menu Down" },
     { 0, NULL, "menu_touch",       XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Menu Touch" },
     { 0, NULL, "grip_down",        XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Grip Down" },
@@ -741,6 +745,7 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
     PROFILE_SIMPLE,
     PROFILE_VIVE,
     PROFILE_TOUCH,
+    PROFILE_TOUCH_PRO,
     PROFILE_GO,
     PROFILE_INDEX,
     PROFILE_WMR,
@@ -758,6 +763,7 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
     [PROFILE_SIMPLE] = "/interaction_profiles/khr/simple_controller",
     [PROFILE_VIVE] = "/interaction_profiles/htc/vive_controller",
     [PROFILE_TOUCH] = "/interaction_profiles/oculus/touch_controller",
+    [PROFILE_TOUCH_PRO] = "/interaction_profiles/facebook/touch_controller_pro",
     [PROFILE_GO] = "/interaction_profiles/oculus/go_controller",
     [PROFILE_INDEX] = "/interaction_profiles/valve/index_controller",
     [PROFILE_WMR] = "/interaction_profiles/microsoft/motion_controller",
@@ -863,6 +869,55 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
       { ACTION_X_TOUCH, "/user/hand/left/input/x/touch" },
       { ACTION_Y_DOWN, "/user/hand/left/input/y/click" },
       { ACTION_Y_TOUCH, "/user/hand/left/input/y/touch" },
+      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_TOUCH_PRO] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/value" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/left/input/trigger/touch" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/right/input/trigger/touch" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/left/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/right/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
+      { ACTION_THUMBREST_TOUCH, "/user/hand/left/input/thumbrest/touch" },
+      { ACTION_THUMBREST_TOUCH, "/user/hand/right/input/thumbrest/touch" },
+      { ACTION_THUMBREST_AXIS, "/user/hand/left/input/thumbrest/force" },
+      { ACTION_THUMBREST_AXIS, "/user/hand/right/input/thumbrest/force" },
+      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
+      { ACTION_MENU_DOWN, "/user/hand/right/input/system/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/value" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/value" },
+      { ACTION_A_DOWN, "/user/hand/right/input/a/click" },
+      { ACTION_A_TOUCH, "/user/hand/right/input/a/touch" },
+      { ACTION_B_DOWN, "/user/hand/right/input/b/click" },
+      { ACTION_B_TOUCH, "/user/hand/right/input/b/touch" },
+      { ACTION_X_DOWN, "/user/hand/left/input/x/click" },
+      { ACTION_X_TOUCH, "/user/hand/left/input/x/touch" },
+      { ACTION_Y_DOWN, "/user/hand/left/input/y/click" },
+      { ACTION_Y_TOUCH, "/user/hand/left/input/y/touch" },
+      { ACTION_NIB_DOWN, "/user/hand/left/input/stylus_fb/force" },
+      { ACTION_NIB_DOWN, "/user/hand/right/input/stylus_fb/force" },
+      { ACTION_NIB_FORCE, "/user/hand/left/input/stylus_fb/force" },
+      { ACTION_NIB_FORCE, "/user/hand/right/input/stylus_fb/force" },
       { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
       { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
       { 0, NULL }
@@ -1175,6 +1230,10 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
 
   if (!state.extensions.handInteraction) {
     bindingCount[PROFILE_HAND] = 0;
+  }
+
+  if (!state.extensions.touchPro) {
+    bindingCount[PROFILE_TOUCH_PRO] = 0;
   }
 
   // Remove bindings for unsupported extensions
@@ -2315,12 +2374,14 @@ bool lovrHeadsetGetAxis(Device device, DeviceAxis axis, float* value) {
     [DEVICE_HAND_LEFT] = {
       [AXIS_TRIGGER] = ACTION_TRIGGER_AXIS,
       [AXIS_THUMBSTICK] = ACTION_THUMBSTICK_AXIS,
+      [AXIS_THUMBREST] = ACTION_THUMBREST_AXIS,
       [AXIS_TOUCHPAD] = ACTION_TRACKPAD_AXIS,
       [AXIS_GRIP] = ACTION_GRIP_AXIS
     },
     [DEVICE_HAND_RIGHT] = {
       [AXIS_TRIGGER] = ACTION_TRIGGER_AXIS,
       [AXIS_THUMBSTICK] = ACTION_THUMBSTICK_AXIS,
+      [AXIS_THUMBREST] = ACTION_THUMBREST_AXIS,
       [AXIS_TOUCHPAD] = ACTION_TRACKPAD_AXIS,
       [AXIS_GRIP] = ACTION_GRIP_AXIS
     },

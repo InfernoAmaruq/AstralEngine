@@ -81,6 +81,7 @@ StringEntry lovrDeviceButton[] = {
 StringEntry lovrDeviceAxis[] = {
   [AXIS_TRIGGER] = ENTRY("trigger"),
   [AXIS_THUMBSTICK] = ENTRY("thumbstick"),
+  [AXIS_THUMBREST] = ENTRY("thumbrest"),
   [AXIS_TOUCHPAD] = ENTRY("touchpad"),
   [AXIS_GRIP] = ENTRY("grip"),
   [AXIS_NIB] = ENTRY("nib"),
@@ -549,6 +550,7 @@ static int l_lovrHeadsetIsTouched(lua_State* L) {
 static const int axisCounts[MAX_AXES] = {
   [AXIS_TRIGGER] = 1,
   [AXIS_THUMBSTICK] = 2,
+  [AXIS_THUMBREST] = 1,
   [AXIS_TOUCHPAD] = 2,
   [AXIS_GRIP] = 1,
   [AXIS_NIB] = 1

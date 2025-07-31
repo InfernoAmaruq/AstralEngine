@@ -122,6 +122,7 @@ typedef enum {
 typedef enum {
   AXIS_TRIGGER,
   AXIS_THUMBSTICK,
+  AXIS_THUMBREST,
   AXIS_TOUCHPAD,
   AXIS_GRIP,
   AXIS_NIB,

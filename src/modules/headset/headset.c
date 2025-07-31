@@ -475,7 +475,7 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
     { "XR_FB_keyboard_tracking", &state.extensions.keyboardTracking, true },
     { "XR_FB_passthrough", &state.extensions.questPassthrough, true },
     { "XR_FB_swapchain_update_state", &state.extensions.swapchainUpdate, true },
-    { "XR_FB_touch_pro_controllers", &state.extensions.touchPro, true },
+    { "XR_FB_touch_controller_pro", &state.extensions.touchPro, true },
     { "XR_LOGITECH_mx_ink_stylus_interaction", &state.extensions.mxInk, true },
     { "XR_META_automatic_layer_filter", &state.extensions.layerAutoFilter, true },
     { "XR_META_passthrough_preferences", &state.extensions.passthroughPreferences, true },

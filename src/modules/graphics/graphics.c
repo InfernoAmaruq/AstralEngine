@@ -6480,6 +6480,25 @@ void lovrPassSetBlendMode(Pass* pass, uint32_t index, BlendMode mode, BlendAlpha
   pass->pipeline->dirty = true;
 }
 
+void lovrPassSetBlendState(Pass* pass, uint32_t index, bool enable, BlendState color, BlendState alpha) {
+  if (!enable) {
+    pass->pipeline->dirty |= pass->pipeline->info.color[index].blend.enabled;
+    memset(&pass->pipeline->info.color[index].blend, 0, sizeof(gpu_blend_state));
+  }
+
+  gpu_blend_state* blend = &pass->pipeline->info.color[index].blend;
+
+  blend->enabled = true;
+  blend->color.op = (gpu_blend_op) color.op;
+  blend->color.src = (gpu_blend_factor) color.src;
+  blend->color.dst = (gpu_blend_factor) color.dst;
+  blend->alpha.op = (gpu_blend_op) alpha.op;
+  blend->alpha.src = (gpu_blend_factor) alpha.src;
+  blend->alpha.dst = (gpu_blend_factor) alpha.dst;
+
+  pass->pipeline->dirty = true;
+}
+
 void lovrPassSetColor(Pass* pass, float color[4]) {
   pass->pipeline->color[0] = lovrMathGammaToLinear(color[0]);
   pass->pipeline->color[1] = lovrMathGammaToLinear(color[1]);

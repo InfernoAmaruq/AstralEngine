@@ -26,6 +26,30 @@ StringEntry lovrBlendMode[] = {
   { 0 }
 };
 
+StringEntry lovrBlendOp[] = {
+  [BLEND_OP_ADD] = ENTRY("add"),
+  [BLEND_OP_SUBTRACT] = ENTRY("subtract"),
+  [BLEND_OP_REVERSE_SUBTRACT] = ENTRY("reversesubtract"),
+  [BLEND_OP_MIN] = ENTRY("min"),
+  [BLEND_OP_MAX] = ENTRY("max"),
+  { 0 }
+};
+
+StringEntry lovrBlendFactor[] = {
+  [BLEND_FACTOR_ZERO] = ENTRY("zero"),
+  [BLEND_FACTOR_ONE] = ENTRY("one"),
+  [BLEND_FACTOR_SRC_COLOR] = ENTRY("srccolor"),
+  [BLEND_FACTOR_ONE_MINUS_SRC_COLOR] = ENTRY("oneminussrccolor"),
+  [BLEND_FACTOR_SRC_ALPHA] = ENTRY("srcalpha"),
+  [BLEND_FACTOR_ONE_MINUS_SRC_ALPHA] = ENTRY("oneminussrcalpha"),
+  [BLEND_FACTOR_DST_COLOR] = ENTRY("dstcolor"),
+  [BLEND_FACTOR_ONE_MINUS_DST_COLOR] = ENTRY("oneminusdstcolor"),
+  [BLEND_FACTOR_DST_ALPHA] = ENTRY("dstalpha"),
+  [BLEND_FACTOR_ONE_MINUS_DST_ALPHA] = ENTRY("oneminusdstalpha"),
+  [BLEND_FACTOR_SRC_ALPHA_SATURATED] = ENTRY("srcalphasaturated"),
+  { 0 }
+};
+
 StringEntry lovrBufferLayout[] = {
   [LAYOUT_PACKED] = ENTRY("packed"),
   [LAYOUT_STD140] = ENTRY("std140"),

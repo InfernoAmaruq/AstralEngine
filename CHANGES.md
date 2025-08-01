@@ -16,6 +16,7 @@ dev
 - Add `Curve:getLength` and `Curve:step`.
 - Add `thumbrest` HeadsetAxis.
 - Add support for Touch Pro controllers.
+- Add `Pass:setBlendState`.
 
 ### Change
 

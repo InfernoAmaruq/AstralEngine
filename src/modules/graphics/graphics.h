@@ -562,6 +562,34 @@ typedef enum {
 } BlendMode;
 
 typedef enum {
+  BLEND_OP_ADD,
+  BLEND_OP_SUBTRACT,
+  BLEND_OP_REVERSE_SUBTRACT,
+  BLEND_OP_MIN,
+  BLEND_OP_MAX
+} BlendOp;
+
+typedef enum {
+  BLEND_FACTOR_ZERO,
+  BLEND_FACTOR_ONE,
+  BLEND_FACTOR_SRC_COLOR,
+  BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+  BLEND_FACTOR_SRC_ALPHA,
+  BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+  BLEND_FACTOR_DST_COLOR,
+  BLEND_FACTOR_ONE_MINUS_DST_COLOR,
+  BLEND_FACTOR_DST_ALPHA,
+  BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
+  BLEND_FACTOR_SRC_ALPHA_SATURATED
+} BlendFactor;
+
+typedef struct {
+  BlendOp op;
+  BlendFactor src;
+  BlendFactor dst;
+} BlendState;
+
+typedef enum {
   CULL_NONE,
   CULL_FRONT,
   CULL_BACK
@@ -619,6 +647,7 @@ void lovrPassTransform(Pass* pass, float* transform);
 
 void lovrPassSetAlphaToCoverage(Pass* pass, bool enabled);
 void lovrPassSetBlendMode(Pass* pass, uint32_t index, BlendMode mode, BlendAlphaMode alphaMode);
+void lovrPassSetBlendState(Pass* pass, uint32_t index, bool enable, BlendState color, BlendState alpha);
 void lovrPassSetColor(Pass* pass, float color[4]);
 void lovrPassSetColorWrite(Pass* pass, uint32_t index, bool r, bool g, bool b, bool a);
 void lovrPassSetDepthTest(Pass* pass, CompareMode test);

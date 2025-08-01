@@ -441,6 +441,37 @@ static int l_lovrPassSetBlendMode(lua_State* L) {
   return 0;
 }
 
+static int l_lovrPassSetBlendState(lua_State* L) {
+  Pass* pass = luax_checktype(L, 1, Pass);
+  int index = 2;
+  uint32_t target = lua_type(L, 2) == LUA_TNUMBER ? luax_checku32(L, index++) - 1 : ~0u;
+  bool enable = !lua_isnoneornil(L, index);
+  BlendState color, alpha;
+  if (enable) {
+    if (lua_gettop(L) >= index + 3) {
+      color.op = luax_checkenum(L, index + 0, BlendOp, NULL);
+      alpha.op = luax_checkenum(L, index + 1, BlendOp, NULL);
+      color.src = luax_checkenum(L, index + 2, BlendFactor, NULL);
+      alpha.src = luax_checkenum(L, index + 3, BlendFactor, NULL);
+      color.dst = luax_checkenum(L, index + 4, BlendFactor, NULL);
+      alpha.dst = luax_checkenum(L, index + 5, BlendFactor, NULL);
+    } else {
+      color.op = alpha.op = luax_checkenum(L, index, BlendOp, NULL);
+      color.src = alpha.src = luax_checkenum(L, index + 1, BlendFactor, NULL);
+      color.dst = alpha.dst = luax_checkenum(L, index + 2, BlendFactor, NULL);
+    }
+  }
+  if (target == ~0u) {
+    uint32_t count = lovrPassGetAttachmentCount(pass, NULL);
+    for (uint32_t i = 0; i < count; i++) {
+      lovrPassSetBlendState(pass, i, enable, color, alpha);
+    }
+  } else {
+    lovrPassSetBlendState(pass, target, enable, color, alpha);
+  }
+  return 0;
+}
+
 static int l_lovrPassSetColor(lua_State* L) {
   Pass* pass = luax_checktype(L, 1, Pass);
   float color[4];
@@ -1116,6 +1147,7 @@ const luaL_Reg lovrPass[] = {
 
   { "setAlphaToCoverage", l_lovrPassSetAlphaToCoverage },
   { "setBlendMode", l_lovrPassSetBlendMode },
+  { "setBlendState", l_lovrPassSetBlendState },
   { "setColor", l_lovrPassSetColor },
   { "setColorWrite", l_lovrPassSetColorWrite },
   { "setDepthTest", l_lovrPassSetDepthTest },

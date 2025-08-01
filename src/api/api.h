@@ -23,6 +23,8 @@ extern StringEntry lovrAudioShareMode[];
 extern StringEntry lovrAudioType[];
 extern StringEntry lovrBlendAlphaMode[];
 extern StringEntry lovrBlendMode[];
+extern StringEntry lovrBlendOp[];
+extern StringEntry lovrBlendFactor[];
 extern StringEntry lovrBlockType[];
 extern StringEntry lovrBufferLayout[];
 extern StringEntry lovrChannelLayout[];

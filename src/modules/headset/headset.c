@@ -2277,7 +2277,8 @@ bool lovrHeadsetIsDown(Device device, DeviceButton button, bool* down, bool* cha
       [BUTTON_A] = ACTION_A_DOWN,
       [BUTTON_B] = ACTION_B_DOWN,
       [BUTTON_X] = ACTION_X_DOWN,
-      [BUTTON_Y] = ACTION_Y_DOWN
+      [BUTTON_Y] = ACTION_Y_DOWN,
+      [BUTTON_NIB] = ACTION_NIB_DOWN
     },
     [DEVICE_HAND_RIGHT] = {
       [BUTTON_TRIGGER] = ACTION_TRIGGER_DOWN,
@@ -2288,7 +2289,8 @@ bool lovrHeadsetIsDown(Device device, DeviceButton button, bool* down, bool* cha
       [BUTTON_A] = ACTION_A_DOWN,
       [BUTTON_B] = ACTION_B_DOWN,
       [BUTTON_X] = ACTION_X_DOWN,
-      [BUTTON_Y] = ACTION_Y_DOWN
+      [BUTTON_Y] = ACTION_Y_DOWN,
+      [BUTTON_NIB] = ACTION_NIB_DOWN
     },
     [DEVICE_STYLUS] = {
       [BUTTON_GRIP] = ACTION_GRIP_DOWN,
@@ -2376,14 +2378,16 @@ bool lovrHeadsetGetAxis(Device device, DeviceAxis axis, float* value) {
       [AXIS_THUMBSTICK] = ACTION_THUMBSTICK_AXIS,
       [AXIS_THUMBREST] = ACTION_THUMBREST_AXIS,
       [AXIS_TOUCHPAD] = ACTION_TRACKPAD_AXIS,
-      [AXIS_GRIP] = ACTION_GRIP_AXIS
+      [AXIS_GRIP] = ACTION_GRIP_AXIS,
+      [AXIS_NIB] = ACTION_NIB_FORCE
     },
     [DEVICE_HAND_RIGHT] = {
       [AXIS_TRIGGER] = ACTION_TRIGGER_AXIS,
       [AXIS_THUMBSTICK] = ACTION_THUMBSTICK_AXIS,
       [AXIS_THUMBREST] = ACTION_THUMBREST_AXIS,
       [AXIS_TOUCHPAD] = ACTION_TRACKPAD_AXIS,
-      [AXIS_GRIP] = ACTION_GRIP_AXIS
+      [AXIS_GRIP] = ACTION_GRIP_AXIS,
+      [AXIS_NIB] = ACTION_NIB_FORCE
     },
     [DEVICE_STYLUS] = {
       [AXIS_GRIP] = ACTION_GRIP_AXIS,

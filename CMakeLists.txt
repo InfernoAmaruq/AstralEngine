@@ -26,7 +26,6 @@ option(LOVR_USE_GLSLANG "Use glslang to compile GLSL shaders" ON)
 option(LOVR_USE_VULKAN "Use the Vulkan renderer" ON)
 option(LOVR_USE_WEBGPU "Use the WebGPU renderer" OFF)
 option(LOVR_USE_STEAM_AUDIO "Enable the Steam Audio spatializer (be sure to also set LOVR_STEAM_AUDIO_PATH)" OFF)
-option(LOVR_USE_OCULUS_AUDIO "Enable the Oculus Audio spatializer (be sure to also set LOVR_OCULUS_AUDIO_PATH)" OFF)
 
 option(LOVR_SANITIZE "Enable Address Sanitizer" OFF)
 option(LOVR_PROFILE "Enable Tracy integration" OFF)
@@ -244,46 +243,6 @@ if(LOVR_USE_STEAM_AUDIO)
   set(LOVR_PHONON Phonon)
 endif()
 
-# Oculus Audio
-if(LOVR_USE_OCULUS_AUDIO)
-  if(NOT LOVR_OCULUS_AUDIO_PATH)
-    message(FATAL_ERROR "LOVR_USE_OCULUS_AUDIO requires the LOVR_OCULUS_AUDIO_PATH to be set to the location of the Oculus Spatializer Native (AudioSDK) folder")
-  endif()
-
-  add_library(OculusAudio SHARED IMPORTED)
-  target_include_directories(OculusAudio INTERFACE "${LOVR_OCULUS_AUDIO_PATH}/Include")
-  if(ANDROID)
-    set_target_properties(OculusAudio PROPERTIES IMPORTED_LOCATION "${LOVR_OCULUS_AUDIO_PATH}/Lib/Android/arm64-v8a/libovraudio64.so")
-  elseif(WIN32) # Note: This has *not* been tested.
-    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-      set_target_properties(OculusAudio PROPERTIES IMPORTED_IMPLIB "${LOVR_OCULUS_AUDIO_PATH}/Lib/x64/ovraudio64.lib")
-      set_target_properties(OculusAudio PROPERTIES IMPORTED_LOCATION "${LOVR_OCULUS_AUDIO_PATH}/Lib/x64/ovraudio64.dll")
-    else () # ARM and ARM64 are also valid values for CMAKE_GENERATOR_PLATFORM but we will ignore this
-      set_target_properties(OculusAudio PROPERTIES IMPORTED_IMPLIB "${LOVR_OCULUS_AUDIO_PATH}/Lib/Win32/ovraudio32.lib")
-      set_target_properties(OculusAudio PROPERTIES IMPORTED_LOCATION "${LOVR_OCULUS_AUDIO_PATH}/Lib/Win32/ovraudio32.dll")
-    endif()
-  elseif(APPLE)
-    # Oculus Audio ships with an intel .framework, but (as of 25.0.0) it is broken. We can convert it to a working dylib with install_name_tool in a custom target:
-    SET(OCULUS_AUDIO_MAC_LIB_DIR "${PROJECT_BINARY_DIR}/ovraudio")
-    SET(OCULUS_AUDIO_MAC_LIB_FILE "${OCULUS_AUDIO_MAC_LIB_DIR}/ovraudio64.dylib")
-    SET(OCULUS_AUDIO_MAC_RPATH "@rpath/ovraudio64.dylib")
-    file(MAKE_DIRECTORY "${OCULUS_AUDIO_MAC_LIB_DIR}")
-    add_custom_command(OUTPUT "${OCULUS_AUDIO_MAC_LIB_FILE}"
-                   COMMAND ${CMAKE_COMMAND} -E copy "${LOVR_OCULUS_AUDIO_PATH}/Lib/mac64/OVRAudio64.framework/Versions/A/ovraudio64" "${OCULUS_AUDIO_MAC_LIB_FILE}"
-                   COMMAND install_name_tool -id ${OCULUS_AUDIO_MAC_RPATH} "${OCULUS_AUDIO_MAC_LIB_FILE}"
-                   WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
-    add_custom_target(OculusAudioFixed DEPENDS "${OCULUS_AUDIO_MAC_LIB_FILE}")
-    add_dependencies(OculusAudio OculusAudioFixed)
-    # IMPORTED_SONAME required because the automatic rpath requires the dylib file to exist before builds start
-    set_target_properties(OculusAudio PROPERTIES IMPORTED_LOCATION "${OCULUS_AUDIO_MAC_LIB_FILE}"
-                                                 IMPORTED_SONAME "${OCULUS_AUDIO_MAC_RPATH}")
-  else() # Assume Linux. Note: This has *not* been tested. FIXME: When is the .so copied?
-    set_target_properties(OculusAudio PROPERTIES IMPORTED_LOCATION "${LOVR_OCULUS_AUDIO_PATH}/Lib/Linux64/libovraudio64.so")
-  endif()
-
-  set(LOVR_OCULUS_AUDIO OculusAudio)
-endif()
-
 # LÖVR
 
 set(LOVR_SRC
@@ -335,7 +294,6 @@ target_link_libraries(lovr
   ${LOVR_JOLT}
   ${LOVR_GLSLANG}
   ${LOVR_OPENXR}
-  ${LOVR_OCULUS_AUDIO}
   ${LOVR_PTHREADS}
   ${EMSCRIPTEN_LINKER_FLAGS}
 )
@@ -381,11 +339,6 @@ if(LOVR_ENABLE_AUDIO)
     target_sources(lovr PRIVATE src/modules/audio/spatializer_phonon.c)
     # Dynamically linked at runtime, so this is not otherwise a dependency
     add_dependencies(lovr ${LOVR_PHONON})
-  endif()
-
-  if(LOVR_USE_OCULUS_AUDIO)
-    target_compile_definitions(lovr PRIVATE LOVR_ENABLE_OCULUS_SPATIALIZER)
-    target_sources(lovr PRIVATE src/modules/audio/spatializer_oculus.c)
   endif()
 else()
   target_compile_definitions(lovr PRIVATE LOVR_DISABLE_AUDIO)
@@ -713,7 +666,6 @@ if(WIN32)
   move_dll(${LOVR_JOLT})
   move_dll(${LOVR_GLSLANG})
   move_dll(${LOVR_OPENXR})
-  move_dll(${LOVR_OCULUS_AUDIO})
   move_dll(${LOVR_PHONON})
   foreach(target ${ALL_PLUGIN_TARGETS})
     move_dll(${target})
@@ -766,7 +718,6 @@ elseif(APPLE)
   move_lib(${LOVR_JOLT})
   move_lib(${LOVR_GLSLANG})
   move_lib(${LOVR_OPENXR})
-  move_lib(${LOVR_OCULUS_AUDIO})
   move_lib(${LOVR_PHONON})
   foreach(target ${ALL_PLUGIN_TARGETS})
     move_lib(${target})
@@ -815,11 +766,6 @@ elseif(ANDROID)
     )
 
     configure_file("${ANDROID_NDK}/toolchains/llvm/prebuilt/${ANDROID_HOST_TAG}/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "raw/lib/${ANDROID_ABI}/libc++_shared.so" COPYONLY)
-
-    if(LOVR_USE_OCULUS_AUDIO)
-      get_target_property(OCULUS_AUDIO_LIB ${LOVR_OCULUS_AUDIO} IMPORTED_LOCATION)
-      file(COPY ${OCULUS_AUDIO_LIB} DESTINATION raw/lib/${ANDROID_ABI})
-    endif()
 
     if(LOVR_USE_STEAM_AUDIO)
       get_target_property(PHONON_LIB ${LOVR_PHONON} IMPORTED_LOCATION)
@@ -923,7 +869,6 @@ elseif(UNIX)
   move_lib(${LOVR_JOLT})
   move_lib(${LOVR_GLSLANG})
   move_lib(${LOVR_OPENXR})
-  move_lib(${LOVR_OCULUS_AUDIO})
   foreach(target ${ALL_PLUGIN_TARGETS})
     move_lib(${target})
   endforeach()

@@ -161,7 +161,11 @@ static bool sanitize(const char* path, char* buffer, size_t* length) {
 bool lovrFilesystemInit(void) {
   if (atomic_fetch_add(&state.ref, 1)) return true;
 
+#ifdef LOVR_USE_LUAU
+  lovrFilesystemSetRequirePath("?.luau;?/init.luau;?.lua;?/init.lua");
+#else
   lovrFilesystemSetRequirePath("?.lua;?/init.lua");
+#endif
 
   // On Android, the save directory is mounted early, because the identity is fixed to the package
   // name and it is convenient to be able to load main.lua and conf.lua from the save directory,

@@ -563,6 +563,11 @@ void luax_readcolor(lua_State* L, int index, float color[4]) {
     color[2] = luax_checkfloat(L, -2);
     color[3] = luax_optfloat(L, -1, 1.);
     lua_pop(L, 4);
+#ifdef LOVR_USE_LUAU
+  } else if (lua_isvector(L, index)) {
+    vec3_init(color, lua_tovector(L, index));
+    color[3] = 1.f;
+#endif
   } else if (lua_gettop(L) >= index + 2) {
     color[0] = luax_checkfloat(L, index);
     color[1] = luax_checkfloat(L, index + 1);
@@ -603,6 +608,13 @@ void luax_optcolor(lua_State* L, int index, float color[4]) {
       color[3] = luax_optfloat(L, -1, 1.);
       lua_pop(L, 4);
       break;
+#ifdef LOVR_USE_LUAU
+    case LUA_TVECTOR: {
+      vec3_init(color, lua_tovector(L, index));
+      color[3] = 1.f;
+      break;
+    }
+#endif
     default: luaL_error(L, "Expected nil, number, table, vec3, or vec4 for color value");
   }
 }

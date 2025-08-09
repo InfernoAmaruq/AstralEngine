@@ -68,6 +68,10 @@ function lovr.boot()
   local fused = bundle and lovr.filesystem.mount(bundle, nil, true, root)
   local cli = lovr.filesystem.isFile('arg.lua') and assert(pcall(require, 'arg')) and lovr.arg and lovr.arg(arg)
 
+  if cli == 'quit' then
+    return function() return 0 end
+  end
+
   -- Implement a barebones CLI if there is no bundled CLI/project
 
   if not fused then

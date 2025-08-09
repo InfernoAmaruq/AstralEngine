@@ -58,7 +58,7 @@ function lovr.arg(arg)
     table.insert(message, 2, 'options:')
     table.insert(message, '\n<source> can be a Lua file, a folder, or a zip archive')
     print(table.concat(message, '\n'))
-    os.exit(0)
+    return 'quit'
   end
 
   if arg._version then
@@ -67,7 +67,7 @@ function lovr.arg(arg)
     else
       print(('LOVR %d.%d.%d (%s)'):format(lovr.getVersion()))
     end
-    os.exit(0)
+    return 'quit'
   end
 
   return function(conf)

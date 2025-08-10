@@ -11,7 +11,6 @@ group('thread', function()
     end)
   end)
 
-  --[[
   group('Channel', function()
     test('push/pop', function()
       local channel = lovr.thread.getChannel('test')
@@ -24,5 +23,4 @@ group('thread', function()
       expect(function() channel:push(t) end).to.fail()
     end)
   end)
-  ]]
 end)

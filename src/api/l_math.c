@@ -71,6 +71,7 @@ int l_lovrMat4Set(lua_State* L);
 static int l_lovrMathNewMat4(lua_State* L) {
   Mat4* matrix = lovrMat4Create();
   luax_pushtype(L, Mat4, matrix);
+  lovrRelease(matrix, lovrMat4Destroy);
   lua_insert(L, 1);
   return l_lovrMat4Set(L);
 }

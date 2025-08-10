@@ -298,6 +298,7 @@ static int l_lovrMat4__mul(lua_State* L) {
     mat4_init(lovrMat4GetData(result), lovrMat4GetData(self));
     mat4_mul(lovrMat4GetData(self), lovrMat4GetData(other));
     luax_pushtype(L, Mat4, result);
+    lovrRelease(result, lovrMat4Destroy);
     return 1;
   }
 

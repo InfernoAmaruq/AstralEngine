@@ -22,7 +22,7 @@ jobs:
       - name: Build
         run: cmake --build build --config %CMAKE_BUILD_TYPE%
       - name: Test
-        run: build\%CMAKE_BUILD_TYPE%\lovr --version
+        run: build\%CMAKE_BUILD_TYPE%\lovr test
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
@@ -49,7 +49,7 @@ jobs:
       - name: Build
         run: cmake --build build -j
       - name: Test
-        run: ./build/bin/lovr --version
+        run: ./build/bin/lovr test
       - name: AppImage
         run: >
           curl -sOL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage &&
@@ -132,7 +132,7 @@ jobs:
       - name: Build
         run: cmake --build build -j
       - name: Test
-        run: ./build/lovr.app/Contents/MacOS/lovr --version
+        run: ./build/lovr.app/Contents/MacOS/lovr test
       - name: Package
         run: >
           cp $VULKAN_SDK/lib/libvulkan.1.4.321.dylib build/lovr.app/Contents/MacOS/libvulkan.1.dylib &&

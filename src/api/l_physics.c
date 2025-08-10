@@ -87,8 +87,7 @@ static int l_lovrPhysicsNewWorld(lua_State* L) {
         if (lua_isstring(L, -1)) {
           info.tags[i] = lua_tostring(L, -1);
         } else {
-          luaL_error(L, "World tags must be a table of strings");
-          return 0;
+          return luaL_error(L, "World tags must be a table of strings");
         }
         lua_pop(L, 1);
       }
@@ -124,8 +123,7 @@ static int l_lovrPhysicsNewWorld(lua_State* L) {
         if (lua_isstring(L, -1)) {
           info.tags[i] = lua_tostring(L, -1);
         } else {
-          luaL_error(L, "World tags must be a table of strings");
-          return 0;
+          return luaL_error(L, "World tags must be a table of strings");
         }
         lua_pop(L, 1);
       }

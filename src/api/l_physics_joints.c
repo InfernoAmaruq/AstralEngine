@@ -59,7 +59,7 @@ static int l_lovrJointDestroy(lua_State* L) {
 
 static int l_lovrJointIsDestroyed(lua_State* L) {
   Joint* joint = luax_tojoint(L, 1);
-  if (!joint) luax_typeerror(L, 1, "Joint");
+  if (!joint) return luax_typeerror(L, 1, "Joint");
   bool destroyed = lovrJointIsDestroyed(joint);
   lua_pushboolean(L, destroyed);
   return 1;

@@ -202,8 +202,7 @@ int luaopen_lovr_math(lua_State* L) {
     luaL_newmetatable(L, "Mat4");
     lua_call(L, 5, 0);
   } else {
-    lua_error(L);
-    lua_pop(L, 1);
+    return lua_error(L);
   }
 #endif
 

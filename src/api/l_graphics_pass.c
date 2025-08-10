@@ -124,7 +124,7 @@ int l_lovrPassSetCanvas(lua_State* L) {
         canvas.depth.resolve = lua_isnil(L, -1) ? NULL : luax_checktype(L, -1, Texture);
         lua_pop(L, 1);
         break;
-      default: luaL_error(L, "Expected Texture, TextureFormat, boolean, table, or nil for canvas depth buffer");
+      default: return luaL_error(L, "Expected Texture, TextureFormat, boolean, table, or nil for canvas depth buffer");
     }
     lua_pop(L, 1);
 
@@ -137,7 +137,7 @@ int l_lovrPassSetCanvas(lua_State* L) {
       canvas.color[i].texture = luax_checktype(L, i + 2, Texture);
     }
   } else if (!lua_isnoneornil(L, 2)) {
-    luaL_error(L, "Expected Texture, table, or nil for canvas");
+    return luaL_error(L, "Expected Texture, table, or nil for canvas");
   }
   luax_assert(L, lovrPassSetCanvas(pass, &canvas));
   return 0;

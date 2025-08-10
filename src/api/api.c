@@ -180,12 +180,11 @@ int luax_require(lua_State* L) {
   if (lua_isfunction(L, -1)) {
     goto load;
   } else if (lua_type(L, -1) == LUA_TSTRING) {
-    lua_error(L);
-    return 1;
+    return lua_error(L);
   }
 #endif
 
-  luaL_error(L, "No module %s", module);
+  return luaL_error(L, "No module %s", module);
 
 load:
   lua_pushvalue(L, 1);
@@ -274,8 +273,7 @@ int luax_typeerror(lua_State* L, int index, const char* expected) {
     name = luaL_typename(L, index);
   }
   const char* message = lua_pushfstring(L, "%s expected, got %s", expected, name);
-  luaL_argerror(L, index, message);
-  return 0;
+  return luaL_argerror(L, index, message);
 }
 
 // Registers the userdata on the top of the stack in the registry.
@@ -343,9 +341,9 @@ int _luax_checkenum(lua_State* L, int index, const StringEntry* map, const char*
   }
 
   if (index > 0) {
-    luaL_argerror(L, index, lua_pushfstring(L, "invalid %s '%s'", label, string));
+    return luaL_argerror(L, index, lua_pushfstring(L, "invalid %s '%s'", label, string));
   } else {
-    luaL_error(L, "invalid %s '%s'", label, string);
+    return luaL_error(L, "invalid %s '%s'", label, string);
   }
 
   return 0;

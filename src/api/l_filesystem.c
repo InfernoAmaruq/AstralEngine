@@ -90,8 +90,8 @@ static int luax_loadfile(lua_State* L, const char* path, const char* debug, cons
   int status = luax_loadbufferx(L, buffer, size, debug, mode);
   lovrFree(buffer);
   switch (status) {
-    case LUA_ERRMEM: return luaL_error(L, "Memory allocation error: %s", lua_tostring(L, -1)), 0;
-    case LUA_ERRSYNTAX: return luaL_error(L, "Syntax error: %s", lua_tostring(L, -1)), 0;
+    case LUA_ERRMEM: return luaL_error(L, "Memory allocation error: %s", lua_tostring(L, -1));
+    case LUA_ERRSYNTAX: return luaL_error(L, "Syntax error: %s", lua_tostring(L, -1));
     default: return 1;
   }
 }
@@ -108,7 +108,7 @@ static int l_lovrFilesystemAppend(lua_State* L) {
   } else if (lua_type(L, 2) == LUA_TSTRING) {
     data = lua_tolstring(L, 2, &size);
   } else {
-    return luax_typeerror(L, 2, "string or Blob"), 0;
+    return luax_typeerror(L, 2, "string or Blob");
   }
 
   return luax_pushsuccess(L, lovrFilesystemWrite(path, data, size, true));

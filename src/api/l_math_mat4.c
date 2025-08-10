@@ -328,8 +328,7 @@ static int l_lovrMat4__mul(lua_State* L) {
   }
 #endif
 
-  luaL_error(L, "Bad right hand side for Mat4 * operator: expected a Mat4 or a vector");
-  return 0;
+  return luaL_error(L, "Bad right hand side for Mat4 * operator: expected a Mat4 or a vector");
 }
 
 static int l_lovrMat4__tostring(lua_State* L) {
@@ -355,8 +354,7 @@ static int l_lovrMat4__newindex(lua_State* L) {
   lua_getglobal(L, "tostring");
   lua_pushvalue(L, 2);
   lua_call(L, 1, 1);
-  luaL_error(L, "attempt to assign property %s of mat4 (invalid property)", lua_tostring(L, -1));
-  return 0;
+  return luaL_error(L, "attempt to assign property %s of mat4 (invalid property)", lua_tostring(L, -1));
 }
 
 static int l_lovrMat4__index(lua_State* L) {
@@ -383,8 +381,7 @@ static int l_lovrMat4__index(lua_State* L) {
   lua_getglobal(L, "tostring");
   lua_pushvalue(L, 2);
   lua_call(L, 1, 1);
-  luaL_error(L, "attempt to index field %s of mat4 (invalid property)", lua_tostring(L, -1));
-  return 0;
+  return luaL_error(L, "attempt to index field %s of mat4 (invalid property)", lua_tostring(L, -1));
 }
 
 const luaL_Reg lovrMat4[] = {

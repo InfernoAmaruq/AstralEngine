@@ -247,8 +247,7 @@ static uint32_t luax_checkdatatype(lua_State* L, int index) {
   const char* string = luaL_checklstring(L, index, &length);
 
   if (length < 3) {
-    luaL_error(L, "invalid DataType '%s'", string);
-    return 0;
+    return luaL_error(L, "invalid DataType '%s'", string);
   }
 
   // Deprecated: plurals are allowed and ignored
@@ -292,8 +291,7 @@ static uint32_t luax_checkdatatype(lua_State* L, int index) {
     }
   }
 
-  luaL_error(L, "invalid DataType '%s'", string);
-  return 0;
+  return luaL_error(L, "invalid DataType '%s'", string);
 }
 
 uint32_t luax_checkcomparemode(lua_State* L, int index) {
@@ -719,7 +717,7 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
     format->stride = luax_optu32(L, -1, 0);
     lua_pop(L, 1);
   } else {
-    return luax_typeerror(L, 1, "number, Blob, table, or string"), 0;
+    return luax_typeerror(L, 1, "number, Blob, table, or string");
   }
 
   // Length/size
@@ -789,7 +787,7 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
             hasData = true;
             break;
           }
-          return luax_typeerror(L, 2, "nil, number, table, vector, Blob, or Mat4"), 0;
+          return luax_typeerror(L, 2, "nil, number, table, vector, Blob, or Mat4");
       }
     }
   }
@@ -924,7 +922,7 @@ static int l_lovrGraphicsNewTexture(lua_State* L) {
       info.mipmaps = (info.samples > 1 || info.imageCount == 0 || !mipmappable) ? 1 : ~0u;
     }
     if (info.imageCount > 0 && info.mipmaps > 1 && !mipmappable) {
-      luaL_error(L, "This texture format does not support blitting, which is required for mipmap generation");
+      return luaL_error(L, "This texture format does not support blitting, which is required for mipmap generation");
     }
     lua_pop(L, 1);
 
@@ -941,7 +939,7 @@ static int l_lovrGraphicsNewTexture(lua_State* L) {
         }
         break;
       case LUA_TNIL: break;
-      default: luaL_error(L, "Expected Texture usage to be a string, table, or nil"); return 0;
+      default: return luaL_error(L, "Expected Texture usage to be a string, table, or nil");
     }
     lua_pop(L, 1);
 
@@ -1038,7 +1036,7 @@ static int l_lovrGraphicsNewSampler(lua_State* L) {
     info.mip = luax_checkenum(L, -1, FilterMode, NULL);
     lua_pop(L, 3);
   } else if (!lua_isnil(L, -1)) {
-    luaL_error(L, "Expected string or table for Sampler filter");
+    return luaL_error(L, "Expected string or table for Sampler filter");
   }
   lua_pop(L, 1);
 
@@ -1054,7 +1052,7 @@ static int l_lovrGraphicsNewSampler(lua_State* L) {
     info.wrap[2] = luax_checkenum(L, -1, WrapMode, NULL);
     lua_pop(L, 3);
   } else if (!lua_isnil(L, -1)) {
-    luaL_error(L, "Expected string or table for Sampler wrap");
+    return luaL_error(L, "Expected string or table for Sampler wrap");
   }
   lua_pop(L, 1);
 
@@ -1187,7 +1185,7 @@ static int l_lovrGraphicsNewShader(lua_State* L) {
         switch (lua_type(L, -2)) {
           case LUA_TSTRING: flag.name = lua_tostring(L, -2); break;
           case LUA_TNUMBER: flag.id = lua_tointeger(L, -2); break;
-          default: luaL_error(L, "Unexpected ShaderFlag key type (%s)", lua_typename(L, lua_type(L, -2)));
+          default: return luaL_error(L, "Unexpected ShaderFlag key type (%s)", lua_typename(L, lua_type(L, -2)));
         }
         arr_push(&flags, flag);
         lua_pop(L, 1);
@@ -1200,8 +1198,7 @@ static int l_lovrGraphicsNewShader(lua_State* L) {
           if (shouldFree[i]) lovrFree((void*) source[i].code);
         }
         arr_free(&flags);
-        luaL_error(L, "Too many shader flags");
-        return 0;
+        return luaL_error(L, "Too many shader flags");
       }
     }
     lua_pop(L, 1);
@@ -1496,7 +1493,7 @@ static int l_lovrGraphicsNewMesh(lua_State* L) {
         hasData = true;
         break;
       }
-    default: return luax_typeerror(L, index, "number, table, Blob, or Buffer"), 0;
+    default: return luax_typeerror(L, index, "number, table, Blob, or Buffer");
   }
 
   if (info.vertexBuffer) {

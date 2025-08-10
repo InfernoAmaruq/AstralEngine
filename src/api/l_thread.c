@@ -55,7 +55,7 @@ static int l_lovrThreadNewThread(lua_State* L) {
       blob = lovrBlobCreate(data, length, "thread code");
     } else {
       void* code = luax_readfile(str, &length);
-      if (!code) luaL_error(L, "Could not read thread code from file '%s'", str);
+      if (!code) return luaL_error(L, "Could not read thread code from file '%s'", str);
       blob = lovrBlobCreate(code, length, str);
     }
   } else {

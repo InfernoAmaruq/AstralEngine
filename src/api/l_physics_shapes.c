@@ -191,7 +191,7 @@ static int l_lovrShapeDestroy(lua_State* L) {
 
 static int l_lovrShapeIsDestroyed(lua_State* L) {
   Shape* shape = luax_toshape(L, 1);
-  if (!shape) luax_typeerror(L, 1, "Shape");
+  if (!shape) return luax_typeerror(L, 1, "Shape");
   bool destroyed = lovrShapeIsDestroyed(shape);
   lua_pushboolean(L, destroyed);
   return 1;

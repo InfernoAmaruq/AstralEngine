@@ -859,7 +859,7 @@ int luax_readmat4(lua_State* L, int index, mat4 m, int scaleComponents) {
     case LUA_TVECTOR:
 #endif
     case LUA_TNUMBER:
-    case LUA_TTABLE: {
+    case LUA_TTABLE:;
       float T[3], R[4], S[3];
       index = luax_readvec3(L, index, T, "number, table, vector, or Mat4");
       index = luax_readscale(L, index, S, scaleComponents, NULL);
@@ -867,7 +867,6 @@ int luax_readmat4(lua_State* L, int index, mat4 m, int scaleComponents) {
       mat4_fromPose(m, T, R);
       mat4_scale(m, S[0], S[1], S[2]);
       return index;
-    }
     default:;
       Mat4* matrix = luax_totype(L, index, Mat4);
       if (matrix) {

@@ -374,7 +374,7 @@ static int l_lovrFilesystemWrite(lua_State* L) {
   } else if (lua_type(L, 2) == LUA_TSTRING) {
     data = lua_tolstring(L, 2, &size);
   } else {
-    return luax_typeerror(L, 2, "string or Blob"), 0;
+    return luax_typeerror(L, 2, "string or Blob");
   }
   return luax_pushsuccess(L, lovrFilesystemWrite(path, data, size, false));
 }

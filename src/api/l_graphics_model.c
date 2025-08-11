@@ -164,6 +164,7 @@ static int l_lovrModelSetNodeTransform(lua_State* L) {
     mat4_getPosition(m, position);
     mat4_getScale(m, scale);
     mat4_getOrientation(m, rotation);
+    index = 4;
   } else {
     index = luax_readvec3(L, index, position, NULL);
     index = luax_readscale(L, index, scale, 3, NULL);

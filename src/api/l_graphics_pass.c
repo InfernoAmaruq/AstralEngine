@@ -764,10 +764,14 @@ static uint32_t luax_getvertexcount(lua_State* L, int index) {
     case LUA_TNUMBER:
       return (lua_gettop(L) - index + 1) / 3;
     case LUA_TTABLE:
-      lua_rawgeti(L, index, 1);
-      int innerType = lua_type(L, -1);
-      lua_pop(L, 1);
-      return luax_len(L, index) / (innerType == LUA_TNUMBER ? 3 : 1);
+      if (lua_gettop(L) > index) {
+        return lua_gettop(L) - index + 1;
+      } else {
+        lua_rawgeti(L, index, 1);
+        int innerType = lua_type(L, -1);
+        lua_pop(L, 1);
+        return luax_len(L, index) / (innerType == LUA_TNUMBER ? 3 : 1);
+      }
 #ifdef LOVR_USE_LUAU
     case LUA_TVECTOR:
       return lua_gettop(L) - index + 1;
@@ -788,48 +792,56 @@ static void luax_readvertices(lua_State* L, int index, float* vertices, uint32_t
         *vertices++ = luax_tofloat(L, index + i);
       }
       break;
-    case LUA_TTABLE:
-      lua_rawgeti(L, index, 1);
-      int innerType = lua_type(L, -1);
-      lua_pop(L, 1);
-      if (innerType == LUA_TNUMBER) {
-        for (uint32_t i = 0; i < 3 * count; i++) {
-          lua_rawgeti(L, index, i + 1);
-          *vertices++ = luax_tofloat(L, -1);
-          lua_pop(L, 1);
-        }
-#ifdef LOVR_USE_LUAU
-      } else if (innerType == LUA_TVECTOR) {
-        for (uint32_t i = 0; i < count; i++) {
-          lua_rawgeti(L, index, i + 1);
-          const float* v = lua_tovector(L, -1);
-          luax_check(L, v, "Expected table of vectors");
-          memcpy(vertices, v, 3 * sizeof(float));
-          lua_pop(L, 1);
-        }
-#endif
-      } else if (innerType == LUA_TTABLE) {
-        for (uint32_t i = 0; i < count; i++) {
-          lua_rawgeti(L, index, i + 1);
-          if (luax_len(L, -1) > 0) {
-            lua_rawgeti(L, -1, 1);
-            lua_rawgeti(L, -2, 2);
-            lua_rawgeti(L, -3, 3);
-          } else {
-            lua_pushliteral(L, "x");
-            lua_gettable(L, index);
-
-            lua_pushliteral(L, "y");
-            lua_gettable(L, index);
-
-            lua_pushliteral(L, "z");
-            lua_gettable(L, index);
-          }
-          vertices[0] = luax_tofloat(L, -3);
-          vertices[1] = luax_tofloat(L, -2);
-          vertices[2] = luax_tofloat(L, -1);
+    case LUA_TTABLE:;
+      int top = lua_gettop(L);
+      if (top > index) {
+        for (int i = index; i <= top; i++) {
+          luax_readvec3(L, i, vertices, NULL);
           vertices += 3;
-          lua_pop(L, 4);
+        }
+      } else {
+        lua_rawgeti(L, index, 1);
+        int innerType = lua_type(L, -1);
+        lua_pop(L, 1);
+        if (innerType == LUA_TNUMBER) {
+          for (uint32_t i = 0; i < 3 * count; i++) {
+            lua_rawgeti(L, index, i + 1);
+            *vertices++ = luax_tofloat(L, -1);
+            lua_pop(L, 1);
+          }
+#ifdef LOVR_USE_LUAU
+        } else if (innerType == LUA_TVECTOR) {
+          for (uint32_t i = 0; i < count; i++) {
+            lua_rawgeti(L, index, i + 1);
+            const float* v = lua_tovector(L, -1);
+            luax_check(L, v, "Expected table of vectors");
+            memcpy(vertices, v, 3 * sizeof(float));
+            lua_pop(L, 1);
+          }
+#endif
+        } else if (innerType == LUA_TTABLE) {
+          for (uint32_t i = 0; i < count; i++) {
+            lua_rawgeti(L, index, i + 1);
+            if (luax_len(L, -1) > 0) {
+              lua_rawgeti(L, -1, 1);
+              lua_rawgeti(L, -2, 2);
+              lua_rawgeti(L, -3, 3);
+            } else {
+              lua_pushliteral(L, "x");
+              lua_gettable(L, index);
+
+              lua_pushliteral(L, "y");
+              lua_gettable(L, index);
+
+              lua_pushliteral(L, "z");
+              lua_gettable(L, index);
+            }
+            vertices[0] = luax_tofloat(L, -3);
+            vertices[1] = luax_tofloat(L, -2);
+            vertices[2] = luax_tofloat(L, -1);
+            vertices += 3;
+            lua_pop(L, 4);
+          }
         }
       }
       break;

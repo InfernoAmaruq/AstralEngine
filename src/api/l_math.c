@@ -267,5 +267,8 @@ int luaopen_lovr_math(lua_State* L) {
   lua_getglobal(L, "quaternion");
   lua_setfield(L, -2, "newQuat");
 
+  lua_getfield(L, -1, "newMat4");
+  lua_setfield(L, -2, "mat4");
+
   return 1;
 }

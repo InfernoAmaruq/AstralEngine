@@ -365,7 +365,7 @@ function quaternion.direction(q)
   local x = -2 * q.x * q.z - 2 * q.w * q.y
   local y = -2 * q.y * q.z + 2 * q.w * q.x
   local z = -1 + 2 * q.x * q.x + 2 * q.y * q.y
-  return x, y, z
+  return vector(x, y, z)
 end
 
 function quaternion.slerp(q, r, t)

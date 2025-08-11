@@ -1,5 +1,5 @@
 function lovr.conf(t)
   t.identity = 'test'
-  t.modules.graphics = false
+  t.modules.graphics = arg[1] ~= '--headless'
   t.window = nil
 end

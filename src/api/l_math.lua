@@ -204,6 +204,7 @@ end
 function quaternion.conjugate(q)
   local result = { x = -q.x, y = -q.y, z = -q.z, w = q.w }
   setmetatable(result, quaternion)
+  return result
 end
 
 function quaternion.angleaxis(angle, ax, ay, az)

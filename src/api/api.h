@@ -84,13 +84,6 @@ typedef struct {
   void* object;
 } Proxy;
 
-#ifdef LOVR_USE_LUAU
-#undef lua_pushcfunction
-#undef lua_pushcclosure
-#define lua_pushcfunction(L, fn) lua_pushcclosurek(L, fn, NULL, 0, NULL)
-#define lua_pushcclosure(L, fn, n) lua_pushcclosurek(L, fn, NULL, n, NULL)
-#endif
-
 #if LUA_VERSION_NUM > 501
 #define luax_len(L, i) (int) lua_rawlen(L, i)
 #define luax_register(L, f) luaL_setfuncs(L, f, 0)
@@ -108,12 +101,6 @@ typedef struct {
 #define luax_check(L, c, ...) if (!(c)) { luaL_error(L, __VA_ARGS__); }
 #define luax_checku32(L, i) _luax_checku32(L, i)
 #define luax_optu32(L, i, x) _luax_optu32(L, i, x)
-#endif
-
-#ifdef LOVR_USE_LUAU
-#define luax_isvector(L, i) (lua_isvector(L, i) || lua_istable(L, i))
-#else
-#define luax_isvector lua_istable
 #endif
 
 #define luax_registertype(L, T) _luax_registertype(L, #T, lovr ## T, lovr ## T ## Destroy)

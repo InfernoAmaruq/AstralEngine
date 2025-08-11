@@ -934,7 +934,11 @@ static int l_lovrPassSphere(lua_State* L) {
 }
 
 static bool luax_checkendpoints(lua_State* L, int index, float transform[16], bool center) {
-  if (!luax_isvector(L, index + 0) || !luax_isvector(L, index + 1)) return false;
+#ifdef LOVR_USE_LUAU
+  if (!lua_isvector(L, index + 0) || !lua_isvector(L, index + 1)) return false;
+#else
+  if (!lua_istable(L, index + 0) || !lua_istable(L, index + 1)) return false;
+#endif
   float v[3], u[3];
   luax_readvec3(L, index + 0, v, NULL);
   luax_readvec3(L, index + 1, u, NULL);

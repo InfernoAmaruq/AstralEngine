@@ -309,12 +309,10 @@ void luax_registerloader(lua_State* L, lua_CFunction loader, int index) {
 }
 
 int luax_resume(lua_State* T, int n) {
-#ifdef LOVR_USE_LUAU
-  return lua_resume(T, NULL, n);
-#elif LUA_VERSION_NUM >= 504
+#if LUA_VERSION_NUM >= 504
   int results;
   return lua_resume(T, NULL, n, &results);
-#elif LUA_VERSION_NUM >= 502
+#elif LUA_VERSION_NUM >= 502 || defined(LOVR_USE_LUAU)
   return lua_resume(T, NULL, n);
 #else
   return lua_resume(T, n);

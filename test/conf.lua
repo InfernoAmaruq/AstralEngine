@@ -1,5 +1,5 @@
 function lovr.conf(t)
   t.identity = 'test'
-  t.modules.graphics = not lovr.filesystem.getSource():match('/home/runner')
+  t.modules.graphics = false
   t.window = nil
 end

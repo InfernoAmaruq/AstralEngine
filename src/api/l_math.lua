@@ -290,7 +290,7 @@ end
 function quaternion.lookdir(dir, up)
   up = up or vector.up
 
-  local fx, fy, fz = dir.x, dir.y, dir.z
+  local fx, fy, fz = -dir.x, -dir.y, -dir.z
   local length = sqrt(fx * fx + fy * fy + fz * fz)
 
   if length == 0 then
@@ -299,7 +299,7 @@ function quaternion.lookdir(dir, up)
 
   fx, fy, fz = fx / length, fy / length, fz / length
 
-  local rx, ry, rz = fy * up.z - fz * up.y, fz * up.x - fx * up.z, fx * up.y - fy * up.x
+  local rx, ry, rz = up.y * fz - up.z * fy, up.z * fx - up.x * fz, up.x * fy - up.y * fx
   length = sqrt(rx * rx + ry * ry + rz * rz)
 
   if length == 0 then
@@ -314,11 +314,11 @@ function quaternion.lookdir(dir, up)
 
   rx, ry, rz = rx / length, ry / length, rz / length
 
-  local ux, uy, uz = ry * fz - rz * fy, rz * fx - rx * fz, rx * fy - ry * fx
+  local ux, uy, uz = fy * rz - fz * ry, fz * rx - fx * rz, fx * ry - fy * rx
 
-  local m00, m01, m02 = rx, ux, fx
-  local m10, m11, m12 = ry, uy, fy
-  local m20, m21, m22 = rz, uz, fz
+  local m00, m01, m02 = rx, ry, rz
+  local m10, m11, m12 = ux, uy, uz
+  local m20, m21, m22 = fx, fy, fz
 
   local x, y, z, w
 

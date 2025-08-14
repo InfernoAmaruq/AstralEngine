@@ -431,7 +431,21 @@ static int l_lovrPassScale(lua_State* L) {
 static int l_lovrPassTransform(lua_State* L) {
   float transform[16];
   Pass* pass = luax_checktype(L, 1, Pass);
-  luax_readmat4(L, 2, transform, 3);
+  if (lua_gettop(L) == 8) {
+    float x = luax_checkfloat(L, 2);
+    float y = luax_checkfloat(L, 3);
+    float z = luax_checkfloat(L, 4);
+    float angle = luax_checkfloat(L, 5);
+    float ax = luax_checkfloat(L, 6);
+    float ay = luax_checkfloat(L, 7);
+    float az = luax_checkfloat(L, 8);
+    float position[3], orientation[4];
+    vec3_set(position, x, y, z);
+    quat_fromAngleAxis(orientation, angle, ax, ay, az);
+    mat4_fromPose(transform, position, orientation);
+  } else {
+    luax_readmat4(L, 2, transform, 3);
+  }
   lovrPassTransform(pass, transform);
   return 0;
 }

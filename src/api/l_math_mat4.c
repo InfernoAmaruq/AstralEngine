@@ -140,17 +140,39 @@ static int l_lovrMat4Mul(lua_State* L) {
   if (other) {
     mat4_mul(lovrMat4GetData(matrix), lovrMat4GetData(other));
     lua_settop(L, 1);
-  } else {
+    return 1;
+  } else if (lua_type(L, 2) == LUA_TNUMBER) {
     float v[4];
-    int index = luax_readvec3(L, 2, v, NULL);
-    v[3] = luax_optfloat(L, index, 1.f);
+    v[0] = luax_checkfloat(L, 2);
+    v[1] = luax_checkfloat(L, 3);
+    v[2] = luax_checkfloat(L, 4);
+    v[3] = luax_optfloat(L, 5, 1.f);
     mat4_mulVec4(lovrMat4GetData(matrix), v);
     lua_pushnumber(L, v[0]);
     lua_pushnumber(L, v[1]);
     lua_pushnumber(L, v[2]);
-    return 3;
+    lua_pushnumber(L, v[3]);
+    return 4;
+  } else {
+    float v[4];
+    int index = luax_readvec3(L, 2, v, "number, vector, or Mat4");
+    v[3] = luax_optfloat(L, index, 1.f);
+    mat4_mulVec4(lovrMat4GetData(matrix), v);
+#ifdef LOVR_USE_LUAU
+    lua_pushvector(L, v[0], v[1], v[2]);
+#else
+    lua_createtable(L, 3, 0);
+    lua_pushnumber(L, v[0]);
+    lua_setfield(L, -2, "x");
+    lua_pushnumber(L, v[1]);
+    lua_setfield(L, -2, "y");
+    lua_pushnumber(L, v[2]);
+    lua_setfield(L, -2, "z");
+    lua_getmetatable(L, 2);
+    lua_setmetatable(L, -2);
+#endif
+    return 1;
   }
-  return 1;
 }
 
 static int l_lovrMat4Identity(lua_State* L) {

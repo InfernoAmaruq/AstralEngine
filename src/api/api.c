@@ -779,6 +779,7 @@ int luax_readquat(lua_State* L, int index, quat q, const char* expected) {
       q[1] = MAX(s[1] / 32767.f, -1.f);
       q[2] = MAX(s[2] / 32767.f, -1.f);
       q[3] = MAX(s[3] / 32767.f, -1.f);
+      quat_normalize(q);
       return index + 1;
     }
 #endif

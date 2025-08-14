@@ -325,7 +325,7 @@ int luax_loadbufferx(lua_State* L, const char* buffer, size_t size, const char* 
   char* bytecode = luau_compile(buffer, size, NULL, &bytecodeSize);
   int result = luau_load(L, name, bytecode, bytecodeSize, 0);
   free(bytecode);
-  return result;
+  return result ? LUA_ERRSYNTAX : LUA_OK;
 #elif LUA_VERSION_NUM >= 502
   return luaL_loadbufferx(L, buffer, size, name, mode);
 #else

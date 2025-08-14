@@ -36,6 +36,10 @@ struct gpu_buffer {
   VkDeviceSize offset;
 };
 
+struct gpu_geotree {
+  VkAccelerationStructureKHR handle;
+};
+
 struct gpu_texture {
   VkImage handle;
   VkImageView view;
@@ -209,6 +213,10 @@ typedef struct {
   bool pipelineCacheControl;
   bool memoryBudget;
   bool cubicFilter;
+  bool accelerationStructure;
+  bool bufferDeviceAddress;
+  bool descriptorIndexing;
+  bool deferredHostOperations;
 } gpu_extensions;
 
 // State
@@ -2789,7 +2797,10 @@ bool gpu_init(gpu_config* config) {
     // Device Extensions
 
     struct { const char* name; bool shouldEnable; bool* flag; } extensions[] = {
+      { "VK_KHR_acceleration_structure", true, &state.extensions.accelerationStructure },
+      { "VK_KHR_buffer_device_address", true, &state.extensions.bufferDeviceAddress },
       { "VK_KHR_create_renderpass2", true, &state.extensions.renderPass2 },
+      { "VK_KHR_deferred_host_operations", true, &state.extensions.deferredHostOperations },
       { "VK_KHR_swapchain", true, &state.extensions.swapchain },
       { "VK_KHR_swapchain_maintenance1", true, &state.extensions.swapchainMaintenance },
       { "VK_KHR_portability_subset", true, &state.extensions.portability },
@@ -2799,6 +2810,7 @@ bool gpu_init(gpu_config* config) {
       { "VK_KHR_synchronization2", true, &state.extensions.synchronization2 },
       { "VK_KHR_dynamic_rendering", true, &state.extensions.dynamicRendering },
       { "VK_KHR_timeline_semaphore", true, &state.extensions.timelineSemaphore },
+      { "VK_EXT_descriptor_indexing", true, &state.extensions.descriptorIndexing },
       { "VK_EXT_scalar_block_layout", true, &state.extensions.scalarBlockLayout },
       { "VK_EXT_fragment_density_map", true, &state.extensions.foveation },
       { "VK_EXT_pipeline_creation_cache_control", true, &state.extensions.pipelineCacheControl },
@@ -2899,6 +2911,8 @@ bool gpu_init(gpu_config* config) {
     VkPhysicalDevicePipelineCreationCacheControlFeaturesEXT pipelineCreationCacheControlFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES_EXT };
     VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timelineSemaphoreFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR };
     VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchainMaintenanceFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR };
+    VkPhysicalDeviceBufferDeviceAddressFeaturesKHR bufferDeviceAddressFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR };
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
 
     vkGetPhysicalDeviceFeatures2(state.adapter, &supported);
 
@@ -2961,6 +2975,16 @@ bool gpu_init(gpu_config* config) {
       CHAIN(swapchainMaintenanceFeatures);
     }
 
+    if (state.extensions.bufferDeviceAddress) {
+      bufferDeviceAddressFeatures.bufferDeviceAddress = true;
+      CHAIN(bufferDeviceAddressFeatures);
+    }
+
+    if (state.extensions.accelerationStructure) {
+      accelerationStructureFeatures.accelerationStructure = true;
+      CHAIN(accelerationStructureFeatures);
+    }
+
     if (config->features) {
       config->features->textureBC = enabled.features.textureCompressionBC;
       config->features->textureASTC = enabled.features.textureCompressionASTC_LDR;
@@ -2968,6 +2992,11 @@ bool gpu_init(gpu_config* config) {
       config->features->depthClamp = enabled.features.depthClamp;
       config->features->depthResolve = state.extensions.depthResolve;
       config->features->foveation = state.extensions.foveation;
+      config->features->rayQuery =
+        state.extensions.accelerationStructure &&
+        state.extensions.bufferDeviceAddress &&
+        state.extensions.descriptorIndexing &&
+        state.extensions.deferredHostOperations;
       config->features->indirectDrawFirstInstance = enabled.features.drawIndirectFirstInstance;
       config->features->packedBuffers = state.extensions.scalarBlockLayout;
       config->features->shaderDebug = state.extensions.shaderDebug;

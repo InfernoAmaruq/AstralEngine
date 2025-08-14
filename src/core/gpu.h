@@ -5,6 +5,7 @@
 #pragma once
 
 typedef struct gpu_buffer gpu_buffer;
+typedef struct gpu_geotree gpu_geotree;
 typedef struct gpu_texture gpu_texture;
 typedef struct gpu_sampler gpu_sampler;
 typedef struct gpu_layout gpu_layout;
@@ -683,6 +684,7 @@ typedef struct {
   bool depthClamp;
   bool depthResolve;
   bool foveation;
+  bool rayQuery;
   bool indirectDrawFirstInstance;
   bool packedBuffers;
   bool shaderDebug;

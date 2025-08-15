@@ -3123,6 +3123,10 @@ bool lovrHeadsetGetPass(Pass** pass) {
       return false;
     }
 
+    if (*pass == NULL) {
+      return true;
+    }
+
     float position[3], orientation[4], viewMatrix[16];
     lovrHeadsetGetViewPose(0, position, orientation);
     mat4_fromPose(viewMatrix, position, orientation);

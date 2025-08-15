@@ -50,6 +50,7 @@ typedef struct {
 
 bool gpu_buffer_init(gpu_buffer* buffer, gpu_buffer_info* info);
 void gpu_buffer_destroy(gpu_buffer* buffer);
+gpu_address gpu_buffer_get_address(gpu_buffer* buffer, uint32_t offset);
 
 // Geotree
 
@@ -112,8 +113,10 @@ typedef struct {
 
 typedef struct {
   gpu_triangle_format format;
-  gpu_address vertices;
-  gpu_address indices;
+  gpu_buffer* vertices;
+  gpu_buffer* indices;
+  uint32_t vertexOffset;
+  uint32_t indexOffset;
 } gpu_triangle_data;
 
 typedef struct {
@@ -126,7 +129,7 @@ typedef struct {
 
 typedef union {
   gpu_triangle_data triangles;
-  gpu_address instances;
+  gpu_buffer* instances;
 } gpu_geotree_data;
 
 typedef enum {
@@ -139,6 +142,9 @@ typedef struct {
   gpu_build_mode mode;
   uint32_t flags;
   gpu_geotree_data data;
+  uint32_t primitiveCount;
+  uint32_t primitiveOffset;
+  uint32_t firstVertex;
 } gpu_build_info;
 
 typedef struct {
@@ -715,6 +721,7 @@ void gpu_clear_buffer(gpu_stream* stream, gpu_buffer* buffer, uint32_t offset, u
 void gpu_clear_texture(gpu_stream* stream, gpu_texture* texture, float value[4], uint32_t layer, uint32_t layerCount, uint32_t level, uint32_t levelCount);
 void gpu_clear_tally(gpu_stream* stream, gpu_tally* tally, uint32_t index, uint32_t count);
 void gpu_blit(gpu_stream* stream, gpu_texture* src, gpu_texture* dst, uint32_t srcOffset[4], uint32_t dstOffset[4], uint32_t srcExtent[3], uint32_t dstExtent[3], gpu_filter filter);
+void gpu_build_geotree(gpu_stream* stream, gpu_geotree* geotree, gpu_build_info* info);
 void gpu_sync(gpu_stream* stream, gpu_barrier* barriers, uint32_t count);
 void gpu_tally_begin(gpu_stream* stream, gpu_tally* tally, uint32_t index);
 void gpu_tally_finish(gpu_stream* stream, gpu_tally* tally, uint32_t index);

@@ -357,6 +357,7 @@ static void error(const char* message);
   X(vkDestroyBuffer)\
   X(vkGetBufferMemoryRequirements)\
   X(vkBindBufferMemory)\
+  X(vkGetBufferDeviceAddressKHR)\
   X(vkCreateImage)\
   X(vkDestroyImage)\
   X(vkGetImageMemoryRequirements)\
@@ -416,7 +417,8 @@ static void error(const char* message);
   X(vkCmdDispatchIndirect)\
   X(vkGetAccelerationStructureBuildSizesKHR)\
   X(vkCreateAccelerationStructureKHR)\
-  X(vkDestroyAccelerationStructureKHR)
+  X(vkDestroyAccelerationStructureKHR)\
+  X(vkCmdBuildAccelerationStructuresKHR)
 
 // Used to load/declare Vulkan functions without lots of clutter
 #define GPU_LOAD_ANONYMOUS(fn) fn = (PFN_##fn) vkGetInstanceProcAddr(NULL, #fn);
@@ -479,6 +481,13 @@ void gpu_buffer_destroy(gpu_buffer* buffer) {
   release(buffer->memory, buffer->offset);
 }
 
+gpu_address gpu_buffer_get_address(gpu_buffer* buffer, uint32_t offset) {
+  return vkGetBufferDeviceAddressKHR(state.device, &(VkBufferDeviceAddressInfoKHR) {
+    .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
+    .buffer = buffer->handle
+  }) + offset;
+}
+
 // Geotree
 
 bool gpu_geotree_init(gpu_geotree* geotree, gpu_geotree_info* info, gpu_address* address) {
@@ -498,7 +507,7 @@ bool gpu_geotree_init(gpu_geotree* geotree, gpu_geotree_info* info, gpu_address*
       .vertexFormat = convertAttributeType(info->format.vertexType),
       .vertexStride = info->format.vertexStride,
       .maxVertex = info->format.maxIndex,
-      .indexType = (VkIndexType) info->format.indexType
+      .indexType = info->format.maxIndex ? (VkIndexType) info->format.indexType : VK_INDEX_TYPE_NONE_KHR
     };
   }
 
@@ -531,6 +540,10 @@ bool gpu_geotree_init(gpu_geotree* geotree, gpu_geotree_info* info, gpu_address*
 
   if (!gpu_buffer_init(&geotree->buffer, &bufferInfo)) {
     return false;
+  }
+
+  if (address) {
+    *address = gpu_buffer_get_address(&geotree->buffer, 0);
   }
 
   bufferInfo.type = GPU_BUFFER_STATIC;
@@ -2639,6 +2652,61 @@ void gpu_blit(gpu_stream* stream, gpu_texture* src, gpu_texture* dst, uint32_t s
   vkCmdBlitImage(stream->commands, src->handle, VK_IMAGE_LAYOUT_GENERAL, dst->handle, VK_IMAGE_LAYOUT_GENERAL, 1, &region, filters[filter]);
 }
 
+void gpu_build_geotree(gpu_stream* stream, gpu_geotree* geotree, gpu_build_info* info) {
+  VkAccelerationStructureGeometryDataKHR geometry;
+
+  if (info->type == GPU_GEOTREE_ROOT) {
+    geometry.instances = (VkAccelerationStructureGeometryInstancesDataKHR) {
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR,
+      .data.deviceAddress = gpu_buffer_get_address(info->data.instances, 0) // Can use primitiveOffset to offset
+    };
+  } else {
+    geometry.triangles = (VkAccelerationStructureGeometryTrianglesDataKHR) {
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+      .vertexFormat = convertAttributeType(info->data.triangles.format.vertexType),
+      .vertexData.deviceAddress = gpu_buffer_get_address(info->data.triangles.vertices, info->data.triangles.vertexOffset),
+      .vertexStride = info->data.triangles.format.vertexStride,
+      .maxVertex = info->data.triangles.format.maxIndex,
+      .indexType = (VkIndexType) info->data.triangles.format.indexType,
+      .indexData.deviceAddress = gpu_buffer_get_address(info->data.triangles.indices, info->data.triangles.indexOffset),
+    };
+  }
+
+  VkAccelerationStructureBuildGeometryInfoKHR build = {
+    .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+    .type = info->type == GPU_GEOTREE_ROOT ?
+      VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :
+      VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+    .flags =
+      ((info->flags & GPU_GEOTREE_WILL_UPDATE) ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0) |
+      ((info->flags & GPU_GEOTREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
+      ((info->flags & GPU_GEOTREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
+      ((info->flags & GPU_GEOTREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0),
+    .mode = info->mode == GPU_BUILD_CREATE ?
+      VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR :
+      VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR,
+    .dstAccelerationStructure = geotree->handle,
+    .geometryCount = 1,
+    .pGeometries = &(VkAccelerationStructureGeometryKHR) {
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+      .geometryType = info->type == GPU_GEOTREE_ROOT ? VK_GEOMETRY_TYPE_INSTANCES_KHR : VK_GEOMETRY_TYPE_TRIANGLES_KHR,
+      .flags = VK_GEOMETRY_OPAQUE_BIT_KHR,
+      .geometry = geometry
+    },
+    .scratchData = gpu_buffer_get_address(&geotree->scratch, 0)
+  };
+
+  VkAccelerationStructureBuildRangeInfoKHR range = {
+    .primitiveCount = info->primitiveCount,
+    .primitiveOffset = info->primitiveOffset,
+    .firstVertex = info->firstVertex
+  };
+
+  const VkAccelerationStructureBuildRangeInfoKHR* ranges[1] = { &range };
+
+  vkCmdBuildAccelerationStructuresKHR(stream->commands, 1, &build, ranges);
+}
+
 void gpu_sync(gpu_stream* stream, gpu_barrier* barriers, uint32_t count) {
   VkMemoryBarrier2KHR memoryBarrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2_KHR };
 
@@ -3169,6 +3237,10 @@ bool gpu_init(gpu_config* config) {
     for (uint32_t i = 0; i < COUNTOF(bufferFlags); i++) {
       gpu_allocator* allocator = &state.allocators[i];
       state.allocatorLookup[i] = i;
+
+      if (i == GPU_MEMORY_BUFFER_GEOTREE && !state.extensions.accelerationStructure) {
+        continue;
+      }
 
       VkBufferCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -3774,7 +3846,8 @@ static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type) {
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
         VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+        (state.extensions.bufferDeviceAddress ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : 0);
     case GPU_BUFFER_STREAM:
       return
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
@@ -3786,7 +3859,7 @@ static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type) {
     case GPU_BUFFER_DOWNLOAD:
       return VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     case GPU_BUFFER_GEOTREE:
-      return VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+      return VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     default: return 0;
   }
 }

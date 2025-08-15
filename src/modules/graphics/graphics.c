@@ -3034,6 +3034,7 @@ bool lovrGraphicsCompileShader(ShaderSource* stages, ShaderSource* outputs, uint
   const char* prefix = ""
     "#version 460\n"
     "#extension GL_EXT_multiview : require\n"
+    "#extension GL_EXT_ray_query : enable\n"
     "#extension GL_EXT_samplerless_texture_functions : require\n"
     "#extension GL_EXT_scalar_block_layout : enable\n"
     "#extension GL_GOOGLE_include_directive : require\n";
@@ -9011,6 +9012,7 @@ static bool checkShaderFeatures(uint32_t* features, uint32_t count) {
       case 4427: break; // ShaderDrawParameters
       case 4437: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "multigpu");
       case 4439: lovrCheck(state.limits.renderSize[2] > 1, "GPU does not support shader feature #%d: %s", features[i], "multiview"); break;
+      case 4472: lovrCheck(state.features.rayQuery, "GPU does not support shader feature #%d: %s", features[i], "raytracing"); break;
       case 5301: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "non-uniform indexing");
       case 5306: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "non-uniform indexing");
       case 5307: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "non-uniform indexing");

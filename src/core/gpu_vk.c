@@ -1471,9 +1471,11 @@ void gpu_bundle_pool_destroy(gpu_bundle_pool* pool) {
 void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t count) {
   VkDescriptorBufferInfo bufferInfo[256];
   VkDescriptorImageInfo imageInfo[256];
+  VkWriteDescriptorSetAccelerationStructureKHR geotreeInfo[256];
   VkWriteDescriptorSet writes[256];
   uint32_t bufferCount = 0;
   uint32_t imageCount = 0;
+  uint32_t geotreeCount = 0;
   uint32_t writeCount = 0;
 
   static const VkDescriptorType types[] = {
@@ -1484,7 +1486,8 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
     [GPU_SLOT_TEXTURE_WITH_SAMPLER] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
     [GPU_SLOT_SAMPLED_TEXTURE] = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
     [GPU_SLOT_STORAGE_TEXTURE] = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER
+    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER,
+    [GPU_SLOT_GEOTREE] = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
   };
 
   for (uint32_t i = 0; i < count; i++) {
@@ -1495,16 +1498,22 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
       gpu_buffer_binding* buffers = binding->count > 0 ? binding->buffers : &binding->buffer;
       gpu_texture_binding* textures = binding->count > 0 ? binding->textures : &binding->texture;
       bool image = binding->type > GPU_SLOT_STORAGE_BUFFER_DYNAMIC;
+      bool geotree = binding->type == GPU_SLOT_GEOTREE;
 
       uint32_t index = 0;
       uint32_t descriptorCount = MAX(binding->count, 1);
 
       while (index < descriptorCount) {
-        uint32_t available = image ? COUNTOF(imageInfo) - imageCount : COUNTOF(bufferInfo) - bufferCount;
+        uint32_t available =
+          geotree ? COUNTOF(geotreeInfo) - geotreeCount :
+          image ? COUNTOF(imageInfo) - imageCount :
+          COUNTOF(bufferInfo) - bufferCount;
+
         uint32_t chunk = MIN(descriptorCount - index, available);
 
         writes[writeCount++] = (VkWriteDescriptorSet) {
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .pNext = geotree ? &geotreeInfo[geotreeCount] : NULL,
           .dstSet = bundles[i]->handle,
           .dstBinding = binding->number,
           .dstArrayElement = index,
@@ -1514,7 +1523,13 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
           .pImageInfo = &imageInfo[imageCount]
         };
 
-        if (image) {
+        if (geotree) {
+          geotreeInfo[geotreeCount++] = (VkWriteDescriptorSetAccelerationStructureKHR) {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+            .accelerationStructureCount = 1,
+            .pAccelerationStructures = &binding->geotree->handle
+          };
+        } else if (image) {
           for (uint32_t n = 0; n < chunk; n++, index++) {
             imageInfo[imageCount++] = (VkDescriptorImageInfo) {
               .imageView = textures[index].object ? textures[index].object->view : NULL,
@@ -1532,9 +1547,15 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
           }
         }
 
-        if ((image ? imageCount >= COUNTOF(imageInfo) : bufferCount >= COUNTOF(bufferInfo)) || writeCount >= COUNTOF(writes)) {
+        bool flush =
+          bufferCount == COUNTOF(bufferInfo) ||
+          imageCount == COUNTOF(imageInfo) ||
+          geotreeCount == COUNTOF(geotreeInfo) ||
+          writeCount == COUNTOF(writes);
+
+        if (flush) {
           vkUpdateDescriptorSets(state.device, writeCount, writes, 0, NULL);
-          bufferCount = imageCount = writeCount = 0;
+          bufferCount = imageCount = geotreeCount = writeCount = 0;
         }
       }
     }

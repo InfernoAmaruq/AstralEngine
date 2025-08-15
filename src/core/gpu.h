@@ -345,7 +345,8 @@ typedef enum {
   GPU_SLOT_TEXTURE_WITH_SAMPLER,
   GPU_SLOT_SAMPLED_TEXTURE,
   GPU_SLOT_STORAGE_TEXTURE,
-  GPU_SLOT_SAMPLER
+  GPU_SLOT_SAMPLER,
+  GPU_SLOT_GEOTREE
 } gpu_slot_type;
 
 enum {
@@ -410,6 +411,7 @@ typedef struct {
     gpu_texture_binding texture;
     gpu_buffer_binding* buffers;
     gpu_texture_binding* textures;
+    gpu_geotree* geotree;
   };
 } gpu_binding;
 

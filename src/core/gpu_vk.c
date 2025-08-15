@@ -2658,7 +2658,7 @@ bool gpu_init(gpu_config* config) {
         VK(vkCreateDebugUtilsMessengerEXT(state.instance, &messengerInfo, NULL, &state.messenger), "vkCreateDebugUtilsMessengerEXT") goto fail;
 
         if (!state.extensions.validation) {
-          LOG("Warning: GPU debugging is enabled, but validation layer is not installed");
+          LOG("Warning: GPU debugging is enabled, but validation layer is not installed, so no debug logs will be shown");
         }
       } else {
         LOG("Warning: GPU debugging is enabled, but debug extension is not supported");

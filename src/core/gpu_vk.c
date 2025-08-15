@@ -220,6 +220,8 @@ typedef struct {
   bool bufferDeviceAddress;
   bool descriptorIndexing;
   bool deferredHostOperations;
+  bool spirv14;
+  bool rayQuery;
 } gpu_extensions;
 
 // State
@@ -2946,7 +2948,9 @@ bool gpu_init(gpu_config* config) {
       { "VK_KHR_swapchain_maintenance1", true, &state.extensions.swapchainMaintenance },
       { "VK_KHR_portability_subset", true, &state.extensions.portability },
       { "VK_KHR_depth_stencil_resolve", true, &state.extensions.depthResolve },
+      { "VK_KHR_ray_query", true, &state.extensions.rayQuery },
       { "VK_KHR_shader_non_semantic_info", config->debug, &state.extensions.shaderDebug },
+      { "VK_KHR_spirv_1_4", true, &state.extensions.spirv14 },
       { "VK_KHR_image_format_list", true, &state.extensions.formatList },
       { "VK_KHR_synchronization2", true, &state.extensions.synchronization2 },
       { "VK_KHR_dynamic_rendering", true, &state.extensions.dynamicRendering },
@@ -3054,6 +3058,7 @@ bool gpu_init(gpu_config* config) {
     VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchainMaintenanceFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR };
     VkPhysicalDeviceBufferDeviceAddressFeaturesKHR bufferDeviceAddressFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR };
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
+    VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
 
     vkGetPhysicalDeviceFeatures2(state.adapter, &supported);
 
@@ -3126,6 +3131,11 @@ bool gpu_init(gpu_config* config) {
       CHAIN(accelerationStructureFeatures);
     }
 
+    if (state.extensions.rayQuery) {
+      rayQueryFeatures.rayQuery = true;
+      CHAIN(rayQueryFeatures);
+    }
+
     if (config->features) {
       config->features->textureBC = enabled.features.textureCompressionBC;
       config->features->textureASTC = enabled.features.textureCompressionASTC_LDR;
@@ -3133,11 +3143,7 @@ bool gpu_init(gpu_config* config) {
       config->features->depthClamp = enabled.features.depthClamp;
       config->features->depthResolve = state.extensions.depthResolve;
       config->features->foveation = state.extensions.foveation;
-      config->features->rayQuery =
-        state.extensions.accelerationStructure &&
-        state.extensions.bufferDeviceAddress &&
-        state.extensions.descriptorIndexing &&
-        state.extensions.deferredHostOperations;
+      config->features->rayQuery = state.extensions.rayQuery && state.extensions.accelerationStructure;
       config->features->indirectDrawFirstInstance = enabled.features.drawIndirectFirstInstance;
       config->features->packedBuffers = state.extensions.scalarBlockLayout;
       config->features->shaderDebug = state.extensions.shaderDebug;

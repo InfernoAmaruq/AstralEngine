@@ -38,6 +38,8 @@ struct gpu_buffer {
 
 struct gpu_geotree {
   VkAccelerationStructureKHR handle;
+  gpu_buffer buffer;
+  gpu_buffer scratch;
 };
 
 struct gpu_texture {
@@ -116,6 +118,7 @@ typedef enum {
   GPU_MEMORY_BUFFER_STREAM,
   GPU_MEMORY_BUFFER_UPLOAD,
   GPU_MEMORY_BUFFER_DOWNLOAD,
+  GPU_MEMORY_BUFFER_GEOTREE,
   GPU_MEMORY_TEXTURE_COLOR,
   GPU_MEMORY_TEXTURE_D16,
   GPU_MEMORY_TEXTURE_D24,
@@ -278,6 +281,7 @@ static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type);
 static bool transitionAttachment(gpu_texture* texture, bool begin, bool resolve, bool discard, VkImageMemoryBarrier2KHR* barrier);
 static VkImageLayout getNaturalLayout(uint32_t usage, VkImageAspectFlags aspect);
 static VkFormat convertFormat(gpu_texture_format format, int colorspace);
+static VkFormat convertAttributeType(gpu_attribute_type type);
 static VkPipelineStageFlags2 convertPhase(gpu_phase phase, bool dst);
 static VkAccessFlags2 convertCache(gpu_cache cache);
 static VkBool32 relay(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT flags, const VkDebugUtilsMessengerCallbackDataEXT* data, void* userdata);
@@ -409,7 +413,10 @@ static void error(const char* message);
   X(vkCmdDrawIndirect)\
   X(vkCmdDrawIndexedIndirect)\
   X(vkCmdDispatch)\
-  X(vkCmdDispatchIndirect)
+  X(vkCmdDispatchIndirect)\
+  X(vkGetAccelerationStructureBuildSizesKHR)\
+  X(vkCreateAccelerationStructureKHR)\
+  X(vkDestroyAccelerationStructureKHR)
 
 // Used to load/declare Vulkan functions without lots of clutter
 #define GPU_LOAD_ANONYMOUS(fn) fn = (PFN_##fn) vkGetInstanceProcAddr(NULL, #fn);
@@ -470,6 +477,84 @@ void gpu_buffer_destroy(gpu_buffer* buffer) {
   if (!buffer->memory) return;
   condemn(buffer->handle, VK_OBJECT_TYPE_BUFFER);
   release(buffer->memory, buffer->offset);
+}
+
+// Geotree
+
+bool gpu_geotree_init(gpu_geotree* geotree, gpu_geotree_info* info, gpu_address* address) {
+  VkAccelerationStructureTypeKHR type = info->type == GPU_GEOTREE_ROOT ?
+    VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :
+    VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+
+  VkAccelerationStructureGeometryDataKHR geometry;
+
+  if (info->type == GPU_GEOTREE_ROOT) {
+    geometry.instances = (VkAccelerationStructureGeometryInstancesDataKHR) {
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR
+    };
+  } else {
+    geometry.triangles = (VkAccelerationStructureGeometryTrianglesDataKHR) {
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+      .vertexFormat = convertAttributeType(info->format.vertexType),
+      .vertexStride = info->format.vertexStride,
+      .maxVertex = info->format.maxIndex,
+      .indexType = (VkIndexType) info->format.indexType
+    };
+  }
+
+  VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {
+    .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+    .type = type,
+    .flags =
+      ((info->flags & GPU_GEOTREE_WILL_UPDATE) ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0) |
+      ((info->flags & GPU_GEOTREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
+      ((info->flags & GPU_GEOTREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
+      ((info->flags & GPU_GEOTREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0),
+    .geometryCount = 1,
+    .pGeometries = &(VkAccelerationStructureGeometryKHR) {
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+      .geometryType = info->type == GPU_GEOTREE_ROOT ? VK_GEOMETRY_TYPE_INSTANCES_KHR : VK_GEOMETRY_TYPE_TRIANGLES_KHR,
+      .flags = VK_GEOMETRY_OPAQUE_BIT_KHR,
+      .geometry = geometry
+    }
+  };
+
+  VkAccelerationStructureBuildSizesInfoKHR sizes = { .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
+  VkAccelerationStructureBuildTypeKHR buildType = VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR;
+
+  vkGetAccelerationStructureBuildSizesKHR(state.device, buildType, &buildInfo, &info->capacity, &sizes);
+
+  gpu_buffer_info bufferInfo = {
+    .type = GPU_BUFFER_GEOTREE,
+    .size = sizes.accelerationStructureSize
+  };
+
+  if (!gpu_buffer_init(&geotree->buffer, &bufferInfo)) {
+    return false;
+  }
+
+  bufferInfo.type = GPU_BUFFER_STATIC;
+  bufferInfo.size = MAX(sizes.updateScratchSize, sizes.buildScratchSize);
+
+  if (!gpu_buffer_init(&geotree->scratch, &bufferInfo)) {
+    gpu_buffer_destroy(&geotree->buffer);
+    return false;
+  }
+
+  VkAccelerationStructureCreateInfoKHR createInfo = {
+    .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
+    .buffer = geotree->buffer.handle,
+    .size = sizes.accelerationStructureSize,
+    .type = type
+  };
+
+  return true;
+}
+
+void gpu_geotree_destroy(gpu_geotree* geotree) {
+  condemn(geotree->handle, VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR);
+  gpu_buffer_destroy(&geotree->buffer);
+  gpu_buffer_destroy(&geotree->scratch);
 }
 
 // Texture
@@ -1456,39 +1541,6 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info,
     [GPU_DRAW_TRIANGLES] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
   };
 
-  static const VkFormat attributeTypes[] = {
-    [GPU_TYPE_I8x4] = VK_FORMAT_R8G8B8A8_SINT,
-    [GPU_TYPE_U8x4] = VK_FORMAT_R8G8B8A8_UINT,
-    [GPU_TYPE_SN8x4] = VK_FORMAT_R8G8B8A8_SNORM,
-    [GPU_TYPE_UN8x4] = VK_FORMAT_R8G8B8A8_UNORM,
-    [GPU_TYPE_SN10x3] = VK_FORMAT_A2B10G10R10_SNORM_PACK32,
-    [GPU_TYPE_UN10x3] = VK_FORMAT_A2B10G10R10_UNORM_PACK32,
-    [GPU_TYPE_I16] = VK_FORMAT_R16_SINT,
-    [GPU_TYPE_I16x2] = VK_FORMAT_R16G16_SINT,
-    [GPU_TYPE_I16x4] = VK_FORMAT_R16G16B16A16_SINT,
-    [GPU_TYPE_U16] = VK_FORMAT_R16_UINT,
-    [GPU_TYPE_U16x2] = VK_FORMAT_R16G16_UINT,
-    [GPU_TYPE_U16x4] = VK_FORMAT_R16G16B16A16_UINT,
-    [GPU_TYPE_SN16x2] = VK_FORMAT_R16G16_SNORM,
-    [GPU_TYPE_SN16x4] = VK_FORMAT_R16G16B16A16_SNORM,
-    [GPU_TYPE_UN16x2] = VK_FORMAT_R16G16_UNORM,
-    [GPU_TYPE_UN16x4] = VK_FORMAT_R16G16B16A16_UNORM,
-    [GPU_TYPE_I32] = VK_FORMAT_R32_SINT,
-    [GPU_TYPE_I32x2] = VK_FORMAT_R32G32_SINT,
-    [GPU_TYPE_I32x3] = VK_FORMAT_R32G32B32_SINT,
-    [GPU_TYPE_I32x4] = VK_FORMAT_R32G32B32A32_SINT,
-    [GPU_TYPE_U32] = VK_FORMAT_R32_UINT,
-    [GPU_TYPE_U32x2] = VK_FORMAT_R32G32_UINT,
-    [GPU_TYPE_U32x3] = VK_FORMAT_R32G32B32_UINT,
-    [GPU_TYPE_U32x4] = VK_FORMAT_R32G32B32A32_UINT,
-    [GPU_TYPE_F16x2] = VK_FORMAT_R16G16_SFLOAT,
-    [GPU_TYPE_F16x4] = VK_FORMAT_R16G16B16A16_SFLOAT,
-    [GPU_TYPE_F32] = VK_FORMAT_R32_SFLOAT,
-    [GPU_TYPE_F32x2] = VK_FORMAT_R32G32_SFLOAT,
-    [GPU_TYPE_F32x3] = VK_FORMAT_R32G32B32_SFLOAT,
-    [GPU_TYPE_F32x4] = VK_FORMAT_R32G32B32A32_SFLOAT
-  };
-
   static const VkCullModeFlagBits cullModes[] = {
     [GPU_CULL_NONE] = VK_CULL_MODE_NONE,
     [GPU_CULL_FRONT] = VK_CULL_MODE_FRONT_BIT,
@@ -1557,7 +1609,7 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info,
     vertexAttributes[i] = (VkVertexInputAttributeDescription) {
       .location = info->vertex.attributes[i].location,
       .binding = info->vertex.attributes[i].buffer,
-      .format = attributeTypes[info->vertex.attributes[i].type],
+      .format = convertAttributeType(info->vertex.attributes[i].type),
       .offset = info->vertex.attributes[i].offset
     };
   }
@@ -3110,7 +3162,8 @@ bool gpu_init(gpu_config* config) {
       [GPU_MEMORY_BUFFER_STATIC] = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
       [GPU_MEMORY_BUFFER_STREAM] = hostVisible | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
       [GPU_MEMORY_BUFFER_UPLOAD] = hostVisible,
-      [GPU_MEMORY_BUFFER_DOWNLOAD] = hostVisible | VK_MEMORY_PROPERTY_HOST_CACHED_BIT
+      [GPU_MEMORY_BUFFER_DOWNLOAD] = hostVisible | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+      [GPU_MEMORY_BUFFER_GEOTREE] = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     };
 
     for (uint32_t i = 0; i < COUNTOF(bufferFlags); i++) {
@@ -3129,7 +3182,7 @@ bool gpu_init(gpu_config* config) {
       vkGetBufferMemoryRequirements(state.device, buffer, &requirements);
       vkDestroyBuffer(state.device, buffer, NULL);
 
-      VkMemoryPropertyFlags fallback = i == GPU_MEMORY_BUFFER_STATIC ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : hostVisible;
+      VkMemoryPropertyFlags fallback = (bufferFlags[i] & hostVisible) ? hostVisible : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
       // Find fallback memory type
       for (uint32_t j = 0; j < memory.memoryProperties.memoryTypeCount; j++) {
@@ -3460,6 +3513,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     [GPU_MEMORY_BUFFER_STREAM] = 0,
     [GPU_MEMORY_BUFFER_UPLOAD] = 0,
     [GPU_MEMORY_BUFFER_DOWNLOAD] = 0,
+    [GPU_MEMORY_BUFFER_GEOTREE] = 1 << 24,
     [GPU_MEMORY_TEXTURE_COLOR] = 1 << 26,
     [GPU_MEMORY_TEXTURE_D16] = 1 << 26,
     [GPU_MEMORY_TEXTURE_D24] = 1 << 26,
@@ -3671,6 +3725,7 @@ static void expunge(uint64_t tick) {
       case VK_OBJECT_TYPE_QUERY_POOL: vkDestroyQueryPool(state.device, victim->handle, NULL); break;
       case VK_OBJECT_TYPE_RENDER_PASS: vkDestroyRenderPass(state.device, victim->handle, NULL); break;
       case VK_OBJECT_TYPE_FRAMEBUFFER: vkDestroyFramebuffer(state.device, victim->handle, NULL); break;
+      case VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR: vkDestroyAccelerationStructureKHR(state.device, victim->handle, NULL); break;
       case VK_OBJECT_TYPE_DEVICE_MEMORY: vkFreeMemory(state.device, victim->handle, NULL); break;
       default: LOG("Trying to destroy invalid Vulkan object type!"); break;
     }
@@ -3730,6 +3785,8 @@ static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type) {
       return VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     case GPU_BUFFER_DOWNLOAD:
       return VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    case GPU_BUFFER_GEOTREE:
+      return VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
     default: return 0;
   }
 }
@@ -3846,6 +3903,43 @@ static VkFormat convertFormat(gpu_texture_format format, int colorspace) {
   };
 
   return formats[format][colorspace];
+}
+
+static VkFormat convertAttributeType(gpu_attribute_type type) {
+  static const VkFormat types[] = {
+    [GPU_TYPE_I8x4] = VK_FORMAT_R8G8B8A8_SINT,
+    [GPU_TYPE_U8x4] = VK_FORMAT_R8G8B8A8_UINT,
+    [GPU_TYPE_SN8x4] = VK_FORMAT_R8G8B8A8_SNORM,
+    [GPU_TYPE_UN8x4] = VK_FORMAT_R8G8B8A8_UNORM,
+    [GPU_TYPE_SN10x3] = VK_FORMAT_A2B10G10R10_SNORM_PACK32,
+    [GPU_TYPE_UN10x3] = VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+    [GPU_TYPE_I16] = VK_FORMAT_R16_SINT,
+    [GPU_TYPE_I16x2] = VK_FORMAT_R16G16_SINT,
+    [GPU_TYPE_I16x4] = VK_FORMAT_R16G16B16A16_SINT,
+    [GPU_TYPE_U16] = VK_FORMAT_R16_UINT,
+    [GPU_TYPE_U16x2] = VK_FORMAT_R16G16_UINT,
+    [GPU_TYPE_U16x4] = VK_FORMAT_R16G16B16A16_UINT,
+    [GPU_TYPE_SN16x2] = VK_FORMAT_R16G16_SNORM,
+    [GPU_TYPE_SN16x4] = VK_FORMAT_R16G16B16A16_SNORM,
+    [GPU_TYPE_UN16x2] = VK_FORMAT_R16G16_UNORM,
+    [GPU_TYPE_UN16x4] = VK_FORMAT_R16G16B16A16_UNORM,
+    [GPU_TYPE_I32] = VK_FORMAT_R32_SINT,
+    [GPU_TYPE_I32x2] = VK_FORMAT_R32G32_SINT,
+    [GPU_TYPE_I32x3] = VK_FORMAT_R32G32B32_SINT,
+    [GPU_TYPE_I32x4] = VK_FORMAT_R32G32B32A32_SINT,
+    [GPU_TYPE_U32] = VK_FORMAT_R32_UINT,
+    [GPU_TYPE_U32x2] = VK_FORMAT_R32G32_UINT,
+    [GPU_TYPE_U32x3] = VK_FORMAT_R32G32B32_UINT,
+    [GPU_TYPE_U32x4] = VK_FORMAT_R32G32B32A32_UINT,
+    [GPU_TYPE_F16x2] = VK_FORMAT_R16G16_SFLOAT,
+    [GPU_TYPE_F16x4] = VK_FORMAT_R16G16B16A16_SFLOAT,
+    [GPU_TYPE_F32] = VK_FORMAT_R32_SFLOAT,
+    [GPU_TYPE_F32x2] = VK_FORMAT_R32G32_SFLOAT,
+    [GPU_TYPE_F32x3] = VK_FORMAT_R32G32B32_SFLOAT,
+    [GPU_TYPE_F32x4] = VK_FORMAT_R32G32B32A32_SFLOAT
+  };
+
+  return types[type];
 }
 
 static VkPipelineStageFlags2 convertPhase(gpu_phase phase, bool dst) {

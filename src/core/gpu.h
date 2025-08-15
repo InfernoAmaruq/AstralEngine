@@ -28,13 +28,16 @@ size_t gpu_sizeof_pass(void);
 size_t gpu_sizeof_pipeline(void);
 size_t gpu_sizeof_tally(void);
 
+typedef uint64_t gpu_address;
+
 // Buffer
 
 typedef enum {
   GPU_BUFFER_STATIC,
   GPU_BUFFER_STREAM,
   GPU_BUFFER_UPLOAD,
-  GPU_BUFFER_DOWNLOAD
+  GPU_BUFFER_DOWNLOAD,
+  GPU_BUFFER_GEOTREE
 } gpu_buffer_type;
 
 typedef struct {
@@ -47,6 +50,107 @@ typedef struct {
 
 bool gpu_buffer_init(gpu_buffer* buffer, gpu_buffer_info* info);
 void gpu_buffer_destroy(gpu_buffer* buffer);
+
+// Geotree
+
+typedef enum {
+  GPU_GEOTREE_LEAF,
+  GPU_GEOTREE_ROOT
+} gpu_geotree_type;
+
+enum {
+  GPU_GEOTREE_WILL_UPDATE = (1 << 0),
+  GPU_GEOTREE_FAST_TRACE = (1 << 1),
+  GPU_GEOTREE_FAST_BUILD = (1 << 2),
+  GPU_GEOTREE_LOW_MEMORY = (1 << 3)
+};
+
+typedef enum {
+  GPU_TYPE_I8x4,
+  GPU_TYPE_U8x4,
+  GPU_TYPE_SN8x4,
+  GPU_TYPE_UN8x4,
+  GPU_TYPE_SN10x3,
+  GPU_TYPE_UN10x3,
+  GPU_TYPE_I16,
+  GPU_TYPE_I16x2,
+  GPU_TYPE_I16x4,
+  GPU_TYPE_U16,
+  GPU_TYPE_U16x2,
+  GPU_TYPE_U16x4,
+  GPU_TYPE_SN16x2,
+  GPU_TYPE_SN16x4,
+  GPU_TYPE_UN16x2,
+  GPU_TYPE_UN16x4,
+  GPU_TYPE_I32,
+  GPU_TYPE_I32x2,
+  GPU_TYPE_I32x3,
+  GPU_TYPE_I32x4,
+  GPU_TYPE_U32,
+  GPU_TYPE_U32x2,
+  GPU_TYPE_U32x3,
+  GPU_TYPE_U32x4,
+  GPU_TYPE_F16x2,
+  GPU_TYPE_F16x4,
+  GPU_TYPE_F32,
+  GPU_TYPE_F32x2,
+  GPU_TYPE_F32x3,
+  GPU_TYPE_F32x4,
+} gpu_attribute_type;
+
+typedef enum {
+  GPU_INDEX_U16,
+  GPU_INDEX_U32
+} gpu_index_type;
+
+typedef struct {
+  gpu_attribute_type vertexType;
+  uint32_t vertexStride;
+  gpu_index_type indexType;
+  uint32_t maxIndex;
+} gpu_triangle_format;
+
+typedef struct {
+  gpu_triangle_format format;
+  gpu_address vertices;
+  gpu_address indices;
+} gpu_triangle_data;
+
+typedef struct {
+  float transform[3][4];
+  unsigned id : 24;
+  unsigned mask : 8;
+  uint32_t padding;
+  gpu_address geotree;
+} gpu_instance_data;
+
+typedef union {
+  gpu_triangle_data triangles;
+  gpu_address instances;
+} gpu_geotree_data;
+
+typedef enum {
+  GPU_BUILD_CREATE,
+  GPU_BUILD_UPDATE
+} gpu_build_mode;
+
+typedef struct {
+  gpu_geotree_type type;
+  gpu_build_mode mode;
+  uint32_t flags;
+  gpu_geotree_data data;
+} gpu_build_info;
+
+typedef struct {
+  gpu_geotree_type type;
+  uint32_t flags;
+  uint32_t capacity;
+  gpu_triangle_format format;
+  const char* label;
+} gpu_geotree_info;
+
+bool gpu_geotree_init(gpu_geotree* geotree, gpu_geotree_info* info, gpu_address* address);
+void gpu_geotree_destroy(gpu_geotree* geotree);
 
 // Texture
 
@@ -353,39 +457,6 @@ typedef enum {
   GPU_DRAW_TRIANGLES
 } gpu_draw_mode;
 
-typedef enum {
-  GPU_TYPE_I8x4,
-  GPU_TYPE_U8x4,
-  GPU_TYPE_SN8x4,
-  GPU_TYPE_UN8x4,
-  GPU_TYPE_SN10x3,
-  GPU_TYPE_UN10x3,
-  GPU_TYPE_I16,
-  GPU_TYPE_I16x2,
-  GPU_TYPE_I16x4,
-  GPU_TYPE_U16,
-  GPU_TYPE_U16x2,
-  GPU_TYPE_U16x4,
-  GPU_TYPE_SN16x2,
-  GPU_TYPE_SN16x4,
-  GPU_TYPE_UN16x2,
-  GPU_TYPE_UN16x4,
-  GPU_TYPE_I32,
-  GPU_TYPE_I32x2,
-  GPU_TYPE_I32x3,
-  GPU_TYPE_I32x4,
-  GPU_TYPE_U32,
-  GPU_TYPE_U32x2,
-  GPU_TYPE_U32x3,
-  GPU_TYPE_U32x4,
-  GPU_TYPE_F16x2,
-  GPU_TYPE_F16x4,
-  GPU_TYPE_F32,
-  GPU_TYPE_F32x2,
-  GPU_TYPE_F32x3,
-  GPU_TYPE_F32x4,
-} gpu_attribute_type;
-
 typedef struct {
   uint8_t buffer;
   uint8_t location;
@@ -575,11 +646,6 @@ typedef struct {
   uint32_t height;
   uint32_t area[4];
 } gpu_canvas;
-
-typedef enum {
-  GPU_INDEX_U16,
-  GPU_INDEX_U32
-} gpu_index_type;
 
 typedef enum {
   GPU_PHASE_INDIRECT = (1 << 0),

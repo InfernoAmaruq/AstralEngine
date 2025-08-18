@@ -366,6 +366,22 @@ static int l_lovrPassSetProjection(lua_State* L) {
   return 0;
 }
 
+static int l_lovrPassGetViewRay(lua_State* L) {
+  Pass* pass = luax_checktype(L, 1, Pass);
+  int32_t x = (int32_t) luaL_checknumber(L, 2);
+  int32_t y = (int32_t) luaL_checknumber(L, 3);
+  uint32_t view = luax_optu32(L, 4, 1) - 1;
+  float position[3], direction[3];
+  luax_assert(L, lovrPassGetViewRay(pass, view, x, y, position, direction));
+  lua_pushnumber(L, position[0]);
+  lua_pushnumber(L, position[1]);
+  lua_pushnumber(L, position[2]);
+  lua_pushnumber(L, direction[0]);
+  lua_pushnumber(L, direction[1]);
+  lua_pushnumber(L, direction[2]);
+  return 6;
+}
+
 static int l_lovrPassPush(lua_State* L) {
   Pass* pass = luax_checktype(L, 1, Pass);
   StackType stack = luax_checkenum(L, 2, StackType, "transform");
@@ -1136,6 +1152,7 @@ const luaL_Reg lovrPass[] = {
   { "setViewPose", l_lovrPassSetViewPose },
   { "getProjection", l_lovrPassGetProjection },
   { "setProjection", l_lovrPassSetProjection },
+  { "getViewRay", l_lovrPassGetViewRay },
 
   { "push", l_lovrPassPush },
   { "pop", l_lovrPassPop },

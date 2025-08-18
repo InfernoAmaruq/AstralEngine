@@ -17,6 +17,7 @@ dev
 - Add `thumbrest` HeadsetAxis.
 - Add support for Touch Pro controllers.
 - Add `Pass:setBlendState`.
+- Add `Pass:getViewRay`.
 
 ### Change
 

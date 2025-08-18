@@ -6369,7 +6369,7 @@ bool lovrPassSetProjection(Pass* pass, uint32_t index, float projection[16]) {
 }
 
 bool lovrPassGetViewRay(Pass* pass, uint32_t view, int32_t x, int32_t y, float position[3], float direction[3]) {
-  lovrCheck(view < pass->views, "Invalid view index '%d'", index + 1);
+  lovrCheck(view < pass->views, "Invalid view index '%d'", view + 1);
   x = CLAMP(x, 0, pass->width);
   y = CLAMP(y, 0, pass->height);
   float worldFromClip[16];

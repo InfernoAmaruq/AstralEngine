@@ -636,7 +636,7 @@ bool lovrPassGetViewMatrix(Pass* pass, uint32_t index, float viewMatrix[16]);
 bool lovrPassSetViewMatrix(Pass* pass, uint32_t index, float viewMatrix[16]);
 bool lovrPassGetProjection(Pass* pass, uint32_t index, float projection[16]);
 bool lovrPassSetProjection(Pass* pass, uint32_t index, float projection[16]);
-bool lovrPassGetViewRay(Pass* pass, uint32_t view, int32_t x, int32_t y, float position[3], float direction[3]);
+bool lovrPassGetViewRay(Pass* pass, uint32_t view, uint32_t x, uint32_t y, float position[3], float direction[3]);
 
 bool lovrPassPush(Pass* pass, StackType stack);
 bool lovrPassPop(Pass* pass, StackType stack);

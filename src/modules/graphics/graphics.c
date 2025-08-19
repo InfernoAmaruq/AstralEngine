@@ -6368,7 +6368,7 @@ bool lovrPassSetProjection(Pass* pass, uint32_t index, float projection[16]) {
   return true;
 }
 
-bool lovrPassGetViewRay(Pass* pass, uint32_t view, int32_t x, int32_t y, float position[3], float direction[3]) {
+bool lovrPassGetViewRay(Pass* pass, uint32_t view, uint32_t x, uint32_t y, float position[3], float direction[3]) {
   lovrCheck(view < pass->views, "Invalid view index '%d'", view + 1);
   x = CLAMP(x, 0, pass->width);
   y = CLAMP(y, 0, pass->height);
@@ -6377,14 +6377,14 @@ bool lovrPassGetViewRay(Pass* pass, uint32_t view, int32_t x, int32_t y, float p
   mat4_invert(mat4_mul(mat4_init(worldFromClip, camera->projection), camera->viewMatrix));
   float nx = 2.f * ((float) x / pass->width) - 1.f;
   float ny = 2.f * ((float) y / pass->height) - 1.f;
-  float near[3] = { nx, ny, 0.f };
-  float far[3] = { nx, ny, .5f };
-  if (camera->projection[5] > 0.f) near[1] *= -1.f, far[1] *= -1.f; // Y-up
-  if (camera->projection[10] == 0.f) near[2] = 1.f; // Reverse Z
-  mat4_mulPoint(worldFromClip, near);
-  mat4_mulPoint(worldFromClip, far);
-  vec3_init(position, near);
-  vec3_normalize(vec3_sub(vec3_init(direction, far), near));
+  float pNear[3] = { nx, ny, 0.f };
+  float pFar[3] = { nx, ny, .5f };
+  if (camera->projection[5] > 0.f) pNear[1] *= -1.f, pFar[1] *= -1.f; // Y-up
+  if (camera->projection[10] == 0.f) pNear[2] = 1.f; // Reverse Z
+  mat4_mulPoint(worldFromClip, pNear);
+  mat4_mulPoint(worldFromClip, pFar);
+  vec3_init(position, pNear);
+  vec3_normalize(vec3_sub(vec3_init(direction, pFar), pNear));
   return true;
 }
 

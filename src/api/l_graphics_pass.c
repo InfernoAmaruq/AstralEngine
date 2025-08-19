@@ -368,8 +368,10 @@ static int l_lovrPassSetProjection(lua_State* L) {
 
 static int l_lovrPassGetViewRay(lua_State* L) {
   Pass* pass = luax_checktype(L, 1, Pass);
-  int32_t x = (int32_t) luaL_checknumber(L, 2);
-  int32_t y = (int32_t) luaL_checknumber(L, 3);
+  double dx = luaL_checknumber(L, 2);
+  double dy = luaL_checknumber(L, 3);
+  uint32_t x = (uint32_t) MAX(dx, 0.);
+  uint32_t y = (uint32_t) MAX(dy, 0.);
   uint32_t view = luax_optu32(L, 4, 1) - 1;
   float position[3], direction[3];
   luax_assert(L, lovrPassGetViewRay(pass, view, x, y, position, direction));

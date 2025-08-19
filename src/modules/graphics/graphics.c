@@ -8455,6 +8455,7 @@ static BufferView allocateBuffer(BufferAllocator* allocator, gpu_buffer_type typ
     if (prev) {
       block = *prev;
       *prev = block->next;
+      block->next = NULL;
     } else {
       block = lovrMalloc(sizeof(BufferBlock) + gpu_sizeof_buffer());
       block->handle = (gpu_buffer*) (block + 1);
@@ -8476,17 +8477,19 @@ static BufferView allocateBuffer(BufferAllocator* allocator, gpu_buffer_type typ
       }
     }
 
-    // Static buffers are refcounted, and get recycled when their refcount reaches zero.
     // Non-static buffers keep a chain of "current" buffers.  Current buffers periodically get
     // recycled on to the freelist (e.g. when a new frame starts, when the pass gets reset).
-    if (type == GPU_BUFFER_STATIC) {
-      atomic_fetch_add(&block->ref, 1);
-    } else {
+    if (type != GPU_BUFFER_STATIC) {
       block->next = allocator->current;
     }
 
     allocator->current = block;
     cursor = 0;
+  }
+
+  // Static buffers are refcounted, and get recycled when their refcount reaches zero.
+  if (type == GPU_BUFFER_STATIC) {
+    atomic_fetch_add(&block->ref, 1);
   }
 
   allocator->cursor = cursor + size;
@@ -8507,7 +8510,7 @@ static BufferView getBuffer(gpu_buffer_type type, uint32_t size, size_t align) {
 // Should only be called for static buffers
 static void releaseBlock(BufferBlock* block) {
   BufferAllocator* allocator = &state.bufferAllocators[GPU_BUFFER_STATIC];
-  if (atomic_fetch_sub(&block->ref, 1) == 0 && block != allocator->current) {
+  if (atomic_fetch_sub(&block->ref, 1) == 1 && block != allocator->current) {
     block->tick = state.tick;
     recycleBlocks(allocator, block);
   }

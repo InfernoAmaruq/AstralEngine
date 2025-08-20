@@ -8209,21 +8209,11 @@ static gpu_pipeline* getPipeline(uint32_t index) {
 
 static BufferBlock* getBlock(gpu_buffer_type type, uint32_t size) {
   BufferBlock* block = state.bufferAllocators[type].freelist;
-  BufferBlock* prev = NULL;
 
-  while (block) {
-    if (block->size >= size && gpu_is_complete(block->tick)) {
-      if (prev) {
-        prev->next = block->next;
-      } else {
-        state.bufferAllocators[type].freelist = block->next;
-      }
-      block->next = NULL;
-      return block;
-    }
-
-    prev = block;
-    block = block->next;
+  if (block && block->size >= size && gpu_is_complete(block->tick)) {
+    state.bufferAllocators[type].freelist = block->next;
+    block->next = NULL;
+    return block;
   }
 
   block = lovrMalloc(sizeof(BufferBlock) + gpu_sizeof_buffer());

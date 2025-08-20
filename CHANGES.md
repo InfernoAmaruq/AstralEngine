@@ -43,6 +43,7 @@ dev
 - Fix possible crash in Model animation.
 - Fix `Collider:setDegreesOfFreedom` to preserve mass/inertia.
 - Fix missing error in `CapsuleShape:setRadius/Length` and `CylinderShape:setRadius/Length`.
+- Fix issue where buffer memory wasn't recycled effectively.
 
 ### Deprecate
 

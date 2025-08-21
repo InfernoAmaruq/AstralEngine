@@ -121,13 +121,13 @@ static int l_lovrModelDataGetNodeName(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetNodeParent(lua_State* L) {
+static int l_lovrModelDataGetNodeChild(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
-  if (node->parent == ~0u) {
-    lua_pushnil(L);
+  if (node->child != ~0u) {
+    lua_pushinteger(L, node->child + 1);
   } else {
-    lua_pushinteger(L, node->parent + 1);
+    lua_pushnil(L);
   }
   return 1;
 }
@@ -135,10 +135,32 @@ static int l_lovrModelDataGetNodeParent(lua_State* L) {
 static int l_lovrModelDataGetNodeChildren(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
-  lua_createtable(L, node->childCount, 0);
-  for (uint32_t i = 0; i < node->childCount; i++) {
-    lua_pushinteger(L, node->children[i] + 1);
+  lua_newtable(L);
+  for (uint32_t i = node->child; i != ~0u; i = model->nodes[i].sibling) {
+    lua_pushinteger(L, i + 1);
     lua_rawseti(L, -2, i + 1);
+  }
+  return 1;
+}
+
+static int l_lovrModelDataGetNodeSibling(lua_State* L) {
+  ModelData* model = luax_checktype(L, 1, ModelData);
+  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+  if (node->sibling != ~0u) {
+    lua_pushinteger(L, node->sibling + 1);
+  } else {
+    lua_pushnil(L);
+  }
+  return 1;
+}
+
+static int l_lovrModelDataGetNodeParent(lua_State* L) {
+  ModelData* model = luax_checktype(L, 1, ModelData);
+  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+  if (node->parent != ~0u) {
+    lua_pushinteger(L, node->parent + 1);
+  } else {
+    lua_pushnil(L);
   }
   return 1;
 }
@@ -768,8 +790,10 @@ const luaL_Reg lovrModelData[] = {
   { "getRootNode", l_lovrModelDataGetRootNode },
   { "getNodeCount", l_lovrModelDataGetNodeCount },
   { "getNodeName", l_lovrModelDataGetNodeName },
-  { "getNodeParent", l_lovrModelDataGetNodeParent },
+  { "getNodeChild", l_lovrModelDataGetNodeChild },
   { "getNodeChildren", l_lovrModelDataGetNodeChildren },
+  { "getNodeSibling", l_lovrModelDataGetNodeSibling },
+  { "getNodeParent", l_lovrModelDataGetNodeParent },
   { "getNodePosition", l_lovrModelDataGetNodePosition },
   { "getNodeOrientation", l_lovrModelDataGetNodeOrientation },
   { "getNodeScale", l_lovrModelDataGetNodeScale },

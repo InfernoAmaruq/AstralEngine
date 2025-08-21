@@ -8167,8 +8167,8 @@ static bool drawNode(Pass* pass, Model* model, uint32_t index, uint32_t instance
     if (!lovrPassDraw(pass, &draw)) return false;
   }
 
-  for (uint32_t i = 0; i < node->childCount; i++) {
-    if (!drawNode(pass, model, node->children[i], instances)) {
+  for (uint32_t i = node->child; i != ~0u; i = model->info.data->nodes[i].sibling) {
+    if (!drawNode(pass, model, i, instances)) {
       return false;
     }
   }
@@ -9040,9 +9040,9 @@ static void updateModelTransforms(Model* model, uint32_t nodeIndex, float* paren
   mat4_rotateQuat(global, local->rotation);
   mat4_scale(global, local->scale[0], local->scale[1], local->scale[2]);
 
-  ModelNode* node = &model->info.data->nodes[nodeIndex];
-  for (uint32_t i = 0; i < node->childCount; i++) {
-    updateModelTransforms(model, node->children[i], global);
+  ModelNode* nodes = model->info.data->nodes;
+  for (uint32_t i = nodes[nodeIndex].child; i != ~0u; i = nodes[i].sibling) {
+    updateModelTransforms(model, i, global);
   }
 }
 

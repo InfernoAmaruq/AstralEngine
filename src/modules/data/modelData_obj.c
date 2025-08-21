@@ -412,6 +412,9 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
     .transform.matrix = MAT4_IDENTITY,
     .primitiveIndex = 0,
     .primitiveCount = (uint32_t) groups.length,
+    .child = ~0u,
+    .sibling = ~0u,
+    .parent = ~0u,
     .skin = ~0u,
     .hasMatrix = true
   };

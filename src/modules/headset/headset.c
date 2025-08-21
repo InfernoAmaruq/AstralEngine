@@ -1778,7 +1778,6 @@ static ModelData* newModelDataFB(uint64_t key) {
   model->primitiveCount = 1;
   model->skinCount = 1;
   model->jointCount = jointCount;
-  model->childCount = jointCount + 1;
   model->nodeCount = 2 + jointCount;
   lovrModelDataAllocate(model);
 
@@ -1847,37 +1846,35 @@ static ModelData* newModelDataFB(uint64_t key) {
   };
 
   // The nodes in the Model correspond directly to the joints in the skin, for convenience
-  uint32_t* children = model->children;
   model->skins[0].joints = model->joints;
   model->skins[0].jointCount = model->jointCount;
   model->skins[0].inverseBindMatrices = inverseBindMatrices;
   for (uint32_t i = 0; i < model->jointCount; i++) {
     model->joints[i] = i;
 
+    uint32_t parent = mesh.jointParents[i];
+
     // Joint node
     model->nodes[i] = (ModelNode) {
       .transform.translation = { 0.f, 0.f, 0.f },
       .transform.rotation = { 0.f, 0.f, 0.f, 1.f },
       .transform.scale = { 1.f, 1.f, 1.f },
+      .child = ~0u,
+      .sibling = ~0u,
+      .parent = i == 0 ? ~0u : parent,
       .skin = ~0u
     };
+
+    if (i > 0) {
+      model->nodes[i].sibling = model->nodes[parent].child;
+      model->nodes[parent].child = i;
+    }
 
     // Inverse bind matrix
     XrPosef* pose = &mesh.jointBindPoses[i];
     float* inverseBindMatrix = inverseBindMatrices + 16 * i;
     mat4_fromPose(inverseBindMatrix, &pose->position.x, &pose->orientation.x);
     mat4_invert(inverseBindMatrix);
-
-    // Add child bones by looking for any bones that have a parent of the current bone.
-    // This is somewhat slow; use the fact that bones are sorted to reduce the work a bit.
-    model->nodes[i].childCount = 0;
-    model->nodes[i].children = children;
-    for (uint32_t j = i + 1; j < jointCount; j++) {
-      if (mesh.jointParents[j] == i) {
-        model->nodes[i].children[model->nodes[i].childCount++] = j;
-        children++;
-      }
-    }
   }
 
   // Add a node that holds the skinned mesh
@@ -1887,6 +1884,9 @@ static ModelData* newModelDataFB(uint64_t key) {
     .transform.scale = { 1.f, 1.f, 1.f },
     .primitiveIndex = 0,
     .primitiveCount = 1,
+    .child = ~0u,
+    .sibling = ~0u,
+    .parent = ~0u,
     .skin = 0
   };
 
@@ -1895,14 +1895,17 @@ static ModelData* newModelDataFB(uint64_t key) {
   model->nodes[model->rootNode] = (ModelNode) {
     .hasMatrix = true,
     .transform = { MAT4_IDENTITY },
-    .childCount = 2,
-    .children = children,
+    .child = ~0u,
+    .sibling = ~0u,
+    .parent = ~0u,
     .skin = ~0u
   };
 
-  // Add the children to the root node
-  *children++ = XR_HAND_JOINT_WRIST_EXT;
-  *children++ = model->jointCount;
+  // Add the 2 children to the root node
+  model->nodes[model->rootNode].child = XR_HAND_JOINT_WRIST_EXT;
+  model->nodes[XR_HAND_JOINT_WRIST_EXT].sibling = model->jointCount;
+  model->nodes[XR_HAND_JOINT_WRIST_EXT].parent = model->rootNode;
+  model->nodes[model->jointCount].parent = model->rootNode;
 
   lovrModelDataFinalize(model);
 

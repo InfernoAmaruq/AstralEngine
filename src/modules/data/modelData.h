@@ -156,8 +156,8 @@ typedef struct {
       float scale[3];
     };
   } transform;
-  uint32_t* children;
-  uint32_t childCount;
+  uint32_t child;
+  uint32_t sibling;
   uint32_t parent;
   uint32_t primitiveIndex;
   uint32_t primitiveCount;
@@ -200,12 +200,10 @@ typedef struct ModelData {
 
   ModelAnimationChannel* channels;
   ModelBlendData* blendData;
-  uint32_t* children;
   uint32_t* joints;
   char* chars;
   uint32_t channelCount;
   uint32_t blendDataCount;
-  uint32_t childCount;
   uint32_t jointCount;
   uint32_t charCount;
 

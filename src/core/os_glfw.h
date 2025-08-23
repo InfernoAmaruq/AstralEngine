@@ -385,6 +385,10 @@ bool os_window_open(const os_window_config* config) {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, config->resizable);
 
+  if (config->width == 0 && config->height == 0) {
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+  }
+
   GLFWmonitor* monitor = glfwGetPrimaryMonitor();
   const GLFWvidmode* mode = glfwGetVideoMode(monitor);
   uint32_t width = config->width ? config->width : (uint32_t) mode->width;

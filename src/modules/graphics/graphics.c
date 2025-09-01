@@ -40,7 +40,6 @@ typedef struct {
   gpu_buffer* handle;
   uint32_t tick;
   uint32_t size;
-  uint32_t ref;
 } BufferBlock;
 
 typedef struct {
@@ -50,7 +49,6 @@ typedef struct {
 } BufferAllocator;
 
 typedef struct {
-  BufferBlock* block;
   gpu_buffer* buffer;
   uint32_t offset;
   uint32_t extent;
@@ -72,7 +70,6 @@ struct Buffer {
   uint32_t base;
   Sync sync;
   gpu_buffer* gpu;
-  BufferBlock* block;
   bool supportsMesh;
   BufferInfo info;
 };
@@ -170,8 +167,9 @@ struct Shader {
 
 typedef struct {
   void* next;
+  void* pointer;
   Material* materials;
-  BufferView view;
+  gpu_buffer* buffer;
   gpu_bundle_pool* bundlePool;
   gpu_bundle* bundles;
   uint32_t head;
@@ -617,11 +615,9 @@ static void stackPop(Allocator* allocator, size_t stack);
 static gpu_pipeline* getPipeline(uint32_t index);
 static BufferView allocateBuffer(BufferAllocator* allocator, gpu_buffer_type type, uint32_t size, size_t align);
 static BufferView getBuffer(gpu_buffer_type type, uint32_t size, size_t align);
-static void releaseBlock(BufferBlock* block);
 static void recycleBlocks(BufferAllocator* allocator, BufferBlock* blocks);
 static void destroyBuffers(BufferAllocator* allocator);
 static int u64cmp(const void* a, const void* b);
-static uint32_t lcm(uint32_t a, uint32_t b);
 static bool beginFrame(void);
 static void flushTransfers(void);
 static void processReadbacks(void);
@@ -734,7 +730,7 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
   if (!view.buffer) goto fail;
 
   memcpy(view.pointer, defaultBufferData, sizeof(defaultBufferData));
-  gpu_copy_buffers(state.stream, view.buffer, state.defaultBuffer->gpu, view.offset, state.defaultBuffer->base, sizeof(defaultBufferData));
+  gpu_copy_buffers(state.stream, view.buffer, state.defaultBuffer->gpu, view.offset, 0, sizeof(defaultBufferData));
 
   state.barrier.prev |= GPU_PHASE_COPY;
   state.barrier.next |= GPU_PHASE_INPUT_VERTEX | GPU_PHASE_SHADER_VERTEX | GPU_PHASE_SHADER_VERTEX | GPU_PHASE_SHADER_FRAGMENT | GPU_PHASE_SHADER_COMPUTE;
@@ -902,7 +898,7 @@ void lovrGraphicsDestroy(void) {
   while (block) {
     MaterialBlock* next = block->next;
     gpu_bundle_pool_destroy(block->bundlePool);
-    releaseBlock(block->view.block);
+    gpu_buffer_destroy(block->buffer);
     lovrFree(block->materials);
     lovrFree(block->bundlePool);
     lovrFree(block->bundles);
@@ -1480,7 +1476,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
   gpu_bundle* uniformBundle = NULL;
 
   gpu_render_begin(stream, &pass->target);
-  gpu_bind_vertex_buffers(stream, &state.defaultBuffer->gpu, &state.defaultBuffer->base, 1, 1);
+  gpu_bind_vertex_buffers(stream, &state.defaultBuffer->gpu, NULL, 1, 1);
 
   bool hasError = false;
 
@@ -1649,7 +1645,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
     uint32_t count = MIN(tally->count, (tally->buffer->info.size - tally->bufferOffset) / 4);
     Buffer* tempBuffer = pass->tally.tempBuffer;
 
-    gpu_copy_tally_buffer(stream, tally->gpu, tempBuffer->gpu, 0, tempBuffer->base, count * pass->views);
+    gpu_copy_tally_buffer(stream, tally->gpu, tempBuffer->gpu, 0, 0, count * pass->views);
 
     gpu_barrier barrier = {
       .prev = GPU_PHASE_COPY,
@@ -1661,7 +1657,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
     gpu_sync(stream, &barrier, 1);
 
     gpu_binding bindings[] = {
-      { 0, GPU_SLOT_STORAGE_BUFFER, .buffer = { tempBuffer->gpu, tempBuffer->base, count * pass->views * sizeof(uint32_t) } },
+      { 0, GPU_SLOT_STORAGE_BUFFER, .buffer = { tempBuffer->gpu, 0, count * pass->views * sizeof(uint32_t) } },
       { 1, GPU_SLOT_STORAGE_BUFFER, .buffer = { tally->buffer->gpu, tally->buffer->base + tally->bufferOffset, count * sizeof(uint32_t) } }
     };
 
@@ -1957,21 +1953,19 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
 
   lovrAssertGoto(fail, gpu_submit(streams, streamCount), "Failed to submit GPU command buffers: %s", gpu_get_error());
 
-  // All of the non-static buffers after the front of the 'current' list are the buffers that filled
-  // up while this frame was being recorded.  Set their tick to the current tick and chain them onto
-  // the end of the freelist.
+  // All of the buffers after the front of the 'current' list are the buffers that filled up while
+  // this frame was being recorded.  Set their tick to the current tick and chain them onto the end
+  // of the freelist.
   for (size_t i = 0; i < COUNTOF(state.bufferAllocators); i++) {
-    if (i != GPU_BUFFER_STATIC) {
-      BufferAllocator* allocator = &state.bufferAllocators[i];
+    BufferAllocator* allocator = &state.bufferAllocators[i];
 
-      if (allocator->current) {
-        for (BufferBlock* block = allocator->current->next; block; block = block->next) {
-          block->tick = state.tick;
-        }
-
-        recycleBlocks(allocator, allocator->current->next);
-        allocator->current->next = NULL;
+    if (allocator->current) {
+      for (BufferBlock* block = allocator->current->next; block; block = block->next) {
+        block->tick = state.tick;
       }
+
+      recycleBlocks(allocator, allocator->current->next);
+      allocator->current->next = NULL;
     }
   }
 
@@ -2108,14 +2102,15 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
 
   charCount = ALIGN(charCount, 8);
 
-  Buffer* buffer = lovrCalloc(sizeof(Buffer) + charCount + fieldCount * sizeof(DataField));
+  Buffer* buffer = lovrCalloc(sizeof(Buffer) + gpu_sizeof_buffer() + charCount + fieldCount * sizeof(DataField));
   buffer->ref = 1;
+  buffer->gpu = (gpu_buffer*) (buffer + 1);
   buffer->info = *info;
   buffer->info.fieldCount = fieldCount;
   buffer->info.size = size;
 
   if (info->format) {
-    char* names = (char*) buffer + sizeof(Buffer);
+    char* names = (char*) buffer + sizeof(Buffer) + gpu_sizeof_buffer();
     DataField* format = buffer->info.format = (DataField*) (names + charCount);
     memcpy(format, info->format, fieldCount * sizeof(DataField));
 
@@ -2175,31 +2170,26 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
     return NULL;
   }
 
-  uint32_t stride = buffer->info.format ? buffer->info.format->stride : 4;
-  uint32_t align = lcm(stride, MAX(state.limits.storageBufferAlign, state.limits.uniformBufferAlign));
-  BufferView view = getBuffer(GPU_BUFFER_STATIC, size, align);
+  gpu_buffer_info bufferInfo = {
+    .type = GPU_BUFFER_STATIC,
+    .size = size,
+    .pointer = data
+  };
 
-  if (!view.buffer) {
-    lovrFree(buffer);
+  if (!gpu_buffer_init(buffer->gpu, &bufferInfo)) {
+    lovrSetError("Failed to create buffer: %s", gpu_get_error());
+    lovrBufferDestroy(buffer);
     return NULL;
   }
 
-  buffer->gpu = view.buffer;
-  buffer->base = view.offset;
-  buffer->block = view.block;
-
-  if (data) {
-    if (view.pointer) {
-      *data = view.pointer;
-    } else {
-      BufferView staging = getBuffer(GPU_BUFFER_UPLOAD, size, 4);
-      if (!staging.buffer) return lovrFree(buffer), NULL;
-      gpu_copy_buffers(state.stream, staging.buffer, buffer->gpu, staging.offset, buffer->base, size);
-      buffer->sync.writePhase = GPU_PHASE_COPY;
-      buffer->sync.pendingWrite = GPU_CACHE_TRANSFER_WRITE;
-      buffer->sync.lastTransferWrite = state.tick;
-      *data = staging.pointer;
-    }
+  if (data && *data == NULL) {
+    BufferView staging = getBuffer(GPU_BUFFER_UPLOAD, size, 4);
+    if (!staging.buffer) return lovrBufferDestroy(buffer), NULL;
+    gpu_copy_buffers(state.stream, staging.buffer, buffer->gpu, staging.offset, 0, size);
+    buffer->sync.writePhase = GPU_PHASE_COPY;
+    buffer->sync.pendingWrite = GPU_CACHE_TRANSFER_WRITE;
+    buffer->sync.lastTransferWrite = state.tick;
+    *data = staging.pointer;
   }
 
   buffer->sync.barrier = &state.barrier;
@@ -2209,7 +2199,7 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
 
 void lovrBufferDestroy(void* ref) {
   Buffer* buffer = ref;
-  releaseBlock(buffer->block);
+  gpu_buffer_destroy(buffer->gpu);
   lovrFree(buffer);
 }
 
@@ -3884,6 +3874,7 @@ Material* lovrMaterialCreate(const MaterialInfo* info) {
     const uint32_t count = 256;
     block = lovrMalloc(sizeof(*block));
     block->materials = lovrMalloc(count * sizeof(Material));
+    block->buffer = lovrMalloc(gpu_sizeof_buffer());
     block->bundlePool = lovrMalloc(gpu_sizeof_bundle_pool());
     block->bundles = lovrMalloc(count * gpu_sizeof_bundle());
 
@@ -3908,17 +3899,21 @@ Material* lovrMaterialCreate(const MaterialInfo* info) {
 
     if (!gpu_bundle_pool_init(block->bundlePool, &poolInfo)) {
       lovrFree(block->materials);
+      lovrFree(block->buffer);
       lovrFree(block->bundlePool);
       lovrFree(block->bundles);
       return NULL;
     }
 
-    size_t align = state.limits.uniformBufferAlign;
-    uint32_t bufferSize = count * (uint32_t) ALIGN(sizeof(MaterialData), align);
-    block->view = getBuffer(GPU_BUFFER_STATIC, bufferSize, align);
+    gpu_buffer_info bufferInfo = {
+      .type = GPU_BUFFER_STATIC,
+      .size = count * (uint32_t) ALIGN(sizeof(MaterialData), state.limits.uniformBufferAlign),
+      .pointer = &block->pointer
+    };
 
-    if (!block->view.buffer) {
+    if (!gpu_buffer_init(block->buffer, &bufferInfo)) {
       lovrFree(block->materials);
+      lovrFree(block->buffer);
       lovrFree(block->bundlePool);
       lovrFree(block->bundles);
       gpu_bundle_pool_destroy(block->bundlePool);
@@ -3936,8 +3931,8 @@ Material* lovrMaterialCreate(const MaterialInfo* info) {
   MaterialData* data;
   uint32_t stride = ALIGN(sizeof(MaterialData), state.limits.uniformBufferAlign);
 
-  if (block->view.pointer) {
-    data = (MaterialData*) ((char*) block->view.pointer + material->index * stride);
+  if (block->pointer) {
+    data = (MaterialData*) ((char*) block->pointer + material->index * stride);
   } else {
     if (!beginFrame()) {
       return NULL;
@@ -3946,7 +3941,7 @@ Material* lovrMaterialCreate(const MaterialInfo* info) {
     BufferView staging = getBuffer(GPU_BUFFER_UPLOAD, sizeof(MaterialData), 4);
     if (!staging.buffer) return NULL;
 
-    gpu_copy_buffers(state.stream, staging.buffer, block->view.buffer, staging.offset, block->view.offset + stride * material->index, sizeof(MaterialData));
+    gpu_copy_buffers(state.stream, staging.buffer, block->buffer, staging.offset, stride * material->index, sizeof(MaterialData));
     state.barrier.prev |= GPU_PHASE_COPY;
     state.barrier.next |= GPU_PHASE_SHADER_VERTEX | GPU_PHASE_SHADER_FRAGMENT;
     state.barrier.flush |= GPU_CACHE_TRANSFER_WRITE;
@@ -3957,8 +3952,8 @@ Material* lovrMaterialCreate(const MaterialInfo* info) {
   memcpy(data, info, sizeof(MaterialData));
 
   gpu_buffer_binding buffer = {
-    .object = block->view.buffer,
-    .offset = block->view.offset + material->index * stride,
+    .object = block->buffer,
+    .offset = material->index * stride,
     .extent = stride
   };
 
@@ -5026,7 +5021,7 @@ Model* lovrModelCreate(const ModelInfo* info) {
 
     Buffer* src = model->vertexBuffer;
     Buffer* dst = model->rawVertexBuffer;
-    gpu_copy_buffers(state.stream, src->gpu, dst->gpu, src->base, dst->base, data->dynamicVertexCount * sizeof(ModelVertex));
+    gpu_copy_buffers(state.stream, src->gpu, dst->gpu, 0, 0, data->dynamicVertexCount * sizeof(ModelVertex));
 
     gpu_sync(state.stream, &(gpu_barrier) {
       .prev = GPU_PHASE_COPY,
@@ -5231,7 +5226,7 @@ Model* lovrModelClone(Model* parent) {
 
     Buffer* src = parent->vertexBuffer;
     Buffer* dst = model->vertexBuffer;
-    gpu_copy_buffers(state.stream, src->gpu, dst->gpu, src->base, dst->base, parent->vertexBuffer->info.size);
+    gpu_copy_buffers(state.stream, src->gpu, dst->gpu, 0, 0, parent->vertexBuffer->info.size);
 
     gpu_sync(state.stream, &(gpu_barrier) {
       .prev = GPU_PHASE_COPY,
@@ -5556,9 +5551,9 @@ static bool lovrModelAnimateVertices(Model* model) {
     if (!shader) return false;
 
     gpu_binding bindings[] = {
-      { 0, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->rawVertexBuffer->gpu, model->rawVertexBuffer->base, vertexCount * sizeof(ModelVertex) } },
-      { 1, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->vertexBuffer->gpu, model->vertexBuffer->base, vertexCount * sizeof(ModelVertex) } },
-      { 2, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->blendBuffer->gpu, model->blendBuffer->base, model->blendBuffer->info.size } },
+      { 0, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->rawVertexBuffer->gpu, 0, vertexCount * sizeof(ModelVertex) } },
+      { 1, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->vertexBuffer->gpu, 0, vertexCount * sizeof(ModelVertex) } },
+      { 2, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->blendBuffer->gpu, 0, model->blendBuffer->info.size } },
       { 3, GPU_SLOT_UNIFORM_BUFFER, .buffer = { NULL, 0, chunkSize * sizeof(float) } }
     };
 
@@ -5615,9 +5610,9 @@ static bool lovrModelAnimateVertices(Model* model) {
     if (!shader) return false;
 
     gpu_binding bindings[] = {
-      { 0, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->rawVertexBuffer->gpu, model->rawVertexBuffer->base, data->skinnedVertexCount * sizeof(ModelVertex) } },
-      { 1, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->vertexBuffer->gpu, model->vertexBuffer->base, data->skinnedVertexCount * sizeof(ModelVertex) } },
-      { 2, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->skinBuffer->gpu, model->skinBuffer->base, data->skinnedVertexCount * 8 } },
+      { 0, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->rawVertexBuffer->gpu, 0, data->skinnedVertexCount * sizeof(ModelVertex) } },
+      { 1, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->vertexBuffer->gpu, 0, data->skinnedVertexCount * sizeof(ModelVertex) } },
+      { 2, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->skinBuffer->gpu, 0, data->skinnedVertexCount * 8 } },
       { 3, GPU_SLOT_UNIFORM_BUFFER, .buffer = { NULL, 0, 0 } } // Filled in for each skin
     };
 
@@ -6643,7 +6638,7 @@ void lovrPassSetShader(Pass* pass, Shader* shader) {
           case GPU_SLOT_UNIFORM_BUFFER:
           case GPU_SLOT_STORAGE_BUFFER:
             bindings[i].buffer.object = state.defaultBuffer->gpu;
-            bindings[i].buffer.offset = state.defaultBuffer->base;
+            bindings[i].buffer.offset = 0;
             bindings[i].buffer.extent = state.defaultBuffer->info.size;
             break;
           case GPU_SLOT_TEXTURE_WITH_SAMPLER:
@@ -7063,7 +7058,7 @@ static bool lovrPassResolveVertices(Pass* pass, DrawInfo* info, Draw* draw) {
     draw->vertexBufferOffset = buffer->base;
   } else {
     draw->vertexBuffer = state.defaultBuffer->gpu;
-    draw->vertexBufferOffset = state.defaultBuffer->base;
+    draw->vertexBufferOffset = 0;
   }
 
   if (!info->index.buffer && info->index.count > 0) {
@@ -8461,7 +8456,6 @@ static BufferView allocateBuffer(BufferAllocator* allocator, gpu_buffer_type typ
       block->handle = (gpu_buffer*) (block + 1);
       block->size = MAX(size, 1 << 22);
       block->next = NULL;
-      block->ref = 0;
 
       gpu_buffer_info info = {
         .type = type,
@@ -8477,25 +8471,14 @@ static BufferView allocateBuffer(BufferAllocator* allocator, gpu_buffer_type typ
       }
     }
 
-    // Non-static buffers keep a chain of "current" buffers.  Current buffers periodically get
-    // recycled on to the freelist (e.g. when a new frame starts, when the pass gets reset).
-    if (type != GPU_BUFFER_STATIC) {
-      block->next = allocator->current;
-    }
-
+    block->next = allocator->current;
     allocator->current = block;
     cursor = 0;
-  }
-
-  // Static buffers are refcounted, and get recycled when their refcount reaches zero.
-  if (type == GPU_BUFFER_STATIC) {
-    atomic_fetch_add(&block->ref, 1);
   }
 
   allocator->cursor = cursor + size;
 
   return (BufferView) {
-    .block = block,
     .buffer = block->handle,
     .offset = cursor,
     .extent = size,
@@ -8505,15 +8488,6 @@ static BufferView allocateBuffer(BufferAllocator* allocator, gpu_buffer_type typ
 
 static BufferView getBuffer(gpu_buffer_type type, uint32_t size, size_t align) {
   return allocateBuffer(&state.bufferAllocators[type], type, size, align);
-}
-
-// Should only be called for static buffers
-static void releaseBlock(BufferBlock* block) {
-  BufferAllocator* allocator = &state.bufferAllocators[GPU_BUFFER_STATIC];
-  if (atomic_fetch_sub(&block->ref, 1) == 1 && block != allocator->current) {
-    block->tick = state.tick;
-    recycleBlocks(allocator, block);
-  }
 }
 
 static void recycleBlocks(BufferAllocator* allocator, BufferBlock* blocks) {
@@ -8539,14 +8513,6 @@ static void destroyBuffers(BufferAllocator* allocator) {
 static int u64cmp(const void* a, const void* b) {
   uint64_t x = *(uint64_t*) a, y = *(uint64_t*) b;
   return (x > y) - (x < y);
-}
-
-static uint32_t gcd(uint32_t a, uint32_t b) {
-  return b ? gcd(b, a % b) : a;
-}
-
-static uint32_t lcm(uint32_t a, uint32_t b) {
-  return (a / gcd(a, b)) * b;
 }
 
 static bool beginFrame(void) {

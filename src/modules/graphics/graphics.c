@@ -68,7 +68,7 @@ typedef struct {
 struct Buffer {
   uint32_t ref;
   uint32_t base;
-  Sync sync;
+  Sync* sync;
   gpu_buffer* gpu;
   bool supportsMesh;
   BufferInfo info;
@@ -1787,7 +1787,7 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
     // Tally buffer (we write to it with a compute shader after the render pass)
     if (pass->tally.buffer && pass->tally.count > 0) {
       Access access = {
-        .sync = &pass->tally.buffer->sync,
+        .sync = pass->tally.buffer->sync,
         .object = pass->tally.buffer,
         .phase = GPU_PHASE_SHADER_COMPUTE,
         .cache = GPU_CACHE_STORAGE_WRITE
@@ -2105,6 +2105,7 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
   Buffer* buffer = lovrCalloc(sizeof(Buffer) + gpu_sizeof_buffer() + charCount + fieldCount * sizeof(DataField));
   buffer->ref = 1;
   buffer->gpu = (gpu_buffer*) (buffer + 1);
+  buffer->sync = lovrCalloc(sizeof(Sync));
   buffer->info = *info;
   buffer->info.fieldCount = fieldCount;
   buffer->info.size = size;
@@ -2186,13 +2187,13 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
     BufferView staging = getBuffer(GPU_BUFFER_UPLOAD, size, 4);
     if (!staging.buffer) return lovrBufferDestroy(buffer), NULL;
     gpu_copy_buffers(state.stream, staging.buffer, buffer->gpu, staging.offset, 0, size);
-    buffer->sync.writePhase = GPU_PHASE_COPY;
-    buffer->sync.pendingWrite = GPU_CACHE_TRANSFER_WRITE;
-    buffer->sync.lastTransferWrite = state.tick;
+    buffer->sync->writePhase = GPU_PHASE_COPY;
+    buffer->sync->pendingWrite = GPU_CACHE_TRANSFER_WRITE;
+    buffer->sync->lastTransferWrite = state.tick;
     *data = staging.pointer;
   }
 
-  buffer->sync.barrier = &state.barrier;
+  buffer->sync->barrier = &state.barrier;
 
   return buffer;
 }
@@ -2200,6 +2201,7 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
 void lovrBufferDestroy(void* ref) {
   Buffer* buffer = ref;
   gpu_buffer_destroy(buffer->gpu);
+  lovrFree(buffer->sync);
   lovrFree(buffer);
 }
 
@@ -2213,7 +2215,7 @@ void* lovrBufferGetData(Buffer* buffer, uint32_t offset, uint32_t extent) {
   if (extent == ~0u) extent = buffer->info.size - offset;
   lovrCheck(offset + extent <= buffer->info.size, "Buffer read range goes past the end of the Buffer");
 
-  gpu_barrier barrier = syncTransfer(&buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  gpu_barrier barrier = syncTransfer(buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
   gpu_sync(state.stream, &barrier, 1);
 
   BufferView view = getBuffer(GPU_BUFFER_DOWNLOAD, extent, 4);
@@ -2234,7 +2236,7 @@ void* lovrBufferSetData(Buffer* buffer, uint32_t offset, uint32_t extent) {
   if (extent == ~0u) extent = buffer->info.size - offset;
   lovrCheck(offset + extent <= buffer->info.size, "Attempt to write past the end of the Buffer");
 
-  gpu_barrier barrier = syncTransfer(&buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
+  gpu_barrier barrier = syncTransfer(buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
 
   BufferView view = getBuffer(GPU_BUFFER_UPLOAD, extent, 4);
@@ -2252,8 +2254,8 @@ bool lovrBufferCopy(Buffer* src, Buffer* dst, uint32_t srcOffset, uint32_t dstOf
   lovrCheck(src != dst || (srcOffset >= dstOffset + extent || dstOffset >= srcOffset + extent), "Copying part of a Buffer to itself requires non-overlapping copy regions");
 
   gpu_barrier barriers[2];
-  barriers[0] = syncTransfer(&src->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
-  barriers[1] = syncTransfer(&dst->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
+  barriers[0] = syncTransfer(src->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  barriers[1] = syncTransfer(dst->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, barriers, 2);
 
   gpu_copy_buffers(state.stream, src->gpu, dst->gpu, src->base + srcOffset, dst->base + dstOffset, extent);
@@ -2269,7 +2271,7 @@ bool lovrBufferClear(Buffer* buffer, uint32_t offset, uint32_t extent, uint32_t 
 
   if (!beginFrame()) return false;
 
-  gpu_barrier barrier = syncTransfer(&buffer->sync, GPU_PHASE_CLEAR, GPU_CACHE_TRANSFER_WRITE);
+  gpu_barrier barrier = syncTransfer(buffer->sync, GPU_PHASE_CLEAR, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
 
   gpu_clear_buffer(state.stream, buffer->gpu, buffer->base + offset, extent, value);
@@ -5016,7 +5018,7 @@ Model* lovrModelCreate(const ModelInfo* info) {
 
     // The vertex buffer may already have a pending copy if its memory was not host-visible, need to
     // wait for that to complete before copying to the raw vertex buffer
-    gpu_barrier barrier = syncTransfer(&model->vertexBuffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+    gpu_barrier barrier = syncTransfer(model->vertexBuffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
     gpu_sync(state.stream, &barrier, 1);
 
     Buffer* src = model->vertexBuffer;
@@ -5221,7 +5223,7 @@ Model* lovrModelClone(Model* parent) {
       return NULL;
     }
 
-    gpu_barrier barrier = syncTransfer(&parent->vertexBuffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+    gpu_barrier barrier = syncTransfer(parent->vertexBuffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
     gpu_sync(state.stream, &barrier, 1);
 
     Buffer* src = parent->vertexBuffer;
@@ -5697,7 +5699,7 @@ Readback* lovrReadbackCreateBuffer(Buffer* buffer, uint32_t offset, uint32_t ext
   readback->blob = lovrBlobCreate(data, extent, "Readback");
   readback->view = view;
   lovrRetain(buffer);
-  gpu_barrier barrier = syncTransfer(&buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  gpu_barrier barrier = syncTransfer(buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
   gpu_sync(state.stream, &barrier, 1);
   gpu_copy_buffers(state.stream, buffer->gpu, readback->view.buffer, buffer->base + offset, readback->view.offset, extent);
   return readback;
@@ -8876,7 +8878,7 @@ static Access* getNextAccess(Pass* pass, int type, bool texture) {
 static void trackBuffer(Pass* pass, Buffer* buffer, gpu_phase phase, gpu_cache cache) {
   if (!buffer) return;
   Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, false);
-  access->sync = &buffer->sync;
+  access->sync = buffer->sync;
   access->object = buffer;
   access->phase = phase;
   access->cache = cache;

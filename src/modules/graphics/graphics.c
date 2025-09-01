@@ -77,7 +77,7 @@ struct Buffer {
 struct Texture {
   uint32_t ref;
   bool xrAcquired;
-  Sync sync;
+  Sync* sync;
   gpu_texture* gpu;
   gpu_texture* sampleView;
   gpu_texture* renderView;
@@ -1684,7 +1684,7 @@ static void syncAttachment(Texture* texture, bool depth, bool resolve, bool load
   if (!texture) return;
 
   Access access = {
-    .sync = &texture->root->sync,
+    .sync = texture->sync,
     .object = texture
   };
 
@@ -1919,12 +1919,12 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
 
     // Reset barriers back to the default
     for (uint32_t t = 0; t < 4 && canvas->color[t].texture; t++) {
-      if (canvas->color[t].texture) canvas->color[t].texture->sync.barrier = &state.barrier;
-      if (canvas->color[t].resolve) canvas->color[t].resolve->sync.barrier = &state.barrier;
+      if (canvas->color[t].texture) canvas->color[t].texture->sync->barrier = &state.barrier;
+      if (canvas->color[t].resolve) canvas->color[t].resolve->sync->barrier = &state.barrier;
     }
 
-    if (canvas->depth.texture) canvas->depth.texture->sync.barrier = &state.barrier;
-    if (canvas->depth.resolve) canvas->depth.resolve->sync.barrier = &state.barrier;
+    if (canvas->depth.texture) canvas->depth.texture->sync->barrier = &state.barrier;
+    if (canvas->depth.resolve) canvas->depth.resolve->sync->barrier = &state.barrier;
 
     for (uint32_t j = 0; j < COUNTOF(passes[i]->access); j++) {
       for (AccessBlock* block = passes[i]->access[j]; block != NULL; block = block->next) {
@@ -2292,6 +2292,7 @@ bool lovrGraphicsGetWindowTexture(Texture** texture) {
     state.window = lovrCalloc(sizeof(Texture));
     state.window->ref = 1;
     state.window->gpu = NULL;
+    state.window->sync = lovrCalloc(sizeof(Sync));
     state.window->sampleView = NULL;
     state.window->renderView = NULL;
     state.window->info = (TextureInfo) {
@@ -2412,6 +2413,7 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
   Texture* texture = lovrCalloc(sizeof(Texture) + gpu_sizeof_texture());
   texture->ref = 1;
   texture->gpu = (gpu_texture*) (texture + 1);
+  texture->sync = lovrCalloc(sizeof(Sync));
   texture->root = texture;
   texture->info = *info;
   texture->info.mipmaps = mipmaps;
@@ -2572,12 +2574,12 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
     state.barrier.flush |= GPU_CACHE_TRANSFER_WRITE;
     state.barrier.clear |= GPU_CACHE_TEXTURE;
   } else if (levelCount > 0) {
-    texture->sync.writePhase = GPU_PHASE_COPY | GPU_PHASE_BLIT;
-    texture->sync.pendingWrite = GPU_CACHE_TRANSFER_WRITE;
-    texture->sync.lastTransferWrite = state.tick;
+    texture->sync->writePhase = GPU_PHASE_COPY | GPU_PHASE_BLIT;
+    texture->sync->pendingWrite = GPU_CACHE_TRANSFER_WRITE;
+    texture->sync->lastTransferWrite = state.tick;
   }
 
-  texture->sync.barrier = &state.barrier;
+  texture->sync->barrier = &state.barrier;
   return texture;
 }
 
@@ -2599,6 +2601,7 @@ Texture* lovrTextureCreateView(Texture* parent, const TextureViewInfo* info) {
   Texture* texture = lovrCalloc(sizeof(Texture) + gpu_sizeof_texture());
   texture->ref = 1;
   texture->gpu = (gpu_texture*) (texture + 1);
+  texture->sync = parent->sync;
   texture->info = *base;
   texture->info.label = lovrStrdup(info->label);
   texture->root = parent->root;
@@ -2722,6 +2725,7 @@ void lovrTextureDestroy(void* ref) {
     if (texture->storageView && texture->storageView != texture->gpu) gpu_texture_destroy(texture->storageView), lovrFree(texture->storageView);
     if (texture->gpu) gpu_texture_destroy(texture->gpu);
   }
+  if (texture->root == texture) lovrFree(texture->sync);
   lovrFree(texture);
 }
 
@@ -2739,7 +2743,7 @@ Image* lovrTextureGetPixels(Texture* texture, uint32_t offset[4], uint32_t exten
   lovrCheck(texture->info.samples == 1, "Can't get pixels of a multisampled texture");
   if (!checkTextureBounds(&texture->info, offset, extent)) return NULL;
 
-  gpu_barrier barrier = syncTransfer(&texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  gpu_barrier barrier = syncTransfer(texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
   gpu_sync(state.stream, &barrier, 1);
 
   uint32_t rootOffset[4] = { offset[0], offset[1], offset[2] + texture->baseLayer, offset[3] + texture->baseLevel };
@@ -2797,7 +2801,7 @@ bool lovrTextureSetPixels(Texture* texture, Image* image, uint32_t dstOffset[4],
     }
   }
 
-  gpu_barrier barrier = syncTransfer(&texture->root->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
+  gpu_barrier barrier = syncTransfer(texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
 
   uint32_t rootOffset[4] = { dstOffset[0], dstOffset[1], dstOffset[2] + texture->baseLayer, dstOffset[3] + texture->baseLevel };
@@ -2820,8 +2824,8 @@ bool lovrTextureCopy(Texture* src, Texture* dst, uint32_t srcOffset[4], uint32_t
   if (!checkTextureBounds(&dst->info, dstOffset, extent)) return false;
 
   gpu_barrier barriers[2];
-  barriers[0] = syncTransfer(&src->root->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
-  barriers[1] = syncTransfer(&dst->root->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
+  barriers[0] = syncTransfer(src->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  barriers[1] = syncTransfer(dst->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, barriers, 2);
 
   uint32_t srcRootOffset[4] = { srcOffset[0], srcOffset[1], srcOffset[2] + src->baseLayer, srcOffset[3] + src->baseLevel };
@@ -2856,8 +2860,8 @@ bool lovrTextureBlit(Texture* src, Texture* dst, uint32_t srcOffset[4], uint32_t
   if (!checkTextureBounds(&dst->info, dstOffset, dstExtent)) return false;
 
   gpu_barrier barriers[2];
-  barriers[0] = syncTransfer(&src->root->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_READ);
-  barriers[1] = syncTransfer(&dst->root->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_WRITE);
+  barriers[0] = syncTransfer(src->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_READ);
+  barriers[1] = syncTransfer(dst->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, barriers, 2);
 
   uint32_t srcRootOffset[4] = { srcOffset[0], srcOffset[1], srcOffset[2] + src->baseLayer, srcOffset[3] + src->baseLevel };
@@ -2875,7 +2879,7 @@ bool lovrTextureClear(Texture* texture, float value[4], uint32_t layer, uint32_t
   lovrCheck(texture->info.type == TEXTURE_3D || layer + layerCount <= texture->info.layers, "Texture clear range exceeds texture layer count");
   lovrCheck(level + levelCount <= texture->info.mipmaps, "Texture clear range exceeds texture mipmap count");
 
-  gpu_barrier barrier = syncTransfer(&texture->root->sync, GPU_PHASE_CLEAR, GPU_CACHE_TRANSFER_WRITE);
+  gpu_barrier barrier = syncTransfer(texture->sync, GPU_PHASE_CLEAR, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
 
   gpu_clear_texture(state.stream, texture->root->gpu, value, texture->baseLayer + layer, layerCount, texture->baseLevel + level, levelCount);
@@ -2892,7 +2896,7 @@ bool lovrTextureGenerateMipmaps(Texture* texture, uint32_t base, uint32_t count)
   lovrCheck(supports & GPU_FEATURE_BLIT, "This GPU does not support mipmapping this texture format/encoding");
   lovrCheck(base + count < texture->info.mipmaps, "Trying to generate too many mipmaps");
 
-  gpu_barrier barrier = syncTransfer(&texture->root->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_READ | GPU_CACHE_TRANSFER_WRITE);
+  gpu_barrier barrier = syncTransfer(texture->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_READ | GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
 
   mipmapTexture(state.stream, texture, texture->baseLevel + base, count);
@@ -5723,7 +5727,7 @@ Readback* lovrReadbackCreateTexture(Texture* texture, uint32_t offset[4], uint32
   readback->image = image;
   readback->view = view;
   lovrRetain(texture);
-  gpu_barrier barrier = syncTransfer(&texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  gpu_barrier barrier = syncTransfer(texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
   gpu_sync(state.stream, &barrier, 1);
   gpu_copy_texture_buffer(state.stream, texture->gpu, readback->view.buffer, offset, readback->view.offset, extent);
   return readback;
@@ -8895,7 +8899,7 @@ static void trackTexture(Pass* pass, Texture* texture, gpu_phase phase, gpu_cach
   }
 
   Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, true);
-  access->sync = &texture->root->sync;
+  access->sync = texture->sync;
   access->object = texture;
   access->phase = phase;
   access->cache = cache;

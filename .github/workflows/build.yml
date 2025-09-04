@@ -119,12 +119,10 @@ jobs:
         env:
           VKV: 1.4.321.0
         run: |
-          curl -sOL https://sdk.lunarg.com/sdk/download/$VKV/mac/vulkansdk-macos-$VKV.dmg?Human=true
-          hdiutil attach vulkansdk-macos-$VKV.dmg
-          cp -R /Volumes/vulkansdk-macos-$VKV .
-          hdiutil detach /Volumes/vulkansdk-macos-$VKV
+          curl -sOL https://sdk.lunarg.com/sdk/download/$VKV/mac/vulkan_sdk.zip?Human=true
+          unzip vulkan_sdk.zip
           export VULKAN_SDK=${{ runner.temp }}/vulkan && echo "VULKAN_SDK=$VULKAN_SDK/macOS" >> $GITHUB_ENV
-          sudo vulkansdk-macos-$VKV/InstallVulkan.app/Contents/MacOS/InstallVulkan --root $VULKAN_SDK --accept-licenses --default-answer --confirm-command install
+          sudo vulkansdk-macOS-$VKV.app/Contents/MacOS/vulkansdk-macOS-$VKV --root $VULKAN_SDK --accept-licenses --default-answer --confirm-command install
       - name: Checkout
         uses: actions/checkout@v4
         with:

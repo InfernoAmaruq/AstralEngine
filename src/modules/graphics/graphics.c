@@ -3183,7 +3183,16 @@ fail:
   stackPop(&thread.stack, stack);
   return false;
 #else
-  return lovrSetError("Could not compile shader: No shader compiler available");
+  for (uint32_t i = 0; i < stageCount; i++) {
+    ShaderSource* source = &stages[i];
+    uint32_t magic = 0x07230203; // Magic SPIR-V header
+    if (source->size % 4 == 0 && source->size >= 4 && !memcmp(source->code, &magic, 4)) {
+      outputs[i] = stages[i];
+    } else {
+      return lovrSetError("Could not compile shader: No shader compiler available");
+    }
+  }
+  return true;
 #endif
 }
 

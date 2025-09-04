@@ -128,7 +128,7 @@ jobs:
         with:
           submodules: 'recursive'
       - name: Init
-        run: cmake -B build -D LOVR_BUILD_BUNDLE=ON -D LOVR_VERSION_HASH=${GITHUB_SHA::6}
+        run: cmake -B build -D LOVR_BUILD_BUNDLE=ON -D LOVR_VERSION_HASH=${GITHUB_SHA::6} -D LOVR_USE_LUAJIT=OFF
       - name: Build
         run: cmake --build build -j
       - name: Test

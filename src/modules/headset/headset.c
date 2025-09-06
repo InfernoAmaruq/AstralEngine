@@ -2817,8 +2817,6 @@ static ModelData* newModelDataFB(uint64_t key) {
   model->nodes[XR_HAND_JOINT_WRIST_EXT].parent = model->rootNode;
   model->nodes[model->jointCount].parent = model->rootNode;
 
-  lovrModelDataFinalize(model);
-
   return model;
 }
 

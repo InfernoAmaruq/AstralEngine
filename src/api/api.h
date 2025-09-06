@@ -17,7 +17,6 @@ typedef struct {
 
 extern StringEntry lovrAnimationProperty[];
 extern StringEntry lovrArcMode[];
-extern StringEntry lovrAttributeType[];
 extern StringEntry lovrAudioMaterial[];
 extern StringEntry lovrAudioShareMode[];
 extern StringEntry lovrAudioType[];
@@ -31,7 +30,6 @@ extern StringEntry lovrChannelLayout[];
 extern StringEntry lovrCompareMode[];
 extern StringEntry lovrCullMode[];
 extern StringEntry lovrDataType[];
-extern StringEntry lovrDefaultAttribute[];
 extern StringEntry lovrDefaultShader[];
 extern StringEntry lovrDevice[];
 extern StringEntry lovrDeviceAxis[];

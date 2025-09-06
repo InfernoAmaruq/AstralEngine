@@ -73,20 +73,6 @@ static int l_lovrModelDataGetMetadata(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetBlobCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  lua_pushinteger(L, model->blobCount);
-  return 1;
-}
-
-static int l_lovrModelDataGetBlob(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->blobCount, "Invalid blob index '%d'", index + 1);
-  luax_pushtype(L, Blob, model->blobs[index]);
-  return 1;
-}
-
 static int l_lovrModelDataGetImageCount(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   lua_pushinteger(L, model->imageCount);
@@ -279,13 +265,13 @@ static int l_lovrModelDataGetNodeTransform(lua_State* L) {
   return 10;
 }
 
-static int l_lovrModelDataGetNodeMeshes(lua_State* L) {
+static int l_lovrModelDataGetNodeMesh(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
-  lua_createtable(L, node->primitiveCount, 0);
-  for (uint32_t i = 0; i < node->primitiveCount; i++) {
-    lua_pushinteger(L, node->primitiveIndex + i + 1);
-    lua_rawseti(L, -2, i + 1);
+  if (node->mesh == ~0u) {
+    lua_pushnil(L);
+  } else {
+    lua_pushinteger(L, node->mesh + 1);
   }
   return 1;
 }
@@ -303,160 +289,8 @@ static int l_lovrModelDataGetNodeSkin(lua_State* L) {
 
 static int l_lovrModelDataGetMeshCount(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
-  lua_pushinteger(L, model->primitiveCount);
+  lua_pushinteger(L, model->meshCount);
   return 1;
-}
-
-static int l_lovrModelDataGetMeshDrawMode(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->primitiveCount, "Invalid mesh index '%d'", index + 1);
-  ModelPrimitive* mesh = &model->primitives[index];
-  luax_pushenum(L, ModelDrawMode, mesh->mode);
-  return 1;
-}
-
-static int l_lovrModelDataGetMeshMaterial(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->primitiveCount, "Invalid mesh index '%d'", index + 1);
-  ModelPrimitive* mesh = &model->primitives[index];
-  if (mesh->material == ~0u) {
-    lua_pushnil(L);
-  } else {
-    lua_pushinteger(L, mesh->material + 1);
-  }
-  return 1;
-}
-
-static int l_lovrModelDataGetMeshVertexCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->primitiveCount, "Invalid mesh index '%d'", index + 1);
-  ModelPrimitive* mesh = &model->primitives[index];
-  lua_pushinteger(L, mesh->attributes[ATTR_POSITION] ? mesh->attributes[ATTR_POSITION]->count : 0);
-  return 1;
-}
-
-static int l_lovrModelDataGetMeshIndexCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->primitiveCount, "Invalid mesh index '%d'", index + 1);
-  ModelPrimitive* mesh = &model->primitives[index];
-  lua_pushinteger(L, mesh->indices ? mesh->indices->count : 0);
-  return 1;
-}
-
-static int l_lovrModelDataGetMeshVertexFormat(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->primitiveCount, "Invalid mesh index '%d'", index + 1);
-  ModelPrimitive* mesh = &model->primitives[index];
-  lua_newtable(L);
-  uint32_t count = 0;
-  for (uint32_t i = 0; i < MAX_DEFAULT_ATTRIBUTES; i++) {
-    ModelAttribute* attribute = mesh->attributes[i];
-    if (!attribute) continue;
-
-    lua_createtable(L, 6, 0);
-
-    luax_pushenum(L, DefaultAttribute, i);
-    lua_rawseti(L, -2, 1);
-
-    luax_pushenum(L, AttributeType, attribute->type);
-    lua_rawseti(L, -2, 2);
-
-    lua_pushinteger(L, attribute->components);
-    lua_rawseti(L, -2, 3);
-
-    lua_pushinteger(L, model->buffers[attribute->buffer].blob + 1);
-    lua_rawseti(L, -2, 4);
-
-    lua_pushinteger(L, model->buffers[attribute->buffer].offset + attribute->offset);
-    lua_rawseti(L, -2, 5);
-
-    lua_pushinteger(L, model->buffers[attribute->buffer].stride);
-    lua_rawseti(L, -2, 6);
-
-    lua_rawseti(L, -2, ++count);
-  }
-  return 1;
-}
-
-static int l_lovrModelDataGetMeshIndexFormat(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->primitiveCount, "Invalid mesh index '%d'", index + 1);
-  ModelPrimitive* mesh = &model->primitives[index];
-  if (!mesh->indices) return lua_pushnil(L), 1;
-  luax_pushenum(L, AttributeType, mesh->indices->type);
-  lua_pushinteger(L, model->buffers[mesh->indices->buffer].blob + 1);
-  lua_pushinteger(L, model->buffers[mesh->indices->buffer].offset + mesh->indices->offset);
-  lua_pushinteger(L, model->buffers[mesh->indices->buffer].stride);
-  return 4;
-}
-
-static int l_lovrModelDataGetMeshVertex(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->primitiveCount, "Invalid mesh index '%d'", index + 1);
-  ModelPrimitive* mesh = &model->primitives[index];
-  uint32_t vertex = luax_checku32(L, 3) - 1;
-  uint32_t vertexCount = mesh->attributes[ATTR_POSITION] ? mesh->attributes[ATTR_POSITION]->count : 0;
-  luax_check(L, vertex < vertexCount, "Invalid vertex index '%d'", vertex + 1);
-  uint32_t total = 0;
-  for (uint32_t i = 0; i < MAX_DEFAULT_ATTRIBUTES; i++) {
-    ModelAttribute* attribute = mesh->attributes[i];
-    if (!attribute) continue;
-
-    size_t stride = model->buffers[attribute->buffer].stride;
-
-    if (!stride) {
-      switch (attribute->type) {
-        case I8: case U8: stride = attribute->components * 1; break;
-        case I16: case U16: stride = attribute->components * 2; break;
-        case I32: case U32: case F32: stride = attribute->components * 4; break;
-        default: break;
-      }
-    }
-
-    AttributeData data = { .raw = model->buffers[attribute->buffer].data };
-    data.u8 += attribute->offset;
-    data.u8 += vertex * stride;
-
-    for (uint32_t j = 0; j < attribute->components; j++) {
-      switch (attribute->type) {
-        case I8: lua_pushinteger(L, data.i8[j]); break;
-        case U8: lua_pushinteger(L, data.u8[j]); break;
-        case I16: lua_pushinteger(L, data.i16[j]); break;
-        case U16: lua_pushinteger(L, data.u16[j]); break;
-        case I32: lua_pushinteger(L, data.i32[j]); break;
-        case U32: lua_pushinteger(L, data.u32[j]); break;
-        case F32: lua_pushnumber(L, data.f32[j]); break;
-        default: break;
-      }
-    }
-
-    total += attribute->components;
-  }
-  return total;
-}
-
-static int l_lovrModelDataGetMeshIndex(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t meshIndex = luax_checku32(L, 2) - 1;
-  luax_check(L, meshIndex < model->primitiveCount, "Invalid mesh index '%d'", meshIndex + 1);
-  ModelPrimitive* mesh = &model->primitives[meshIndex];
-  uint32_t index = luax_checku32(L, 3) - 1;
-  uint32_t indexCount = mesh->indices ? mesh->indices->count : 0;
-  luax_check(L, index < indexCount, "Invalid index index '%d'", index + 1);
-  AttributeData data = { .raw = model->buffers[mesh->indices->buffer].data };
-  data.u8 += mesh->indices->offset;
-  switch (mesh->indices->type) {
-    case U16: lua_pushinteger(L, data.u16[index] + 1); return 1;
-    case U32: lua_pushinteger(L, data.u32[index] + 1); return 1;
-    default: lovrUnreachable();
-  }
 }
 
 static int l_lovrModelDataGetTriangles(lua_State* L) {
@@ -725,7 +559,7 @@ static int l_lovrModelDataGetAnimationKeyframe(lua_State* L) {
     case PROP_TRANSLATION: count = 3; break;
     case PROP_ROTATION: count = 4; break;
     case PROP_SCALE: count = 3; break;
-    case PROP_WEIGHTS: count = model->nodes[channel->nodeIndex].blendShapeCount; break;
+    case PROP_WEIGHTS: count = model->meshes[model->nodes[channel->nodeIndex].mesh].blendShapeCount; break;
   }
   for (int i = 0; i < count; i++) {
     lua_pushnumber(L, channel->data[keyframe * count + i]);
@@ -783,8 +617,6 @@ static int l_lovrModelDataGetBlendShapeName(lua_State* L) {
 
 const luaL_Reg lovrModelData[] = {
   { "getMetadata", l_lovrModelDataGetMetadata },
-  { "getBlobCount", l_lovrModelDataGetBlobCount },
-  { "getBlob", l_lovrModelDataGetBlob },
   { "getImageCount", l_lovrModelDataGetImageCount },
   { "getImage", l_lovrModelDataGetImage },
   { "getRootNode", l_lovrModelDataGetRootNode },
@@ -799,17 +631,9 @@ const luaL_Reg lovrModelData[] = {
   { "getNodeScale", l_lovrModelDataGetNodeScale },
   { "getNodePose", l_lovrModelDataGetNodePose },
   { "getNodeTransform", l_lovrModelDataGetNodeTransform },
-  { "getNodeMeshes", l_lovrModelDataGetNodeMeshes },
+  { "getNodeMesh", l_lovrModelDataGetNodeMesh },
   { "getNodeSkin", l_lovrModelDataGetNodeSkin },
   { "getMeshCount", l_lovrModelDataGetMeshCount },
-  { "getMeshDrawMode", l_lovrModelDataGetMeshDrawMode },
-  { "getMeshMaterial", l_lovrModelDataGetMeshMaterial },
-  { "getMeshVertexCount", l_lovrModelDataGetMeshVertexCount },
-  { "getMeshIndexCount", l_lovrModelDataGetMeshIndexCount },
-  { "getMeshVertexFormat", l_lovrModelDataGetMeshVertexFormat },
-  { "getMeshIndexFormat", l_lovrModelDataGetMeshIndexFormat },
-  { "getMeshVertex", l_lovrModelDataGetMeshVertex },
-  { "getMeshIndex", l_lovrModelDataGetMeshIndex },
   { "getTriangles", l_lovrModelDataGetTriangles },
   { "getTriangleCount", l_lovrModelDataGetTriangleCount },
   { "getVertexCount", l_lovrModelDataGetVertexCount },

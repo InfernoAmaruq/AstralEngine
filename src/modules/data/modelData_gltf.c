@@ -676,13 +676,13 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   if (info.meshes) {
     jsmntok_t* token = info.meshes;
     for (int i = (token++)->size; i > 0 ; i--) {
+      uint32_t blendShapeCount = 0;
       for (int k = (token++)->size; k > 0; k--) {
         gltfString key = NOM_STR(json, token);
         if (STR_EQ(key, "primitives")) {
           model->primitiveCount += token->size;
           for (int p = (token++)->size; p > 0; p--) {
             uint32_t vertexCount = 0;
-            uint32_t blendShapeCount = 0;
             bool hasJoints = false;
             for (int k2 = (token++)->size; k2 > 0; k2--) {
               gltfString key = NOM_STR(json, token);
@@ -697,7 +697,8 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                 uint32_t index = NOM_U32(json, token);
                 model->indexCount += accessors[index].count;
                 model->indexSize = MAX(model->indexSize, typeSizes[accessors[index].type]);
-              } else if (p == 0 && STR_EQ(key, "targets")) {
+              } else if (STR_EQ(key, "targets")) {
+                lovrAssertGoto(fail, blendShapeCount == 0 || blendShapeCount == token->size, "Model has inconsistent blend shape counts");
                 blendShapeCount = token->size;
                 token = NOM(token);
               } else {
@@ -708,12 +709,13 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
             model->skinnedVertexCount += hasJoints ? vertexCount : 0;
             model->blendedVertexCount += vertexCount * blendShapeCount;
             model->animatedVertexCount += (hasJoints || blendShapeCount > 0) ? vertexCount : 0;
-            model->blendShapeCount += blendShapeCount;
           }
         } else if (STR_EQ(key, "extras")) {
           for (int k2 = (token++)->size; k2 > 0; k2--) {
             gltfString key = NOM_STR(json, token);
             if (STR_EQ(key, "targetNames")) {
+              lovrAssertGoto(fail, blendShapeCount == 0 || blendShapeCount == token->size, "Model has inconsistent blend shape counts");
+              blendShapeCount = token->size;
               for (int j = (token++)->size; j > 0; j--) {
                 model->charCount += token->end - token->start + 1;
                 token++;
@@ -726,6 +728,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
           token = NOM(token);
         }
       }
+      model->blendShapeCount += blendShapeCount;
     }
   }
 
@@ -973,9 +976,6 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
     ModelBlendShape* blendShapes = model->blendShapes;
     for (int i = (token++)->size; i > 0; i--, mesh++) {
       mesh->primitives = primitive;
-      mesh->vertices = vertices;
-      mesh->indices = indexData;
-      mesh->blendData = blendData;
       mesh->blendShapes = blendShapes;
       for (int k = (token++)->size; k > 0; k--) {
         gltfString key = NOM_STR(json, token);
@@ -989,9 +989,6 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
             gltfAccessor* indices = NULL;
             gltfAccessor* joints = NULL;
             gltfAccessor* weights = NULL;
-            gltfAccessor* blendPositions = NULL;
-            gltfAccessor* blendNormals = NULL;
-            gltfAccessor* blendTangents = NULL;
 
             for (int k2 = (token++)->size; k2 > 0; k2--) {
               gltfString key = NOM_STR(json, token);
@@ -1021,14 +1018,25 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               } else if (STR_EQ(key, "indices")) {
                 indices = &accessors[NOM_U32(json, token)];
               } else if (STR_EQ(key, "targets")) {
-                mesh->blendShapeCount = token->size;
+                if (mesh->blendShapeCount == 0) mesh->blendShapeCount = token->size;
                 for (int t = (token++)->size; t > 0; t--) {
+                  gltfAccessor* blendPositions = NULL;
+                  gltfAccessor* blendNormals = NULL;
+                  gltfAccessor* blendTangents = NULL;
                   for (int a = (token++)->size; a > 0; a--) {
                     gltfString name = NOM_STR(json, token);
                     uint32_t accessor = NOM_U32(json, token);
                     if (STR_EQ(name, "POSITION")) blendPositions = &accessors[accessor];
                     else if (STR_EQ(name, "NORMAL")) blendNormals = &accessors[accessor];
                     else if (STR_EQ(name, "TANGENT")) blendTangents = &accessors[accessor];
+                  }
+                  if (blendPositions) {
+                    uint32_t count = blendPositions->count;
+                    if (!mesh->blendData) mesh->blendData = blendData;
+                    copyAttribute(blendData, blendPositions, F32, 3, false, 0, sizeof(BlendData), count, 0);
+                    copyAttribute(blendData, blendNormals, F32, 3, false, 12, sizeof(BlendData), count, 0);
+                    copyAttribute(blendData, blendTangents, F32, 3, false, 24, sizeof(BlendData), count, 0);
+                    blendData += blendPositions->count;
                   }
                 }
               } else if (STR_EQ(key, "material")) {
@@ -1053,6 +1061,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                 primitive->count = vertexCount;
               }
 
+              if (!mesh->vertices) mesh->vertices = vertices;
               copyAttribute(vertices, positions, F32, 3, false, 0, sizeof(ModelVertex), vertexCount, 0);
               copyAttribute(vertices, normals, SN10x3, 1, false, 12, sizeof(ModelVertex), vertexCount, 0);
               copyAttribute(vertices, uvs, F32, 2, false, 16, sizeof(ModelVertex), vertexCount, 0);
@@ -1061,29 +1070,19 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               vertices += vertexCount;
 
               if (indices) {
+                if (!mesh->indices) mesh->indices = indexData;
                 int type = model->indexSize == 4 ? U32 : U16;
                 copyAttribute(indexData, indices, type, 1, false, 0, model->indexSize, indices->count, 0);
                 indexData = (char*) indexData + (indices->count * model->indexSize);
               }
 
               if (joints && weights) {
-                mesh->skinData = mesh->skinData ? mesh->skinData : skinData;
+                if (!mesh->skinData) mesh->skinData = skinData;
                 copyAttribute(skinData, joints, U8, 4, false, 0, sizeof(SkinData), vertexCount, 0);
                 copyAttribute(skinData, weights, U8, 4, true, 4, sizeof(SkinData), vertexCount, 0);
                 skinData += vertexCount;
               }
 
-              if (blendPositions) {
-                for (uint32_t b = 0; b < mesh->blendShapeCount; b++) {
-                  copyAttribute(blendData, blendPositions, F32, 3, false, 0, sizeof(BlendData), vertexCount, 0);
-                  copyAttribute(blendData, blendNormals, F32, 3, false, 12, sizeof(BlendData), vertexCount, 0);
-                  copyAttribute(blendData, blendTangents, F32, 3, false, 24, sizeof(BlendData), vertexCount, 0);
-                  blendData += vertexCount;
-                }
-              }
-
-              primitive->vertexCount = vertexCount;
-              primitive->indexCount = indices ? indices->count : 0;
               primitive->bounds[0] = (positions->min[0] + positions->max[0]) / 2.f;
               primitive->bounds[1] = (positions->min[1] + positions->max[1]) / 2.f;
               primitive->bounds[2] = (positions->min[2] + positions->max[2]) / 2.f;
@@ -1091,13 +1090,14 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               primitive->bounds[4] = (positions->max[1] - positions->min[1]) / 2.f;
               primitive->bounds[5] = (positions->max[2] - positions->min[2]) / 2.f;
 
-              mesh->vertexCount += vertexCount;
-              mesh->indexCount += indices ? indices->count : 0;
+              primitive->vertexCount = vertexCount;
+              primitive->indexCount = indices ? indices->count : 0;
+              mesh->vertexCount += primitive->vertexCount;
+              mesh->indexCount += primitive->indexCount;
               mesh->primitiveCount++;
             }
           }
         } else if (STR_EQ(key, "weights")) {
-          lovrAssertGoto(fail, (uint32_t) token->size == mesh->blendShapeCount, "Inconsistent blend shape counts");
           for (int w = (token++)->size, index = 0; w > 0; w--, index++) {
             mesh->blendShapes[index].weight = NOM_FLOAT(json, token);
           }
@@ -1105,7 +1105,6 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
           for (int k2 = (token++)->size; k2 > 0; k2--) {
             gltfString key = NOM_STR(json, token);
             if (STR_EQ(key, "targetNames")) {
-              lovrAssertGoto(fail, (uint32_t) token->size == mesh->blendShapeCount, "Inconsistent blend shape counts");
               for (int k3 = (token++)->size, index = 0; k3 > 0; k3--, index++) {
                 gltfString name = NOM_STR(json, token);
                 uint64_t hash = hash64(name.data, name.length);
@@ -1123,8 +1122,15 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
         } else {
           token = NOM(token);
         }
+      }
 
+      if (mesh->blendShapeCount > 0) {
+        for (uint32_t i = 0; i < mesh->blendShapeCount; i++) {
+          mesh->blendShapes[i].mesh = mesh - model->meshes;
+        }
         blendShapes += mesh->blendShapeCount;
+      } else {
+        mesh->blendShapes = NULL;
       }
     }
   }

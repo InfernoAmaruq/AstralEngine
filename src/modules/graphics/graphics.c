@@ -4994,7 +4994,7 @@ Model* lovrModelCreate(const ModelInfo* info) {
     void* skinData = NULL;
     model->skinBuffer = lovrBufferCreate(&bufferInfo, &skinData);
     lovrAssertGoto(fail, model->skinBuffer, "Failed to create model skinning buffer: %s", lovrGetError());
-    memcpy(skinData, data->skinData, data->vertexCount * 8);
+    memcpy(skinData, data->skinData, data->skinnedVertexCount * 8);
   }
 
   // Blend Shapes
@@ -5015,6 +5015,7 @@ Model* lovrModelCreate(const ModelInfo* info) {
   }
 
   // Draws
+  uint32_t baseVertex = 0;
   model->draws = lovrCalloc(data->primitiveCount * sizeof(DrawInfo));
   for (uint32_t i = 0, drawIndex = 0; i < data->meshCount; i++) {
     ModelMesh* mesh = &data->meshes[i];
@@ -5032,10 +5033,16 @@ Model* lovrModelCreate(const ModelInfo* info) {
 
       draw->material = !info->materials || primitive->material == ~0u ? NULL: model->materials[primitive->material];
       draw->vertex.buffer = model->vertexBuffer;
-      draw->index.buffer = mesh->indices ? model->indexBuffer : NULL;
       draw->start = primitive->start;
       draw->count = primitive->count;
       draw->bounds = primitive->bounds;
+
+      if (primitive->indexCount > 0) {
+        draw->index.buffer = model->indexBuffer;
+        draw->baseVertex = baseVertex;
+      }
+
+      baseVertex += primitive->vertexCount;
     }
   }
 
@@ -5474,7 +5481,7 @@ static bool lovrModelAnimateVertices(Model* model) {
 
     gpu_binding bindings[] = {
       { 0, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->rawVertexBuffer->gpu, 0, data->skinnedVertexCount * sizeof(ModelVertex) } },
-      { 1, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->vertexBuffer->gpu, 0, data->skinnedVertexCount * sizeof(ModelVertex) } },
+      { 1, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->vertexBuffer->gpu, 0, data->vertexCount * sizeof(ModelVertex) } },
       { 2, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->skinBuffer->gpu, 0, data->skinnedVertexCount * 8 } },
       { 3, GPU_SLOT_UNIFORM_BUFFER, .buffer = { NULL, 0, 0 } } // Filled in for each skin
     };
@@ -5488,7 +5495,9 @@ static bool lovrModelAnimateVertices(Model* model) {
       ModelMesh* mesh = &data->meshes[i];
       ModelSkin* skin = NULL;
 
-      if (!mesh->skinData) continue;
+      if (!mesh->skinData) {
+        continue;
+      }
 
       for (uint32_t j = 0; j < data->nodeCount; j++) {
         if (data->nodes[j].mesh == i && data->nodes[j].skin != ~0u) {
@@ -5528,9 +5537,6 @@ static bool lovrModelAnimateVertices(Model* model) {
       uint32_t maxVerticesPerDispatch = (uint32_t) MIN((uint64_t) state.limits.workgroupCount[0] * subgroupSize, (uint64_t) verticesRemaining);
       uint32_t baseVertex = mesh->vertices - data->vertices;
       bool inplace = mesh->blendShapeCount > 0;
-
-      // TODO do we need to send both the raw vertex buffer offset and the vertex offset?
-      // Note: to get raw vertex buffer offset, maintain a cursor in this loop
 
       while (verticesRemaining > 0) {
         uint32_t vertexCount = MIN(verticesRemaining, maxVerticesPerDispatch);

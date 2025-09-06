@@ -119,8 +119,8 @@ typedef struct {
 
 typedef struct {
   uint32_t* joints;
-  uint32_t jointCount;
   float* inverseBindMatrices;
+  uint32_t jointCount;
 } ModelSkin;
 
 typedef struct {
@@ -143,6 +143,7 @@ typedef struct {
 
 typedef struct ModelData {
   uint32_t ref;
+  uint32_t rootNode;
   uint64_t id;
   void* data;
 
@@ -164,15 +165,16 @@ typedef struct ModelData {
   ModelAnimation* animations;
   ModelSkin* skins;
   ModelNode* nodes;
-  uint32_t rootNode;
 
   uint32_t primitiveCount;
   uint32_t channelCount;
+  uint32_t keyframeDataCount;
   uint32_t jointCount;
   uint32_t charCount;
 
   ModelPrimitive* primitives;
   ModelAnimationChannel* channels;
+  float* keyframeData;
   float* inverseBindMatrices;
   uint32_t* joints;
   char* chars;

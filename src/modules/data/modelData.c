@@ -49,10 +49,10 @@ void lovrModelDataDestroy(void* ref) {
 // Batches allocations for all the ModelData arrays
 void lovrModelDataAllocate(ModelData* model) {
   size_t totalSize = 0;
-  size_t sizes[16];
+  size_t sizes[17];
   size_t alignment = 8;
-  totalSize += sizes[0] = ALIGN(model->imageCount * sizeof(Image*), alignment);
-  totalSize += sizes[1] = ALIGN(model->meshCount * sizeof(ModelMesh), alignment);
+  totalSize += sizes[0] = ALIGN(model->meshCount * sizeof(ModelMesh), alignment);
+  totalSize += sizes[1] = ALIGN(model->imageCount * sizeof(Image*), alignment);
   totalSize += sizes[2] = ALIGN(model->materialCount * sizeof(ModelMaterial), alignment);
   totalSize += sizes[3] = ALIGN(model->blendShapeCount * sizeof(ModelBlendShape), alignment);
   totalSize += sizes[4] = ALIGN(model->animationCount * sizeof(ModelAnimation), alignment);
@@ -60,18 +60,19 @@ void lovrModelDataAllocate(ModelData* model) {
   totalSize += sizes[6] = ALIGN(model->nodeCount * sizeof(ModelNode), alignment);
   totalSize += sizes[7] = ALIGN(model->primitiveCount * sizeof(ModelPrimitive), alignment);
   totalSize += sizes[8] = ALIGN(model->channelCount * sizeof(ModelAnimationChannel), alignment);
-  totalSize += sizes[9] = ALIGN(model->jointCount * 16 * sizeof(float), alignment);
-  totalSize += sizes[10] = ALIGN(model->jointCount * sizeof(uint32_t), alignment);
-  totalSize += sizes[11] = ALIGN(model->charCount * sizeof(char), alignment);
-  totalSize += sizes[12] = ALIGN(sizeof(map_t), alignment);
+  totalSize += sizes[9] = ALIGN(model->keyframeDataCount * sizeof(float), alignment);
+  totalSize += sizes[10] = ALIGN(model->jointCount * 16 * sizeof(float), alignment);
+  totalSize += sizes[11] = ALIGN(model->jointCount * sizeof(uint32_t), alignment);
+  totalSize += sizes[12] = ALIGN(model->charCount * sizeof(char), alignment);
   totalSize += sizes[13] = ALIGN(sizeof(map_t), alignment);
   totalSize += sizes[14] = ALIGN(sizeof(map_t), alignment);
   totalSize += sizes[15] = ALIGN(sizeof(map_t), alignment);
+  totalSize += sizes[16] = ALIGN(sizeof(map_t), alignment);
 
   size_t offset = 0;
   char* p = model->data = lovrCalloc(totalSize);
-  model->images = (Image**) (p + offset), offset += sizes[0];
-  model->meshes = (ModelMesh*) (p + offset), offset += sizes[1];
+  model->meshes = (ModelMesh*) (p + offset), offset += sizes[0];
+  model->images = (Image**) (p + offset), offset += sizes[1];
   model->materials = (ModelMaterial*) (p + offset), offset += sizes[2];
   model->blendShapes = (ModelBlendShape*) (p + offset), offset += sizes[3];
   model->animations = (ModelAnimation*) (p + offset), offset += sizes[4];
@@ -79,13 +80,14 @@ void lovrModelDataAllocate(ModelData* model) {
   model->nodes = (ModelNode*) (p + offset), offset += sizes[6];
   model->primitives = (ModelPrimitive*) (p + offset), offset += sizes[7];
   model->channels = (ModelAnimationChannel*) (p + offset), offset += sizes[8];
-  model->inverseBindMatrices = (float*) (p + offset), offset += sizes[9];
-  model->joints = (uint32_t*) (p + offset), offset += sizes[10];
-  model->chars = (char*) (p + offset), offset += sizes[11];
-  model->blendShapeMap = (map_t*) (p + offset), offset += sizes[12];
-  model->animationMap = (map_t*) (p + offset), offset += sizes[13];
-  model->materialMap = (map_t*) (p + offset), offset += sizes[14];
-  model->nodeMap = (map_t*) (p + offset), offset += sizes[15];
+  model->keyframeData = (float*) (p + offset), offset += sizes[9];
+  model->inverseBindMatrices = (float*) (p + offset), offset += sizes[10];
+  model->joints = (uint32_t*) (p + offset), offset += sizes[11];
+  model->chars = (char*) (p + offset), offset += sizes[12];
+  model->blendShapeMap = (map_t*) (p + offset), offset += sizes[13];
+  model->animationMap = (map_t*) (p + offset), offset += sizes[14];
+  model->materialMap = (map_t*) (p + offset), offset += sizes[15];
+  model->nodeMap = (map_t*) (p + offset), offset += sizes[16];
 
   model->vertices = model->vertexCount > 0 ? lovrMalloc(model->vertexCount * sizeof(ModelVertex)) : NULL;
   model->indices = model->indexCount > 0 ? lovrMalloc(model->indexCount * model->indexSize) : NULL;

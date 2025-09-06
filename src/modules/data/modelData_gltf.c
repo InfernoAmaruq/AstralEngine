@@ -443,6 +443,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   gltfImage* images = NULL;
   gltfTexture* textures = NULL;
   gltfScene* scenes = NULL;
+  int animationSamplerCount = 0;
   int rootScene = 0;
 
   for (jsmntok_t* token = tokens + 1; token < tokens + tokenCount;) {
@@ -498,21 +499,20 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
     } else if (STR_EQ(key, "animations")){
       info.animations = token;
       model->animationCount = token->size;
-      size_t samplerCount = 0;
       jsmntok_t* t = token;
       for (int i = (t++)->size; i > 0; i--) {
         if (t->size > 0) {
           for (int k = (t++)->size; k > 0; k--) {
             gltfString key = NOM_STR(json, t);
             if (STR_EQ(key, "channels")) { model->channelCount += t->size; }
-            else if (STR_EQ(key, "samplers")) { samplerCount += t->size; }
+            else if (STR_EQ(key, "samplers")) { animationSamplerCount += t->size; }
             else if (STR_EQ(key, "name")) { model->charCount += t->end - t->start + 1; }
             t = NOM(t);
           }
         }
       }
 
-      animationSamplers = lovrMalloc(samplerCount * sizeof(gltfAnimationSampler));
+      animationSamplers = lovrMalloc(animationSamplerCount * sizeof(gltfAnimationSampler));
       gltfAnimationSampler* sampler = animationSamplers;
       for (int i = (token++)->size; i > 0; i--) {
         for (int k = (token++)->size; k > 0; k--) {
@@ -673,57 +673,68 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   }
 
   // Iterate over meshes and tally up vertex/index/blendshape counts (now that we have accessors)
-  jsmntok_t* token = info.meshes;
-  for (int i = (token++)->size; i > 0 ; i--) {
-    for (int k = (token++)->size; k > 0; k--) {
-      gltfString key = NOM_STR(json, token);
-      if (STR_EQ(key, "primitives")) {
-        model->primitiveCount += token->size;
-        for (int p = (token++)->size; p > 0; p--) {
-          uint32_t vertexCount = 0;
-          uint32_t blendShapeCount = 0;
-          bool hasJoints = false;
+  if (info.meshes) {
+    jsmntok_t* token = info.meshes;
+    for (int i = (token++)->size; i > 0 ; i--) {
+      for (int k = (token++)->size; k > 0; k--) {
+        gltfString key = NOM_STR(json, token);
+        if (STR_EQ(key, "primitives")) {
+          model->primitiveCount += token->size;
+          for (int p = (token++)->size; p > 0; p--) {
+            uint32_t vertexCount = 0;
+            uint32_t blendShapeCount = 0;
+            bool hasJoints = false;
+            for (int k2 = (token++)->size; k2 > 0; k2--) {
+              gltfString key = NOM_STR(json, token);
+              if (STR_EQ(key, "attributes")) {
+                for (int a = (token++)->size; a > 0; a--) {
+                  gltfString name = NOM_STR(json, token);
+                  uint32_t index = NOM_U32(json, token);
+                  if (STR_EQ(name, "POSITION")) vertexCount = accessors[index].count;
+                  else if (STR_EQ(name, "JOINTS_0")) hasJoints = true;
+                }
+              } else if (STR_EQ(key, "indices")) {
+                uint32_t index = NOM_U32(json, token);
+                model->indexCount += accessors[index].count;
+                model->indexSize = MAX(model->indexSize, typeSizes[accessors[index].type]);
+              } else if (p == 0 && STR_EQ(key, "targets")) {
+                blendShapeCount = token->size;
+                token = NOM(token);
+              } else {
+                token = NOM(token);
+              }
+            }
+            model->vertexCount += vertexCount;
+            model->skinnedVertexCount += hasJoints ? vertexCount : 0;
+            model->blendedVertexCount += vertexCount * blendShapeCount;
+            model->animatedVertexCount += (hasJoints || blendShapeCount > 0) ? vertexCount : 0;
+            model->blendShapeCount += blendShapeCount;
+          }
+        } else if (STR_EQ(key, "extras")) {
           for (int k2 = (token++)->size; k2 > 0; k2--) {
             gltfString key = NOM_STR(json, token);
-            if (STR_EQ(key, "attributes")) {
-              for (int a = (token++)->size; a > 0; a--) {
-                gltfString name = NOM_STR(json, token);
-                uint32_t index = NOM_U32(json, token);
-                if (STR_EQ(name, "POSITION")) vertexCount = accessors[index].count;
-                else if (STR_EQ(name, "JOINTS_0")) hasJoints = true;
+            if (STR_EQ(key, "targetNames")) {
+              for (int j = (token++)->size; j > 0; j--) {
+                model->charCount += token->end - token->start + 1;
+                token++;
               }
-            } else if (STR_EQ(key, "indices")) {
-              uint32_t index = NOM_U32(json, token);
-              model->indexCount += accessors[index].count;
-              model->indexSize = MAX(model->indexSize, typeSizes[accessors[index].type]);
-            } else if (p == 0 && STR_EQ(key, "targets")) {
-              model->blendShapeCount += token->size;
-              token = NOM(token);
             } else {
               token = NOM(token);
             }
           }
-          model->vertexCount += vertexCount;
-          model->skinnedVertexCount += hasJoints ? vertexCount : 0;
-          model->blendedVertexCount += vertexCount * blendShapeCount;
-          model->animatedVertexCount += (hasJoints || blendShapeCount > 0) ? vertexCount : 0;
+        } else {
+          token = NOM(token);
         }
-      } else if (STR_EQ(key, "extras")) {
-        for (int k2 = (token++)->size; k2 > 0; k2--) {
-          gltfString key = NOM_STR(json, token);
-          if (STR_EQ(key, "targetNames")) {
-            for (int j = (token++)->size; j > 0; j--) {
-              model->charCount += token->end - token->start + 1;
-              token++;
-            }
-          } else {
-            token = NOM(token);
-          }
-        }
-      } else {
-        token = NOM(token);
       }
     }
+  }
+
+  // Count keyframes
+  for (uint32_t i = 0; i < animationSamplerCount; i++) {
+    gltfAccessor* times = &accessors[animationSamplers[i].input];
+    gltfAccessor* values = &accessors[animationSamplers[i].output];
+    model->keyframeDataCount += times->count;
+    model->keyframeDataCount += values->count * values->components;
   }
 
   // We only support a single root node, so if there is more than one root node in the scene then
@@ -817,6 +828,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
     int channelIndex = 0;
     int baseSampler = 0;
     jsmntok_t* token = info.animations;
+    float* keyframeData = model->keyframeData;
     ModelAnimation* animation = model->animations;
     for (int i = (token++)->size; i > 0; i--, animation++) {
       int samplerCount = 0;
@@ -828,17 +840,25 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
           channelIndex += animation->channelCount;
           for (uint32_t j = 0; j < animation->channelCount; j++) {
             ModelAnimationChannel* channel = &animation->channels[j];
-            //ModelAttribute* times = NULL;
-            //ModelAttribute* data = NULL;
 
             for (int k2 = (token++)->size; k2 > 0; k2--) {
               gltfString key = NOM_STR(json, token);
               if (STR_EQ(key, "sampler")) {
                 gltfAnimationSampler* sampler = animationSamplers + baseSampler + NOM_U32(json, token);
-                //times = &model->attributes[sampler->input];
-                //data = &model->attributes[sampler->output];
-                //channel->smoothing = sampler->smoothing;
-                //channel->keyframeCount = times->count;
+
+                gltfAccessor* times = &accessors[sampler->input];
+                channel->times = keyframeData;
+                copyAttribute(keyframeData, times, F32, 1, false, 0, 4, times->count, 0);
+                animation->duration = MAX(animation->duration, channel->times[times->count - 1]);
+                keyframeData += times->count;
+
+                gltfAccessor* values = &accessors[sampler->output];
+                channel->data = keyframeData;
+                copyAttribute(keyframeData, values, F32, values->components, false, 0, values->components * 4, values->count, 0);
+                keyframeData += values->count * values->components;
+
+                channel->smoothing = sampler->smoothing;
+                channel->keyframeCount = times->count;
               } else if (STR_EQ(key, "target")) {
                 for (int k3 = (token++)->size; k3 > 0; k3--) {
                   gltfString key = NOM_STR(json, token);
@@ -858,23 +878,6 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                 token = NOM(token);
               }
             }
-
-            /*
-            lovrAssertGoto(fail, times, "Missing keyframe times");
-            lovrAssertGoto(fail, data, "Missing keyframe data");
-
-            ModelBuffer* buffer;
-            buffer = &model->buffers[times->buffer];
-            lovrAssertGoto(fail, times->type == F32 && (buffer->stride == 0 || buffer->stride == sizeof(float)), "Keyframe times must be tightly-packed floats");
-            channel->times = (float*) (buffer->data + times->offset);
-
-            buffer = &model->buffers[data->buffer];
-            uint8_t components = data->components;
-            lovrAssertGoto(fail, data->type == F32 && (buffer->stride == 0 || buffer->stride == sizeof(float) * components), "Keyframe data must be tightly-packed floats");
-            channel->data = (float*) (buffer->data + data->offset);
-
-            animation->duration = MAX(animation->duration, channel->times[channel->keyframeCount - 1]);
-            */
           }
         } else if (STR_EQ(key, "samplers")) {
           samplerCount = token->size;
@@ -967,12 +970,13 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
     void* indexData = model->indices;
     SkinData* skinData = model->skinData;
     BlendData* blendData = model->blendData;
-    uint32_t blendShapeIndex = 0;
+    ModelBlendShape* blendShapes = model->blendShapes;
     for (int i = (token++)->size; i > 0; i--, mesh++) {
-      uint32_t drawStart = 0;
       mesh->primitives = primitive;
-      mesh->blendShapes = mesh->blendShapeCount > 0 ? model->blendShapes + blendShapeIndex : NULL;
-      blendShapeIndex += model->blendShapeCount;
+      mesh->vertices = vertices;
+      mesh->indices = indexData;
+      mesh->blendData = blendData;
+      mesh->blendShapes = blendShapes;
       for (int k = (token++)->size; k > 0; k--) {
         gltfString key = NOM_STR(json, token);
         if (STR_EQ(key, "primitives")) {
@@ -1037,7 +1041,18 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
             if (positions) {
               uint32_t vertexCount = positions->count;
 
-              mesh->vertices = vertices;
+              if (indices) {
+                if (model->indexSize == 4) {
+                  primitive->start = (uint32_t*) indexData - (uint32_t*) model->indices;
+                } else {
+                  primitive->start = (uint16_t*) indexData - (uint16_t*) model->indices;
+                }
+                primitive->count = indices->count;
+              } else {
+                primitive->start = vertices - model->vertices;
+                primitive->count = vertexCount;
+              }
+
               copyAttribute(vertices, positions, F32, 3, false, 0, sizeof(ModelVertex), vertexCount, 0);
               copyAttribute(vertices, normals, SN10x3, 1, false, 12, sizeof(ModelVertex), vertexCount, 0);
               copyAttribute(vertices, uvs, F32, 2, false, 16, sizeof(ModelVertex), vertexCount, 0);
@@ -1046,21 +1061,19 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               vertices += vertexCount;
 
               if (indices) {
-                mesh->indices = indexData;
                 int type = model->indexSize == 4 ? U32 : U16;
                 copyAttribute(indexData, indices, type, 1, false, 0, model->indexSize, indices->count, 0);
                 indexData = (char*) indexData + (indices->count * model->indexSize);
               }
 
               if (joints && weights) {
-                mesh->skinData = skinData;
+                mesh->skinData = mesh->skinData ? mesh->skinData : skinData;
                 copyAttribute(skinData, joints, U8, 4, false, 0, sizeof(SkinData), vertexCount, 0);
                 copyAttribute(skinData, weights, U8, 4, true, 4, sizeof(SkinData), vertexCount, 0);
                 skinData += vertexCount;
               }
 
-              if (mesh->blendShapeCount > 0) {
-                mesh->blendData = blendData;
+              if (blendPositions) {
                 for (uint32_t b = 0; b < mesh->blendShapeCount; b++) {
                   copyAttribute(blendData, blendPositions, F32, 3, false, 0, sizeof(BlendData), vertexCount, 0);
                   copyAttribute(blendData, blendNormals, F32, 3, false, 12, sizeof(BlendData), vertexCount, 0);
@@ -1069,8 +1082,6 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                 }
               }
 
-              primitive->start = drawStart;
-              primitive->count = indices ? indices->count : vertexCount;
               primitive->vertexCount = vertexCount;
               primitive->indexCount = indices ? indices->count : 0;
               primitive->bounds[0] = (positions->min[0] + positions->max[0]) / 2.f;
@@ -1079,7 +1090,9 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               primitive->bounds[3] = (positions->max[0] - positions->min[0]) / 2.f;
               primitive->bounds[4] = (positions->max[1] - positions->min[1]) / 2.f;
               primitive->bounds[5] = (positions->max[2] - positions->min[2]) / 2.f;
-              drawStart += primitive->count;
+
+              mesh->vertexCount += vertexCount;
+              mesh->indexCount += indices ? indices->count : 0;
               mesh->primitiveCount++;
             }
           }
@@ -1097,7 +1110,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                 gltfString name = NOM_STR(json, token);
                 uint64_t hash = hash64(name.data, name.length);
                 if (map_get(model->blendShapeMap, hash) == MAP_NIL) {
-                  map_set(model->blendShapeMap, hash, blendShapeIndex + index);
+                  map_set(model->blendShapeMap, hash, mesh->blendShapes - model->blendShapes + index);
                 }
                 memcpy(model->chars, name.data, name.length);
                 mesh->blendShapes[index].name = model->chars;
@@ -1110,6 +1123,8 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
         } else {
           token = NOM(token);
         }
+
+        blendShapes += mesh->blendShapeCount;
       }
     }
   }
@@ -1194,7 +1209,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
         if (STR_EQ(key, "inverseBindMatrices")) {
           gltfAccessor* accessor = &accessors[NOM_U32(json, token)];
           skin->inverseBindMatrices = inverseBindMatrices;
-          memcpy(skin->inverseBindMatrices, accessor, accessor->count * 16 * sizeof(float));
+          memcpy(skin->inverseBindMatrices, accessor->data, accessor->count * 16 * sizeof(float));
           inverseBindMatrices += accessor->count * 16;
         } else if (STR_EQ(key, "joints")) {
           skin->joints = &model->joints[jointIndex];

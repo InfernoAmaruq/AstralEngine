@@ -2682,83 +2682,71 @@ static ModelData* newModelDataFB(uint64_t key) {
   ModelData* model = lovrCalloc(sizeof(ModelData));
   model->ref = 1;
   model->id = key;
-  model->blobCount = 1;
-  model->bufferCount = 6;
-  model->attributeCount = 6;
-  model->primitiveCount = 1;
+  model->meshCount = 1;
   model->skinCount = 1;
-  model->jointCount = jointCount;
   model->nodeCount = 2 + jointCount;
+  model->primitiveCount = 1;
+  model->jointCount = jointCount;
+  model->vertexCount = vertexCount;
+  model->indexCount = indexCount;
+  model->skinnedVertexCount = vertexCount;
+  model->indexSize = 2;
   lovrModelDataAllocate(model);
 
-  model->blobs[0] = lovrBlobCreate(meshData, totalSize, "Hand Mesh Data");
+  XrVector3f* positions = mesh.vertexPositions;
+  XrVector3f* normals = mesh.vertexNormals;
+  XrVector2f* uvs = mesh.vertexUVs;
 
-  model->buffers[0] = (ModelBuffer) {
-    .offset = (char*) mesh.vertexPositions - (char*) meshData,
-    .data = (char*) mesh.vertexPositions,
-    .size = sizeof(mesh.vertexPositions[0]) * vertexCount,
-    .stride = sizeof(mesh.vertexPositions[0])
+  for (uint32_t i = 0; i < vertexCount; i++) {
+    model->vertices[i] = (ModelVertex) {
+      .position = { positions[i].x, positions[i].y, positions[i].z },
+      .normal =
+        ((((uint32_t) (int32_t) (normals[i].x * 511.f)) & 0x3ff) <<  0) |
+        ((((uint32_t) (int32_t) (normals[i].y * 511.f)) & 0x3ff) << 10) |
+        ((((uint32_t) (int32_t) (normals[i].z * 511.f)) & 0x3ff) << 20),
+      .uv = { uvs[i].x, uvs[i].y },
+      .color = { 0xff, 0xff, 0xff, 0xff }
+    };
+  }
+
+  XrVector4sFB* joints = mesh.vertexBlendIndices;
+  XrVector4f* weights = mesh.vertexBlendWeights;
+
+  for (uint32_t i = 0; i < vertexCount; i++) {
+    model->skinData[i] = (SkinData) {
+      .joints = { (uint8_t) joints[i].x, (uint8_t) joints[i].y, (uint8_t) joints[i].z, (uint8_t) joints[i].w },
+      .weights = { weights[i].x * 255.f + .5f, weights[i].y * 255.f + .5f, weights[i].z * 255.f + .5f, weights[i].w * 255.f + .5f },
+    };
+  }
+
+  memcpy(model->indices, mesh.indices, model->indexCount * model->indexSize);
+
+  model->meshes[0] = (ModelMesh) {
+    .primitiveCount = 1,
+    .vertexCount = vertexCount,
+    .indexCount = indexCount,
+    .primitives = model->primitives,
+    .vertices = model->vertices,
+    .indices = model->indices,
+    .skinData = model->skinData
   };
-
-  model->buffers[1] = (ModelBuffer) {
-    .offset = (char*) mesh.vertexNormals - (char*) meshData,
-    .data = (char*) mesh.vertexNormals,
-    .size = sizeof(mesh.vertexNormals[0]) * vertexCount,
-    .stride = sizeof(mesh.vertexNormals[0])
-  };
-
-  model->buffers[2] = (ModelBuffer) {
-    .offset = (char*) mesh.vertexUVs - (char*) meshData,
-    .data = (char*) mesh.vertexUVs,
-    .size = sizeof(mesh.vertexUVs[0]) * vertexCount,
-    .stride = sizeof(mesh.vertexUVs[0])
-  };
-
-  model->buffers[3] = (ModelBuffer) {
-    .offset = (char*) mesh.vertexBlendIndices - (char*) meshData,
-    .data = (char*) mesh.vertexBlendIndices,
-    .size = sizeof(mesh.vertexBlendIndices[0]) * vertexCount,
-    .stride = sizeof(mesh.vertexBlendIndices[0])
-  };
-
-  model->buffers[4] = (ModelBuffer) {
-    .offset = (char*) mesh.vertexBlendWeights - (char*) meshData,
-    .data = (char*) mesh.vertexBlendWeights,
-    .size = sizeof(mesh.vertexBlendWeights[0]) * vertexCount,
-    .stride = sizeof(mesh.vertexBlendWeights[0])
-  };
-
-  model->buffers[5] = (ModelBuffer) {
-    .offset = (char*) mesh.indices - (char*) meshData,
-    .data = (char*) mesh.indices,
-    .size = sizeof(mesh.indices[0]) * indexCount,
-    .stride = sizeof(mesh.indices[0])
-  };
-
-  model->attributes[0] = (ModelAttribute) { .buffer = 0, .type = F32, .components = 3, .count = vertexCount };
-  model->attributes[1] = (ModelAttribute) { .buffer = 1, .type = F32, .components = 3 };
-  model->attributes[2] = (ModelAttribute) { .buffer = 2, .type = F32, .components = 2 };
-  model->attributes[3] = (ModelAttribute) { .buffer = 3, .type = I16, .components = 4 };
-  model->attributes[4] = (ModelAttribute) { .buffer = 4, .type = F32, .components = 4 };
-  model->attributes[5] = (ModelAttribute) { .buffer = 5, .type = U16, .components = 1, .count = indexCount };
 
   model->primitives[0] = (ModelPrimitive) {
     .mode = DRAW_TRIANGLE_LIST,
-    .attributes = {
-      [ATTR_POSITION] = &model->attributes[0],
-      [ATTR_NORMAL] = &model->attributes[1],
-      [ATTR_UV] = &model->attributes[2],
-      [ATTR_JOINTS] = &model->attributes[3],
-      [ATTR_WEIGHTS] = &model->attributes[4]
-    },
-    .indices = &model->attributes[5],
-    .material = ~0u
+    .material = ~0u,
+    .start = 0,
+    .count = indexCount,
+    .vertexCount = vertexCount,
+    .indexCount = indexCount
+  };
+
+  model->skins[0] = (ModelSkin) {
+    .jointCount = model->jointCount,
+    .joints = model->joints,
+    .inverseBindMatrices = model->inverseBindMatrices
   };
 
   // The nodes in the Model correspond directly to the joints in the skin, for convenience
-  model->skins[0].joints = model->joints;
-  model->skins[0].jointCount = model->jointCount;
-  model->skins[0].inverseBindMatrices = inverseBindMatrices;
   for (uint32_t i = 0; i < model->jointCount; i++) {
     model->joints[i] = i;
 
@@ -2792,11 +2780,10 @@ static ModelData* newModelDataFB(uint64_t key) {
     .transform.translation = { 0.f, 0.f, 0.f },
     .transform.rotation = { 0.f, 0.f, 0.f, 1.f },
     .transform.scale = { 1.f, 1.f, 1.f },
-    .primitiveIndex = 0,
-    .primitiveCount = 1,
     .child = ~0u,
     .sibling = ~0u,
     .parent = ~0u,
+    .mesh = 0,
     .skin = 0
   };
 
@@ -2808,6 +2795,7 @@ static ModelData* newModelDataFB(uint64_t key) {
     .child = ~0u,
     .sibling = ~0u,
     .parent = ~0u,
+    .mesh = ~0u,
     .skin = ~0u
   };
 

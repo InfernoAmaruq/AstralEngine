@@ -5011,7 +5011,7 @@ Model* lovrModelCreate(const ModelInfo* info) {
     void* blendData = NULL;
     model->blendBuffer = lovrBufferCreate(&bufferInfo, &blendData);
     lovrAssertGoto(fail, model->blendBuffer, "Failed to create model blend shape buffer: %s", lovrGetError());
-    memcpy(blendData, data->blendData, data->vertexCount * data->blendShapeCount * sizeof(BlendData));
+    memcpy(blendData, data->blendData, data->blendedVertexCount * sizeof(BlendData));
   }
 
   // Draws

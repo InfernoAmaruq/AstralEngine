@@ -73,20 +73,6 @@ static int l_lovrModelDataGetMetadata(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetImageCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  lua_pushinteger(L, model->imageCount);
-  return 1;
-}
-
-static int l_lovrModelDataGetImage(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->imageCount, "Invalid image index '%d'", index + 1);
-  luax_pushtype(L, Image, model->images[index]);
-  return 1;
-}
-
 static int l_lovrModelDataGetRootNode(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   lua_pushinteger(L, model->rootNode + 1);
@@ -401,6 +387,20 @@ static int l_lovrModelDataGetBoundingSphere(lua_State* L) {
   return 4;
 }
 
+static int l_lovrModelDataGetImageCount(lua_State* L) {
+  ModelData* model = luax_checktype(L, 1, ModelData);
+  lua_pushinteger(L, model->imageCount);
+  return 1;
+}
+
+static int l_lovrModelDataGetImage(lua_State* L) {
+  ModelData* model = luax_checktype(L, 1, ModelData);
+  uint32_t index = luax_checku32(L, 2) - 1;
+  luax_check(L, index < model->imageCount, "Invalid image index '%d'", index + 1);
+  luax_pushtype(L, Image, model->images[index]);
+  return 1;
+}
+
 static int l_lovrModelDataGetMaterialCount(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   lua_pushinteger(L, model->materialCount);
@@ -617,13 +617,11 @@ static int l_lovrModelDataGetBlendShapeName(lua_State* L) {
 
 const luaL_Reg lovrModelData[] = {
   { "getMetadata", l_lovrModelDataGetMetadata },
-  { "getImageCount", l_lovrModelDataGetImageCount },
-  { "getImage", l_lovrModelDataGetImage },
   { "getRootNode", l_lovrModelDataGetRootNode },
   { "getNodeCount", l_lovrModelDataGetNodeCount },
   { "getNodeName", l_lovrModelDataGetNodeName },
   { "getNodeChild", l_lovrModelDataGetNodeChild },
-  { "getNodeChildren", l_lovrModelDataGetNodeChildren },
+  { "getNodeChildren", l_lovrModelDataGetNodeChildren }, // Deprecated
   { "getNodeSibling", l_lovrModelDataGetNodeSibling },
   { "getNodeParent", l_lovrModelDataGetNodeParent },
   { "getNodePosition", l_lovrModelDataGetNodePosition },
@@ -644,6 +642,8 @@ const luaL_Reg lovrModelData[] = {
   { "getCenter", l_lovrModelDataGetCenter },
   { "getBoundingBox", l_lovrModelDataGetBoundingBox },
   { "getBoundingSphere", l_lovrModelDataGetBoundingSphere },
+  { "getImageCount", l_lovrModelDataGetImageCount },
+  { "getImage", l_lovrModelDataGetImage },
   { "getMaterialCount", l_lovrModelDataGetMaterialCount },
   { "getMaterialName", l_lovrModelDataGetMaterialName },
   { "getMaterial", l_lovrModelDataGetMaterial },

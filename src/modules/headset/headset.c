@@ -2685,7 +2685,6 @@ static ModelData* newModelDataFB(uint64_t key) {
   model->meshCount = 1;
   model->skinCount = 1;
   model->nodeCount = 2 + jointCount;
-  model->primitiveCount = 1;
   model->jointCount = jointCount;
   model->vertexCount = vertexCount;
   model->indexCount = indexCount;
@@ -2721,24 +2720,10 @@ static ModelData* newModelDataFB(uint64_t key) {
 
   memcpy(model->indices, mesh.indices, model->indexCount * model->indexSize);
 
-  model->meshes[0] = (ModelMesh) {
-    .primitiveCount = 1,
-    .vertexCount = vertexCount,
-    .indexCount = indexCount,
-    .primitives = model->primitives,
-    .vertices = model->vertices,
-    .indices = model->indices,
-    .skinData = model->skinData
-  };
-
-  model->primitives[0] = (ModelPrimitive) {
-    .mode = DRAW_TRIANGLE_LIST,
-    .material = ~0u,
-    .start = 0,
-    .count = indexCount,
-    .vertexCount = vertexCount,
-    .indexCount = indexCount
-  };
+  model->meshes[0].vertexOffset = 0;
+  model->meshes[0].vertexCount = vertexCount;
+  model->meshes[0].indexOffset = 0;
+  model->meshes[0].indexCount = indexCount;
 
   model->skins[0] = (ModelSkin) {
     .jointCount = model->jointCount,
@@ -2760,6 +2745,7 @@ static ModelData* newModelDataFB(uint64_t key) {
       .child = ~0u,
       .sibling = ~0u,
       .parent = i == 0 ? ~0u : parent,
+      .mesh = ~0u,
       .skin = ~0u
     };
 

@@ -37,31 +37,29 @@ typedef enum {
 } ModelDrawMode;
 
 typedef struct {
-  ModelDrawMode mode;
-  uint32_t material;
   uint32_t start;
   uint32_t count;
-  uint32_t vertexCount;
-  uint32_t indexCount;
+  uint32_t baseVertex;
+  uint32_t material;
+  ModelDrawMode mode;
   float bounds[6];
-} ModelPrimitive;
+} ModelPart;
 
 typedef struct {
   const char* name;
-  uint32_t mesh;
   float weight;
 } ModelBlendShape;
 
 typedef struct {
-  uint32_t primitiveCount;
+  ModelPart* parts;
+  uint32_t partCount;
+  uint32_t vertexOffset;
   uint32_t vertexCount;
+  uint32_t indexOffset;
   uint32_t indexCount;
+  uint32_t skinDataOffset;
+  uint32_t blendDataOffset;
   uint32_t blendShapeCount;
-  ModelPrimitive* primitives;
-  ModelVertex* vertices;
-  void* indices;
-  SkinData* skinData;
-  BlendData* blendData;
   ModelBlendShape* blendShapes;
 } ModelMesh;
 
@@ -153,7 +151,6 @@ typedef struct ModelData {
   uint32_t meshCount;
   uint32_t imageCount;
   uint32_t materialCount;
-  uint32_t blendShapeCount;
   uint32_t animationCount;
   uint32_t skinCount;
   uint32_t nodeCount;
@@ -161,18 +158,19 @@ typedef struct ModelData {
   ModelMesh* meshes;
   struct Image** images;
   ModelMaterial* materials;
-  ModelBlendShape* blendShapes;
   ModelAnimation* animations;
   ModelSkin* skins;
   ModelNode* nodes;
 
-  uint32_t primitiveCount;
+  uint32_t partCount;
+  uint32_t blendShapeCount;
   uint32_t channelCount;
   uint32_t keyframeDataCount;
   uint32_t jointCount;
   uint32_t charCount;
 
-  ModelPrimitive* primitives;
+  ModelPart* parts;
+  ModelBlendShape* blendShapes;
   ModelAnimationChannel* channels;
   float* keyframeData;
   float* inverseBindMatrices;

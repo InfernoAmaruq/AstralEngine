@@ -328,7 +328,7 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
   model->vertexCount = vertices.length;
   model->indexCount = indices.length;
   model->indexSize = 4;
-  model->primitiveCount = (uint32_t) groups.length;
+  model->partCount = (uint32_t) groups.length;
   model->nodeCount = 1;
   model->imageCount = (uint32_t) images.length;
   model->materialCount = (uint32_t) materials.length;
@@ -336,25 +336,26 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
 
   memcpy(model->vertices, vertices.data, model->vertexCount * sizeof(ModelVertex));
   memcpy(model->indices, indices.data, model->indexCount * sizeof(uint32_t));
-  memcpy(model->images, images.data, model->imageCount * sizeof(Image*));
-  memcpy(model->materials, materials.data, model->materialCount * sizeof(ModelMaterial));
-  memcpy(((map_t*) model->materialMap)->hashes, materialMap.hashes, materialMap.size * sizeof(uint64_t));
-  memcpy(((map_t*) model->materialMap)->values, materialMap.values, materialMap.size * sizeof(uint64_t));
+
+  if (model->imageCount > 0) {
+    memcpy(model->images, images.data, model->imageCount * sizeof(Image*));
+    memcpy(model->materials, materials.data, model->materialCount * sizeof(ModelMaterial));
+    memcpy(((map_t*) model->materialMap)->hashes, materialMap.hashes, materialMap.size * sizeof(uint64_t));
+    memcpy(((map_t*) model->materialMap)->values, materialMap.values, materialMap.size * sizeof(uint64_t));
+  }
 
   for (size_t i = 0; i < groups.length; i++) {
     objGroup* group = &groups.data[i];
 
-    model->primitives[i] = (ModelPrimitive) {
-      .mode = DRAW_TRIANGLE_LIST,
+    model->parts[i] = (ModelPart) {
       .start = group->start,
       .count = group->count,
-      .vertexCount = model->vertexCount,
-      .indexCount = group->count,
       .material = group->material,
+      .mode = DRAW_TRIANGLE_LIST,
       .bounds = { FLT_MAX, -FLT_MAX, FLT_MAX, -FLT_MAX, FLT_MAX, -FLT_MAX }
     };
 
-    float* bounds = model->primitives[i].bounds;
+    float* bounds = model->parts[i].bounds;
 
     for (size_t j = group->start; j < group->start + group->count; j++) {
       ModelVertex* vertex = &vertices.data[indices.data[j]];
@@ -376,12 +377,12 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
   }
 
   model->meshes[0] = (ModelMesh) {
-    .primitiveCount = groups.length,
+    .parts = model->parts,
+    .partCount = groups.length,
     .vertexCount = vertices.length,
     .indexCount = indices.length,
-    .primitives = model->primitives,
-    .vertices = model->vertices,
-    .indices = model->indices
+    .skinDataOffset = ~0u,
+    .blendDataOffset = ~0u
   };
 
   model->nodes[0].mesh = 0;
@@ -392,6 +393,8 @@ finish:
   arr_free(&materials);
   map_free(&materialMap);
   map_free(&vertexMap);
+  arr_free(&vertices);
+  arr_free(&indices);
   arr_free(&positions);
   arr_free(&normals);
   arr_free(&uvs);
@@ -404,6 +407,8 @@ fail:
   arr_free(&materials);
   map_free(&materialMap);
   map_free(&vertexMap);
+  arr_free(&vertices);
+  arr_free(&indices);
   arr_free(&positions);
   arr_free(&normals);
   arr_free(&uvs);

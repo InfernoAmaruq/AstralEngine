@@ -278,7 +278,6 @@ struct Model {
   uint32_t ref;
   Model* parent;
   ModelInfo info;
-  DrawInfo* draws;
   Buffer* rawVertexBuffer;
   Buffer* vertexBuffer;
   Buffer* indexBuffer;
@@ -4956,10 +4955,10 @@ Model* lovrModelCreate(const ModelInfo* info) {
       model->rawVertexBuffer = lovrBufferCreate(&bufferInfo, &vertexData);
       lovrAssertGoto(fail, model->rawVertexBuffer, "Failed to create model raw vertex buffer: %s", lovrGetError());
 
-      for (uint32_t i = 0; i < data->meshCount; i++) {
-        ModelMesh* mesh = &data->meshes[i];
-        if (!mesh->skinData && !mesh->blendData) continue;
-        memcpy(vertexData, mesh->vertices, mesh->vertexCount * sizeof(ModelVertex));
+      ModelMesh* mesh = data->meshes;
+      for (uint32_t i = 0; i < data->meshCount; i++, mesh++) {
+        if (mesh->skinDataOffset == ~0u && mesh->blendDataOffset == ~0u) continue;
+        memcpy(vertexData, data->vertices + mesh->vertexOffset, mesh->vertexCount * sizeof(ModelVertex));
         vertexData = (ModelVertex*) vertexData + mesh->vertexCount;
       }
     }
@@ -5012,38 +5011,6 @@ Model* lovrModelCreate(const ModelInfo* info) {
     model->blendBuffer = lovrBufferCreate(&bufferInfo, &blendData);
     lovrAssertGoto(fail, model->blendBuffer, "Failed to create model blend shape buffer: %s", lovrGetError());
     memcpy(blendData, data->blendData, data->blendedVertexCount * sizeof(BlendData));
-  }
-
-  // Draws
-  uint32_t baseVertex = 0;
-  model->draws = lovrCalloc(data->primitiveCount * sizeof(DrawInfo));
-  for (uint32_t i = 0, drawIndex = 0; i < data->meshCount; i++) {
-    ModelMesh* mesh = &data->meshes[i];
-
-    for (uint32_t j = 0; j < mesh->primitiveCount; j++, drawIndex++) {
-      ModelPrimitive* primitive = &mesh->primitives[j];
-      DrawInfo* draw = &model->draws[drawIndex];
-
-      switch (primitive->mode) {
-        case DRAW_POINT_LIST: draw->mode = DRAW_POINTS; break;
-        case DRAW_LINE_LIST: draw->mode = DRAW_LINES; break;
-        case DRAW_TRIANGLE_LIST: draw->mode = DRAW_TRIANGLES; break;
-        default: lovrSetError("Model uses an unsupported draw mode (lineloop, linestrip, strip, fan)"); goto fail;
-      }
-
-      draw->material = !info->materials || primitive->material == ~0u ? NULL: model->materials[primitive->material];
-      draw->vertex.buffer = model->vertexBuffer;
-      draw->start = primitive->start;
-      draw->count = primitive->count;
-      draw->bounds = primitive->bounds;
-
-      if (primitive->indexCount > 0) {
-        draw->index.buffer = model->indexBuffer;
-        draw->baseVertex = baseVertex;
-      }
-
-      baseVertex += primitive->vertexCount;
-    }
   }
 
   // Blend shapes
@@ -5102,13 +5069,6 @@ Model* lovrModelClone(Model* parent) {
     }, 1);
   }
 
-  model->draws = lovrMalloc(data->primitiveCount * sizeof(DrawInfo));
-
-  for (uint32_t i = 0; i < data->primitiveCount; i++) {
-    model->draws[i] = parent->draws[i];
-    model->draws[i].vertex.buffer = model->vertexBuffer;
-  }
-
   model->blendShapeWeights = lovrMalloc(data->blendShapeCount * sizeof(float));
   lovrModelResetBlendShapes(model);
 
@@ -5128,7 +5088,6 @@ void lovrModelDestroy(void* ref) {
     lovrFree(model->globalTransforms);
     lovrFree(model->blendShapeWeights);
     lovrFree(model->meshes);
-    lovrFree(model->draws);
     lovrFree(model);
     return;
   }
@@ -5144,7 +5103,7 @@ void lovrModelDestroy(void* ref) {
     lovrFree(model->textures);
   }
   if (model->meshes) {
-    for (uint32_t i = 0; i < data->primitiveCount; i++) {
+    for (uint32_t i = 0; i < data->meshCount; i++) {
       lovrRelease(model->meshes[i], lovrMeshDestroy);
     }
   }
@@ -5158,7 +5117,6 @@ void lovrModelDestroy(void* ref) {
   lovrFree(model->globalTransforms);
   lovrFree(model->blendShapeWeights);
   lovrFree(model->meshes);
-  lovrFree(model->draws);
   lovrFree(model);
 }
 
@@ -5354,24 +5312,50 @@ Buffer* lovrModelGetIndexBuffer(Model* model) {
 }
 
 Mesh* lovrModelGetMesh(Model* model, uint32_t index) {
-  ModelData* data = model->info.data;
-  lovrCheck(index < data->primitiveCount, "Invalid mesh index '%d' (Model has %d mesh%s)", index + 1, data->primitiveCount, data->primitiveCount == 1 ? "" : "es");
+  ModelData* modelData = model->info.data;
+  uint32_t meshCount = modelData->meshCount;
+  lovrCheck(index < meshCount, "Invalid mesh index '%d' (Model has %d mesh%s)", index + 1, meshCount, meshCount == 1 ? "" : "es");
 
   if (!model->meshes) {
-    model->meshes = lovrCalloc(data->primitiveCount * sizeof(Mesh*));
+    model->meshes = lovrCalloc(meshCount * sizeof(Mesh*));
   }
 
   if (!model->meshes[index]) {
-    DrawInfo* draw = &model->draws[index];
-    MeshInfo info = { .vertexBuffer = model->vertexBuffer, .storage = MESH_GPU };
-    Mesh* mesh = lovrMeshCreate(&info, NULL);
-    if (!mesh) return NULL;
-    if (draw->index.buffer) lovrMeshSetIndexBuffer(mesh, model->indexBuffer);
-    lovrMeshSetDrawMode(mesh, draw->mode);
-    lovrMeshSetDrawRange(mesh, draw->start, draw->count, draw->baseVertex);
-    lovrMeshSetMaterial(mesh, draw->material);
-    memcpy(mesh->bounds, draw->bounds, sizeof(mesh->bounds));
+    Mesh* mesh = lovrMeshCreate(&(MeshInfo) {
+      .vertexBuffer = model->vertexBuffer,
+      .storage = MESH_GPU
+    }, NULL);
+
+    if (!mesh) {
+      return NULL;
+    }
+
+    ModelMesh* data = &modelData->meshes[index];
+    ModelPart* part = &modelData->parts[0];
+
+    if (data->indexCount > 0) {
+      lovrMeshSetIndexBuffer(mesh, model->indexBuffer);
+      lovrMeshSetDrawRange(mesh, data->indexOffset, part->count, data->vertexOffset);
+    } else {
+      lovrMeshSetDrawRange(mesh, data->vertexOffset, part->count, 0);
+    }
+
+    switch (part->mode) {
+      case DRAW_POINT_LIST: lovrMeshSetDrawMode(mesh, DRAW_POINTS); break;
+      case DRAW_LINE_LIST: lovrMeshSetDrawMode(mesh, DRAW_LINES); break;
+      case DRAW_TRIANGLE_LIST: lovrMeshSetDrawMode(mesh, DRAW_TRIANGLES); break;
+      default: lovrUnreachable();
+    }
+
+    if (model->materials && part->material != ~0u) {
+      lovrMeshSetMaterial(mesh, model->materials[part->material]);
+    }
+
+    // Can't use lovrMeshSetBoundingBox because the bounds is already in center/half-extent form
+    // TODO make it the union of the parts
+    memcpy(mesh->bounds, part->bounds, sizeof(mesh->bounds));
     mesh->hasBounds = true;
+
     model->meshes[index] = mesh;
   }
 
@@ -5495,10 +5479,11 @@ static bool lovrModelAnimateVertices(Model* model) {
       ModelMesh* mesh = &data->meshes[i];
       ModelSkin* skin = NULL;
 
-      if (!mesh->skinData) {
+      if (mesh->skinDataOffset == ~0u) {
         continue;
       }
 
+      // Search through nodes to find the skin for this mesh
       for (uint32_t j = 0; j < data->nodeCount; j++) {
         if (data->nodes[j].mesh == i && data->nodes[j].skin != ~0u) {
           skin = &data->skins[data->nodes[j].skin];
@@ -5535,7 +5520,7 @@ static bool lovrModelAnimateVertices(Model* model) {
       uint32_t subgroupSize = state.device.subgroupSize;
       uint32_t verticesRemaining = mesh->vertexCount;
       uint32_t maxVerticesPerDispatch = (uint32_t) MIN((uint64_t) state.limits.workgroupCount[0] * subgroupSize, (uint64_t) verticesRemaining);
-      uint32_t baseVertex = mesh->vertices - data->vertices;
+      uint32_t baseVertex = mesh->vertexOffset;
       bool inplace = mesh->blendShapeCount > 0;
 
       while (verticesRemaining > 0) {
@@ -8057,11 +8042,25 @@ static bool drawNode(Pass* pass, Model* model, uint32_t index, uint32_t instance
 
   if (node->mesh != ~0u) {
     ModelMesh* mesh = &data->meshes[node->mesh];
-    for (uint32_t i = 0; i < mesh->primitiveCount; i++) {
-      DrawInfo draw = model->draws[mesh->primitives - data->primitives + i];
-      if (node->skin == ~0u) draw.transform = globalTransform;
-      draw.instances = instances;
-      if (!lovrPassDraw(pass, &draw)) return false;
+    ModelPart* part = mesh->parts;
+
+    for (uint32_t i = 0; i < mesh->partCount; i++, part++) {
+      DrawInfo draw = {
+        .mode = part->mode == DRAW_POINT_LIST ? DRAW_POINTS : part->mode == DRAW_LINE_LIST ? DRAW_LINES : DRAW_TRIANGLES,
+        .material = model->materials && part->material != ~0u ? model->materials[part->material] : NULL,
+        .transform = node->skin == ~0u ? globalTransform : NULL,
+        .bounds = part->bounds,
+        .vertex.buffer = model->vertexBuffer,
+        .index.buffer = mesh->indexCount > 0 ? model->indexBuffer : NULL,
+        .start = part->start,
+        .count = part->count,
+        .baseVertex = part->baseVertex,
+        .instances = instances
+      };
+
+      if (!lovrPassDraw(pass, &draw)) {
+        return false;
+      }
     }
   }
 

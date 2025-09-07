@@ -1,8 +1,8 @@
 #include "data/modelData.h"
 #include "data/blob.h"
-#include "core/maf.h"
 #include "util.h"
 #include <string.h>
+#include <float.h>
 
 static bool lovrModelDataInitStlAscii(ModelData** result, Blob* source, ModelDataIO* io) {
   return lovrSetError("ASCII STL files are not supported yet");
@@ -19,30 +19,18 @@ static bool lovrModelDataInitStlBinary(ModelData** result, Blob* source, ModelDa
   model->ref = 1;
   model->meshCount = 1;
   model->vertexCount = vertexCount;
-  model->primitiveCount = 1;
+  model->meshCount = 1;
   model->nodeCount = 1;
 
   lovrModelDataAllocate(model);
 
-  model->primitives[0] = (ModelPrimitive) {
-    .mode = DRAW_TRIANGLE_LIST,
-    .count = vertexCount,
-    .vertexCount = vertexCount,
-    .material = ~0u,
-    .bounds = { FLT_MAX, -FLT_MAX, FLT_MAX, -FLT_MAX, FLT_MAX, -FLT_MAX }
-  };
-
-  model->meshes[0] = (ModelMesh) {
-    .primitiveCount = 1,
-    .primitives = model->primitives,
-    .vertexCount = vertexCount,
-    .vertices = model->vertices
-  };
+  model->meshes[0].vertexOffset = 0;
+  model->meshes[0].vertexCount = vertexCount;
 
   model->nodes[0].mesh = 0;
 
   ModelVertex* vertices = model->vertices;
-  float* bounds = model->primitives->bounds;
+  float* bounds = model->parts[0].bounds;
 
   for (uint32_t i = 0; i < triangleCount; i++) {
     float* f = (float*) data;
@@ -67,16 +55,16 @@ static bool lovrModelDataInitStlBinary(ModelData** result, Blob* source, ModelDa
       bounds[5] = MAX(bounds[5], v[j][2]);
     }
 
-    // Convert to center/half-extent representation
-    bounds[0] = (bounds[0] + bounds[3]) / 2.f;
-    bounds[1] = (bounds[1] + bounds[4]) / 2.f;
-    bounds[2] = (bounds[2] + bounds[5]) / 2.f;
-    bounds[3] = (bounds[3] - bounds[0]) / 2.f;
-    bounds[4] = (bounds[4] - bounds[1]) / 2.f;
-    bounds[5] = (bounds[5] - bounds[2]) / 2.f;
-
     data += 50;
   }
+
+  // Convert bounds to center/half-extent representation
+  bounds[0] = (bounds[0] + bounds[3]) / 2.f;
+  bounds[1] = (bounds[1] + bounds[4]) / 2.f;
+  bounds[2] = (bounds[2] + bounds[5]) / 2.f;
+  bounds[3] = (bounds[3] - bounds[0]) / 2.f;
+  bounds[4] = (bounds[4] - bounds[1]) / 2.f;
+  bounds[5] = (bounds[5] - bounds[2]) / 2.f;
 
   *result = model;
   return true;

@@ -675,12 +675,12 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   // Iterate over meshes and tally up vertex/index/blendshape counts (now that we have accessors)
   if (info.meshes) {
     jsmntok_t* token = info.meshes;
-    for (int i = (token++)->size; i > 0 ; i--) {
+    for (int i = (token++)->size, group = 0; i > 0; i--, group++) {
       uint32_t blendShapeCount = 0;
       for (int k = (token++)->size; k > 0; k--) {
         gltfString key = NOM_STR(json, token);
         if (STR_EQ(key, "primitives")) {
-          model->primitiveCount += token->size;
+          model->partCount += token->size;
           for (int p = (token++)->size; p > 0; p--) {
             uint32_t vertexCount = 0;
             bool hasJoints = false;
@@ -968,19 +968,20 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   if (model->meshCount > 0) {
     jsmntok_t* token = info.meshes;
     ModelMesh* mesh = model->meshes;
-    ModelPrimitive* primitive = model->primitives;
-    ModelVertex* vertices = model->vertices;
-    void* indexData = model->indices;
-    SkinData* skinData = model->skinData;
-    BlendData* blendData = model->blendData;
+    ModelPart* part = model->parts;
+    uint32_t vertexOffset = 0;
+    uint32_t indexOffset = 0;
+    uint32_t skinDataOffset = 0;
+    uint32_t blendDataOffset = 0;
+    uint32_t blendShapeIndex = 0;
     ModelBlendShape* blendShapes = model->blendShapes;
-    for (int i = (token++)->size; i > 0; i--, mesh++) {
-      mesh->primitives = primitive;
+    for (int i = (token++)->size; i > 0; i--) {
+      mesh->parts = part;
       mesh->blendShapes = blendShapes;
       for (int k = (token++)->size; k > 0; k--) {
         gltfString key = NOM_STR(json, token);
         if (STR_EQ(key, "primitives")) {
-          for (uint32_t j = (token++)->size; j > 0; j--, primitive++) {
+          for (uint32_t j = (token++)->size; j > 0; j--, mesh++) {
             gltfAccessor* positions = NULL;
             gltfAccessor* normals = NULL;
             gltfAccessor* uvs = NULL;
@@ -994,13 +995,13 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               gltfString key = NOM_STR(json, token);
               if (STR_EQ(key, "mode")) {
                 switch (NOM_U32(json, token)) {
-                  case 0: primitive->mode = DRAW_POINT_LIST; break;
-                  case 1: primitive->mode = DRAW_LINE_LIST; break;
-                  case 2: primitive->mode = DRAW_LINE_LOOP; break;
-                  case 3: primitive->mode = DRAW_LINE_STRIP; break;
-                  case 4: primitive->mode = DRAW_TRIANGLE_LIST; break;
-                  case 5: primitive->mode = DRAW_TRIANGLE_STRIP; break;
-                  case 6: primitive->mode = DRAW_TRIANGLE_FAN; break;
+                  case 0: part->mode = DRAW_POINT_LIST; break;
+                  case 1: part->mode = DRAW_LINE_LIST; break;
+                  case 2: part->mode = DRAW_LINE_LOOP; break;
+                  case 3: part->mode = DRAW_LINE_STRIP; break;
+                  case 4: part->mode = DRAW_TRIANGLE_LIST; break;
+                  case 5: part->mode = DRAW_TRIANGLE_STRIP; break;
+                  case 6: part->mode = DRAW_TRIANGLE_FAN; break;
                   default: lovrAssertGoto(fail, false, "Unknown primitive mode");
                 }
               } else if (STR_EQ(key, "attributes")) {
@@ -1019,87 +1020,112 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                 indices = &accessors[NOM_U32(json, token)];
               } else if (STR_EQ(key, "targets")) {
                 if (mesh->blendShapeCount == 0) mesh->blendShapeCount = token->size;
+                mesh->blendDataOffset = blendDataOffset;
                 for (int t = (token++)->size; t > 0; t--) {
                   gltfAccessor* blendPositions = NULL;
                   gltfAccessor* blendNormals = NULL;
                   gltfAccessor* blendTangents = NULL;
+                  uint32_t count = 0;
+
                   for (int a = (token++)->size; a > 0; a--) {
                     gltfString name = NOM_STR(json, token);
                     uint32_t accessor = NOM_U32(json, token);
                     if (STR_EQ(name, "POSITION")) blendPositions = &accessors[accessor];
                     else if (STR_EQ(name, "NORMAL")) blendNormals = &accessors[accessor];
                     else if (STR_EQ(name, "TANGENT")) blendTangents = &accessors[accessor];
+                    count = accessors[accessor].count;
                   }
-                  if (blendPositions) {
-                    uint32_t count = blendPositions->count;
-                    if (!mesh->blendData) mesh->blendData = blendData;
-                    copyAttribute(blendData, blendPositions, F32, 3, false, 0, sizeof(BlendData), count, 0);
-                    copyAttribute(blendData, blendNormals, F32, 3, false, 12, sizeof(BlendData), count, 0);
-                    copyAttribute(blendData, blendTangents, F32, 3, false, 24, sizeof(BlendData), count, 0);
-                    blendData += blendPositions->count;
-                  }
+
+                  BlendData* blendData = model->blendData + blendDataOffset;
+                  copyAttribute(blendData, blendPositions, F32, 3, false, 0, sizeof(BlendData), count, 0);
+                  copyAttribute(blendData, blendNormals, F32, 3, false, 12, sizeof(BlendData), count, 0);
+                  copyAttribute(blendData, blendTangents, F32, 3, false, 24, sizeof(BlendData), count, 0);
+                  blendDataOffset += blendPositions->count;
                 }
               } else if (STR_EQ(key, "material")) {
-                primitive->material = NOM_U32(json, token);
+                part->material = NOM_U32(json, token);
               } else {
                 token = NOM(token);
               }
             }
 
             if (positions) {
-              uint32_t vertexCount = positions->count;
-
-              if (indices) {
-                if (model->indexSize == 4) {
-                  primitive->start = (uint32_t*) indexData - (uint32_t*) model->indices;
-                } else {
-                  primitive->start = (uint16_t*) indexData - (uint16_t*) model->indices;
-                }
-                primitive->count = indices->count;
+              if (indices || mesh->indexCount > 0) {
+                part->start = indexOffset;
+                part->count = indices->count;
+                part->baseVertex = vertexOffset;
               } else {
-                primitive->start = vertices - model->vertices;
-                primitive->count = vertexCount;
+                part->start = vertexOffset;
+                part->count = positions->count;
               }
 
-              if (!mesh->vertices) mesh->vertices = vertices;
+              uint32_t vertexCount = positions->count;
+              ModelVertex* vertices = model->vertices + vertexOffset;
               copyAttribute(vertices, positions, F32, 3, false, 0, sizeof(ModelVertex), vertexCount, 0);
               copyAttribute(vertices, normals, SN10x3, 1, false, 12, sizeof(ModelVertex), vertexCount, 0);
               copyAttribute(vertices, uvs, F32, 2, false, 16, sizeof(ModelVertex), vertexCount, 0);
               copyAttribute(vertices, colors, U8, 4, true, 24, sizeof(ModelVertex), vertexCount, 0xff);
               copyAttribute(vertices, tangents, SN10x3, 1, false, 28, sizeof(ModelVertex), vertexCount, 0);
-              vertices += vertexCount;
+              if (mesh->vertexOffset == ~0u) mesh->vertexOffset = vertexOffset;
+              mesh->vertexCount += vertexCount;
+              vertexOffset += vertexCount;
+
+              // We keep meshes consistently indexed or non-indexed, so we have to generate indices if:
+              // - This is the first indexed primitive, and we already wrote non-indexed primitives
+              // - This is a non-inxed primitive, and we've already written an indexed primitive
+              if ((indices && mesh->indexCount == 0) || (!indices && mesh->indexCount > 0)) {
+                uint32_t partIndex = indices ? 0 : part - mesh->parts;
+                uint32_t partCount = indices ? mesh->partCount : 1;
+                void* indexData = (char*) model->indices + (indexOffset * model->indexSize);
+
+                for (uint32_t p = 0; p < partCount; p++) {
+                  uint32_t count = mesh->parts[partIndex + p].count;
+                  if (model->indexSize == 4) {
+                    for (uint32_t index = 0; index < count; index++) {
+                      ((uint32_t*) indexData)[index] = indexOffset + index;
+                    }
+                  } else {
+                    for (uint32_t index = 0; index < count; index++) {
+                      ((uint16_t*) indexData)[index] = indexOffset + index;
+                    }
+                  }
+                  mesh->parts[partIndex + p].start = indexOffset;
+                  mesh->indexCount += count;
+                  indexOffset += count;
+                }
+              }
 
               if (indices) {
-                if (!mesh->indices) mesh->indices = indexData;
+                uint32_t indexCount = indices->count;
                 int type = model->indexSize == 4 ? U32 : U16;
-                copyAttribute(indexData, indices, type, 1, false, 0, model->indexSize, indices->count, 0);
-                indexData = (char*) indexData + (indices->count * model->indexSize);
+                void* indexData = (char*) model->indices + (indexOffset * model->indexSize);
+                copyAttribute(indexData, indices, type, 1, false, 0, model->indexSize, indexCount, 0);
+                if (mesh->indexOffset == ~0u) mesh->indexOffset = indexOffset;
+                mesh->indexCount += indexCount;
+                indexOffset += indexCount;
               }
 
               if (joints && weights) {
-                if (!mesh->skinData) mesh->skinData = skinData;
+                SkinData* skinData = model->skinData + skinDataOffset;
                 copyAttribute(skinData, joints, U8, 4, false, 0, sizeof(SkinData), vertexCount, 0);
                 copyAttribute(skinData, weights, U8, 4, true, 4, sizeof(SkinData), vertexCount, 0);
-                skinData += vertexCount;
+                if (mesh->skinDataOffset == ~0u) mesh->skinDataOffset = skinDataOffset;
+                skinDataOffset += vertexCount;
               }
 
-              primitive->bounds[0] = (positions->min[0] + positions->max[0]) / 2.f;
-              primitive->bounds[1] = (positions->min[1] + positions->max[1]) / 2.f;
-              primitive->bounds[2] = (positions->min[2] + positions->max[2]) / 2.f;
-              primitive->bounds[3] = (positions->max[0] - positions->min[0]) / 2.f;
-              primitive->bounds[4] = (positions->max[1] - positions->min[1]) / 2.f;
-              primitive->bounds[5] = (positions->max[2] - positions->min[2]) / 2.f;
-
-              primitive->vertexCount = vertexCount;
-              primitive->indexCount = indices ? indices->count : 0;
-              mesh->vertexCount += primitive->vertexCount;
-              mesh->indexCount += primitive->indexCount;
-              mesh->primitiveCount++;
+              part->bounds[0] = (positions->min[0] + positions->max[0]) / 2.f;
+              part->bounds[1] = (positions->min[1] + positions->max[1]) / 2.f;
+              part->bounds[2] = (positions->min[2] + positions->max[2]) / 2.f;
+              part->bounds[3] = (positions->max[0] - positions->min[0]) / 2.f;
+              part->bounds[4] = (positions->max[1] - positions->min[1]) / 2.f;
+              part->bounds[5] = (positions->max[2] - positions->min[2]) / 2.f;
+              mesh->partCount++;
+              part++;
             }
           }
         } else if (STR_EQ(key, "weights")) {
           for (int w = (token++)->size, index = 0; w > 0; w--, index++) {
-            mesh->blendShapes[index].weight = NOM_FLOAT(json, token);
+            model->blendShapes[index].weight = NOM_FLOAT(json, token);
           }
         } else if (STR_EQ(key, "extras")) {
           for (int k2 = (token++)->size; k2 > 0; k2--) {
@@ -1124,14 +1150,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
         }
       }
 
-      if (mesh->blendShapeCount > 0) {
-        for (uint32_t i = 0; i < mesh->blendShapeCount; i++) {
-          mesh->blendShapes[i].mesh = mesh - model->meshes;
-        }
-        blendShapes += mesh->blendShapeCount;
-      } else {
-        mesh->blendShapes = NULL;
-      }
+      blendShapes += mesh->blendShapeCount;
     }
   }
 
@@ -1295,6 +1314,7 @@ fail:
   lovrFree(blobs);
   lovrFree(buffers);
   lovrFree(accessors);
+  lovrFree(animationSamplers);
   lovrFree(images);
   lovrFree(textures);
   lovrFree(scenes);

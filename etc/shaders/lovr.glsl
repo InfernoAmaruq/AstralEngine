@@ -65,7 +65,7 @@ layout(set = 1, binding = 6) uniform texture2D OcclusionTexture;
 layout(set = 1, binding = 7) uniform texture2D NormalTexture;
 
 layout(push_constant) uniform PushConstants {
-  uint DrawID;
+  uint _drawID;
 };
 #endif
 
@@ -119,7 +119,7 @@ layout(location = 14) in vec4 Tangent;
 #ifdef GL_VERTEX_SHADER
 #define BaseInstance gl_BaseInstance
 #define BaseVertex gl_BaseVertex
-#define DrawIndex gl_DrawIndex
+#define DrawIndex gl_DrawID
 #define InstanceIndex gl_InstanceIndex
 #define PointSize gl_PointSize
 #define Position gl_Position
@@ -155,9 +155,9 @@ layout(location = 14) in vec4 Tangent;
 #endif
 
 #ifdef GL_VERTEX_SHADER
-#define Transform mat4(Draws[DrawID].transform)
-#define NormalMatrix (cofactor3(Draws[DrawID].transform))
-#define PassColor Draws[DrawID].color
+#define Transform mat4(Draws[_drawID].transform)
+#define NormalMatrix (cofactor3(Draws[_drawID].transform))
+#define PassColor Draws[_drawID].color
 #define ClipFromLocal (ViewProjection * Transform)
 #define ClipFromWorld (ViewProjection)
 #define ClipFromView (Projection)

@@ -6199,7 +6199,9 @@ bool lovrPassSetCanvas(Pass* pass, Canvas* canvas) {
   // Release old canvas, assign new one
 
   for (uint32_t i = 0; i < 4; i++) {
-    if (target->color[i].texture && target->color[i].texture != tempColorTextures[i]) {
+    // Destroy the temporary texture if we aren't going to reuse it
+    gpu_texture* texture = target->color[i].texture;
+    if (texture && texture != pass->canvas.color[i].texture->renderView && texture != tempColorTextures[i]) {
       gpu_texture_destroy(target->color[i].texture);
       lovrFree(target->color[i].texture);
     }
@@ -6210,7 +6212,9 @@ bool lovrPassSetCanvas(Pass* pass, Canvas* canvas) {
     lovrRetain(canvas->color[i].resolve);
   }
 
-  if (target->depth.texture && target->depth.texture != tempDepthTexture) {
+  // Destroy the temporary texture if we aren't going to reuse it
+  bool depthWasTemporary = !pass->canvas.depth.texture || target->depth.texture != pass->canvas.depth.texture->renderView;
+  if (target->depth.texture && depthWasTemporary && target->depth.texture != tempDepthTexture) {
     gpu_texture_destroy(pass->target.depth.texture);
     lovrFree(pass->target.depth.texture);
   }

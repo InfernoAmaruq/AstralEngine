@@ -525,6 +525,8 @@ struct Pass {
   AccessBlock* access[2];
   gpu_canvas target;
   Canvas canvas;
+  bool tempColor[4];
+  bool tempDepth;
   uint32_t width;
   uint32_t height;
   uint32_t views;
@@ -6037,20 +6039,22 @@ bool lovrPassSetCanvas(Pass* pass, Canvas* canvas) {
     canvas = &pass->canvas;
 
     for (uint32_t i = 0; i < 4 && canvas->color[i].texture; i++) {
-      if (target->color[i].texture && target->color[i].texture != canvas->color[i].texture->renderView) {
+      if (pass->tempColor[i]) {
         gpu_texture_destroy(target->color[i].texture);
         lovrFree(target->color[i].texture);
         target->color[i].texture = NULL;
+        pass->tempColor[i] = false;
       }
 
       lovrRelease(canvas->color[i].texture, lovrTextureDestroy);
       lovrRelease(canvas->color[i].resolve, lovrTextureDestroy);
     }
 
-    if (target->depth.texture && (!canvas->depth.texture || target->depth.texture != canvas->depth.texture->renderView)) {
+    if (pass->tempDepth) {
       gpu_texture_destroy(target->depth.texture);
       lovrFree(target->depth.texture);
       target->depth.texture = NULL;
+      pass->tempDepth = false;
     }
 
     lovrRelease(canvas->depth.texture, lovrTextureDestroy);
@@ -6199,11 +6203,11 @@ bool lovrPassSetCanvas(Pass* pass, Canvas* canvas) {
   // Release old canvas, assign new one
 
   for (uint32_t i = 0; i < 4; i++) {
-    // Destroy the temporary texture if we aren't going to reuse it
-    gpu_texture* texture = target->color[i].texture;
-    if (texture && texture != pass->canvas.color[i].texture->renderView && texture != tempColorTextures[i]) {
+    if (pass->tempColor[i] && target->color[i].texture != tempColorTextures[i]) {
       gpu_texture_destroy(target->color[i].texture);
       lovrFree(target->color[i].texture);
+      target->color[i].texture = NULL;
+      pass->tempColor[i] = false;
     }
 
     lovrRelease(pass->canvas.color[i].texture, lovrTextureDestroy);
@@ -6212,11 +6216,11 @@ bool lovrPassSetCanvas(Pass* pass, Canvas* canvas) {
     lovrRetain(canvas->color[i].resolve);
   }
 
-  // Destroy the temporary texture if we aren't going to reuse it
-  bool depthWasTemporary = !pass->canvas.depth.texture || target->depth.texture != pass->canvas.depth.texture->renderView;
-  if (target->depth.texture && depthWasTemporary && target->depth.texture != tempDepthTexture) {
-    gpu_texture_destroy(pass->target.depth.texture);
-    lovrFree(pass->target.depth.texture);
+  if (pass->tempDepth && target->depth.texture != tempDepthTexture) {
+    gpu_texture_destroy(target->depth.texture);
+    lovrFree(target->depth.texture);
+    target->depth.texture = NULL;
+    pass->tempDepth = false;
   }
 
   lovrRelease(pass->canvas.depth.texture, lovrTextureDestroy);
@@ -6245,6 +6249,7 @@ bool lovrPassSetCanvas(Pass* pass, Canvas* canvas) {
         target->color[i].texture = tempColorTextures[i];
         target->color[i].resolve = attachment->texture->renderView;
         target->color[i].save = GPU_SAVE_OP_DISCARD;
+        pass->tempColor[i] = true;
       } else {
         target->color[i].texture = attachment->texture->renderView;
         target->color[i].resolve = attachment->resolve ? attachment->resolve->renderView : NULL;
@@ -6261,6 +6266,7 @@ bool lovrPassSetCanvas(Pass* pass, Canvas* canvas) {
       target->depth.texture = tempDepthTexture;
       target->depth.resolve = canvas->depth.texture ? canvas->depth.texture->renderView : NULL;
       target->depth.save = GPU_SAVE_OP_DISCARD;
+      pass->tempDepth = true;
     } else {
       target->depth.texture = canvas->depth.texture->renderView;
       target->depth.resolve = canvas->depth.resolve ? canvas->depth.resolve->renderView : NULL;

@@ -1762,9 +1762,8 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
     for (uint32_t a = 0; a < 4 && canvas->color[a].texture; a++) {
       Attachment* attachment = &canvas->color[a];
       bool load = pass->target.color[a].load == GPU_LOAD_OP_KEEP;
-      bool temporary = pass->target.color[a].texture != attachment->texture->renderView;
       if (attachment->texture == state.window) continue;
-      syncAttachment(attachment->texture, false, false, load, temporary);
+      syncAttachment(attachment->texture, false, false, load, pass->tempColor[a]);
       syncAttachment(attachment->resolve, false, true, false, false);
       xrCanvas |= attachment->texture->info.xr || (attachment->resolve && attachment->resolve->info.xr);
     }
@@ -1773,8 +1772,7 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
     if (canvas->depth.texture) {
       Attachment* attachment = &canvas->depth;
       bool load = pass->target.depth.load == GPU_LOAD_OP_KEEP;
-      bool temporary = pass->target.depth.texture != attachment->texture->renderView;
-      syncAttachment(attachment->texture, true, false, load, temporary);
+      syncAttachment(attachment->texture, true, false, load, pass->tempDepth);
       syncAttachment(attachment->resolve, true, true, false, false);
       xrCanvas |= attachment->texture->info.xr || (attachment->resolve && attachment->resolve->info.xr);
     }
@@ -6300,11 +6298,9 @@ void lovrPassGetClear(Pass* pass, LoadAction loads[4], float clears[4][4], LoadA
 }
 
 bool lovrPassSetClear(Pass* pass, LoadAction loads[4], float clears[4][4], LoadAction depthLoad, float depthClear) {
-  bool temporary = false;
   gpu_canvas* target = &pass->target;
   for (uint32_t i = 0; i < 4 && pass->canvas.color[i].texture; i++) {
-    temporary = pass->canvas.color[i].texture->renderView != target->color[i].texture;
-    lovrCheck(loads[i] != LOAD_KEEP || !temporary, "Can not set clear to false unless canvas texture sample count matches pass sample count (try setting pass sample count to 1)");
+    lovrCheck(loads[i] != LOAD_KEEP || !pass->tempColor[i], "Can not set clear to false unless canvas texture sample count matches pass sample count (try setting pass sample count to 1)");
     target->color[i].load = (gpu_load_op) loads[i];
     if (loads[i] == LOAD_CLEAR) {
       target->color[i].clear[0] = lovrMathGammaToLinear(clears[i][0]);
@@ -6318,8 +6314,7 @@ bool lovrPassSetClear(Pass* pass, LoadAction loads[4], float clears[4][4], LoadA
   target->depth.load = (gpu_load_op) depthLoad;
   target->depth.stencilLoad = (gpu_load_op) depthLoad;
   target->depth.clear = depthLoad == LOAD_CLEAR ? depthClear : 0.f;
-  temporary = pass->canvas.depth.texture && pass->canvas.depth.texture->renderView == target->depth.texture;
-  lovrCheck(depthLoad != LOAD_KEEP || !temporary, "Can not set depth clear to false unless canvas texture sample count matches pass sample count (try setting pass sample count to 1)");
+  lovrCheck(depthLoad != LOAD_KEEP || !pass->tempDepth, "Can not set depth clear to false unless canvas texture sample count matches pass sample count (try setting pass sample count to 1)");
   return true;
 }
 

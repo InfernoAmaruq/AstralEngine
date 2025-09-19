@@ -61,6 +61,19 @@ uint32_t luax_checknodeindex(lua_State* L, int index, ModelData* model) {
   }
 }
 
+uint32_t luax_checkmeshindex(lua_State* L, int index, ModelData* model) {
+  uint32_t mesh = luax_checku32(L, index) - 1;
+  luax_check(L, mesh < model->meshCount, "Invalid mesh index '%d'", mesh + 1);
+  return 1;
+}
+
+ModelPart* luax_checkmeshpart(lua_State* L, int index, ModelData* model) {
+  uint32_t mesh = luax_checkmeshindex(L, index, model);
+  uint32_t part = luax_optu32(L, index + 1, 1) - 1;
+  luax_check(L, part < model->meshes[mesh].partCount, "Invalid part index '%d'", part + 1);
+  return &model->meshes[mesh].parts[part];
+}
+
 static int l_lovrModelDataGetMetadata(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
 
@@ -281,9 +294,37 @@ static int l_lovrModelDataGetMeshCount(lua_State* L) {
 
 static int l_lovrModelDataGetMeshPartCount(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t mesh = luax_checku32(L, 2) - 1;
-  luax_check(L, mesh < model->meshCount, "Invalid mesh index '%d'", mesh + 1);
+  uint32_t mesh = luax_checkmeshindex(L, 2, model);
   lua_pushinteger(L, model->meshes[mesh].partCount);
+  return 1;
+}
+
+static int l_lovrModelDataGetMeshDrawMode(lua_State* L) {
+  ModelData* model = luax_checktype(L,  1, ModelData);
+  ModelPart* part = luax_checkmeshpart(L, 2, model);
+  luax_pushenum(L, ModelDrawMode, part->mode);
+  return 1;
+}
+
+static int l_lovrModelDataGetMeshDrawRange(lua_State* L) {
+  ModelData* model = luax_checktype(L,  1, ModelData);
+  ModelPart* part = luax_checkmeshpart(L, 2, model);
+  lua_pushinteger(L, part->start + 1);
+  lua_pushinteger(L, part->count);
+  return 2;
+}
+
+static int l_lovrModelDataGetMeshBaseVertex(lua_State* L) {
+  ModelData* model = luax_checktype(L,  1, ModelData);
+  ModelPart* part = luax_checkmeshpart(L, 2, model);
+  lua_pushinteger(L, part->baseVertex);
+  return 1;
+}
+
+static int l_lovrModelDataGetMeshMaterial(lua_State* L) {
+  ModelData* model = luax_checktype(L,  1, ModelData);
+  ModelPart* part = luax_checkmeshpart(L, 2, model);
+  lua_pushinteger(L, part->material + 1);
   return 1;
 }
 
@@ -673,6 +714,10 @@ const luaL_Reg lovrModelData[] = {
   { "getNodeSkin", l_lovrModelDataGetNodeSkin },
   { "getMeshCount", l_lovrModelDataGetMeshCount },
   { "getMeshPartCount", l_lovrModelDataGetMeshPartCount },
+  { "getMeshDrawMode", l_lovrModelDataGetMeshDrawMode },
+  { "getMeshDrawRange", l_lovrModelDataGetMeshDrawRange },
+  { "getMeshBaseVertex", l_lovrModelDataGetMeshBaseVertex },
+  { "getMeshMaterial", l_lovrModelDataGetMeshMaterial },
   { "getTriangles", l_lovrModelDataGetTriangles },
   { "getTriangleCount", l_lovrModelDataGetTriangleCount },
   { "getVertexCount", l_lovrModelDataGetVertexCount },

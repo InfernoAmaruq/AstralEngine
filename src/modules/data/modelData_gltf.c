@@ -2,6 +2,7 @@
 #include "data/blob.h"
 #include "data/image.h"
 #include "util.h"
+#include "core/job.h"
 #include "lib/jsmn/jsmn.h"
 #include <stdlib.h>
 #include <string.h>
@@ -80,6 +81,16 @@ typedef struct {
   uint32_t node;
   uint32_t nodeCount;
 } gltfScene;
+
+typedef struct {
+  job* handle;
+  Image* result;
+  gltfImage* image;
+  gltfBufferView* buffers;
+  ModelDataIO* io;
+  char* basePath;
+  char* error;
+} ImageJob;
 
 static uint32_t nomU32(const char* s) {
   uint32_t n = 0;
@@ -184,42 +195,82 @@ static jsmntok_t* nomTexture(const char* json, jsmntok_t* token, uint32_t* image
   return token;
 }
 
-static bool loadImage(ModelData* model, gltfBufferView* buffers, gltfImage* images, uint32_t index, ModelDataIO* io, char* filename, size_t maxLength) {
-  if (model->images[index]) {
-    return true; // Already loaded
-  }
+static void loadImage(void* arg) {
+  ImageJob* ctx = arg;
+  Blob* blob;
 
-  gltfImage* image = &images[index];
-  if (image->bufferView != ~0u) {
-    gltfBufferView* buffer = &buffers[image->bufferView];
-    Blob* blob = lovrBlobCreate(buffer->data, buffer->size, NULL);
-    model->images[index] = lovrImageCreateFromFile(blob);
+  if (ctx->image->bufferView != ~0u) {
+    gltfBufferView* buffer = &ctx->buffers[ctx->image->bufferView];
+    blob = lovrBlobCreate(buffer->data, buffer->size, NULL);
+    ctx->result = lovrImageCreateFromFile(blob);
     blob->data = NULL; // XXX Blob data ownership
     lovrRelease(blob, lovrBlobDestroy);
-  } else if (image->uri.data) {
-    void* data;
-    Blob* blob;
-    size_t size;
-    if (image->uri.length >= 5 && !strncmp("data:", image->uri.data, 5)) {
-      data = decodeBase64(image->uri.data, image->uri.length, &size);
-      lovrAssert(data, "Could not decode base64 image");
+  } else if (ctx->image->uri.data) {
+    if (ctx->image->uri.length >= 5 && !strncmp("data:", ctx->image->uri.data, 5)) {
+      size_t size;
+      void* data = decodeBase64(ctx->image->uri.data, ctx->image->uri.length, &size);
+      if (!data) {
+        ctx->error = lovrStrdup("Could not decode base64 image");
+        return;
+      }
       blob = lovrBlobCreate(data, size, NULL);
     } else {
-      char* path = image->uri.data;
-      size_t length = image->uri.length;
-      lovrAssert(length < maxLength, "Image filename is too long");
-      lovrAssert(path[0] != '/', "Absolute paths in models are not supported");
-      if (path[0] && path[1] && !memcmp(path, "./", 2)) path += 2;
-      strncat(filename, path, length);
-      data = io(filename, &size);
-      lovrAssert(data && size > 0, "Unable to read image from '%s'", filename);
+      char* path = ctx->image->uri.data;
+      size_t length = ctx->image->uri.length;
+
+      if (path[0] == '/') {
+        ctx->error = lovrStrdup("Absolute paths in models are not supported");
+        return;
+      }
+
+      // Remove ./ prefix
+      if (path[0] && path[1] && !memcmp(path, "./", 2)) {
+        path += 2;
+        length -= 2;
+      }
+
+      // basePath/path
+      size_t baseLength = strlen(ctx->basePath);
+      size_t totalLength = baseLength + 1 + length + 1;
+      char* fullpath = lovrMalloc(totalLength);
+
+      memcpy(fullpath, ctx->basePath, baseLength);
+      fullpath[baseLength] = '/';
+
+      memcpy(fullpath + baseLength + 1, path, length);
+      fullpath[baseLength + 1 + length] = '\0';
+
+      size_t size;
+      void* data = ctx->io(fullpath, &size);
+
+      if (!data || size <= 0) {
+        const char* message = "Unable to read image from ";
+        size_t messageLength = strlen(message);
+        ctx->error = lovrMalloc(messageLength + length + 1);
+        memcpy(ctx->error, message, messageLength);
+        memcpy(ctx->error + messageLength, path, length);
+        ctx->error[messageLength + length + 1] = '\0';
+        return;
+      }
+
       blob = lovrBlobCreate(data, size, NULL);
     }
-    model->images[index] = lovrImageCreateFromFile(blob);
+
+    ctx->result = lovrImageCreateFromFile(blob);
     lovrRelease(blob, lovrBlobDestroy);
   }
+}
 
-  return !!model->images[index];
+static void startImageJob(ModelData* model, ImageJob* jobs, uint32_t index, gltfBufferView* buffers, gltfImage* images, ModelDataIO* io, char* basePath) {
+  if (jobs[index].handle) {
+    return;
+  }
+
+  jobs[index].image = &images[index];
+  jobs[index].buffers = buffers;
+  jobs[index].basePath = basePath;
+  jobs[index].io = io;
+  jobs[index].handle = job_start(loadImage, &jobs[index]);
 }
 
 static size_t typeSizes[] = {
@@ -750,6 +801,8 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   // their data into this memory.
   lovrModelDataAllocate(model);
 
+  ImageJob* imageJobs = lovrCalloc(model->imageCount * sizeof(ImageJob));
+
   // Blobs
   if (info.buffers) {
     jsmntok_t* token = info.buffers;
@@ -917,7 +970,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               material->color[3] = NOM_FLOAT(json, token);
             } else if (STR_EQ(key, "baseColorTexture")) {
               token = nomTexture(json, token, &material->texture, textures, material);
-              if (!loadImage(model, buffers, images, material->texture, io, filename, maxPathLength)) goto fail;
+              startImageJob(model, imageJobs, material->texture, buffers, images, io, filename);
               *root = '\0';
             } else if (STR_EQ(key, "metallicFactor")) {
               material->metalness = NOM_FLOAT(json, token);
@@ -925,7 +978,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               material->roughness = NOM_FLOAT(json, token);
             } else if (STR_EQ(key, "metallicRoughnessTexture")) {
               token = nomTexture(json, token, &material->metalnessTexture, textures, NULL);
-              if (!loadImage(model, buffers, images, material->metalnessTexture, io, filename, maxPathLength)) goto fail;
+              startImageJob(model, imageJobs, material->metalnessTexture, buffers, images, io, filename);
               material->roughnessTexture = material->metalnessTexture;
               *root = '\0';
             } else {
@@ -934,15 +987,15 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
           }
         } else if (STR_EQ(key, "normalTexture")) {
           token = nomTexture(json, token, &material->normalTexture, textures, NULL);
-          if (!loadImage(model, buffers, images, material->normalTexture, io, filename, maxPathLength)) goto fail;
+          startImageJob(model, imageJobs, material->normalTexture, buffers, images, io, filename);
           *root = '\0';
         } else if (STR_EQ(key, "occlusionTexture")) {
           token = nomTexture(json, token, &material->occlusionTexture, textures, NULL);
-          if (!loadImage(model, buffers, images, material->occlusionTexture, io, filename, maxPathLength)) goto fail;
+          startImageJob(model, imageJobs, material->occlusionTexture, buffers, images, io, filename);
           *root = '\0';
         } else if (STR_EQ(key, "emissiveTexture")) {
           token = nomTexture(json, token, &material->glowTexture, textures, NULL);
-          if (!loadImage(model, buffers, images, material->glowTexture, io, filename, maxPathLength)) goto fail;
+          startImageJob(model, imageJobs, material->glowTexture, buffers, images, io, filename);
           *root = '\0';
         } else if (STR_EQ(key, "emissiveFactor")) {
           token++; // Enter array
@@ -1290,6 +1343,25 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
     model->rootNode = scenes[rootScene].node;
   }
 
+  for (uint32_t i = 0; i < model->imageCount; i++) {
+    ImageJob* task = &imageJobs[i];
+
+    if (task->handle) {
+      job_wait(task->handle);
+      task->handle = NULL;
+
+      if (task->error) {
+        lovrSetError(task->error);
+        lovrFree(task->error);
+        goto fail;
+      } else {
+        model->images[i] = task->result;
+      }
+    }
+  }
+
+  lovrFree(imageJobs);
+
   for (int i = 0; i < info.buffers->size; i++) {
     lovrRelease(blobs[i], lovrBlobDestroy);
   }
@@ -1306,6 +1378,18 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   return true;
 
 fail:
+  for (uint32_t i = 0; i < model->imageCount; i++) {
+    ImageJob* task = &imageJobs[i];
+
+    if (task->handle) {
+      job_wait(task->handle);
+      lovrRelease(task->result, lovrImageDestroy);
+      lovrFree(task->error);
+    }
+  }
+
+  lovrFree(imageJobs);
+
   for (int i = 0; i < info.buffers->size; i++) {
     lovrRelease(blobs[i], lovrBlobDestroy);
   }

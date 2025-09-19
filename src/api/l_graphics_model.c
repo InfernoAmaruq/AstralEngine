@@ -385,6 +385,30 @@ static int l_lovrModelGetMaterial(lua_State* L) {
   return 1;
 }
 
+int luax_modelmeshiterator(lua_State* L) {
+  Model* model = luax_checktype(L, 1, Model);
+  ModelData* data = lovrModelGetInfo(model)->data;
+  lua_settop(L, 2);
+  uint32_t node = lua_type(L, 2) == LUA_TNIL ? ~0u : (uint32_t) lua_tonumber(L, 2) - 1;
+  uint32_t next = lovrModelDataNextNodeWithMesh(data, node);
+  if (next == ~0u) {
+    lua_pushnil(L);
+    return 1;
+  } else {
+    lua_pushinteger(L, next + 1);
+    luax_pushtype(L, Mesh, lovrModelGetMesh(model, data->nodes[next].mesh));
+    return 2;
+  }
+}
+
+int l_lovrModelMeshes(lua_State* L) {
+  Model* model = luax_checktype(L, 1, Model);
+  lua_pushvalue(L, lua_upvalueindex(1));
+  lua_pushvalue(L, 1);
+  lua_pushnil(L);
+  return 3;
+}
+
 const luaL_Reg lovrModel[] = {
   { "clone", l_lovrModelClone },
   { "getData", l_lovrModelGetData },

@@ -487,3 +487,13 @@ void lovrModelDataGetTriangles(ModelData* model, float** vertices, uint32_t** in
   if (vertices) *vertices = model->triangleVertices;
   if (indices) *indices = model->triangleIndices;
 }
+
+uint32_t lovrModelDataNextNodeWithMesh(ModelData* model, uint32_t node) {
+  while (++node < model->nodeCount) {
+    if (model->nodes[node].mesh != ~0u) {
+      return node;
+    }
+  }
+
+  return ~0u;
+}

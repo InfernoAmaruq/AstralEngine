@@ -220,3 +220,4 @@ void lovrModelDataGetMeshBoundingBox(ModelData* model, uint32_t index, float box
 void lovrModelDataGetBoundingSphere(ModelData* data, float sphere[4]);
 void lovrModelDataGetMeshBoundingSphere(ModelData* model, uint32_t index, uint32_t part, float sphere[4]);
 void lovrModelDataGetTriangles(ModelData* data, float** vertices, uint32_t** indices, uint32_t* vertexCount, uint32_t* indexCount);
+uint32_t lovrModelDataNextNodeWithMesh(ModelData* data, uint32_t node);

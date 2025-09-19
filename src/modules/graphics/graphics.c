@@ -5331,7 +5331,7 @@ Mesh* lovrModelGetMesh(Model* model, uint32_t index) {
     }
 
     ModelMesh* data = &modelData->meshes[index];
-    ModelPart* part = &modelData->parts[0];
+    ModelPart* part = &data->parts[0];
 
     if (data->indexCount > 0) {
       lovrMeshSetIndexBuffer(mesh, model->indexBuffer);

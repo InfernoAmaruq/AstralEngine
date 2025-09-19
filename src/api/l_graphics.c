@@ -1603,6 +1603,9 @@ static const luaL_Reg lovrGraphics[] = {
   { NULL, NULL }
 };
 
+extern int l_lovrModelMeshes(lua_State* L);
+extern int luax_modelmeshiterator(lua_State* L);
+
 extern const luaL_Reg lovrBuffer[];
 extern const luaL_Reg lovrTexture[];
 extern const luaL_Reg lovrSampler[];
@@ -1627,5 +1630,12 @@ int luaopen_lovr_graphics(lua_State* L) {
   luax_registertype(L, Model);
   luax_registertype(L, Readback);
   luax_registertype(L, Pass);
+
+  luaL_getmetatable(L, "Model");
+  lua_pushcfunction(L, luax_modelmeshiterator);
+  lua_pushcclosure(L, l_lovrModelMeshes, 1);
+  lua_setfield(L, -2, "meshes");
+  lua_pop(L, 1);
+
   return 1;
 }

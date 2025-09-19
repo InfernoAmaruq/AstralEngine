@@ -975,13 +975,13 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
     uint32_t blendDataOffset = 0;
     uint32_t blendShapeIndex = 0;
     ModelBlendShape* blendShapes = model->blendShapes;
-    for (int i = (token++)->size; i > 0; i--) {
+    for (int i = (token++)->size; i > 0; i--, mesh++) {
       mesh->parts = part;
       mesh->blendShapes = blendShapes;
       for (int k = (token++)->size; k > 0; k--) {
         gltfString key = NOM_STR(json, token);
         if (STR_EQ(key, "primitives")) {
-          for (uint32_t j = (token++)->size; j > 0; j--, mesh++) {
+          for (uint32_t j = (token++)->size; j > 0; j--, part++) {
             gltfAccessor* positions = NULL;
             gltfAccessor* normals = NULL;
             gltfAccessor* uvs = NULL;
@@ -1120,7 +1120,6 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               part->bounds[4] = positions->min[2];
               part->bounds[5] = positions->max[2];
               mesh->partCount++;
-              part++;
             }
           }
         } else if (STR_EQ(key, "weights")) {

@@ -1113,12 +1113,12 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                 skinDataOffset += vertexCount;
               }
 
-              part->bounds[0] = (positions->min[0] + positions->max[0]) / 2.f;
-              part->bounds[1] = (positions->min[1] + positions->max[1]) / 2.f;
-              part->bounds[2] = (positions->min[2] + positions->max[2]) / 2.f;
-              part->bounds[3] = (positions->max[0] - positions->min[0]) / 2.f;
-              part->bounds[4] = (positions->max[1] - positions->min[1]) / 2.f;
-              part->bounds[5] = (positions->max[2] - positions->min[2]) / 2.f;
+              part->bounds[0] = positions->min[0];
+              part->bounds[1] = positions->max[0];
+              part->bounds[2] = positions->min[1];
+              part->bounds[3] = positions->max[1];
+              part->bounds[4] = positions->min[2];
+              part->bounds[5] = positions->max[2];
               mesh->partCount++;
               part++;
             }

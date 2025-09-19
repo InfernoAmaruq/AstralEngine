@@ -279,6 +279,14 @@ static int l_lovrModelDataGetMeshCount(lua_State* L) {
   return 1;
 }
 
+static int l_lovrModelDataGetMeshPartCount(lua_State* L) {
+  ModelData* model = luax_checktype(L, 1, ModelData);
+  uint32_t mesh = luax_checku32(L, 2) - 1;
+  luax_check(L, mesh < model->meshCount, "Invalid mesh index '%d'", mesh + 1);
+  lua_pushinteger(L, model->meshes[mesh].partCount);
+  return 1;
+}
+
 static int l_lovrModelDataGetTriangles(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
 
@@ -319,10 +327,29 @@ static int l_lovrModelDataGetVertexCount(lua_State* L) {
   return 1;
 }
 
+static void luax_checkboundingbox(lua_State* L, int index, ModelData* model, float bounds[6]) {
+  if (lua_type(L, index) == LUA_TNONE) {
+    lovrModelDataGetBoundingBox(model, bounds);
+    return;
+  }
+
+  uint32_t mesh = luax_checku32(L, index) - 1;
+  luax_check(L, mesh < model->meshCount, "Invalid mesh index '%d'", mesh + 1);
+
+  if (lua_type(L, index + 1) == LUA_TNONE) {
+    lovrModelDataGetMeshBoundingBox(model, mesh, bounds);
+    return;
+  }
+
+  uint32_t part = luax_checku32(L, index + 1) - 1;
+  luax_check(L, part < model->meshes[mesh].partCount, "Invalid part index '%d'", part + 1);
+  memcpy(bounds, model->meshes[mesh].parts[part].bounds, 6 * sizeof(float));
+}
+
 static int l_lovrModelDataGetWidth(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   float bounds[6];
-  lovrModelDataGetBoundingBox(model, bounds);
+  luax_checkboundingbox(L, 2, model, bounds);
   lua_pushnumber(L, bounds[1] - bounds[0]);
   return 1;
 }
@@ -330,7 +357,7 @@ static int l_lovrModelDataGetWidth(lua_State* L) {
 static int l_lovrModelDataGetHeight(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   float bounds[6];
-  lovrModelDataGetBoundingBox(model, bounds);
+  luax_checkboundingbox(L, 2, model, bounds);
   lua_pushnumber(L, bounds[3] - bounds[2]);
   return 1;
 }
@@ -338,7 +365,7 @@ static int l_lovrModelDataGetHeight(lua_State* L) {
 static int l_lovrModelDataGetDepth(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   float bounds[6];
-  lovrModelDataGetBoundingBox(model, bounds);
+  luax_checkboundingbox(L, 2, model, bounds);
   lua_pushnumber(L, bounds[5] - bounds[4]);
   return 1;
 }
@@ -346,7 +373,7 @@ static int l_lovrModelDataGetDepth(lua_State* L) {
 static int l_lovrModelDataGetDimensions(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   float bounds[6];
-  lovrModelDataGetBoundingBox(model, bounds);
+  luax_checkboundingbox(L, 2, model, bounds);
   lua_pushnumber(L, bounds[1] - bounds[0]);
   lua_pushnumber(L, bounds[3] - bounds[2]);
   lua_pushnumber(L, bounds[5] - bounds[4]);
@@ -356,7 +383,7 @@ static int l_lovrModelDataGetDimensions(lua_State* L) {
 static int l_lovrModelDataGetCenter(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   float bounds[6];
-  lovrModelDataGetBoundingBox(model, bounds);
+  luax_checkboundingbox(L, 2, model, bounds);
   lua_pushnumber(L, (bounds[0] + bounds[1]) / 2.f);
   lua_pushnumber(L, (bounds[2] + bounds[3]) / 2.f);
   lua_pushnumber(L, (bounds[4] + bounds[5]) / 2.f);
@@ -366,7 +393,7 @@ static int l_lovrModelDataGetCenter(lua_State* L) {
 static int l_lovrModelDataGetBoundingBox(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   float bounds[6];
-  lovrModelDataGetBoundingBox(model, bounds);
+  luax_checkboundingbox(L, 2, model, bounds);
   lua_pushnumber(L, bounds[0]);
   lua_pushnumber(L, bounds[1]);
   lua_pushnumber(L, bounds[2]);
@@ -379,7 +406,20 @@ static int l_lovrModelDataGetBoundingBox(lua_State* L) {
 static int l_lovrModelDataGetBoundingSphere(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   float sphere[4];
-  lovrModelDataGetBoundingSphere(model, sphere);
+  if (lua_type(L, 2) == LUA_TNONE) {
+    lovrModelDataGetBoundingSphere(model, sphere);
+  } else {
+    uint32_t mesh = luax_checku32(L, 2) - 1;
+    luax_check(L, mesh < model->meshCount, "Invalid mesh index '%d'", mesh + 1);
+
+    uint32_t part = ~0u;
+    if (lua_type(L, 3) != LUA_TNONE) {
+      part = luax_checku32(L, 3);
+      luax_check(L, part < model->meshes[mesh].partCount, "Invalid part index '%d'", part + 1);
+    }
+
+    lovrModelDataGetMeshBoundingSphere(model, mesh, part, sphere);
+  }
   lua_pushnumber(L, sphere[0]);
   lua_pushnumber(L, sphere[1]);
   lua_pushnumber(L, sphere[2]);
@@ -632,6 +672,7 @@ const luaL_Reg lovrModelData[] = {
   { "getNodeMesh", l_lovrModelDataGetNodeMesh },
   { "getNodeSkin", l_lovrModelDataGetNodeSkin },
   { "getMeshCount", l_lovrModelDataGetMeshCount },
+  { "getMeshPartCount", l_lovrModelDataGetMeshPartCount },
   { "getTriangles", l_lovrModelDataGetTriangles },
   { "getTriangleCount", l_lovrModelDataGetTriangleCount },
   { "getVertexCount", l_lovrModelDataGetVertexCount },

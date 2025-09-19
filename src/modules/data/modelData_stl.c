@@ -58,14 +58,6 @@ static bool lovrModelDataInitStlBinary(ModelData** result, Blob* source, ModelDa
     data += 50;
   }
 
-  // Convert bounds to center/half-extent representation
-  bounds[0] = (bounds[0] + bounds[3]) / 2.f;
-  bounds[1] = (bounds[1] + bounds[4]) / 2.f;
-  bounds[2] = (bounds[2] + bounds[5]) / 2.f;
-  bounds[3] = (bounds[3] - bounds[0]) / 2.f;
-  bounds[4] = (bounds[4] - bounds[1]) / 2.f;
-  bounds[5] = (bounds[5] - bounds[2]) / 2.f;
-
   *result = model;
   return true;
 }

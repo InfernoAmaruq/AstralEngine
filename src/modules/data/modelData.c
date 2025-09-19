@@ -110,9 +110,6 @@ void lovrModelDataAllocate(ModelData* model) {
   for (uint32_t i = 0; i < model->partCount; i++) {
     model->parts[i].mode = DRAW_TRIANGLE_LIST;
     model->parts[i].material = ~0u;
-    model->parts[i].bounds[3] = FLT_MAX;
-    model->parts[i].bounds[4] = FLT_MAX;
-    model->parts[i].bounds[5] = FLT_MAX;
   }
 
   for (uint32_t i = 0; i < model->materialCount; i++) {
@@ -238,7 +235,20 @@ void lovrModelDataGetBoundingBox(ModelData* model, float box[6]) {
   memcpy(box, model->boundingBox, sizeof(model->boundingBox));
 }
 
-static void boundingSphereHelper(ModelData* model, uint32_t nodeIndex, uint32_t* pointIndex, float* points, float* parentTransform) {
+void lovrModelDataGetMeshBoundingBox(ModelData* model, uint32_t index, float box[6]) {
+  ModelMesh* mesh = &model->meshes[index];
+  memcpy(box, mesh->parts[0].bounds, 6 * sizeof(float));
+  for (uint32_t i = 1; i < mesh->partCount; i++) {
+    box[0] = MIN(box[0], mesh->parts[i].bounds[0]);
+    box[1] = MAX(box[1], mesh->parts[i].bounds[1]);
+    box[2] = MIN(box[2], mesh->parts[i].bounds[2]);
+    box[3] = MAX(box[3], mesh->parts[i].bounds[3]);
+    box[4] = MIN(box[4], mesh->parts[i].bounds[4]);
+    box[5] = MAX(box[5], mesh->parts[i].bounds[5]);
+  }
+}
+
+static void gatherBoundingBoxCorners(ModelData* model, uint32_t nodeIndex, uint32_t* pointIndex, float* points, float* parentTransform) {
   ModelNode* node = &model->nodes[nodeIndex];
 
   float m[16];
@@ -283,8 +293,60 @@ static void boundingSphereHelper(ModelData* model, uint32_t nodeIndex, uint32_t*
   }
 
   for (uint32_t i = node->child; i != ~0u; i = model->nodes[i].sibling) {
-    boundingSphereHelper(model, i, pointIndex, points, m);
+    gatherBoundingBoxCorners(model, i, pointIndex, points, m);
   }
+}
+
+static void computeBoundingSphere(float* points, uint32_t pointCount, size_t stride, float sphere[4]) {
+
+  // Find point furthest away from first point
+
+  float max = 0.f;
+  float* a = NULL;
+  for (uint32_t i = 1; i < pointCount; i++) {
+    float d2 = vec3_distance2(&points[i * stride], &points[0]);
+    if (d2 > max) {
+      a = &points[i * stride];
+      max = d2;
+    }
+  }
+
+  // Find point furthest away from that point
+
+  max = 0.f;
+  float* b = NULL;
+  for (uint32_t i = 0; i < pointCount; i++) {
+    float d2 = vec3_distance2(&points[i * stride], a);
+    if (d2 > max) {
+      b = &points[i * stride];
+      max = d2;
+    }
+  }
+
+  // Create and refine sphere
+
+  float dx = a[0] - b[0];
+  float dy = a[1] - b[1];
+  float dz = a[2] - b[2];
+  float cx = (a[0] + b[0]) / 2.f;
+  float cy = (a[1] + b[1]) / 2.f;
+  float cz = (a[2] + b[2]) / 2.f;
+  float r2 = (dx * dx + dy * dy + dz * dz) / 4.f; // Initial radius is half the distance between points
+
+  for (uint32_t i = 0; i < pointCount; i++) {
+    float dx = points[i * stride + 0] - cx;
+    float dy = points[i * stride + 1] - cy;
+    float dz = points[i * stride + 2] - cz;
+    float d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > r2) {
+      r2 = d2; // beep boop
+    }
+  }
+
+  sphere[0] = cx;
+  sphere[1] = cy;
+  sphere[2] = cz;
+  sphere[3] = sqrtf(r2);
 }
 
 void lovrModelDataGetBoundingSphere(ModelData* model, float sphere[4]) {
@@ -292,69 +354,30 @@ void lovrModelDataGetBoundingSphere(ModelData* model, float sphere[4]) {
     uint32_t totalPartCount = 0;
 
     for (uint32_t i = 0; i < model->nodeCount; i++) {
-      totalPartCount += model->meshes[model->nodes[i].mesh].partCount;
+      if (model->nodes[i].mesh != ~0u) {
+        totalPartCount += model->meshes[model->nodes[i].mesh].partCount;
+      }
     }
 
     uint32_t pointCount = totalPartCount * 8;
     float* points = lovrMalloc(pointCount * 3 * sizeof(float));
 
     uint32_t pointIndex = 0;
-    boundingSphereHelper(model, model->rootNode, &pointIndex, points, (float[16]) MAT4_IDENTITY);
-
-    // Find point furthest away from first point
-
-    float max = 0.f;
-    float* a = NULL;
-    for (uint32_t i = 1; i < pointCount; i++) {
-      float d2 = vec3_distance2(&points[3 * i], &points[0]);
-      if (d2 > max) {
-        a = &points[3 * i];
-        max = d2;
-      }
-    }
-
-    // Find point furthest away from that point
-
-    max = 0.f;
-    float* b = NULL;
-    for (uint32_t i = 0; i < pointCount; i++) {
-      float d2 = vec3_distance2(&points[3 * i], a);
-      if (d2 > max) {
-        b = &points[3 * i];
-        max = d2;
-      }
-    }
-
-    // Create and refine sphere
-
-    float dx = a[0] - b[0];
-    float dy = a[1] - b[1];
-    float dz = a[2] - b[2];
-    float x = (a[0] + b[0]) / 2.f;
-    float y = (a[1] + b[1]) / 2.f;
-    float z = (a[2] + b[2]) / 2.f;
-    float r = sqrtf(dx * dx + dy * dy + dz * dz) / 2.f;
-    float r2 = r * r;
-
-    for (uint32_t i = 0; i < pointCount; i++) {
-      float dx = points[3 * i + 0] - x;
-      float dy = points[3 * i + 1] - y;
-      float dz = points[3 * i + 2] - z;
-      float d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 > r2) {
-        r = sqrtf(d2);
-        r2 = r * r;
-      }
-    }
-
-    model->boundingSphere[0] = x;
-    model->boundingSphere[1] = y;
-    model->boundingSphere[2] = z;
-    model->boundingSphere[3] = r;
+    gatherBoundingBoxCorners(model, model->rootNode, &pointIndex, points, (float[16]) MAT4_IDENTITY);
+    computeBoundingSphere(points, pointCount, 3, model->boundingSphere);
     lovrFree(points);
   }
 
   memcpy(sphere, model->boundingSphere, sizeof(model->boundingSphere));
+}
+
+void lovrModelDataGetMeshBoundingSphere(ModelData* model, uint32_t index, uint32_t part, float sphere[4]) {
+  ModelMesh* mesh = &model->meshes[index];
+  uint32_t nextVertexOffset = part == mesh->partCount - 1 ? mesh->vertexOffset + mesh->vertexCount : mesh->parts[part + 1].baseVertex;
+  uint32_t start = part == ~0u ? mesh->vertexOffset : mesh->parts[part].baseVertex;
+  uint32_t count = part == ~0u ? mesh->vertexCount : nextVertexOffset - start;
+  float* vertex = &model->vertices[start].position.x;
+  computeBoundingSphere(vertex, count, sizeof(ModelVertex) / sizeof(float), sphere);
 }
 
 static void countVertices(ModelData* model, uint32_t nodeIndex, uint32_t* vertexCount, uint32_t* indexCount) {

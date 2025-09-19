@@ -5351,10 +5351,9 @@ Mesh* lovrModelGetMesh(Model* model, uint32_t index) {
       lovrMeshSetMaterial(mesh, model->materials[part->material]);
     }
 
-    // Can't use lovrMeshSetBoundingBox because the bounds is already in center/half-extent form
-    // TODO make it the union of the parts
-    memcpy(mesh->bounds, part->bounds, sizeof(mesh->bounds));
-    mesh->hasBounds = true;
+    float bounds[6];
+    lovrModelDataGetMeshBoundingBox(modelData, index, bounds);
+    lovrMeshSetBoundingBox(mesh, bounds);
 
     model->meshes[index] = mesh;
   }

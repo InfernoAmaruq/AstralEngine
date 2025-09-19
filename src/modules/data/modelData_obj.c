@@ -351,8 +351,7 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
       .start = group->start,
       .count = group->count,
       .material = group->material,
-      .mode = DRAW_TRIANGLE_LIST,
-      .bounds = { FLT_MAX, -FLT_MAX, FLT_MAX, -FLT_MAX, FLT_MAX, -FLT_MAX }
+      .mode = DRAW_TRIANGLE_LIST
     };
 
     float* bounds = model->parts[i].bounds;
@@ -366,14 +365,6 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
       bounds[4] = MIN(bounds[4], vertex->position.z);
       bounds[5] = MAX(bounds[5], vertex->position.z);
     }
-
-    // Convert to center/half-extent representation
-    bounds[0] = (bounds[0] + bounds[3]) / 2.f;
-    bounds[1] = (bounds[1] + bounds[4]) / 2.f;
-    bounds[2] = (bounds[2] + bounds[5]) / 2.f;
-    bounds[3] = (bounds[3] - bounds[0]) / 2.f;
-    bounds[4] = (bounds[4] - bounds[1]) / 2.f;
-    bounds[5] = (bounds[5] - bounds[2]) / 2.f;
   }
 
   model->meshes[0] = (ModelMesh) {

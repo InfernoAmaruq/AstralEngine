@@ -385,7 +385,7 @@ static void countVertices(ModelData* model, uint32_t nodeIndex, uint32_t* vertex
 
   if (node->mesh != ~0u) {
     ModelMesh* mesh = &model->meshes[node->mesh];
-    ModelPart* part = model->parts;
+    ModelPart* part = mesh->parts;
 
     model->triangleVertexCount += mesh->vertexCount;
 
@@ -471,11 +471,11 @@ void lovrModelDataGetTriangles(ModelData* model, float** vertices, uint32_t** in
     countVertices(model, model->rootNode, vertexCount, indexCount);
   }
 
-  if (vertices && !model->vertices) {
+  if (vertices && !model->triangleVertices) {
     uint32_t* tempIndices;
     uint32_t baseIndex = 0;
-    model->vertices = lovrMalloc(model->triangleVertexCount * 3 * sizeof(float));
-    model->indices = lovrMalloc(model->triangleIndexCount * sizeof(uint32_t));
+    model->triangleVertices = lovrMalloc(model->triangleVertexCount * 3 * sizeof(float));
+    model->triangleIndices = lovrMalloc(model->triangleIndexCount * sizeof(uint32_t));
     *vertices = model->triangleVertices;
     tempIndices = model->triangleIndices;
     collectVertices(model, model->rootNode, vertices, &tempIndices, &baseIndex, (float[16]) MAT4_IDENTITY);

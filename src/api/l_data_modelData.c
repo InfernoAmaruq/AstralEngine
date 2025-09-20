@@ -331,22 +331,59 @@ static int l_lovrModelDataGetMeshMaterial(lua_State* L) {
 static int l_lovrModelDataGetTriangles(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
 
-  float* vertices = NULL;
-  uint32_t* indices = NULL;
-  uint32_t vertexCount = 0;
-  uint32_t indexCount = 0;
-  lovrModelDataGetTriangles(model, &vertices, &indices, &vertexCount, &indexCount);
+  if (lua_isnoneornil(L, 2)) {
+    float* vertices = NULL;
+    uint32_t* indices = NULL;
+    uint32_t vertexCount = 0;
+    uint32_t indexCount = 0;
+    lovrModelDataGetTriangles(model, &vertices, &indices, &vertexCount, &indexCount);
 
-  lua_createtable(L, vertexCount * 3, 0);
-  for (uint32_t i = 0; i < vertexCount * 3; i++) {
-    lua_pushnumber(L, vertices[i]);
-    lua_rawseti(L, -2, i + 1);
-  }
+    lua_createtable(L, vertexCount * 3, 0);
+    for (uint32_t i = 0; i < vertexCount * 3; i++) {
+      lua_pushnumber(L, vertices[i]);
+      lua_rawseti(L, -2, i + 1);
+    }
 
-  lua_createtable(L, indexCount, 0);
-  for (uint32_t i = 0; i < indexCount; i++) {
-    lua_pushinteger(L, indices[i] + 1);
-    lua_rawseti(L, -2, i + 1);
+    lua_createtable(L, indexCount, 0);
+    for (uint32_t i = 0; i < indexCount; i++) {
+      lua_pushinteger(L, indices[i] + 1);
+      lua_rawseti(L, -2, i + 1);
+    }
+  } else {
+    uint32_t meshIndex = luax_checku32(L, 2) - 1;
+    luax_check(L, meshIndex < model->meshCount, "Invalid mesh index '%d'", meshIndex + 1);
+
+    ModelMesh* mesh = &model->meshes[meshIndex];
+    ModelVertex* vertex = model->vertices + mesh->vertexOffset;
+
+    lua_createtable(L, mesh->vertexCount, 0);
+    for (uint32_t i = 0; i < mesh->vertexCount; i++, vertex++) {
+      lua_pushnumber(L, vertex->position.x);
+      lua_rawseti(L, -2, 3 * i + 1);
+
+      lua_pushnumber(L, vertex->position.y);
+      lua_rawseti(L, -2, 3 * i + 2);
+
+      lua_pushnumber(L, vertex->position.z);
+      lua_rawseti(L, -2, 3 * i + 3);
+    }
+
+    if (mesh->indexCount > 0) {
+      void* indices = model->indices;
+      uint32_t base = mesh->parts->baseVertex;
+      lua_createtable(L, mesh->indexCount, 0);
+
+      for (uint32_t i = 0; i < mesh->indexCount; i++) {
+        uint32_t index = model->indexSize == 4 ? ((uint32_t*) indices)[i] : ((uint16_t*) indices)[i];
+        lua_pushinteger(L, index - base + 1);
+        lua_rawseti(L, -2, i + 1);
+      }
+    } else {
+      for (uint32_t i = 0; i < mesh->vertexCount; i++) {
+        lua_pushinteger(L, i + 1);
+        lua_rawseti(L, -2, i + 1);
+      }
+    }
   }
 
   return 2;
@@ -354,9 +391,26 @@ static int l_lovrModelDataGetTriangles(lua_State* L) {
 
 static int l_lovrModelDataGetTriangleCount(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t vertexCount, indexCount;
-  lovrModelDataGetTriangles(model, NULL, NULL, &vertexCount, &indexCount);
-  lua_pushinteger(L, indexCount / 3);
+
+  if (lua_isnoneornil(L, 2)) {
+    uint32_t vertexCount, indexCount;
+    lovrModelDataGetTriangles(model, NULL, NULL, &vertexCount, &indexCount);
+    lua_pushinteger(L, indexCount / 3);
+  } else {
+    uint32_t meshIndex = luax_checku32(L, 2) - 1;
+    luax_check(L, meshIndex < model->meshCount, "Invalid mesh index '%d'", meshIndex + 1);
+    ModelMesh* mesh = &model->meshes[meshIndex];
+    uint32_t count = 0;
+
+    for (uint32_t i = 0; i < mesh->partCount; i++) {
+      if (mesh->parts[i].mode == DRAW_TRIANGLE_LIST) {
+        count += mesh->parts[i].count / 3;
+      }
+    }
+
+    lua_pushinteger(L, count);
+  }
+
   return 1;
 }
 

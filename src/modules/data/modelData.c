@@ -24,6 +24,8 @@ ModelData* lovrModelDataCreate(Blob* source, ModelDataIO* io) {
     return NULL;
   }
 
+  lovrModelDataFinalize(model);
+
   return model;
 }
 

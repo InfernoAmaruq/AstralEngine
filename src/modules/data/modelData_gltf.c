@@ -242,6 +242,7 @@ static void loadImage(void* arg) {
 
       size_t size;
       void* data = ctx->io(fullpath, &size);
+      lovrFree(fullpath);
 
       if (!data || size <= 0) {
         const char* message = "Unable to read image from ";

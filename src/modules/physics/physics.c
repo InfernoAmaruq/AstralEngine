@@ -1903,37 +1903,35 @@ void lovrContactGetPoint(Contact* contact, uint32_t index, float point[3]) {
 }
 
 float lovrContactGetFriction(Contact* contact) {
-  return JPH_ContactSettings_GetFriction(contact->settings);
+  return contact->settings->combinedFriction;
 }
 
 void lovrContactSetFriction(Contact* contact, float friction) {
-  JPH_ContactSettings_SetFriction(contact->settings, MAX(friction, 0.f));
+  contact->settings->combinedFriction = MAX(friction, 0.f);
 }
 
 float lovrContactGetRestitution(Contact* contact) {
-  return JPH_ContactSettings_GetRestitution(contact->settings);
+  return contact->settings->combinedRestitution;
 }
 
 void lovrContactSetRestitution(Contact* contact, float restitution) {
-  JPH_ContactSettings_SetRestitution(contact->settings, MAX(restitution, 0.f));
+  contact->settings->combinedRestitution = MAX(restitution, 0.f);
 }
 
 bool lovrContactIsEnabled(Contact* contact) {
-  return JPH_ContactSettings_GetIsSensor(contact->settings);
+  return contact->settings->isSensor;
 }
 
 void lovrContactSetEnabled(Contact* contact, bool enable) {
-  JPH_ContactSettings_SetIsSensor(contact->settings, !enable);
+  contact->settings->isSensor = !enable;
 }
 
 void lovrContactGetSurfaceVelocity(Contact* contact, float velocity[3]) {
-  JPH_Vec3 v;
-  JPH_ContactSettings_GetRelativeLinearSurfaceVelocity(contact->settings, &v);
-  vec3_fromJolt(velocity, &v);
+  vec3_fromJolt(velocity, &contact->settings->relativeLinearSurfaceVelocity);
 }
 
 void lovrContactSetSurfaceVelocity(Contact* contact, float velocity[3]) {
-  JPH_ContactSettings_SetRelativeLinearSurfaceVelocity(contact->settings, vec3_toJolt(velocity));
+  contact->settings->relativeLinearSurfaceVelocity = *vec3_toJolt(velocity);
 }
 
 // Shapes

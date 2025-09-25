@@ -2317,6 +2317,7 @@ ConvexShape* lovrConvexShapeCreate(float points[], uint32_t count, float scale) 
   shape->type = SHAPE_CONVEX;
   JPH_ConvexHullShapeSettings* settings = JPH_ConvexHullShapeSettings_Create((const JPH_Vec3*) points, count, .05f);
   JPH_Shape* hull = (JPH_Shape*) JPH_ConvexHullShapeSettings_CreateShape(settings);
+  lovrCheck(hull, "Invalid convex hull!");
   JPH_ShapeSettings_Destroy((JPH_ShapeSettings*) settings);
   float scale3[3] = { scale, scale, scale };
   shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(hull, vec3_toJolt(scale3));
@@ -2412,6 +2413,7 @@ MeshShape* lovrMeshShapeClone(MeshShape* parent, float scale) {
   float scale3[3] = { scale, scale, scale };
   const JPH_Shape* mesh = JPH_DecoratedShape_GetInnerShape((const JPH_DecoratedShape*) parent->handle);
   shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(mesh, vec3_toJolt(scale3));
+  lovrCheck(shape->handle, "Invalid mesh data!");
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
   quat_identity(shape->rotation);
   return shape;
@@ -2443,6 +2445,7 @@ TerrainShape* lovrTerrainShapeCreate(float* vertices, uint32_t n, float scaleXZ,
 
   JPH_HeightFieldShapeSettings* shape_settings = JPH_HeightFieldShapeSettings_Create(vertices, &offset, &scale, n);
   shape->handle = (JPH_Shape*) JPH_HeightFieldShapeSettings_CreateShape(shape_settings);
+  lovrCheck(shape->handle, "Invalid terrain data!");
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
   JPH_ShapeSettings_Destroy((JPH_ShapeSettings*) shape_settings);
   return shape;

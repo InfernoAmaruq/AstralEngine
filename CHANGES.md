@@ -33,6 +33,7 @@ dev
 - Fix `ConvexShape` scale not working when created from a table of points.
 - Fix `ConvexShape:getPoint` to apply the shape's center of mass and scale.
 - Fix memory leak with `ConvexShape` and `MeshShape`.
+- Fix crash when creating invalid `ConvexShape`/`MeshShape`/`TerrainShape`.
 - Fix issue where OBJ models loaded without materials would have inverted UVs.
 - Fix issue where cube/array textures would only regenerate 1 mipmap.
 - Fix crash in `Pass:send` when using tables to write nested structs to a uniform buffer.

@@ -120,6 +120,11 @@ group('physics', function()
     end)
 
     group('ConvexShape', function()
+      test('invalid', function()
+        local invalid = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+        expect(function() lovr.physics.newConvexShape(invalid) end).to.fail()
+      end)
+
       test('tetrahedron', function()
         shape = lovr.physics.newConvexShape({ 1, 1, 0, -1, 1, 0, 0, 0, 0, 0, 0, 1 })
         expect(shape:getPointCount()).to.equal(4)

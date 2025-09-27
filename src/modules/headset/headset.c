@@ -2598,7 +2598,7 @@ static ModelData* newModelDataEXT(uint64_t key) {
     lovrRelease(blob, lovrBlobDestroy);
 
     if (modelData) {
-      modelData->id = key;
+      modelData->meta.id = key;
 
       if (!model->nodes) {
         uint32_t nodeCount = model->properties.animatableNodeCount;
@@ -2607,8 +2607,13 @@ static ModelData* newModelDataEXT(uint64_t key) {
 
         for (uint32_t n = 0; n < nodeCount; n++) {
           const char* name = nodeProperties[n].uniqueName;
-          size_t length = strlen(nodeProperties[n].uniqueName);
-          model->nodes[n] = map_get(modelData->nodeMap, hash64(name, length));
+          uint32_t hash = (uint32_t) hash64(name, strlen(name));
+          for (uint32_t m = 0; m < modelData->meta.nodeCount; m++) {
+            if (modelData->meta.nodeLookup[m] == hash) {
+              model->nodes[n] = m;
+              break;
+            }
+          }
         }
       }
     }
@@ -2681,15 +2686,15 @@ static ModelData* newModelDataFB(uint64_t key) {
 
   ModelData* model = lovrCalloc(sizeof(ModelData));
   model->ref = 1;
-  model->id = key;
-  model->meshCount = 1;
-  model->skinCount = 1;
-  model->nodeCount = 2 + jointCount;
-  model->jointCount = jointCount;
-  model->vertexCount = vertexCount;
-  model->indexCount = indexCount;
-  model->skinnedVertexCount = vertexCount;
-  model->indexSize = 2;
+  model->meta.id = key;
+  model->meta.meshCount = 1;
+  model->meta.skinCount = 1;
+  model->meta.nodeCount = 2 + jointCount;
+  model->meta.jointCount = jointCount;
+  model->meta.vertexCount = vertexCount;
+  model->meta.indexCount = indexCount;
+  model->meta.skinnedVertexCount = vertexCount;
+  model->meta.indexSize = 2;
   lovrModelDataAllocate(model);
 
   XrVector3f* positions = mesh.vertexPositions;
@@ -2718,27 +2723,29 @@ static ModelData* newModelDataFB(uint64_t key) {
     };
   }
 
-  memcpy(model->indices, mesh.indices, model->indexCount * model->indexSize);
+  ModelMetadata* meta = &model->meta;
 
-  model->meshes[0].vertexOffset = 0;
-  model->meshes[0].vertexCount = vertexCount;
-  model->meshes[0].indexOffset = 0;
-  model->meshes[0].indexCount = indexCount;
+  memcpy(model->indices, mesh.indices, meta->indexCount * meta->indexSize);
 
-  model->skins[0] = (ModelSkin) {
-    .jointCount = model->jointCount,
-    .joints = model->joints,
-    .inverseBindMatrices = model->inverseBindMatrices
+  meta->meshes[0].vertexOffset = 0;
+  meta->meshes[0].vertexCount = vertexCount;
+  meta->meshes[0].indexOffset = 0;
+  meta->meshes[0].indexCount = indexCount;
+
+  meta->skins[0] = (ModelSkin) {
+    .jointCount = meta->jointCount,
+    .joints = meta->joints,
+    .inverseBindMatrices = meta->inverseBindMatrices
   };
 
   // The nodes in the Model correspond directly to the joints in the skin, for convenience
-  for (uint32_t i = 0; i < model->jointCount; i++) {
-    model->joints[i] = i;
+  for (uint32_t i = 0; i < meta->jointCount; i++) {
+    meta->joints[i] = i;
 
     uint32_t parent = mesh.jointParents[i];
 
     // Joint node
-    model->nodes[i] = (ModelNode) {
+    meta->nodes[i] = (ModelNode) {
       .transform.translation = { 0.f, 0.f, 0.f },
       .transform.rotation = { 0.f, 0.f, 0.f, 1.f },
       .transform.scale = { 1.f, 1.f, 1.f },
@@ -2750,8 +2757,8 @@ static ModelData* newModelDataFB(uint64_t key) {
     };
 
     if (i > 0) {
-      model->nodes[i].sibling = model->nodes[parent].child;
-      model->nodes[parent].child = i;
+      meta->nodes[i].sibling = meta->nodes[parent].child;
+      meta->nodes[parent].child = i;
     }
 
     // Inverse bind matrix
@@ -2762,7 +2769,7 @@ static ModelData* newModelDataFB(uint64_t key) {
   }
 
   // Add a node that holds the skinned mesh
-  model->nodes[model->jointCount] = (ModelNode) {
+  meta->nodes[meta->jointCount] = (ModelNode) {
     .transform.translation = { 0.f, 0.f, 0.f },
     .transform.rotation = { 0.f, 0.f, 0.f, 1.f },
     .transform.scale = { 1.f, 1.f, 1.f },
@@ -2774,8 +2781,8 @@ static ModelData* newModelDataFB(uint64_t key) {
   };
 
   // The root node has the mesh node and root joint as children
-  model->rootNode = model->jointCount + 1;
-  model->nodes[model->rootNode] = (ModelNode) {
+  meta->rootNode = meta->jointCount + 1;
+  meta->nodes[meta->rootNode] = (ModelNode) {
     .hasMatrix = true,
     .transform = { MAT4_IDENTITY },
     .child = ~0u,
@@ -2786,10 +2793,10 @@ static ModelData* newModelDataFB(uint64_t key) {
   };
 
   // Add the 2 children to the root node
-  model->nodes[model->rootNode].child = XR_HAND_JOINT_WRIST_EXT;
-  model->nodes[XR_HAND_JOINT_WRIST_EXT].sibling = model->jointCount;
-  model->nodes[XR_HAND_JOINT_WRIST_EXT].parent = model->rootNode;
-  model->nodes[model->jointCount].parent = model->rootNode;
+  meta->nodes[meta->rootNode].child = XR_HAND_JOINT_WRIST_EXT;
+  meta->nodes[XR_HAND_JOINT_WRIST_EXT].sibling = meta->jointCount;
+  meta->nodes[XR_HAND_JOINT_WRIST_EXT].parent = meta->rootNode;
+  meta->nodes[meta->jointCount].parent = meta->rootNode;
 
   return model;
 }
@@ -2806,7 +2813,7 @@ ModelData* lovrHeadsetNewModelData(uint64_t key) {
 
 bool lovrHeadsetGetModelPose(Model* model, float* position, float* orientation) {
   if (state.extensions.renderModel) {
-    uint64_t key = lovrModelGetInfo(model)->data->id;
+    uint64_t key = lovrModelGetMetadata(model)->id;
 
     for (uint32_t i = 0; i < state.modelCount; i++) {
       if (state.modelKeys[i] != key) {
@@ -2823,7 +2830,7 @@ bool lovrHeadsetGetModelPose(Model* model, float* position, float* orientation) 
 
     return false;
   } else if (state.extensions.handTrackingMesh) {
-    Device device = lovrModelGetInfo(model)->data->id == 1 ? DEVICE_HAND_LEFT : DEVICE_HAND_RIGHT;
+    Device device = lovrModelGetMetadata(model)->id == 1 ? DEVICE_HAND_LEFT : DEVICE_HAND_RIGHT;
     return lovrHeadsetGetPose(device, position, orientation);
   }
 
@@ -2831,7 +2838,7 @@ bool lovrHeadsetGetModelPose(Model* model, float* position, float* orientation) 
 }
 
 static bool animateEXT(Model* model) {
-  uint64_t key = lovrModelGetInfo(model)->data->id;
+  uint64_t key = lovrModelGetMetadata(model)->id;
 
   for (uint32_t i = 0; i < state.modelCount; i++) {
     if (state.modelKeys[i] != key) {
@@ -2879,7 +2886,7 @@ static bool animateEXT(Model* model) {
 }
 
 static bool animateFB(Model* model) {
-  Device device = lovrModelGetInfo(model)->data->id == 1 ? DEVICE_HAND_LEFT : DEVICE_HAND_RIGHT;
+  Device device = lovrModelGetMetadata(model)->id == 1 ? DEVICE_HAND_LEFT : DEVICE_HAND_RIGHT;
   XrHandTrackerEXT tracker = state.handTrackers[device == DEVICE_HAND_RIGHT];
 
   XrHandJointsLocateInfoEXT locateInfo = {

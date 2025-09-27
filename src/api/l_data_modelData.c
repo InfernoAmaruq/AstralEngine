@@ -1,114 +1,143 @@
 #include "api.h"
 #include "data/modelData.h"
+#include "graphics/graphics.h"
 #include "core/maf.h"
 #include "util.h"
 #include <stdlib.h>
 
-uint32_t luax_checkanimationindex(lua_State* L, int index, ModelData* model) {
+ModelMetadata* luax_checkmodelmeta(lua_State* L, int index) {
+  ModelData* modelData = luax_totype(L, index, ModelData);
+
+  if (modelData) {
+    return &modelData->meta;
+  }
+
+#ifndef LOVR_DISABLE_GRAPHICS
+  Model* model = luax_totype(L, index, Model);
+
+  if (model) {
+    return lovrModelGetMetadata(model);
+  }
+#endif
+
+  luax_typeerror(L, index, "Model or ModelData");
+  return NULL;
+}
+
+uint32_t luax_checkanimationindex(lua_State* L, int index, ModelMetadata* meta) {
   switch (lua_type(L, index)) {
     case LUA_TNUMBER: {
       uint32_t animation = luax_checku32(L, index) - 1;
-      luax_check(L, animation < model->animationCount, "Invalid animation index '%d'", animation + 1);
+      luax_check(L, animation < meta->animationCount, "Invalid animation index '%d'", animation + 1);
       return animation;
     }
     case LUA_TSTRING: {
       size_t length;
       const char* name = lua_tolstring(L, index, &length);
-      uint64_t hash = hash64(name, length);
-      uint64_t entry = map_get(model->animationMap, hash);
-      luax_check(L, entry != MAP_NIL, "Model has no animation named '%s'", name);
-      return (uint32_t) entry;
+      uint32_t hash = (uint32_t) hash64(name, length);
+      for (uint32_t i = 0; i < meta->animationCount; i++) {
+        if (meta->animationLookup[i] == hash) {
+          return i;
+        }
+      }
+      return luaL_error(L, "Model has no animation named '%s'", name);
     }
     default: return luax_typeerror(L, index, "number or string"), ~0u;
   }
 }
 
-uint32_t luax_checkmaterialindex(lua_State* L, int index, ModelData* model) {
+uint32_t luax_checkmaterialindex(lua_State* L, int index, ModelMetadata* meta) {
   switch (lua_type(L, index)) {
     case LUA_TNUMBER: {
       uint32_t material = luax_checku32(L, index) - 1;
-      luax_check(L, material < model->materialCount, "Invalid material index '%d'", material + 1);
+      luax_check(L, material < meta->materialCount, "Invalid material index '%d'", material + 1);
       return material;
     }
     case LUA_TSTRING: {
       size_t length;
       const char* name = lua_tolstring(L, index, &length);
-      uint64_t hash = hash64(name, length);
-      uint64_t entry = map_get(model->materialMap, hash);
-      luax_check(L, entry != MAP_NIL, "Model has no material named '%s'", name);
-      return (uint32_t) entry;
+      uint32_t hash = (uint32_t) hash64(name, length);
+      for (uint32_t i = 0; i < meta->materialCount; i++) {
+        if (meta->materialLookup[i] == hash) {
+          return i;
+        }
+      }
+      return luaL_error(L, "Model has no material named '%s'", name);
     }
     default: return luax_typeerror(L, index, "number or string"), ~0u;
   }
 }
 
-uint32_t luax_checknodeindex(lua_State* L, int index, ModelData* model) {
+uint32_t luax_checknodeindex(lua_State* L, int index, ModelMetadata* meta) {
   switch (lua_type(L, index)) {
     case LUA_TNUMBER: {
       uint32_t node = luax_checku32(L, index) - 1;
-      luax_check(L, node < model->nodeCount, "Invalid node index '%d'", node + 1);
+      luax_check(L, node < meta->nodeCount, "Invalid node index '%d'", node + 1);
       return node;
     }
     case LUA_TSTRING: {
       size_t length;
       const char* name = lua_tolstring(L, index, &length);
-      uint64_t hash = hash64(name, length);
-      uint64_t entry = map_get(model->nodeMap, hash);
-      luax_check(L, entry != MAP_NIL, "Model has no node named '%s'", name);
-      return (uint32_t) entry;
+      uint32_t hash = (uint32_t) hash64(name, length);
+      for (uint32_t i = 0; i < meta->nodeCount; i++) {
+        if (meta->nodeLookup[i] == hash) {
+          return i;
+        }
+      }
+      return luaL_error(L, "Model has no node named '%s'", name);
     }
     default: return luax_typeerror(L, index, "number or string"), ~0u;
   }
 }
 
-uint32_t luax_checkmeshindex(lua_State* L, int index, ModelData* model) {
+static uint32_t luax_checkmeshindex(lua_State* L, int index, ModelMetadata* meta) {
   uint32_t mesh = luax_checku32(L, index) - 1;
-  luax_check(L, mesh < model->meshCount, "Invalid mesh index '%d'", mesh + 1);
-  return 1;
+  luax_check(L, mesh < meta->meshCount, "Invalid mesh index '%d'", mesh + 1);
+  return mesh;
 }
 
-ModelPart* luax_checkmeshpart(lua_State* L, int index, ModelData* model) {
-  uint32_t mesh = luax_checkmeshindex(L, index, model);
+static ModelPart* luax_checkmeshpart(lua_State* L, int index, ModelMetadata* meta) {
+  uint32_t mesh = luax_checkmeshindex(L, index, meta);
   uint32_t part = luax_optu32(L, index + 1, 1) - 1;
-  luax_check(L, part < model->meshes[mesh].partCount, "Invalid part index '%d'", part + 1);
-  return &model->meshes[mesh].parts[part];
+  luax_check(L, part < meta->meshes[mesh].partCount, "Invalid part index '%d'", part + 1);
+  return &meta->meshes[mesh].parts[part];
 }
 
-static int l_lovrModelDataGetMetadata(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetMetadata(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
 
-  if (!model->metadata || model->metadataSize == 0) {
+  if (!meta->comment || meta->commentLength == 0) {
     lua_pushnil(L);
   } else {
-    lua_pushlstring(L, model->metadata, model->metadataSize);
+    lua_pushlstring(L, meta->comment, meta->commentLength);
   }
 
   return 1;
 }
 
-static int l_lovrModelDataGetRootNode(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  lua_pushinteger(L, model->rootNode + 1);
+int l_lovrModelMetaGetRootNode(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  lua_pushinteger(L, meta->rootNode + 1);
   return 1;
 }
 
-static int l_lovrModelDataGetNodeCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  lua_pushinteger(L, model->nodeCount);
+int l_lovrModelMetaGetNodeCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  lua_pushinteger(L, meta->nodeCount);
   return 1;
 }
 
-static int l_lovrModelDataGetNodeName(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetNodeName(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->nodeCount, "Invalid node index '%d'", index + 1);
-  lua_pushstring(L, model->nodes[index].name);
+  luax_check(L, index < meta->nodeCount, "Invalid node index '%d'", index + 1);
+  lua_pushstring(L, meta->nodes[index].name);
   return 1;
 }
 
-static int l_lovrModelDataGetNodeChild(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+int l_lovrModelMetaGetNodeChild(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelNode* node = &meta->nodes[luax_checknodeindex(L, 2, meta)];
   if (node->child != ~0u) {
     lua_pushinteger(L, node->child + 1);
   } else {
@@ -117,20 +146,20 @@ static int l_lovrModelDataGetNodeChild(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetNodeChildren(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+int l_lovrModelMetaGetNodeChildren(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelNode* node = &meta->nodes[luax_checknodeindex(L, 2, meta)];
   lua_newtable(L);
-  for (uint32_t i = node->child; i != ~0u; i = model->nodes[i].sibling) {
+  for (uint32_t i = node->child; i != ~0u; i = meta->nodes[i].sibling) {
     lua_pushinteger(L, i + 1);
     lua_rawseti(L, -2, i + 1);
   }
   return 1;
 }
 
-static int l_lovrModelDataGetNodeSibling(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+int l_lovrModelMetaGetNodeSibling(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelNode* node = &meta->nodes[luax_checknodeindex(L, 2, meta)];
   if (node->sibling != ~0u) {
     lua_pushinteger(L, node->sibling + 1);
   } else {
@@ -139,9 +168,9 @@ static int l_lovrModelDataGetNodeSibling(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetNodeParent(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+int l_lovrModelMetaGetNodeParent(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelNode* node = &meta->nodes[luax_checknodeindex(L, 2, meta)];
   if (node->parent != ~0u) {
     lua_pushinteger(L, node->parent + 1);
   } else {
@@ -150,9 +179,9 @@ static int l_lovrModelDataGetNodeParent(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetNodePosition(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+int l_lovrModelMetaGetNodePosition(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelNode* node = &meta->nodes[luax_checknodeindex(L, 2, meta)];
   if (node->hasMatrix) {
     float position[3];
     mat4_getPosition(node->transform.matrix, position);
@@ -168,9 +197,9 @@ static int l_lovrModelDataGetNodePosition(lua_State* L) {
   }
 }
 
-static int l_lovrModelDataGetNodeOrientation(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+int l_lovrModelMetaGetNodeOrientation(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelNode* node = &meta->nodes[luax_checknodeindex(L, 2, meta)];
   float angle, ax, ay, az;
   if (node->hasMatrix) {
     mat4_getAngleAxis(node->transform.matrix, &angle, &ax, &ay, &az);
@@ -184,9 +213,9 @@ static int l_lovrModelDataGetNodeOrientation(lua_State* L) {
   return 4;
 }
 
-static int l_lovrModelDataGetNodeScale(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+int l_lovrModelMetaGetNodeScale(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelNode* node = &meta->nodes[luax_checknodeindex(L, 2, meta)];
   if (node->hasMatrix) {
     float scale[3];
     mat4_getScale(node->transform.matrix, scale);
@@ -201,9 +230,9 @@ static int l_lovrModelDataGetNodeScale(lua_State* L) {
   return 3;
 }
 
-static int l_lovrModelDataGetNodePose(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+int l_lovrModelMetaGetNodePose(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelNode* node = &meta->nodes[luax_checknodeindex(L, 2, meta)];
   if (node->hasMatrix) {
     float position[3], angle, ax, ay, az;
     mat4_getPosition(node->transform.matrix, position);
@@ -229,9 +258,9 @@ static int l_lovrModelDataGetNodePose(lua_State* L) {
   return 7;
 }
 
-static int l_lovrModelDataGetNodeTransform(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+int l_lovrModelMetaGetNodeTransform(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelNode* node = &meta->nodes[luax_checknodeindex(L, 2, meta)];
   if (node->hasMatrix) {
     float position[3], scale[4], angle, ax, ay, az;
     mat4_getPosition(node->transform.matrix, position);
@@ -264,9 +293,9 @@ static int l_lovrModelDataGetNodeTransform(lua_State* L) {
   return 10;
 }
 
-static int l_lovrModelDataGetNodeMesh(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+int l_lovrModelMetaGetNodeMesh(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelNode* node = &meta->nodes[luax_checknodeindex(L, 2, meta)];
   if (node->mesh == ~0u) {
     lua_pushnil(L);
   } else {
@@ -275,9 +304,9 @@ static int l_lovrModelDataGetNodeMesh(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetNodeSkin(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
+int l_lovrModelMetaGetNodeSkin(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelNode* node = &meta->nodes[luax_checknodeindex(L, 2, meta)];
   if (node->skin == ~0u) {
     lua_pushnil(L);
   } else {
@@ -286,44 +315,44 @@ static int l_lovrModelDataGetNodeSkin(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetMeshCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  lua_pushinteger(L, model->meshCount);
+int l_lovrModelMetaGetMeshCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  lua_pushinteger(L, meta->meshCount);
   return 1;
 }
 
-static int l_lovrModelDataGetMeshPartCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  uint32_t mesh = luax_checkmeshindex(L, 2, model);
-  lua_pushinteger(L, model->meshes[mesh].partCount);
+int l_lovrModelMetaGetMeshPartCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  uint32_t mesh = luax_checkmeshindex(L, 2, meta);
+  lua_pushinteger(L, meta->meshes[mesh].partCount);
   return 1;
 }
 
-static int l_lovrModelDataGetMeshDrawMode(lua_State* L) {
-  ModelData* model = luax_checktype(L,  1, ModelData);
-  ModelPart* part = luax_checkmeshpart(L, 2, model);
+int l_lovrModelMetaGetMeshDrawMode(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelPart* part = luax_checkmeshpart(L, 2, meta);
   luax_pushenum(L, ModelDrawMode, part->mode);
   return 1;
 }
 
-static int l_lovrModelDataGetMeshDrawRange(lua_State* L) {
-  ModelData* model = luax_checktype(L,  1, ModelData);
-  ModelPart* part = luax_checkmeshpart(L, 2, model);
+int l_lovrModelMetaGetMeshDrawRange(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L,  1);
+  ModelPart* part = luax_checkmeshpart(L, 2, meta);
   lua_pushinteger(L, part->start + 1);
   lua_pushinteger(L, part->count);
   return 2;
 }
 
-static int l_lovrModelDataGetMeshBaseVertex(lua_State* L) {
-  ModelData* model = luax_checktype(L,  1, ModelData);
-  ModelPart* part = luax_checkmeshpart(L, 2, model);
+int l_lovrModelMetaGetMeshBaseVertex(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelPart* part = luax_checkmeshpart(L, 2, meta);
   lua_pushinteger(L, part->baseVertex);
   return 1;
 }
 
-static int l_lovrModelDataGetMeshMaterial(lua_State* L) {
-  ModelData* model = luax_checktype(L,  1, ModelData);
-  ModelPart* part = luax_checkmeshpart(L, 2, model);
+int l_lovrModelMetaGetMeshMaterial(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelPart* part = luax_checkmeshpart(L, 2, meta);
   lua_pushinteger(L, part->material + 1);
   return 1;
 }
@@ -351,9 +380,9 @@ static int l_lovrModelDataGetTriangles(lua_State* L) {
     }
   } else {
     uint32_t meshIndex = luax_checku32(L, 2) - 1;
-    luax_check(L, meshIndex < model->meshCount, "Invalid mesh index '%d'", meshIndex + 1);
+    luax_check(L, meshIndex < model->meta.meshCount, "Invalid mesh index '%d'", meshIndex + 1);
 
-    ModelMesh* mesh = &model->meshes[meshIndex];
+    ModelMesh* mesh = &model->meta.meshes[meshIndex];
     ModelVertex* vertex = model->vertices + mesh->vertexOffset;
 
     lua_createtable(L, mesh->vertexCount, 0);
@@ -374,7 +403,7 @@ static int l_lovrModelDataGetTriangles(lua_State* L) {
       lua_createtable(L, mesh->indexCount, 0);
 
       for (uint32_t i = 0; i < mesh->indexCount; i++) {
-        uint32_t index = model->indexSize == 4 ? ((uint32_t*) indices)[i] : ((uint16_t*) indices)[i];
+        uint32_t index = model->meta.indexSize == 4 ? ((uint32_t*) indices)[i] : ((uint16_t*) indices)[i];
         lua_pushinteger(L, index - base + 1);
         lua_rawseti(L, -2, i + 1);
       }
@@ -398,8 +427,8 @@ static int l_lovrModelDataGetTriangleCount(lua_State* L) {
     lua_pushinteger(L, indexCount / 3);
   } else {
     uint32_t meshIndex = luax_checku32(L, 2) - 1;
-    luax_check(L, meshIndex < model->meshCount, "Invalid mesh index '%d'", meshIndex + 1);
-    ModelMesh* mesh = &model->meshes[meshIndex];
+    luax_check(L, meshIndex < model->meta.meshCount, "Invalid mesh index '%d'", meshIndex + 1);
+    ModelMesh* mesh = &model->meta.meshes[meshIndex];
     uint32_t count = 0;
 
     for (uint32_t i = 0; i < mesh->partCount; i++) {
@@ -414,7 +443,7 @@ static int l_lovrModelDataGetTriangleCount(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetVertexCount(lua_State* L) {
+int l_lovrModelMetaGetVertexCount(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   uint32_t vertexCount, indexCount;
   lovrModelDataGetTriangles(model, NULL, NULL, &vertexCount, &indexCount);
@@ -422,73 +451,73 @@ static int l_lovrModelDataGetVertexCount(lua_State* L) {
   return 1;
 }
 
-static void luax_checkboundingbox(lua_State* L, int index, ModelData* model, float bounds[6]) {
+static void luax_checkboundingbox(lua_State* L, int index, ModelMetadata* meta, float bounds[6]) {
   if (lua_type(L, index) == LUA_TNONE) {
-    lovrModelDataGetBoundingBox(model, bounds);
+    lovrModelMetadataGetBoundingBox(meta, bounds);
     return;
   }
 
   uint32_t mesh = luax_checku32(L, index) - 1;
-  luax_check(L, mesh < model->meshCount, "Invalid mesh index '%d'", mesh + 1);
+  luax_check(L, mesh < meta->meshCount, "Invalid mesh index '%d'", mesh + 1);
 
   if (lua_type(L, index + 1) == LUA_TNONE) {
-    lovrModelDataGetMeshBoundingBox(model, mesh, bounds);
+    lovrModelMetadataGetMeshBoundingBox(meta, mesh, bounds);
     return;
   }
 
   uint32_t part = luax_checku32(L, index + 1) - 1;
-  luax_check(L, part < model->meshes[mesh].partCount, "Invalid part index '%d'", part + 1);
-  memcpy(bounds, model->meshes[mesh].parts[part].bounds, 6 * sizeof(float));
+  luax_check(L, part < meta->meshes[mesh].partCount, "Invalid part index '%d'", part + 1);
+  memcpy(bounds, meta->meshes[mesh].parts[part].bounds, 6 * sizeof(float));
 }
 
-static int l_lovrModelDataGetWidth(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetWidth(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   float bounds[6];
-  luax_checkboundingbox(L, 2, model, bounds);
+  luax_checkboundingbox(L, 2, meta, bounds);
   lua_pushnumber(L, bounds[1] - bounds[0]);
   return 1;
 }
 
-static int l_lovrModelDataGetHeight(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetHeight(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   float bounds[6];
-  luax_checkboundingbox(L, 2, model, bounds);
+  luax_checkboundingbox(L, 2, meta, bounds);
   lua_pushnumber(L, bounds[3] - bounds[2]);
   return 1;
 }
 
-static int l_lovrModelDataGetDepth(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetDepth(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   float bounds[6];
-  luax_checkboundingbox(L, 2, model, bounds);
+  luax_checkboundingbox(L, 2, meta, bounds);
   lua_pushnumber(L, bounds[5] - bounds[4]);
   return 1;
 }
 
-static int l_lovrModelDataGetDimensions(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetDimensions(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   float bounds[6];
-  luax_checkboundingbox(L, 2, model, bounds);
+  luax_checkboundingbox(L, 2, meta, bounds);
   lua_pushnumber(L, bounds[1] - bounds[0]);
   lua_pushnumber(L, bounds[3] - bounds[2]);
   lua_pushnumber(L, bounds[5] - bounds[4]);
   return 3;
 }
 
-static int l_lovrModelDataGetCenter(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetCenter(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   float bounds[6];
-  luax_checkboundingbox(L, 2, model, bounds);
+  luax_checkboundingbox(L, 2, meta, bounds);
   lua_pushnumber(L, (bounds[0] + bounds[1]) / 2.f);
   lua_pushnumber(L, (bounds[2] + bounds[3]) / 2.f);
   lua_pushnumber(L, (bounds[4] + bounds[5]) / 2.f);
   return 3;
 }
 
-static int l_lovrModelDataGetBoundingBox(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetBoundingBox(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   float bounds[6];
-  luax_checkboundingbox(L, 2, model, bounds);
+  luax_checkboundingbox(L, 2, meta, bounds);
   lua_pushnumber(L, bounds[0]);
   lua_pushnumber(L, bounds[1]);
   lua_pushnumber(L, bounds[2]);
@@ -498,61 +527,37 @@ static int l_lovrModelDataGetBoundingBox(lua_State* L) {
   return 6;
 }
 
-static int l_lovrModelDataGetBoundingSphere(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  float sphere[4];
-  if (lua_type(L, 2) == LUA_TNONE) {
-    lovrModelDataGetBoundingSphere(model, sphere);
-  } else {
-    uint32_t mesh = luax_checku32(L, 2) - 1;
-    luax_check(L, mesh < model->meshCount, "Invalid mesh index '%d'", mesh + 1);
-
-    uint32_t part = ~0u;
-    if (lua_type(L, 3) != LUA_TNONE) {
-      part = luax_checku32(L, 3);
-      luax_check(L, part < model->meshes[mesh].partCount, "Invalid part index '%d'", part + 1);
-    }
-
-    lovrModelDataGetMeshBoundingSphere(model, mesh, part, sphere);
-  }
-  lua_pushnumber(L, sphere[0]);
-  lua_pushnumber(L, sphere[1]);
-  lua_pushnumber(L, sphere[2]);
-  lua_pushnumber(L, sphere[3]);
-  return 4;
-}
-
-static int l_lovrModelDataGetImageCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  lua_pushinteger(L, model->imageCount);
+int l_lovrModelMetaGetImageCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  lua_pushinteger(L, meta->imageCount);
   return 1;
 }
 
 static int l_lovrModelDataGetImage(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->imageCount, "Invalid image index '%d'", index + 1);
+  luax_check(L, index < model->meta.imageCount, "Invalid image index '%d'", index + 1);
   luax_pushtype(L, Image, model->images[index]);
   return 1;
 }
 
-static int l_lovrModelDataGetMaterialCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  lua_pushinteger(L, model->materialCount);
+int l_lovrModelMetaGetMaterialCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  lua_pushinteger(L, meta->materialCount);
   return 1;
 }
 
-static int l_lovrModelDataGetMaterialName(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetMaterialName(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->nodeCount, "Invalid material index '%d'", index + 1);
-  lua_pushstring(L, model->materials[index].name);
+  luax_check(L, index < meta->nodeCount, "Invalid material index '%d'", index + 1);
+  lua_pushstring(L, meta->materials[index].name);
   return 1;
 }
 
 static int l_lovrModelDataGetMaterial(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelMaterial* material = &model->materials[luax_checkmaterialindex(L, 2, model)];
+  ModelMaterial* material = &model->meta.materials[luax_checkmaterialindex(L, 2, &model->meta)];
 
   lua_newtable(L);
 
@@ -612,37 +617,37 @@ static int l_lovrModelDataGetMaterial(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetAnimationCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  lua_pushinteger(L, model->animationCount);
+int l_lovrModelMetaGetAnimationCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  lua_pushinteger(L, meta->animationCount);
   return 1;
 }
 
-static int l_lovrModelDataGetAnimationName(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetAnimationName(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->animationCount, "Invalid animation index '%d'", index + 1);
-  lua_pushstring(L, model->animations[index].name);
+  luax_check(L, index < meta->animationCount, "Invalid animation index '%d'", index + 1);
+  lua_pushstring(L, meta->animations[index].name);
   return 1;
 }
 
-static int l_lovrModelDataGetAnimationDuration(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelAnimation* animation = &model->animations[luax_checkanimationindex(L, 2, model)];
+int l_lovrModelMetaGetAnimationDuration(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelAnimation* animation = &meta->animations[luax_checkanimationindex(L, 2, meta)];
   lua_pushnumber(L, animation->duration);
   return 1;
 }
 
-static int l_lovrModelDataGetAnimationChannelCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelAnimation* animation = &model->animations[luax_checkanimationindex(L, 2, model)];
+int l_lovrModelMetaGetAnimationChannelCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelAnimation* animation = &meta->animations[luax_checkanimationindex(L, 2, meta)];
   lua_pushinteger(L, animation->channelCount);
   return 1;
 }
 
-static int l_lovrModelDataGetAnimationNode(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelAnimation* animation = &model->animations[luax_checkanimationindex(L, 2, model)];
+int l_lovrModelMetaGetAnimationNode(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelAnimation* animation = &meta->animations[luax_checkanimationindex(L, 2, meta)];
   uint32_t index = luax_checku32(L, 3) - 1;
   luax_check(L, index < animation->channelCount, "Invalid channel index '%d'", index + 1);
   ModelAnimationChannel* channel = &animation->channels[index];
@@ -650,9 +655,9 @@ static int l_lovrModelDataGetAnimationNode(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetAnimationProperty(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelAnimation* animation = &model->animations[luax_checkanimationindex(L, 2, model)];
+int l_lovrModelMetaGetAnimationProperty(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelAnimation* animation = &meta->animations[luax_checkanimationindex(L, 2, meta)];
   uint32_t index = luax_checku32(L, 3) - 1;
   luax_check(L, index < animation->channelCount, "Invalid channel index '%d'", index + 1);
   ModelAnimationChannel* channel = &animation->channels[index];
@@ -660,9 +665,9 @@ static int l_lovrModelDataGetAnimationProperty(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetAnimationSmoothMode(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelAnimation* animation = &model->animations[luax_checkanimationindex(L, 2, model)];
+int l_lovrModelMetaGetAnimationSmoothMode(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelAnimation* animation = &meta->animations[luax_checkanimationindex(L, 2, meta)];
   uint32_t index = luax_checku32(L, 3) - 1;
   luax_check(L, index < animation->channelCount, "Invalid channel index '%d'", index + 1);
   ModelAnimationChannel* channel = &animation->channels[index];
@@ -670,9 +675,9 @@ static int l_lovrModelDataGetAnimationSmoothMode(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetAnimationKeyframeCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelAnimation* animation = &model->animations[luax_checkanimationindex(L, 2, model)];
+int l_lovrModelMetaGetAnimationKeyframeCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  ModelAnimation* animation = &meta->animations[luax_checkanimationindex(L, 2, meta)];
   uint32_t index = luax_checku32(L, 3) - 1;
   luax_check(L, index < animation->channelCount, "Invalid channel index '%d'", index + 1);
   ModelAnimationChannel* channel = &animation->channels[index];
@@ -682,7 +687,7 @@ static int l_lovrModelDataGetAnimationKeyframeCount(lua_State* L) {
 
 static int l_lovrModelDataGetAnimationKeyframe(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelAnimation* animation = &model->animations[luax_checkanimationindex(L, 2, model)];
+  ModelAnimation* animation = &model->meta.animations[luax_checkanimationindex(L, 2, &model->meta)];
   uint32_t index = luax_checku32(L, 3) - 1;
   luax_check(L, index < animation->channelCount, "Invalid channel index '%d'", index + 1);
   ModelAnimationChannel* channel = &animation->channels[index];
@@ -694,7 +699,7 @@ static int l_lovrModelDataGetAnimationKeyframe(lua_State* L) {
     case PROP_TRANSLATION: count = 3; break;
     case PROP_ROTATION: count = 4; break;
     case PROP_SCALE: count = 3; break;
-    case PROP_WEIGHTS: count = model->meshes[model->nodes[channel->nodeIndex].mesh].blendShapeCount; break;
+    case PROP_WEIGHTS: count = model->meta.meshes[model->meta.nodes[channel->nodeIndex].mesh].blendShapeCount; break;
   }
   for (int i = 0; i < count; i++) {
     lua_pushnumber(L, channel->data[keyframe * count + i]);
@@ -702,17 +707,17 @@ static int l_lovrModelDataGetAnimationKeyframe(lua_State* L) {
   return count + 1;
 }
 
-static int l_lovrModelDataGetSkinCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  lua_pushinteger(L, model->skinCount);
+int l_lovrModelMetaGetSkinCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  lua_pushinteger(L, meta->skinCount);
   return 1;
 }
 
-static int l_lovrModelDataGetSkinJoints(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetSkinJoints(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->skinCount, "Invalid skin index '%d'", index + 1);
-  ModelSkin* skin = &model->skins[index];
+  luax_check(L, index < meta->skinCount, "Invalid skin index '%d'", index + 1);
+  ModelSkin* skin = &meta->skins[index];
   lua_createtable(L, skin->jointCount, 0);
   for (uint32_t i = 0; i < skin->jointCount; i++) {
     lua_pushinteger(L, skin->joints[i]);
@@ -721,11 +726,11 @@ static int l_lovrModelDataGetSkinJoints(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetSkinInverseBindMatrix(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetSkinInverseBindMatrix(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->skinCount, "Invalid skin index '%d'", index + 1);
-  ModelSkin* skin = &model->skins[index];
+  luax_check(L, index < meta->skinCount, "Invalid skin index '%d'", index + 1);
+  ModelSkin* skin = &meta->skins[index];
   uint32_t joint = luax_checku32(L, 3) - 1;
   luax_check(L, index < skin->jointCount, "Invalid joint index '%d'", joint + 1);
   if (!skin->inverseBindMatrices) return lua_pushnil(L), 1;
@@ -736,70 +741,69 @@ static int l_lovrModelDataGetSkinInverseBindMatrix(lua_State* L) {
   return 16;
 }
 
-static int l_lovrModelDataGetBlendShapeCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  lua_pushinteger(L, model->blendShapeCount);
+int l_lovrModelMetaGetBlendShapeCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  lua_pushinteger(L, meta->blendShapeCount);
   return 1;
 }
 
-static int l_lovrModelDataGetBlendShapeName(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
+int l_lovrModelMetaGetBlendShapeName(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < model->blendShapeCount, "Invalid blend shape index '%d'", index + 1);
-  lua_pushstring(L, model->blendShapes[index].name);
+  luax_check(L, index < meta->blendShapeCount, "Invalid blend shape index '%d'", index + 1);
+  lua_pushstring(L, meta->blendShapes[index].name);
   return 1;
 }
 
 const luaL_Reg lovrModelData[] = {
-  { "getMetadata", l_lovrModelDataGetMetadata },
-  { "getRootNode", l_lovrModelDataGetRootNode },
-  { "getNodeCount", l_lovrModelDataGetNodeCount },
-  { "getNodeName", l_lovrModelDataGetNodeName },
-  { "getNodeChild", l_lovrModelDataGetNodeChild },
-  { "getNodeChildren", l_lovrModelDataGetNodeChildren }, // Deprecated
-  { "getNodeSibling", l_lovrModelDataGetNodeSibling },
-  { "getNodeParent", l_lovrModelDataGetNodeParent },
-  { "getNodePosition", l_lovrModelDataGetNodePosition },
-  { "getNodeOrientation", l_lovrModelDataGetNodeOrientation },
-  { "getNodeScale", l_lovrModelDataGetNodeScale },
-  { "getNodePose", l_lovrModelDataGetNodePose },
-  { "getNodeTransform", l_lovrModelDataGetNodeTransform },
-  { "getNodeMesh", l_lovrModelDataGetNodeMesh },
-  { "getNodeSkin", l_lovrModelDataGetNodeSkin },
-  { "getMeshCount", l_lovrModelDataGetMeshCount },
-  { "getMeshPartCount", l_lovrModelDataGetMeshPartCount },
-  { "getMeshDrawMode", l_lovrModelDataGetMeshDrawMode },
-  { "getMeshDrawRange", l_lovrModelDataGetMeshDrawRange },
-  { "getMeshBaseVertex", l_lovrModelDataGetMeshBaseVertex },
-  { "getMeshMaterial", l_lovrModelDataGetMeshMaterial },
+  { "getMetadata", l_lovrModelMetaGetMetadata },
+  { "getRootNode", l_lovrModelMetaGetRootNode },
+  { "getNodeCount", l_lovrModelMetaGetNodeCount },
+  { "getNodeName", l_lovrModelMetaGetNodeName },
+  { "getNodeChild", l_lovrModelMetaGetNodeChild },
+  { "getNodeChildren", l_lovrModelMetaGetNodeChildren }, // Deprecated
+  { "getNodeSibling", l_lovrModelMetaGetNodeSibling },
+  { "getNodeParent", l_lovrModelMetaGetNodeParent },
+  { "getNodePosition", l_lovrModelMetaGetNodePosition },
+  { "getNodeOrientation", l_lovrModelMetaGetNodeOrientation },
+  { "getNodeScale", l_lovrModelMetaGetNodeScale },
+  { "getNodePose", l_lovrModelMetaGetNodePose },
+  { "getNodeTransform", l_lovrModelMetaGetNodeTransform },
+  { "getNodeMesh", l_lovrModelMetaGetNodeMesh },
+  { "getNodeSkin", l_lovrModelMetaGetNodeSkin },
+  { "getMeshCount", l_lovrModelMetaGetMeshCount },
+  { "getMeshPartCount", l_lovrModelMetaGetMeshPartCount },
+  { "getMeshDrawMode", l_lovrModelMetaGetMeshDrawMode },
+  { "getMeshDrawRange", l_lovrModelMetaGetMeshDrawRange },
+  { "getMeshBaseVertex", l_lovrModelMetaGetMeshBaseVertex },
+  { "getMeshMaterial", l_lovrModelMetaGetMeshMaterial },
   { "getTriangles", l_lovrModelDataGetTriangles },
   { "getTriangleCount", l_lovrModelDataGetTriangleCount },
-  { "getVertexCount", l_lovrModelDataGetVertexCount },
-  { "getWidth", l_lovrModelDataGetWidth },
-  { "getHeight", l_lovrModelDataGetHeight },
-  { "getDepth", l_lovrModelDataGetDepth },
-  { "getDimensions", l_lovrModelDataGetDimensions },
-  { "getCenter", l_lovrModelDataGetCenter },
-  { "getBoundingBox", l_lovrModelDataGetBoundingBox },
-  { "getBoundingSphere", l_lovrModelDataGetBoundingSphere },
-  { "getImageCount", l_lovrModelDataGetImageCount },
+  { "getVertexCount", l_lovrModelMetaGetVertexCount },
+  { "getWidth", l_lovrModelMetaGetWidth },
+  { "getHeight", l_lovrModelMetaGetHeight },
+  { "getDepth", l_lovrModelMetaGetDepth },
+  { "getDimensions", l_lovrModelMetaGetDimensions },
+  { "getCenter", l_lovrModelMetaGetCenter },
+  { "getBoundingBox", l_lovrModelMetaGetBoundingBox },
+  { "getImageCount", l_lovrModelMetaGetImageCount },
   { "getImage", l_lovrModelDataGetImage },
-  { "getMaterialCount", l_lovrModelDataGetMaterialCount },
-  { "getMaterialName", l_lovrModelDataGetMaterialName },
+  { "getMaterialCount", l_lovrModelMetaGetMaterialCount },
+  { "getMaterialName", l_lovrModelMetaGetMaterialName },
   { "getMaterial", l_lovrModelDataGetMaterial },
-  { "getAnimationCount", l_lovrModelDataGetAnimationCount },
-  { "getAnimationName", l_lovrModelDataGetAnimationName },
-  { "getAnimationDuration", l_lovrModelDataGetAnimationDuration },
-  { "getAnimationChannelCount", l_lovrModelDataGetAnimationChannelCount },
-  { "getAnimationNode", l_lovrModelDataGetAnimationNode },
-  { "getAnimationProperty", l_lovrModelDataGetAnimationProperty },
-  { "getAnimationSmoothMode", l_lovrModelDataGetAnimationSmoothMode },
-  { "getAnimationKeyframeCount", l_lovrModelDataGetAnimationKeyframeCount },
+  { "getAnimationCount", l_lovrModelMetaGetAnimationCount },
+  { "getAnimationName", l_lovrModelMetaGetAnimationName },
+  { "getAnimationDuration", l_lovrModelMetaGetAnimationDuration },
+  { "getAnimationChannelCount", l_lovrModelMetaGetAnimationChannelCount },
+  { "getAnimationNode", l_lovrModelMetaGetAnimationNode },
+  { "getAnimationProperty", l_lovrModelMetaGetAnimationProperty },
+  { "getAnimationSmoothMode", l_lovrModelMetaGetAnimationSmoothMode },
+  { "getAnimationKeyframeCount", l_lovrModelMetaGetAnimationKeyframeCount },
   { "getAnimationKeyframe", l_lovrModelDataGetAnimationKeyframe },
-  { "getSkinCount", l_lovrModelDataGetSkinCount },
-  { "getSkinJoints", l_lovrModelDataGetSkinJoints },
-  { "getSkinInverseBindMatrix", l_lovrModelDataGetSkinInverseBindMatrix },
-  { "getBlendShapeCount", l_lovrModelDataGetBlendShapeCount },
-  { "getBlendShapeName", l_lovrModelDataGetBlendShapeName },
+  { "getSkinCount", l_lovrModelMetaGetSkinCount },
+  { "getSkinJoints", l_lovrModelMetaGetSkinJoints },
+  { "getSkinInverseBindMatrix", l_lovrModelMetaGetSkinInverseBindMatrix },
+  { "getBlendShapeCount", l_lovrModelMetaGetBlendShapeCount },
+  { "getBlendShapeName", l_lovrModelMetaGetBlendShapeName },
   { NULL, NULL }
 };

@@ -8,6 +8,7 @@ struct Blob;
 struct Image;
 struct Rasterizer;
 struct ModelData;
+struct ModelMetadata;
 
 typedef struct Buffer Buffer;
 typedef struct Texture Texture;
@@ -484,7 +485,7 @@ typedef enum {
 Model* lovrModelCreate(const ModelInfo* info);
 Model* lovrModelClone(Model* model);
 void lovrModelDestroy(void* ref);
-const ModelInfo* lovrModelGetInfo(Model* model);
+struct ModelMetadata* lovrModelGetMetadata(Model* model);
 void lovrModelResetNodeTransforms(Model* model);
 void lovrModelResetBlendShapes(Model* model);
 bool lovrModelAnimate(Model* model, uint32_t animationIndex, float time, float alpha);

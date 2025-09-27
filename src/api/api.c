@@ -603,15 +603,6 @@ int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCou
   }
 
 #ifndef LOVR_DISABLE_GRAPHICS
-  Model* model = luax_totype(L, index, Model);
-
-  if (model) {
-    ModelData* modelData = lovrModelGetInfo(model)->data;
-    lovrModelDataGetTriangles(modelData, vertices, indices, vertexCount, indexCount);
-    *shouldFree = false;
-    return index + 1;
-  }
-
   Mesh* mesh = luax_totype(L, index, Mesh);
 
   if (mesh) {
@@ -620,7 +611,7 @@ int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCou
     return index + 1;
   }
 
-  luaL_argerror(L, index, "table, ModelData, Model, or Mesh expected");
+  luaL_argerror(L, index, "table, ModelData, or Mesh expected");
 #else
   luaL_argerror(L, index, "table or ModelData expected");
 #endif

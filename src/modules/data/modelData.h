@@ -139,24 +139,21 @@ typedef struct {
   bool hasMatrix;
 } ModelNode;
 
-typedef struct ModelData {
-  uint32_t ref;
-  uint32_t rootNode;
-  uint64_t id;
-  void* data;
+typedef struct ModelMetadata {
+  struct Blob* blob;
 
-  void* metadata;
-  size_t metadataSize;
+  uint64_t id;
+  char* comment;
+  size_t commentLength;
 
   uint32_t meshCount;
-  uint32_t imageCount;
   uint32_t materialCount;
   uint32_t animationCount;
   uint32_t skinCount;
   uint32_t nodeCount;
+  uint32_t rootNode;
 
   ModelMesh* meshes;
-  struct Image** images;
   ModelMaterial* materials;
   ModelAnimation* animations;
   ModelSkin* skins;
@@ -183,27 +180,30 @@ typedef struct ModelData {
   uint32_t blendedVertexCount;
   uint32_t animatedVertexCount;
   uint32_t indexSize;
+  uint32_t imageCount;
+
+  uint32_t* blendShapeLookup;
+  uint32_t* animationLookup;
+  uint32_t* materialLookup;
+  uint32_t* nodeLookup;
+
+  float bounds[6];
+} ModelMetadata;
+
+typedef struct ModelData {
+  uint32_t ref;
+  ModelMetadata meta;
 
   ModelVertex* vertices;
   void* indices;
   SkinData* skinData;
   BlendData* blendData;
+  struct Image** images;
 
-  // Computed properties (loaders don't need to fill these out)
-
-  float boundingBox[6];
-  float boundingSphere[4];
-  float* triangleVertices;
-  uint32_t* triangleIndices;
   uint32_t triangleVertexCount;
   uint32_t triangleIndexCount;
-
-  // Lookups
-
-  void* blendShapeMap;
-  void* animationMap;
-  void* materialMap;
-  void* nodeMap;
+  float* triangleVertices;
+  uint32_t* triangleIndices;
 } ModelData;
 
 typedef void* ModelDataIO(const char* filename, size_t* bytesRead);
@@ -215,9 +215,8 @@ bool lovrModelDataInitStl(ModelData** model, struct Blob* blob, ModelDataIO* io)
 void lovrModelDataDestroy(void* ref);
 void lovrModelDataAllocate(ModelData* model);
 bool lovrModelDataFinalize(ModelData* model);
-void lovrModelDataGetBoundingBox(ModelData* data, float box[6]);
-void lovrModelDataGetMeshBoundingBox(ModelData* model, uint32_t index, float box[6]);
-void lovrModelDataGetBoundingSphere(ModelData* data, float sphere[4]);
-void lovrModelDataGetMeshBoundingSphere(ModelData* model, uint32_t index, uint32_t part, float sphere[4]);
 void lovrModelDataGetTriangles(ModelData* data, float** vertices, uint32_t** indices, uint32_t* vertexCount, uint32_t* indexCount);
-uint32_t lovrModelDataNextNodeWithMesh(ModelData* data, uint32_t node);
+
+void lovrModelMetadataGetBoundingBox(ModelMetadata* meta, float box[6]);
+void lovrModelMetadataGetMeshBoundingBox(ModelMetadata* meta, uint32_t index, float box[6]);
+uint32_t lovrModelMetadataNextNodeWithMesh(ModelMetadata* meta, uint32_t node);

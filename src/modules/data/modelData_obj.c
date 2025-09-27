@@ -1,9 +1,9 @@
 #include "data/modelData.h"
 #include "data/blob.h"
 #include "data/image.h"
-#include "core/maf.h"
 #include "util.h"
 #include <stdlib.h>
+#include <string.h>
 #include <float.h>
 
 typedef struct {
@@ -324,37 +324,38 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
 
   model = lovrCalloc(sizeof(ModelData));
   model->ref = 1;
-  model->meshCount = 1;
-  model->vertexCount = vertices.length;
-  model->indexCount = indices.length;
-  model->indexSize = 4;
-  model->partCount = (uint32_t) groups.length;
-  model->nodeCount = 1;
-  model->imageCount = (uint32_t) images.length;
-  model->materialCount = (uint32_t) materials.length;
+
+  ModelMetadata* meta = &model->meta;
+  meta->meshCount = 1;
+  meta->vertexCount = vertices.length;
+  meta->indexCount = indices.length;
+  meta->indexSize = 4;
+  meta->partCount = (uint32_t) groups.length;
+  meta->nodeCount = 1;
+  meta->imageCount = (uint32_t) images.length;
+  meta->materialCount = (uint32_t) materials.length;
+
   lovrModelDataAllocate(model);
 
-  memcpy(model->vertices, vertices.data, model->vertexCount * sizeof(ModelVertex));
-  memcpy(model->indices, indices.data, model->indexCount * sizeof(uint32_t));
+  memcpy(model->vertices, vertices.data, meta->vertexCount * sizeof(ModelVertex));
+  memcpy(model->indices, indices.data, meta->indexCount * sizeof(uint32_t));
 
-  if (model->imageCount > 0) {
-    memcpy(model->images, images.data, model->imageCount * sizeof(Image*));
-    memcpy(model->materials, materials.data, model->materialCount * sizeof(ModelMaterial));
-    memcpy(((map_t*) model->materialMap)->hashes, materialMap.hashes, materialMap.size * sizeof(uint64_t));
-    memcpy(((map_t*) model->materialMap)->values, materialMap.values, materialMap.size * sizeof(uint64_t));
+  if (meta->imageCount > 0) {
+    memcpy(model->images, images.data, meta->imageCount * sizeof(Image*));
+    memcpy(meta->materials, materials.data, meta->materialCount * sizeof(ModelMaterial));
   }
 
   for (size_t i = 0; i < groups.length; i++) {
     objGroup* group = &groups.data[i];
 
-    model->parts[i] = (ModelPart) {
+    meta->parts[i] = (ModelPart) {
       .start = group->start,
       .count = group->count,
       .material = group->material,
       .mode = DRAW_TRIANGLE_LIST
     };
 
-    float* bounds = model->parts[i].bounds;
+    float* bounds = meta->parts[i].bounds;
 
     for (size_t j = group->start; j < group->start + group->count; j++) {
       ModelVertex* vertex = &vertices.data[indices.data[j]];
@@ -367,8 +368,8 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
     }
   }
 
-  model->meshes[0] = (ModelMesh) {
-    .parts = model->parts,
+  meta->meshes[0] = (ModelMesh) {
+    .parts = meta->parts,
     .partCount = groups.length,
     .vertexCount = vertices.length,
     .indexCount = indices.length,
@@ -376,7 +377,7 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
     .blendDataOffset = ~0u
   };
 
-  model->nodes[0].mesh = 0;
+  meta->nodes[0].mesh = 0;
 
 finish:
   arr_free(&groups);

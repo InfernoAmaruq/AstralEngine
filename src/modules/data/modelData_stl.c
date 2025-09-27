@@ -17,20 +17,19 @@ static bool lovrModelDataInitStlBinary(ModelData** result, Blob* source, ModelDa
 
   ModelData* model = lovrCalloc(sizeof(ModelData));
   model->ref = 1;
-  model->meshCount = 1;
-  model->vertexCount = vertexCount;
-  model->meshCount = 1;
-  model->nodeCount = 1;
+  model->meta.meshCount = 1;
+  model->meta.vertexCount = vertexCount;
+  model->meta.meshCount = 1;
+  model->meta.nodeCount = 1;
 
   lovrModelDataAllocate(model);
 
-  model->meshes[0].vertexOffset = 0;
-  model->meshes[0].vertexCount = vertexCount;
-
-  model->nodes[0].mesh = 0;
+  model->meta.meshes[0].vertexOffset = 0;
+  model->meta.meshes[0].vertexCount = vertexCount;
+  model->meta.nodes[0].mesh = 0;
 
   ModelVertex* vertices = model->vertices;
-  float* bounds = model->parts[0].bounds;
+  float* bounds = model->meta.parts[0].bounds;
 
   for (uint32_t i = 0; i < triangleCount; i++) {
     float* f = (float*) data;

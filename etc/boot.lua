@@ -182,7 +182,7 @@ function lovr.run()
       local headset = lovr.headset and lovr.headset.getPass()
       if headset and lovr.draw and lovr.draw(headset) then headset = nil end
       if window and lovr.mirror and lovr.mirror(window) then window = nil end
-      lovr.graphics.submit(headset, window)
+      if headset or window then lovr.graphics.submit(headset, window) end
       lovr.graphics.present()
     end
     if lovr.headset then lovr.headset.submit() end

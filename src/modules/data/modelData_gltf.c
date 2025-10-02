@@ -730,12 +730,15 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
     jsmntok_t* token = info.meshes;
     for (int i = (token++)->size, group = 0; i > 0; i--, group++) {
       uint32_t blendShapeCount = 0;
+      uint32_t maxUnindexedVertexCount = 0;
+      bool indexed = false;
       for (int k = (token++)->size; k > 0; k--) {
         gltfString key = NOM_STR(json, token);
         if (STR_EQ(key, "primitives")) {
           meta->partCount += token->size;
           for (int p = (token++)->size; p > 0; p--) {
             uint32_t vertexCount = 0;
+            uint32_t indexCount = 0;
             bool hasJoints = false;
             for (int k2 = (token++)->size; k2 > 0; k2--) {
               gltfString key = NOM_STR(json, token);
@@ -748,8 +751,9 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                 }
               } else if (STR_EQ(key, "indices")) {
                 uint32_t index = NOM_U32(json, token);
-                meta->indexCount += accessors[index].count;
+                indexCount = accessors[index].count;
                 meta->indexSize = MAX(meta->indexSize, typeSizes[accessors[index].type]);
+                indexed = true;
               } else if (STR_EQ(key, "targets")) {
                 lovrAssertGoto(fail, blendShapeCount == 0 || blendShapeCount == token->size, "Model has inconsistent blend shape counts");
                 blendShapeCount = token->size;
@@ -759,9 +763,11 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               }
             }
             meta->vertexCount += vertexCount;
+            meta->indexCount += indexCount;
             meta->skinnedVertexCount += hasJoints ? vertexCount : 0;
             meta->blendedVertexCount += vertexCount * blendShapeCount;
             meta->animatedVertexCount += (hasJoints || blendShapeCount > 0) ? vertexCount : 0;
+            if (indexCount == 0) maxUnindexedVertexCount = MAX(maxUnindexedVertexCount, vertexCount);
           }
         } else if (STR_EQ(key, "extras")) {
           for (int k2 = (token++)->size; k2 > 0; k2--) {
@@ -782,6 +788,11 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
         }
       }
       meta->blendShapeCount += blendShapeCount;
+      // If any primitives are indexed, we generate indices for any non-indexed primitives in the
+      // mesh.  If any of those dummy indices have a value > 65536, we need to upgrade to 32-bit indices.
+      if (indexed && maxUnindexedVertexCount > UINT16_MAX) {
+        meta->indexSize = 4;
+      }
     }
   }
 
@@ -1105,12 +1116,15 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
             }
 
             if (positions) {
+              if (mesh->vertexOffset == ~0u) mesh->vertexOffset = vertexOffset;
+              if (indices && mesh->indexOffset == ~0u) mesh->indexOffset = indexOffset;
+
               if (indices || mesh->indexCount > 0) {
-                part->start = indexOffset;
-                part->count = indices->count;
-                part->baseVertex = vertexOffset;
+                part->start = indexOffset - mesh->indexOffset;
+                part->count = indices ? indices->count : positions->count;
+                part->baseVertex = vertexOffset - mesh->vertexOffset;
               } else {
-                part->start = vertexOffset;
+                part->start = vertexOffset - mesh->vertexOffset;
                 part->count = positions->count;
               }
 
@@ -1121,13 +1135,12 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               copyAttribute(vertices, uvs, F32, 2, false, 16, sizeof(ModelVertex), vertexCount, 0);
               copyAttribute(vertices, colors, U8, 4, true, 24, sizeof(ModelVertex), vertexCount, 0xff);
               copyAttribute(vertices, tangents, SN10x3, 1, false, 28, sizeof(ModelVertex), vertexCount, 0);
-              if (mesh->vertexOffset == ~0u) mesh->vertexOffset = vertexOffset;
               mesh->vertexCount += vertexCount;
               vertexOffset += vertexCount;
 
               // We keep meshes consistently indexed or non-indexed, so we have to generate indices if:
               // - This is the first indexed primitive, and we already wrote non-indexed primitives
-              // - This is a non-inxed primitive, and we've already written an indexed primitive
+              // - This is a non-indexed primitive, and we've already written an indexed primitive
               if ((indices && mesh->indexCount == 0) || (!indices && mesh->indexCount > 0)) {
                 uint32_t partIndex = indices ? 0 : part - mesh->parts;
                 uint32_t partCount = indices ? mesh->partCount : 1;
@@ -1137,14 +1150,14 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                   uint32_t count = mesh->parts[partIndex + p].count;
                   if (meta->indexSize == 4) {
                     for (uint32_t index = 0; index < count; index++) {
-                      ((uint32_t*) indexData)[index] = indexOffset + index;
+                      ((uint32_t*) indexData)[index] = index;
                     }
                   } else {
                     for (uint32_t index = 0; index < count; index++) {
-                      ((uint16_t*) indexData)[index] = indexOffset + index;
+                      ((uint16_t*) indexData)[index] = index;
                     }
                   }
-                  mesh->parts[partIndex + p].start = indexOffset;
+                  mesh->parts[partIndex + p].start = indexOffset - mesh->indexOffset;
                   mesh->indexCount += count;
                   indexOffset += count;
                 }
@@ -1155,7 +1168,6 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                 int type = meta->indexSize == 4 ? U32 : U16;
                 void* indexData = (char*) model->indices + (indexOffset * meta->indexSize);
                 copyAttribute(indexData, indices, type, 1, false, 0, meta->indexSize, indexCount, 0);
-                if (mesh->indexOffset == ~0u) mesh->indexOffset = indexOffset;
                 mesh->indexCount += indexCount;
                 indexOffset += indexCount;
               }

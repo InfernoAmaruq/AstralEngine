@@ -68,6 +68,7 @@ typedef struct {
 struct Buffer {
   uint32_t ref;
   uint32_t base;
+  Buffer* root;
   Sync* sync;
   gpu_buffer* gpu;
   bool supportsMesh;
@@ -2095,8 +2096,9 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
 
   Buffer* buffer = lovrCalloc(sizeof(Buffer) + gpu_sizeof_buffer() + charCount + fieldCount * sizeof(DataField));
   buffer->ref = 1;
-  buffer->gpu = (gpu_buffer*) (buffer + 1);
+  buffer->root = buffer;
   buffer->sync = lovrCalloc(sizeof(Sync));
+  buffer->gpu = (gpu_buffer*) (buffer + 1);
   buffer->info = *info;
   buffer->info.fieldCount = fieldCount;
   buffer->info.size = size;
@@ -2184,13 +2186,37 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
   return buffer;
 }
 
+Buffer* lovrBufferCreateView(Buffer* parent, uint32_t offset, uint32_t extent) {
+  lovrCheck(offset < parent->info.size, "Buffer view byte range exceeds the size of its parent");
+  lovrCheck(extent < parent->info.size - offset , "Buffer view byte range exceeds the size of its parent");
+  lovrCheck(offset % parent->info.format->stride == 0, "Buffer view offset must be a multiple of its stride");
+  lovrCheck(extent % parent->info.format->stride == 0, "Buffer view extent must be a multiple of its stride");
+
+  Buffer* buffer = lovrCalloc(sizeof(Buffer));
+  buffer->ref = 1;
+  buffer->base = parent->base + offset;
+  buffer->root = parent->root;
+  buffer->sync = parent->sync;
+  buffer->gpu = parent->gpu;
+  buffer->supportsMesh = parent->supportsMesh;
+  buffer->info = parent->info;
+  buffer->info.size = extent;
+  lovrRetain(buffer->root);
+
+  return buffer;
+}
+
 void lovrBufferDestroy(void* ref) {
   Buffer* buffer = ref;
-  if (buffer->sync->lastTransferRead == state.tick || buffer->sync->lastTransferWrite == state.tick) {
-    lovrGraphicsSubmit(NULL, 0);
+  if (buffer->root == buffer) {
+    if (buffer->sync->lastTransferRead == state.tick || buffer->sync->lastTransferWrite == state.tick) {
+      lovrGraphicsSubmit(NULL, 0);
+    }
+    gpu_buffer_destroy(buffer->gpu);
+    lovrFree(buffer->sync);
+  } else {
+    lovrRelease(buffer->root, lovrBufferDestroy);
   }
-  gpu_buffer_destroy(buffer->gpu);
-  lovrFree(buffer->sync);
   lovrFree(buffer);
 }
 
@@ -5325,24 +5351,20 @@ Mesh* lovrModelGetMesh(Model* model, uint32_t index) {
   }
 
   if (!model->meshes[index]) {
-    Mesh* mesh = lovrMeshCreate(&(MeshInfo) {
-      .vertexBuffer = model->vertexBuffer,
-      .storage = MESH_GPU
-    }, NULL);
+    ModelMesh* data = &meta->meshes[index];
+    uint32_t offset = data->vertexOffset * sizeof(ModelVertex);
+    uint32_t extent = data->vertexCount * sizeof(ModelVertex);
+    Buffer* vertexBuffer = offset ? lovrBufferCreateView(model->vertexBuffer, offset, extent) : model->vertexBuffer;
+    Mesh* mesh = lovrMeshCreate(&(MeshInfo) { .vertexBuffer = vertexBuffer, .storage = MESH_GPU }, NULL);
 
     if (!mesh) {
       return NULL;
     }
 
-    ModelMesh* data = &meta->meshes[index];
     ModelPart* part = &data->parts[0];
 
-    if (data->indexCount > 0) {
-      lovrMeshSetIndexBuffer(mesh, model->indexBuffer);
-      lovrMeshSetDrawRange(mesh, data->indexOffset, part->count, data->vertexOffset);
-    } else {
-      lovrMeshSetDrawRange(mesh, data->vertexOffset, part->count, 0);
-    }
+    lovrMeshSetIndexBuffer(mesh, model->indexBuffer);
+    lovrMeshSetDrawRange(mesh, part->start, part->count, part->baseVertex);
 
     switch (part->mode) {
       case DRAW_POINT_LIST: lovrMeshSetDrawMode(mesh, DRAW_POINTS); break;

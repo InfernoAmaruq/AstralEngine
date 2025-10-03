@@ -386,7 +386,7 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
 
   // If OpenXR fails to boot up, log an error in debug mode and fall back to simulator
   if (!xrinit() && config->debug) {
-    lovrLog(LOG_WARN, "XR", "Failed to start OpenXR: %s", lovrGetError());
+    lovrLog(LOG_WARN, "XR", "Failed to start OpenXR, falling back to simulator (%s)", lovrGetError());
   }
 
   return true;

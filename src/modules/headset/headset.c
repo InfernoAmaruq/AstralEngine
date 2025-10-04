@@ -3790,6 +3790,9 @@ static void xrdestroy(void) {
   if (state.actionSet) xrDestroyActionSet(state.actionSet);
   if (state.messenger) xrDestroyDebugUtilsMessengerEXT(state.messenger);
   if (state.instance) xrDestroyInstance(state.instance);
+  state.actionSet = XR_NULL_HANDLE;
+  state.messenger = XR_NULL_HANDLE;
+  state.instance = XR_NULL_HANDLE;
 }
 
 static void xrthrow(XrResult result, const char* symbol) {

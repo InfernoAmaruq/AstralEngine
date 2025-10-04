@@ -1951,7 +1951,7 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
     atomic_store(&state.newPipelines, NULL);
   }
 
-  lovrAssertGoto(fail, gpu_submit(streams, streamCount), "Failed to submit GPU command buffers: %s", gpu_get_error());
+  lovrAssertGoto(fail, gpu_submit(streams, streamCount, state.tick), "Failed to submit GPU command buffers: %s", gpu_get_error());
 
   // All of the buffers after the front of the 'current' list are the buffers that filled up while
   // this frame was being recorded.  Set their tick to the current tick and chain them onto the end
@@ -5776,9 +5776,8 @@ bool lovrReadbackIsComplete(Readback* readback) {
   return gpu_is_complete(readback->tick);
 }
 
-bool lovrReadbackWait(Readback* readback, bool* waited) {
+bool lovrReadbackWait(Readback* readback) {
   if (lovrReadbackIsComplete(readback)) {
-    *waited = false;
     return true;
   }
 
@@ -5792,14 +5791,11 @@ bool lovrReadbackWait(Readback* readback, bool* waited) {
     return false;
   }
 
-  if (!gpu_wait_tick(readback->tick, waited)) {
+  if (!gpu_wait_tick(readback->tick)) {
     return lovrSetError("Failed to wait for readback: %s", gpu_get_error());
   }
 
-  if (*waited) {
-    processReadbacks();
-  }
-
+  processReadbacks();
   return true;
 }
 
@@ -8537,10 +8533,7 @@ static int u64cmp(const void* a, const void* b) {
 
 static bool beginFrame(void) {
   if (!state.active) {
-    if (!gpu_begin(&state.tick)) {
-      return lovrSetError("Failed to begin GPU frame: %s", gpu_get_error());
-    }
-
+    state.tick++;
     state.active = true;
     memset(&state.barrier, 0, sizeof(gpu_barrier));
     memset(&state.transferBarrier, 0, sizeof(gpu_barrier));

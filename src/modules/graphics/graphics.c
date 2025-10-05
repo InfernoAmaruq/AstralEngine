@@ -569,7 +569,6 @@ static thread_local struct {
 static struct {
   uint32_t ref;
   bool glslang;
-  bool active;
   bool resized;
   bool shouldPresent;
   bool timingEnabled;
@@ -620,8 +619,6 @@ static BufferView getBuffer(gpu_buffer_type type, uint32_t size, size_t align);
 static void recycleBlocks(BufferAllocator* allocator, BufferBlock* blocks);
 static void destroyBuffers(BufferAllocator* allocator);
 static int u64cmp(const void* a, const void* b);
-static bool beginFrame(void);
-static void flushTransfers(void);
 static void processReadbacks(void);
 static Layout* getLayout(gpu_slot* slots, uint32_t count);
 static gpu_bundle* getBundle(Layout* layout, gpu_binding* bindings, uint32_t count);
@@ -721,12 +718,15 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
   state.uniformLayout = getLayout(uniformSlots, COUNTOF(uniformSlots));
   lovrAssertGoto(fail, state.builtinLayout && state.materialLayout && state.uniformLayout, "Failed to create GPU layouts: %s", gpu_get_error());
 
+  state.stream = gpu_stream_begin("Internal");
+  lovrAssertGoto(fail, state.stream, "Failed to begin command buffer: %s", gpu_get_error());
+  state.tick = 1;
+
   // Default Buffer
 
   float defaultBufferData[] = { 0.f, 0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 1.f };
   state.defaultBuffer = lovrBufferCreate(&(BufferInfo) { .size = sizeof(defaultBufferData), }, NULL);
   if (!state.defaultBuffer) goto fail;
-  if (!beginFrame()) goto fail;
 
   BufferView view = getBuffer(GPU_BUFFER_UPLOAD, sizeof(defaultBufferData), 4);
   if (!view.buffer) goto fail;
@@ -1715,10 +1715,6 @@ static void syncAttachment(Texture* texture, bool depth, bool resolve, bool load
 }
 
 bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
-  if (!beginFrame()) {
-    return false;
-  }
-
   size_t stack = stackPush(&thread.stack);
 
   bool xrCanvas = false;
@@ -1953,6 +1949,9 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
 
   lovrAssertGoto(fail, gpu_submit(streams, streamCount, state.tick), "Failed to submit GPU command buffers: %s", gpu_get_error());
 
+  state.stream = gpu_stream_begin("Internal");
+  lovrAssertGoto(fail, state.stream, "Failed to begin new command buffer: %s", gpu_get_error());
+
   // All of the buffers after the front of the 'current' list are the buffers that filled up while
   // this frame was being recorded.  Set their tick to the current tick and chain them onto the end
   // of the freelist.
@@ -1969,9 +1968,11 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
     }
   }
 
+  memset(&state.barrier, 0, sizeof(gpu_barrier));
+  memset(&state.transferBarrier, 0, sizeof(gpu_barrier));
+  state.tick++;
+
   stackPop(&thread.stack, stack);
-  state.active = false;
-  state.stream = NULL;
   return true;
 fail:
   stackPop(&thread.stack, stack);
@@ -1988,14 +1989,13 @@ bool lovrGraphicsPresent(void) {
   }
 
   lovrProfileMarkFrame();
+  processReadbacks();
   return true;
 }
 
 bool lovrGraphicsWait(void) {
-  if (state.active) {
-    if (!lovrGraphicsSubmit(NULL, 0)) {
-      return false;
-    }
+  if (!lovrGraphicsSubmit(NULL, 0)) {
+    return false;
   }
 
   lovrAssert(gpu_wait_idle(), "Failed to wait: %s", gpu_get_error());
@@ -2166,11 +2166,6 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
     }
   }
 
-  if (!beginFrame()) {
-    lovrFree(buffer);
-    return NULL;
-  }
-
   gpu_buffer_info bufferInfo = {
     .type = GPU_BUFFER_STATIC,
     .size = size,
@@ -2200,6 +2195,7 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
 
 void lovrBufferDestroy(void* ref) {
   Buffer* buffer = ref;
+  lovrGraphicsSubmit(NULL, 0);
   gpu_buffer_destroy(buffer->gpu);
   lovrFree(buffer->sync);
   lovrFree(buffer);
@@ -2210,8 +2206,6 @@ const BufferInfo* lovrBufferGetInfo(Buffer* buffer) {
 }
 
 void* lovrBufferGetData(Buffer* buffer, uint32_t offset, uint32_t extent) {
-  if (!beginFrame()) return NULL;
-
   if (extent == ~0u) extent = buffer->info.size - offset;
   lovrCheck(offset + extent <= buffer->info.size, "Buffer read range goes past the end of the Buffer");
 
@@ -2231,8 +2225,6 @@ void* lovrBufferGetData(Buffer* buffer, uint32_t offset, uint32_t extent) {
 }
 
 void* lovrBufferSetData(Buffer* buffer, uint32_t offset, uint32_t extent) {
-  if (!beginFrame()) return NULL;
-
   if (extent == ~0u) extent = buffer->info.size - offset;
   lovrCheck(offset + extent <= buffer->info.size, "Attempt to write past the end of the Buffer");
 
@@ -2247,8 +2239,6 @@ void* lovrBufferSetData(Buffer* buffer, uint32_t offset, uint32_t extent) {
 }
 
 bool lovrBufferCopy(Buffer* src, Buffer* dst, uint32_t srcOffset, uint32_t dstOffset, uint32_t extent) {
-  if (!beginFrame()) return false;
-
   lovrCheck(srcOffset + extent <= src->info.size, "Buffer copy range goes past the end of the source Buffer");
   lovrCheck(dstOffset + extent <= dst->info.size, "Buffer copy range goes past the end of the destination Buffer");
   lovrCheck(src != dst || (srcOffset >= dstOffset + extent || dstOffset >= srcOffset + extent), "Copying part of a Buffer to itself requires non-overlapping copy regions");
@@ -2268,8 +2258,6 @@ bool lovrBufferClear(Buffer* buffer, uint32_t offset, uint32_t extent, uint32_t 
   lovrCheck(offset % 4 == 0, "Buffer clear offset must be a multiple of 4");
   lovrCheck(extent % 4 == 0, "Buffer clear extent must be a multiple of 4");
   lovrCheck(offset + extent <= buffer->info.size, "Buffer clear range goes past the end of the Buffer");
-
-  if (!beginFrame()) return false;
 
   gpu_barrier barrier = syncTransfer(buffer->sync, GPU_PHASE_CLEAR, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
@@ -2345,10 +2333,6 @@ bool lovrGraphicsGetWindowTexture(Texture** texture) {
   }
 
   if (state.window && !state.window->gpu) {
-    if (!beginFrame()) {
-      return false;
-    }
-
     if (state.resized) {
       lovrAssert(gpu_surface_resize(state.window->info.width, state.window->info.height), "Failed to resize window: %s", gpu_get_error());
       state.resized = false;
@@ -2425,11 +2409,6 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
   uint32_t levelOffsets[16];
   uint32_t levelSizes[16];
   BufferView view = { 0 };
-
-  if (!beginFrame()) {
-    lovrTextureDestroy(texture);
-    return NULL;
-  }
 
   if (info->imageCount > 0) {
     levelCount = lovrImageGetLevelCount(info->images[0]);
@@ -2716,7 +2695,7 @@ void lovrTextureDestroy(void* ref) {
     if (texture->root == texture || texture->info.label != texture->root->info.label) {
       lovrFree((char*) texture->info.label);
     }
-    flushTransfers();
+    lovrGraphicsSubmit(NULL, 0);
     lovrRelease(texture->sampler, lovrSamplerDestroy);
     lovrRelease(texture->material, lovrMaterialDestroy);
     if (texture->root != texture) lovrRelease(texture->root, lovrTextureDestroy);
@@ -2734,8 +2713,6 @@ const TextureInfo* lovrTextureGetInfo(Texture* texture) {
 }
 
 Image* lovrTextureGetPixels(Texture* texture, uint32_t offset[4], uint32_t extent[3]) {
-  if (!beginFrame()) return NULL;
-
   if (extent[0] == ~0u) extent[0] = texture->info.width - offset[0];
   if (extent[1] == ~0u) extent[1] = texture->info.height - offset[1];
   lovrCheck(extent[2] == 1, "Currently only a single layer can be read from a Texture");
@@ -2768,8 +2745,6 @@ Image* lovrTextureGetPixels(Texture* texture, uint32_t offset[4], uint32_t exten
 }
 
 bool lovrTextureSetPixels(Texture* texture, Image* image, uint32_t dstOffset[4], uint32_t srcOffset[4], uint32_t extent[3]) {
-  if (!beginFrame()) return false;
-
   TextureFormat format = texture->info.format;
   if (extent[0] == ~0u) extent[0] = MIN(texture->info.width - dstOffset[0], lovrImageGetWidth(image, srcOffset[3]) - srcOffset[0]);
   if (extent[1] == ~0u) extent[1] = MIN(texture->info.height - dstOffset[1], lovrImageGetHeight(image, srcOffset[3]) - srcOffset[1]);
@@ -2810,8 +2785,6 @@ bool lovrTextureSetPixels(Texture* texture, Image* image, uint32_t dstOffset[4],
 }
 
 bool lovrTextureCopy(Texture* src, Texture* dst, uint32_t srcOffset[4], uint32_t dstOffset[4], uint32_t extent[3]) {
-  if (!beginFrame()) return false;
-
   if (src->info.format != dst->info.format) return lovrTextureBlit(src, dst, srcOffset, dstOffset, extent, extent, FILTER_NEAREST);
 
   if (extent[0] == ~0u) extent[0] = MIN(src->info.width - srcOffset[0], dst->info.width - dstOffset[0]);
@@ -2835,8 +2808,6 @@ bool lovrTextureCopy(Texture* src, Texture* dst, uint32_t srcOffset[4], uint32_t
 }
 
 bool lovrTextureBlit(Texture* src, Texture* dst, uint32_t srcOffset[4], uint32_t dstOffset[4], uint32_t srcExtent[3], uint32_t dstExtent[3], FilterMode filter) {
-  if (!beginFrame()) return false;
-
   bool depth = isDepthFormat(src->info.format) || isDepthFormat(dst->info.format);
 
   if (depth) filter = FILTER_NEAREST;
@@ -2871,8 +2842,6 @@ bool lovrTextureBlit(Texture* src, Texture* dst, uint32_t srcOffset[4], uint32_t
 }
 
 bool lovrTextureClear(Texture* texture, float value[4], uint32_t layer, uint32_t layerCount, uint32_t level, uint32_t levelCount) {
-  if (!beginFrame()) return false;
-
   if (layerCount == ~0u) layerCount = texture->info.layers - layer;
   if (levelCount == ~0u) levelCount = texture->info.mipmaps - level;
   lovrCheck(texture->info.usage & TEXTURE_TRANSFER, "Texture must be created with 'transfer' usage to clear it");
@@ -2887,8 +2856,6 @@ bool lovrTextureClear(Texture* texture, float value[4], uint32_t layer, uint32_t
 }
 
 bool lovrTextureGenerateMipmaps(Texture* texture, uint32_t base, uint32_t count) {
-  if (!beginFrame()) return false;
-
   if (count == ~0u) count = texture->info.mipmaps - (base + 1);
   uint32_t supports = state.features.formats[texture->info.format][texture->info.srgb];
   lovrCheck(texture->info.usage & TEXTURE_TRANSFER, "Texture must be created with the 'transfer' usage to mipmap it");
@@ -3949,10 +3916,6 @@ Material* lovrMaterialCreate(const MaterialInfo* info) {
   if (block->pointer) {
     data = (MaterialData*) ((char*) block->pointer + material->index * stride);
   } else {
-    if (!beginFrame()) {
-      return NULL;
-    }
-
     BufferView staging = getBuffer(GPU_BUFFER_UPLOAD, sizeof(MaterialData), 4);
     if (!staging.buffer) return NULL;
 
@@ -4170,10 +4133,6 @@ static Glyph* lovrFontGetGlyph(Font* font, uint32_t codepoint, bool* resized) {
   float height = glyph->box[3] - glyph->box[1];
   uint32_t pixelWidth = 2 * font->padding + (uint32_t) ceilf(width);
   uint32_t pixelHeight = 2 * font->padding + (uint32_t) ceilf(height);
-
-  if (!beginFrame()) {
-    return NULL;
-  }
 
   BufferView bufferView = getBuffer(GPU_BUFFER_UPLOAD, pixelWidth * pixelHeight * 4 * sizeof(uint8_t), 64);
 
@@ -5027,8 +4986,6 @@ Model* lovrModelCreate(const ModelInfo* info) {
     model->rawVertexBuffer = lovrBufferCreate(&vertexBufferInfo, NULL);
     lovrAssertGoto(fail, model->rawVertexBuffer, "Failed to create model raw vertex buffer: %s", lovrGetError());
 
-    if (!beginFrame()) goto fail;
-
     // The vertex buffer may already have a pending copy if its memory was not host-visible, need to
     // wait for that to complete before copying to the raw vertex buffer
     gpu_barrier barrier = syncTransfer(model->vertexBuffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
@@ -5231,7 +5188,7 @@ Model* lovrModelClone(Model* parent) {
   if (parent->vertexBuffer) {
     model->vertexBuffer = lovrBufferCreate(&parent->vertexBuffer->info, NULL);
 
-    if (!model->vertexBuffer || !beginFrame()) {
+    if (!model->vertexBuffer) {
       lovrModelDestroy(model);
       return NULL;
     }
@@ -5544,8 +5501,6 @@ static bool lovrModelAnimateVertices(Model* model) {
   bool blend = model->blendGroupCount > 0;
   bool skin = data->skinCount > 0;
 
-  if (!beginFrame()) return false;
-
   if ((!blend && !skin) || (!model->transformsDirty && !model->blendShapesDirty) || model->lastVertexAnimation == state.tick || !model->vertexBuffer) {
     return true;
   }
@@ -5699,7 +5654,6 @@ static Readback* lovrReadbackCreate(ReadbackType type) {
 }
 
 Readback* lovrReadbackCreateBuffer(Buffer* buffer, uint32_t offset, uint32_t extent) {
-  if (!beginFrame()) return NULL;
   if (extent == ~0u) extent = buffer->info.size - offset;
   lovrCheck(offset + extent <= buffer->info.size, "Tried to read past the end of the Buffer");
   lovrCheck(!buffer->info.format || offset % buffer->info.format->stride == 0, "Readback offset must be a multiple of Buffer's stride");
@@ -5719,7 +5673,6 @@ Readback* lovrReadbackCreateBuffer(Buffer* buffer, uint32_t offset, uint32_t ext
 }
 
 Readback* lovrReadbackCreateTexture(Texture* texture, uint32_t offset[4], uint32_t extent[3]) {
-  if (!beginFrame()) return NULL;
   if (extent[0] == ~0u) extent[0] = texture->info.width - offset[0];
   if (extent[1] == ~0u) extent[1] = texture->info.height - offset[1];
   lovrCheck(extent[2] == 1, "Currently, only one layer can be read from a Texture");
@@ -5781,14 +5734,10 @@ bool lovrReadbackWait(Readback* readback) {
     return true;
   }
 
-  if (readback->tick == state.tick && state.active) {
+  if (readback->tick == state.tick) {
     if (!lovrGraphicsSubmit(NULL, 0)) {
       return false;
     }
-  }
-
-  if (!beginFrame()) {
-    return false;
   }
 
   if (!gpu_wait_tick(readback->tick)) {
@@ -6124,10 +6073,6 @@ bool lovrPassSetCanvas(Pass* pass, Canvas* canvas) {
   }
 
   // Create temporary textures, trying to reuse existing ones when possible
-
-  if (!beginFrame()) {
-    return false;
-  }
 
   gpu_texture* tempColorTextures[4] = { 0 };
   gpu_texture* tempDepthTexture = NULL;
@@ -8013,10 +7958,6 @@ bool lovrPassText(Pass* pass, ColoredString* strings, uint32_t count, float* tra
     totalLength += strings[i].length;
   }
 
-  if (!beginFrame()) {
-    return false;
-  }
-
   size_t stack = stackPush(&thread.stack);
   GlyphVertex* vertices = allocate(&thread.stack, totalLength * 4 * sizeof(GlyphVertex));
   uint32_t glyphCount;
@@ -8529,34 +8470,6 @@ static void destroyBuffers(BufferAllocator* allocator) {
 static int u64cmp(const void* a, const void* b) {
   uint64_t x = *(uint64_t*) a, y = *(uint64_t*) b;
   return (x > y) - (x < y);
-}
-
-static bool beginFrame(void) {
-  if (!state.active) {
-    state.tick++;
-    state.active = true;
-    memset(&state.barrier, 0, sizeof(gpu_barrier));
-    memset(&state.transferBarrier, 0, sizeof(gpu_barrier));
-    processReadbacks();
-  }
-
-  if (!state.stream && (state.stream = gpu_stream_begin("Internal")) == NULL) {
-    return lovrSetError("Failed to begin command buffer: %s", gpu_get_error());
-  }
-
-  return true;
-}
-
-// When a Texture is garbage collected, if it has any transfer operations recorded to state.stream,
-// those transfers need to be submitted before it gets destroyed.  The allocator offset is saved and
-// restored, which is pretty gross, but we don't want to invalidate temp memory (currently this is
-// only a problem for Font: when the font's atlas gets destroyed, it could invalidate the temp
-// memory used by Font:getLines and Pass:text).
-static void flushTransfers(void) {
-  if (state.active) {
-    lovrGraphicsSubmit(NULL, 0);
-    beginFrame();
-  }
 }
 
 static void processReadbacks(void) {

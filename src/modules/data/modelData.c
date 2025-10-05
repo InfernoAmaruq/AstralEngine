@@ -308,6 +308,26 @@ void lovrModelDataGetTriangles(ModelData* model, float** vertices, uint32_t** in
   if (indices) *indices = model->triangleIndices;
 }
 
+uint32_t lovrModelMetadataGetTotalVertexCount(ModelMetadata* meta) {
+  uint32_t count = 0;
+  for (uint32_t i = 0; i < meta->nodeCount; i++) {
+    if (meta->nodes[i].mesh != ~0u) {
+      count += meta->meshes[meta->nodes[i].mesh].vertexCount;
+    }
+  }
+  return count;
+}
+
+uint32_t lovrModelMetadataGetTotalIndexCount(ModelMetadata* meta) {
+  uint32_t count = 0;
+  for (uint32_t i = 0; i < meta->nodeCount; i++) {
+    if (meta->nodes[i].mesh != ~0u) {
+      count += meta->meshes[meta->nodes[i].mesh].indexCount;
+    }
+  }
+  return count;
+}
+
 static void boundingBoxHelper(ModelMetadata* meta, uint32_t nodeIndex, float* parentTransform) {
   ModelNode* node = &meta->nodes[nodeIndex];
 

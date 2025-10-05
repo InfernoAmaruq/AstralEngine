@@ -285,11 +285,11 @@ static size_t typeSizes[] = {
   [SN10x3] = 4
 };
 
-void copyAttribute(void* dst, gltfAccessor* accessor, ComponentType type, uint32_t components, bool normalized, size_t offset, size_t stride, uint32_t count, uint8_t clear) {
+void copyAttribute(void* destination, gltfAccessor* accessor, ComponentType type, uint32_t components, bool normalized, size_t offset, size_t stride, uint32_t count, uint8_t clear) {
   char* src = accessor ? accessor->data : NULL;
   size_t size = components * typeSizes[type];
   size_t srcStride = accessor && accessor->stride ? accessor->stride : size;
-  dst = (char*) dst + offset;
+  char* dst = (char*) destination + offset;
 
   if (!src) {
     if (stride == size) {

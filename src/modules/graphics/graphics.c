@@ -1986,6 +1986,7 @@ bool lovrGraphicsPresent(void) {
     state.window->renderView = NULL;
     state.shouldPresent = false;
     lovrAssert(gpu_surface_present(), "Failed to present: %s", gpu_get_error());
+    lovrGraphicsGetWindowTexture(NULL);
   }
 
   lovrProfileMarkFrame();
@@ -2343,12 +2344,12 @@ bool lovrGraphicsGetWindowTexture(Texture** texture) {
 
     // Window texture may be unavailable during a resize
     if (!state.window->gpu) {
-      *texture = NULL;
+      if (texture) *texture = NULL;
       return true;
     }
   }
 
-  *texture = state.window;
+  if (texture) *texture = state.window;
   return true;
 }
 

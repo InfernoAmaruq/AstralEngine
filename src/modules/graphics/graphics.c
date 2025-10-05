@@ -4847,15 +4847,21 @@ void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count, uint32_t
   *offset = mesh->baseVertex;
 }
 
-bool lovrMeshSetDrawRange(Mesh* mesh, uint32_t start, uint32_t count, uint32_t offset) {
+bool lovrMeshSetDrawRange(Mesh* mesh, uint32_t start, uint32_t count) {
   uint32_t vertexCount = mesh->vertexBuffer->info.format->length;
   uint32_t extent = mesh->indexCount > 0 ? mesh->indexCount : vertexCount;
   lovrCheck(start < extent && count <= extent - start, "Invalid draw range [%d,%d]", start + 1, start + 1 + count);
-  lovrCheck(offset < vertexCount, "Mesh vertex offset must be less than the vertex count");
   mesh->drawStart = start;
   mesh->drawCount = count;
-  mesh->baseVertex = offset;
   return true;
+}
+
+uint32_t lovrMeshGetBaseVertex(Mesh* mesh) {
+  return mesh->baseVertex;
+}
+
+void lovrMeshSetBaseVertex(Mesh* mesh, uint32_t base) {
+  mesh->baseVertex = base;
 }
 
 Material* lovrMeshGetMaterial(Mesh* mesh) {

@@ -248,8 +248,10 @@ static int l_lovrMeshSetDrawMode(lua_State* L) {
 static int l_lovrMeshGetDrawRange(lua_State* L) {
   Mesh* mesh = luax_checktype(L, 1, Mesh);
 
-  uint32_t start, count, offset;
-  lovrMeshGetDrawRange(mesh, &start, &count, &offset);
+  uint32_t start, count;
+  lovrMeshGetDrawRange(mesh, &start, &count);
+
+  uint32_t offset = lovrMeshGetBaseVertex(mesh);
 
   if (count == 0) {
     return 0;
@@ -265,14 +267,30 @@ static int l_lovrMeshSetDrawRange(lua_State* L) {
   Mesh* mesh = luax_checktype(L, 1, Mesh);
 
   if (lua_isnoneornil(L, 2)) {
-    lovrMeshSetDrawRange(mesh, 0, 0, 0);
+    lovrMeshSetDrawRange(mesh, 0, 0);
+    lovrMeshSetBaseVertex(mesh, 0);
   } else {
     uint32_t start = luax_checku32(L, 2) - 1;
     uint32_t count = luax_checku32(L, 3);
     uint32_t offset = luax_optu32(L, 4, 0);
-    luax_assert(L, lovrMeshSetDrawRange(mesh, start, count, offset));
+    luax_assert(L, lovrMeshSetDrawRange(mesh, start, count));
+    lovrMeshSetBaseVertex(mesh, offset);
   }
 
+  return 0;
+}
+
+static int l_lovrMeshGetBaseVertex(lua_State* L) {
+  Mesh* mesh = luax_checktype(L, 1, Mesh);
+  uint32_t base = lovrMeshGetBaseVertex(mesh);
+  lua_pushinteger(L, base);
+  return 1;
+}
+
+static int l_lovrMeshSetBaseVertex(lua_State* L) {
+  Mesh* mesh = luax_checktype(L, 1, Mesh);
+  uint32_t base = luax_optu32(L, 2, 0);
+  lovrMeshSetBaseVertex(mesh, base);
   return 0;
 }
 
@@ -308,6 +326,8 @@ const luaL_Reg lovrMesh[] = {
   { "setDrawMode", l_lovrMeshSetDrawMode },
   { "getDrawRange", l_lovrMeshGetDrawRange },
   { "setDrawRange", l_lovrMeshSetDrawRange },
+  { "getBaseVertex", l_lovrMeshGetBaseVertex },
+  { "setBaseVertex", l_lovrMeshSetBaseVertex },
   { "getMaterial", l_lovrMeshGetMaterial },
   { "setMaterial", l_lovrMeshSetMaterial },
   { NULL, NULL }

@@ -464,8 +464,10 @@ void lovrMeshSetBoundingBox(Mesh* mesh, float box[6]);
 bool lovrMeshComputeBoundingBox(Mesh* mesh);
 DrawMode lovrMeshGetDrawMode(Mesh* mesh);
 void lovrMeshSetDrawMode(Mesh* mesh, DrawMode mode);
-void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count, uint32_t* offset);
-bool lovrMeshSetDrawRange(Mesh* mesh, uint32_t start, uint32_t count, uint32_t offset);
+void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count);
+bool lovrMeshSetDrawRange(Mesh* mesh, uint32_t start, uint32_t count);
+uint32_t lovrMeshGetBaseVertex(Mesh* mesh);
+void lovrMeshSetBaseVertex(Mesh* mesh, uint32_t base);
 Material* lovrMeshGetMaterial(Mesh* mesh);
 void lovrMeshSetMaterial(Mesh* mesh, Material* material);
 

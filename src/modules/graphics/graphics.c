@@ -4841,10 +4841,9 @@ void lovrMeshSetDrawMode(Mesh* mesh, DrawMode mode) {
   mesh->mode = mode;
 }
 
-void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count, uint32_t* offset) {
+void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count) {
   *start = mesh->drawStart;
   *count = mesh->drawCount;
-  *offset = mesh->baseVertex;
 }
 
 bool lovrMeshSetDrawRange(Mesh* mesh, uint32_t start, uint32_t count) {
@@ -5370,7 +5369,8 @@ Mesh* lovrModelGetMesh(Model* model, uint32_t index) {
     ModelPart* part = &data->parts[0];
 
     lovrMeshSetIndexBuffer(mesh, model->indexBuffer);
-    lovrMeshSetDrawRange(mesh, part->start, part->count, part->baseVertex);
+    lovrMeshSetDrawRange(mesh, part->start, part->count);
+    lovrMeshSetBaseVertex(mesh, part->baseVertex);
 
     switch (part->mode) {
       case DRAW_POINT_LIST: lovrMeshSetDrawMode(mesh, DRAW_POINTS); break;

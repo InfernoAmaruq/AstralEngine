@@ -4110,7 +4110,7 @@ static bool loadVisibilityMask(void) {
     info.indices += info.indexCountOutput;
   }
 
-  lovrMeshSetDrawRange(state.mask, 0, indexCount, 0);
+  lovrMeshSetDrawRange(state.mask, 0, indexCount);
 
   return true;
 }

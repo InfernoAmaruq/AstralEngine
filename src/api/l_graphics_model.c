@@ -270,8 +270,9 @@ int luax_modelmeshiterator(lua_State* L) {
     return 1;
   } else {
     lua_pushinteger(L, next + 1);
+    lua_pushinteger(L, meta->nodes[next].mesh + 1);
     luax_pushtype(L, Mesh, lovrModelGetMesh(model, meta->nodes[next].mesh));
-    return 2;
+    return 3;
   }
 }
 
@@ -292,6 +293,7 @@ int l_lovrModelMetaGetNodeChild(lua_State* L);
 int l_lovrModelMetaGetNodeChildren(lua_State* L);
 int l_lovrModelMetaGetNodeSibling(lua_State* L);
 int l_lovrModelMetaGetNodeParent(lua_State* L);
+int l_lovrModelMetaGetNodeMesh(lua_State* L);
 int l_lovrModelMetaGetAnimationCount(lua_State* L);
 int l_lovrModelMetaGetAnimationName(lua_State* L);
 int l_lovrModelMetaGetAnimationDuration(lua_State* L);
@@ -304,6 +306,11 @@ int l_lovrModelMetaGetDimensions(lua_State* L);
 int l_lovrModelMetaGetCenter(lua_State* L);
 int l_lovrModelMetaGetBoundingBox(lua_State* L);
 int l_lovrModelMetaGetMeshCount(lua_State* L);
+int l_lovrModelMetaGetMeshPartCount(lua_State* L);
+int l_lovrModelMetaGetMeshDrawMode(lua_State* L);
+int l_lovrModelMetaGetMeshDrawRange(lua_State* L);
+int l_lovrModelMetaGetMeshBaseVertex(lua_State* L);
+int l_lovrModelMetaGetMeshMaterial(lua_State* L);
 int l_lovrModelMetaGetImageCount(lua_State* L);
 int l_lovrModelMetaGetMaterialCount(lua_State* L);
 int l_lovrModelMetaGetMaterialName(lua_State* L);
@@ -318,6 +325,7 @@ const luaL_Reg lovrModel[] = {
   { "getNodeChildren", l_lovrModelMetaGetNodeChildren },
   { "getNodeSibling", l_lovrModelMetaGetNodeSibling },
   { "getNodeParent", l_lovrModelMetaGetNodeParent },
+  { "getNodeMesh", l_lovrModelMetaGetNodeMesh },
   { "getNodePosition", l_lovrModelGetNodePosition },
   { "setNodePosition", l_lovrModelSetNodePosition },
   { "getNodeOrientation", l_lovrModelGetNodeOrientation },
@@ -348,6 +356,11 @@ const luaL_Reg lovrModel[] = {
   { "getVertexBuffer", l_lovrModelGetVertexBuffer },
   { "getIndexBuffer", l_lovrModelGetIndexBuffer },
   { "getMeshCount", l_lovrModelMetaGetMeshCount },
+  { "getMeshPartCount", l_lovrModelMetaGetMeshPartCount },
+  { "getMeshDrawMode", l_lovrModelMetaGetMeshDrawMode },
+  { "getMeshDrawRange", l_lovrModelMetaGetMeshDrawRange },
+  { "getMeshBaseVertex", l_lovrModelMetaGetMeshBaseVertex },
+  { "getMeshMaterial", l_lovrModelMetaGetMeshMaterial },
   { "getMesh", l_lovrModelGetMesh },
   { "getTextureCount", l_lovrModelMetaGetImageCount },
   { "getTexture", l_lovrModelGetTexture },

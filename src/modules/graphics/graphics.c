@@ -582,6 +582,7 @@ static struct {
   gpu_tally* timestamps;
   uint32_t timestampCount;
   uint32_t tick;
+  uint32_t waitTick;
   float background[4];
   TextureFormat depthFormat;
   Texture* window;
@@ -1988,6 +1989,10 @@ bool lovrGraphicsPresent(void) {
     lovrAssert(gpu_surface_present(), "Failed to present: %s", gpu_get_error());
     lovrGraphicsGetWindowTexture(NULL);
   }
+
+  // Avoid CPU getting too far ahead of GPU
+  gpu_wait_tick(state.waitTick);
+  state.waitTick = state.tick - 1;
 
   lovrProfileMarkFrame();
   processReadbacks();

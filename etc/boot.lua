@@ -183,9 +183,11 @@ function lovr.run()
       if headset and lovr.draw and lovr.draw(headset) then headset = nil end
       if window and lovr.mirror and lovr.mirror(window) then window = nil end
       if headset or window then lovr.graphics.submit(headset, window) end
+      if lovr.headset then lovr.headset.submit() end
       lovr.graphics.present()
+    elseif lovr.headset then
+      lovr.headset.submit()
     end
-    if lovr.headset then lovr.headset.submit() end
     if lovr.math then lovr.math.drain() end
   end
 end

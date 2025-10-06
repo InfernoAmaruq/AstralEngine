@@ -748,9 +748,8 @@ typedef struct {
 
 bool gpu_init(gpu_config* config);
 void gpu_destroy(void);
-const char* gpu_get_error(void);
-bool gpu_begin(uint32_t* tick);
-bool gpu_submit(gpu_stream** streams, uint32_t count);
+char* gpu_get_error(void);
+bool gpu_submit(gpu_stream** streams, uint32_t count, uint32_t tick);
 bool gpu_is_complete(uint32_t tick);
-bool gpu_wait_tick(uint32_t tick, bool* waited);
+bool gpu_wait_tick(uint32_t tick);
 bool gpu_wait_idle(void);

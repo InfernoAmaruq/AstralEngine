@@ -96,7 +96,7 @@ size_t gpu_sizeof_tally(void) { return sizeof(gpu_tally); }
 
 // Internals
 
-#define TICK_DEPTH 2
+#define FRAME_DEPTH 2
 
 struct gpu_memory {
   VkDeviceMemory handle;
@@ -156,12 +156,6 @@ typedef struct {
   bool valid;
 } gpu_surface;
 
-typedef struct {
-  VkSemaphore acquireSemaphore;
-  VkSemaphore presentSemaphore;
-  VkFence fence;
-} gpu_tick;
-
 typedef struct gpu_stream_pool {
   struct gpu_stream_pool* next;
   VkCommandPool handle;
@@ -184,6 +178,7 @@ typedef struct {
   bool renderPass2;
   bool synchronization2;
   bool dynamicRendering;
+  bool timelineSemaphore;
   bool scalarBlockLayout;
   bool foveation;
   bool pipelineCacheControl;
@@ -192,10 +187,15 @@ typedef struct {
 
 // State
 
-static THREAD_LOCAL struct {
-  gpu_stream_pool streamPools[TICK_DEPTH];
-  char error[256];
-} thread;
+typedef struct gpu_thread_state {
+  struct gpu_thread_state* next;
+  gpu_stream_pool* streamPools;
+  gpu_stream_pool* activeStreamPool;
+  char error[255];
+  bool initialized;
+} gpu_thread_state;
+
+static THREAD_LOCAL gpu_thread_state thread;
 
 static struct {
   void* library;
@@ -207,15 +207,17 @@ static struct {
   VkDevice device;
   VkQueue queue;
   uint32_t queueFamilyIndex;
+  uint32_t tick;
+  uint32_t frame;
+  VkSemaphore semaphore;
+  VkSemaphore acquireSemaphore[FRAME_DEPTH];
+  VkSemaphore presentSemaphore[FRAME_DEPTH];
   VkPipelineCache pipelineCache;
   VkDebugUtilsMessengerEXT messenger;
   gpu_allocator allocators[GPU_MEMORY_COUNT];
   uint8_t allocatorLookup[GPU_MEMORY_COUNT];
   gpu_memory memory[1024];
-  uint32_t tick;
-  uint32_t lastTickFinished;
-  gpu_tick ticks[TICK_DEPTH];
-  gpu_stream_pool* streamPools;
+  gpu_thread_state* threads;
   gpu_morgue morgue;
 } state;
 
@@ -231,13 +233,14 @@ enum { LINEAR, SRGB };
 #define LOG(s) if (state.config.fnLog) state.config.fnLog(state.config.userdata, s)
 #define VK(f, s) if (!vkcheck(f, s))
 #define ASSERT(c, s) if (!(c) && (error(s), true))
-#define TICK_MASK (TICK_DEPTH - 1)
+#define FRAME_MASK (FRAME_DEPTH - 1)
 #define MORGUE_MASK (COUNTOF(state.morgue.data) - 1)
 
 static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkDeviceSize* offset);
 static void release(gpu_memory* memory);
 static void condemn(void* handle, VkObjectType type);
-static void expunge(void);
+static void expunge(uint64_t tick);
+static uint64_t getFinishedTick(void);
 static bool hasLayer(VkLayerProperties* layers, uint32_t count, const char* layer);
 static bool hasExtension(VkExtensionProperties* extensions, uint32_t count, const char* extension);
 static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type);
@@ -304,6 +307,8 @@ static void error(const char* message);
   X(vkWaitForFences)\
   X(vkCreateSemaphore)\
   X(vkDestroySemaphore)\
+  X(vkWaitSemaphoresKHR)\
+  X(vkGetSemaphoreCounterValueKHR)\
   X(vkCmdPipelineBarrier2KHR)\
   X(vkCreateQueryPool)\
   X(vkDestroyQueryPool)\
@@ -968,7 +973,7 @@ bool gpu_surface_acquire(gpu_texture** texture) {
   }
 
   gpu_surface* surface = &state.surface;
-  VkSemaphore semaphore = state.ticks[state.tick & TICK_MASK].acquireSemaphore;
+  VkSemaphore semaphore = state.acquireSemaphore[state.frame & FRAME_MASK];
   VkResult result = vkAcquireNextImageKHR(state.device, surface->swapchain, UINT64_MAX, semaphore, VK_NULL_HANDLE, &surface->imageIndex);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -987,7 +992,7 @@ bool gpu_surface_acquire(gpu_texture** texture) {
 }
 
 bool gpu_surface_present(void) {
-  VkSemaphore semaphore = state.ticks[state.tick & TICK_MASK].presentSemaphore;
+  VkSemaphore semaphore = state.presentSemaphore[state.frame & FRAME_MASK];
 
   VkSubmitInfo submit = {
     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -1839,31 +1844,52 @@ void gpu_tally_destroy(gpu_tally* tally) {
 // Stream
 
 gpu_stream* gpu_stream_begin(const char* label) {
-  gpu_stream_pool* pool = &thread.streamPools[state.tick & TICK_MASK];
-
-  if (!pool->handle) {
-    VkCommandPoolCreateInfo poolInfo = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-      .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-      .queueFamilyIndex = state.queueFamilyIndex
-    };
-
-    VK(vkCreateCommandPool(state.device, &poolInfo, NULL, &pool->handle), "vkCreateCommandPool") return NULL;
-
-    pool->next = state.streamPools;
-    while (!atomic_compare_exchange_strong(&state.streamPools, &pool->next, pool)) {
+  if (!thread.initialized) {
+    thread.initialized = true;
+    thread.next = state.threads;
+    while (!atomic_compare_exchange_strong(&state.threads, &thread.next, &thread)) {
       continue;
     }
-
-    pool->head = NULL;
-    pool->tail = NULL;
-    pool->tick = state.tick;
   }
 
-  if (pool->tick != state.tick) {
-    VK(vkResetCommandPool(state.device, pool->handle, 0), "vkResetCommandPool") return NULL;
-    pool->tick = state.tick;
-    pool->tail = NULL;
+  gpu_stream_pool* pool = thread.activeStreamPool;
+
+  if (!pool) {
+    // Find an existing pool to reuse
+    for (gpu_stream_pool* p = thread.streamPools; p; p = p->next) {
+      if (gpu_is_complete(p->tick)) {
+        pool = p;
+        VK(vkResetCommandPool(state.device, pool->handle, 0), "vkResetCommandPool") return NULL;
+        pool->tail = NULL;
+        break;
+      }
+    }
+
+    // No pool available?  Make a new one
+    if (!pool) {
+      pool = state.config.fnAlloc(sizeof(gpu_stream_pool));
+      ASSERT(pool, "Out of memory") return NULL;
+
+      VkCommandPoolCreateInfo poolInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+        .queueFamilyIndex = state.queueFamilyIndex
+      };
+
+      VK(vkCreateCommandPool(state.device, &poolInfo, NULL, &pool->handle), "vkCreateCommandPool") {
+        state.config.fnFree(pool);
+        return NULL;
+      }
+
+      pool->next = thread.streamPools;
+      thread.streamPools = pool;
+
+      pool->head = NULL;
+      pool->tail = NULL;
+      pool->tick = 0;
+    }
+
+    thread.activeStreamPool = pool;
   }
 
   gpu_stream* stream = pool->tail ? pool->tail->next : pool->head;
@@ -2685,6 +2711,7 @@ bool gpu_init(gpu_config* config) {
       { "VK_KHR_image_format_list", true, &state.extensions.formatList },
       { "VK_KHR_synchronization2", true, &state.extensions.synchronization2 },
       { "VK_KHR_dynamic_rendering", true, &state.extensions.dynamicRendering },
+      { "VK_KHR_timeline_semaphore", true, &state.extensions.timelineSemaphore },
       { "VK_EXT_scalar_block_layout", true, &state.extensions.scalarBlockLayout },
       { "VK_EXT_fragment_density_map", true, &state.extensions.foveation },
       { "VK_EXT_pipeline_creation_cache_control", true, &state.extensions.pipelineCacheControl },
@@ -2708,6 +2735,7 @@ bool gpu_init(gpu_config* config) {
 
     ASSERT(state.extensions.renderPass2, "GPU driver is missing required Vulkan extension VK_KHR_render_pass2") goto fail;
     ASSERT(state.extensions.synchronization2, "GPU driver is missing required Vulkan extension VK_KHR_synchronization2") goto fail;
+    ASSERT(state.extensions.timelineSemaphore, "GPU driver is missing required Vulkan extension VK_KHR_timeline_semaphore") goto fail;
 
     config->fnFree(extensionInfo);
 
@@ -2781,6 +2809,7 @@ bool gpu_init(gpu_config* config) {
     VkPhysicalDeviceScalarBlockLayoutFeaturesEXT scalarBlockLayoutFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES_EXT };
     VkPhysicalDeviceFragmentDensityMapFeaturesEXT fragmentDensityMapFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT };
     VkPhysicalDevicePipelineCreationCacheControlFeaturesEXT pipelineCreationCacheControlFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES_EXT };
+    VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timelineSemaphoreFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR };
 
     vkGetPhysicalDeviceFeatures2(state.adapter, &supported);
 
@@ -2813,6 +2842,9 @@ bool gpu_init(gpu_config* config) {
 
     synchronization2Features.synchronization2 = true;
     CHAIN(synchronization2Features);
+
+    timelineSemaphoreFeatures.timelineSemaphore = true;
+    CHAIN(timelineSemaphoreFeatures);
 
     if (state.extensions.dynamicRendering) {
       dynamicRenderingFeatures.dynamicRendering = true;
@@ -2946,9 +2978,7 @@ bool gpu_init(gpu_config* config) {
     // - STATIC: Regular device-local memory.  Not necessarily mappable, fast to read on GPU.
     // - STREAM: Used to "stream" data to the GPU, to be read by shaders.  This tries to use the
     //   special 256MB memory type present on discrete GPUs because it's both device local and host-
-    //   visible and that supposedly makes it fast.  A single buffer is allocated with a "zone" for
-    //   each tick.  If one of the zones fills up, a new bigger buffer is allocated.  It's important
-    //   to have one buffer and keep it alive since streaming is expected to happen very frequently.
+    //   visible and that supposedly makes it fast.
     // - UPLOAD: Used to stage data to upload to buffers/textures.  Can only be used for transfers.
     //   Uses uncached host-visible memory to not pollute the CPU cache or waste the STREAM memory.
     // - DOWNLOAD: Used for readbacks.  Uses cached memory when available since reading from
@@ -3073,21 +3103,23 @@ bool gpu_init(gpu_config* config) {
     }
   }
 
-  // Per-tick resources
-  for (uint32_t i = 0; i < TICK_DEPTH; i++) {
-    gpu_tick* tick = &state.ticks[i];
+  // Semaphores
 
+  for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
     VkSemaphoreCreateInfo semaphoreInfo = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &tick->acquireSemaphore), "vkCreateSemaphore") goto fail;
-    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &tick->presentSemaphore), "vkCreateSemaphore") goto fail;
-
-    VkFenceCreateInfo fenceInfo = {
-      .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-      .flags = VK_FENCE_CREATE_SIGNALED_BIT
-    };
-
-    VK(vkCreateFence(state.device, &fenceInfo, NULL, &tick->fence), "vkCreateFence") goto fail;
+    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &state.acquireSemaphore[i]), "vkCreateSemaphore") goto fail;
+    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &state.presentSemaphore[i]), "vkCreateSemaphore") goto fail;
   }
+
+  VkSemaphoreCreateInfo timelineSemaphoreInfo = {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+    .pNext = &(VkSemaphoreTypeCreateInfo) {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
+    }
+  };
+
+  VK(vkCreateSemaphore(state.device, &timelineSemaphoreInfo, NULL, &state.semaphore), "vkCreateSemaphore") goto fail;
 
   // Pipeline cache
 
@@ -3108,9 +3140,7 @@ bool gpu_init(gpu_config* config) {
 
   VK(vkCreatePipelineCache(state.device, &cacheInfo, NULL, &state.pipelineCache), "vkCreatePipelineCache") goto fail;
 
-  state.tick = TICK_DEPTH - 1;
   return true;
-
 fail:
   gpu_destroy();
   return false;
@@ -3118,26 +3148,25 @@ fail:
 
 void gpu_destroy(void) {
   if (state.device) vkDeviceWaitIdle(state.device);
-  state.lastTickFinished = state.tick;
-  expunge();
-  for (gpu_stream_pool* pool = state.streamPools; pool; pool = pool->next) {
-    vkDestroyCommandPool(state.device, pool->handle, NULL);
-    for (gpu_stream* stream = pool->head, *next; stream; stream = next) {
-      next = stream->next;
-      state.config.fnFree(stream);
+  expunge(UINT64_MAX);
+  for (gpu_thread_state* t = state.threads; t; t = t->next) {
+    for (gpu_stream_pool* pool = t->streamPools, *next; pool; pool = next) {
+      vkDestroyCommandPool(state.device, pool->handle, NULL);
+      for (gpu_stream* stream = pool->head, *next; stream; stream = next) {
+        next = stream->next;
+        state.config.fnFree(stream);
+      }
+      next = pool->next;
+      state.config.fnFree(pool);
     }
-    pool->handle = VK_NULL_HANDLE;
-    pool->head = NULL;
-    pool->tail = NULL;
-    pool->tick = 0;
+    t->initialized = false;
   }
   if (state.pipelineCache) vkDestroyPipelineCache(state.device, state.pipelineCache, NULL);
-  for (uint32_t i = 0; i < TICK_DEPTH; i++) {
-    gpu_tick* tick = &state.ticks[i];
-    if (tick->acquireSemaphore) vkDestroySemaphore(state.device, tick->acquireSemaphore, NULL);
-    if (tick->presentSemaphore) vkDestroySemaphore(state.device, tick->presentSemaphore, NULL);
-    if (tick->fence) vkDestroyFence(state.device, tick->fence, NULL);
+  for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
+    if (state.acquireSemaphore[i]) vkDestroySemaphore(state.device, state.acquireSemaphore[i], NULL);
+    if (state.presentSemaphore[i]) vkDestroySemaphore(state.device, state.presentSemaphore[i], NULL);
   }
+  if (state.semaphore) vkDestroySemaphore(state.device, state.semaphore, NULL);
   for (uint32_t i = 0; i < COUNTOF(state.memory); i++) {
     if (state.memory[i].handle) vkFreeMemory(state.device, state.memory[i].handle, NULL);
   }
@@ -3157,33 +3186,11 @@ void gpu_destroy(void) {
   memset(&state, 0, sizeof(state));
 }
 
-const char* gpu_get_error(void) {
+char* gpu_get_error(void) {
   return thread.error;
 }
 
-bool gpu_begin(uint32_t* tick) {
-  uint32_t nextTick = state.tick + 1;
-  uint32_t pendingTick = nextTick - TICK_DEPTH;
-  VkFence fence = state.ticks[pendingTick & TICK_MASK].fence;
-
-  // Wait for the fence if needed
-  if (state.lastTickFinished < pendingTick) {
-    VK(vkWaitForFences(state.device, 1, &fence, VK_FALSE, ~0ull), "vkWaitForFences") return false;
-    state.lastTickFinished = pendingTick;
-  }
-
-  // Reset the fence
-  VK(vkResetFences(state.device, 1, &fence), "vkResetFences") return false;
-
-  // Free any destroyed resources that are no longer in use
-  expunge();
-
-  if (tick) *tick = nextTick;
-  state.tick = nextTick;
-  return true;
-}
-
-bool gpu_submit(gpu_stream** streams, uint32_t count) {
+bool gpu_submit(gpu_stream** streams, uint32_t count, uint32_t tick) {
   VkCommandBuffer stack[64];
   VkCommandBuffer* commandBuffers = stack;
 
@@ -3196,47 +3203,62 @@ bool gpu_submit(gpu_stream** streams, uint32_t count) {
     commandBuffers[i] = streams[i]->commands;
   }
 
+  for (gpu_thread_state* t = state.threads; t; t = t->next) {
+    if (t->activeStreamPool) {
+      t->activeStreamPool->tick = tick;
+      t->activeStreamPool = NULL;
+    }
+  }
+
   VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR;
 
   VkSubmitInfo submit = {
     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+    .pNext = &(VkTimelineSemaphoreSubmitInfo) {
+      .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+      .signalSemaphoreValueCount = 1,
+      .pSignalSemaphoreValues = (uint64_t[1]) { tick }
+    },
     .waitSemaphoreCount = !!state.surface.semaphore,
     .pWaitSemaphores = &state.surface.semaphore,
     .pWaitDstStageMask = &waitStage,
+    .signalSemaphoreCount = 1,
+    .pSignalSemaphores = &state.semaphore,
     .commandBufferCount = count,
     .pCommandBuffers = commandBuffers
   };
 
-  VkFence fence = state.ticks[state.tick & TICK_MASK].fence;
-  VK(vkQueueSubmit(state.queue, 1, &submit, fence), "vkQueueSubmit") {
+  VK(vkQueueSubmit(state.queue, 1, &submit, VK_NULL_HANDLE), "vkQueueSubmit") {
     if (commandBuffers != stack) state.config.fnFree(commandBuffers);
     return false;
   }
 
+  expunge(getFinishedTick());
+
+  if (commandBuffers != stack) state.config.fnFree(commandBuffers);
   state.surface.semaphore = VK_NULL_HANDLE;
+  state.tick = tick;
   return true;
 }
 
 bool gpu_is_complete(uint32_t tick) {
-  return state.lastTickFinished >= tick;
+  return getFinishedTick() >= (uint64_t) tick;
 }
 
-bool gpu_wait_tick(uint32_t tick, bool* waited) {
-  if (state.lastTickFinished < tick && tick < state.tick) {
-    VkFence fence = state.ticks[tick & TICK_MASK].fence;
-    VK(vkWaitForFences(state.device, 1, &fence, VK_FALSE, ~0ull), "vkWaitForFences") return false;
-    state.lastTickFinished = tick;
-    if (waited) *waited = true;
-    return true;
-  } else {
-    if (waited) *waited = false;
-    return true;
-  }
+bool gpu_wait_tick(uint32_t tick) {
+  VkSemaphoreWaitInfo info = {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+    .semaphoreCount = 1,
+    .pSemaphores = &state.semaphore,
+    .pValues = (uint64_t[1]) { tick }
+  };
+
+  VK(vkWaitSemaphoresKHR(state.device, &info, UINT64_MAX), "vkWaitSemaphores") return false;
+  return true;
 }
 
 bool gpu_wait_idle(void) {
   VK(vkDeviceWaitIdle(state.device), "vkDeviceWaitIdle") return false;
-  state.lastTickFinished = state.tick;
   return true;
 }
 
@@ -3348,24 +3370,25 @@ static void condemn(void* handle, VkObjectType type) {
 
   // If the morgue is full, try expunging to reclaim some space
   if (morgue->head - morgue->tail >= COUNTOF(morgue->data)) {
-    expunge();
+    expunge(getFinishedTick());
 
     // If that didn't work, wait for the GPU to be done with the oldest victim and retry
     if (morgue->head - morgue->tail >= COUNTOF(morgue->data)) {
-      gpu_wait_tick(morgue->data[morgue->tail & MORGUE_MASK].tick, NULL);
-      expunge();
+      uint32_t tick = morgue->data[morgue->tail & MORGUE_MASK].tick;
+      gpu_wait_tick(tick);
+      expunge(tick);
     }
 
     // The following should be unreachable
     ASSERT(morgue->head - morgue->tail < COUNTOF(morgue->data), "Morgue overflow!") return;
   }
 
-  morgue->data[morgue->head++ & MORGUE_MASK] = (gpu_victim) { handle, type, state.tick };
+  morgue->data[morgue->head++ & MORGUE_MASK] = (gpu_victim) { handle, type, state.tick + 1 };
 }
 
-static void expunge(void) {
+static void expunge(uint64_t tick) {
   gpu_morgue* morgue = &state.morgue;
-  while (morgue->tail != morgue->head && state.lastTickFinished >= morgue->data[morgue->tail & MORGUE_MASK].tick) {
+  while (morgue->tail != morgue->head && tick >= morgue->data[morgue->tail & MORGUE_MASK].tick) {
     gpu_victim* victim = &morgue->data[morgue->tail++ & MORGUE_MASK];
     switch (victim->type) {
       case VK_OBJECT_TYPE_BUFFER: vkDestroyBuffer(state.device, victim->handle, NULL); break;
@@ -3383,6 +3406,12 @@ static void expunge(void) {
       default: LOG("Trying to destroy invalid Vulkan object type!"); break;
     }
   }
+}
+
+static uint64_t getFinishedTick(void) {
+  uint64_t value;
+  VK(vkGetSemaphoreCounterValueKHR(state.device, state.semaphore, &value), "vkGetSemaphoreCounterValue") return false;
+  return value;
 }
 
 static bool hasLayer(VkLayerProperties* layers, uint32_t count, const char* layer) {

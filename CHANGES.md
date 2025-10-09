@@ -45,6 +45,7 @@ dev
 - Fix `Collider:setDegreesOfFreedom` to preserve mass/inertia.
 - Fix missing error in `CapsuleShape:setRadius/Length` and `CylinderShape:setRadius/Length`.
 - Fix issue where buffer memory wasn't recycled effectively.
+- Fix thread stack traces to use the correct filename.
 
 ### Deprecate
 

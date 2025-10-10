@@ -666,9 +666,9 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
     .vk.cacheSize = config->cacheSize,
 #endif
 #if defined(LOVR_VK) && !defined(LOVR_DISABLE_HEADSET)
-    .vk.getPhysicalDevice = lovrHeadsetGetInstanceHandle() ? lovrHeadsetGetVulkanPhysicalDevice : NULL,
-    .vk.createInstance = lovrHeadsetGetInstanceHandle() ? lovrHeadsetCreateVulkanInstance : NULL,
-    .vk.createDevice = lovrHeadsetGetInstanceHandle() ? lovrHeadsetCreateVulkanDevice : NULL
+    .vk.getPhysicalDevice = lovrHeadsetIsConnected() ? lovrHeadsetGetVulkanPhysicalDevice : NULL,
+    .vk.createInstance = lovrHeadsetIsConnected() ? lovrHeadsetCreateVulkanInstance : NULL,
+    .vk.createDevice = lovrHeadsetIsConnected() ? lovrHeadsetCreateVulkanDevice : NULL
 #endif
   };
 

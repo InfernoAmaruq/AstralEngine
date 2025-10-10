@@ -77,6 +77,7 @@ function lovr.arg(arg)
     end
 
     if arg.simulator then
+      conf.headset.connect = false
       conf.headset.start = false
     end
 

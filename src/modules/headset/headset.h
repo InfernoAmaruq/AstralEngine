@@ -166,6 +166,8 @@ typedef enum {
 
 bool lovrHeadsetInit(HeadsetConfig* config);
 void lovrHeadsetDestroy(void);
+bool lovrHeadsetConnect(void);
+bool lovrHeadsetIsConnected(void);
 bool lovrHeadsetGetName(char* name, size_t length);
 bool lovrHeadsetGetDriver(char* name, size_t length);
 void lovrHeadsetGetFeatures(HeadsetFeatures* features);

@@ -98,6 +98,10 @@ static Device luax_optdevice(lua_State* L, int index) {
   return luax_checkenum(L, 1, Device, "head");
 }
 
+static int l_lovrHeadsetConnect(lua_State* L) {
+  return luax_pushsuccess(L, lovrHeadsetConnect());
+}
+
 static int l_lovrHeadsetGetName(lua_State* L) {
   char name[256];
   if (lovrHeadsetGetName(name, sizeof(name))) {
@@ -985,6 +989,7 @@ static int l_lovrHeadsetGetHandles(lua_State* L) {
 }
 
 static const luaL_Reg lovrHeadset[] = {
+  { "connect", l_lovrHeadsetConnect },
   { "getName", l_lovrHeadsetGetName },
   { "getDriver", l_lovrHeadsetGetDriver },
   { "getFeatures", l_lovrHeadsetGetFeatures },

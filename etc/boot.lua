@@ -31,6 +31,7 @@ local conf = {
     shadercache = true
   },
   headset = {
+    connect = true,
     start = true,
     debug = false,
     seated = false,
@@ -133,6 +134,13 @@ function lovr.boot()
       else
         lovr[module] = result
       end
+    end
+  end
+
+  if lovr.headset and conf.headset.connect then
+    local ok, message = lovr.headset.connect()
+    if not ok and conf.headset.debug then
+      lovr.log(string.format('Could not connect to headset, falling back to simulator (%s)', message), 'warn', 'XR')
     end
   end
 

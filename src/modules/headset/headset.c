@@ -350,8 +350,7 @@ static void lovrSwapchainDestroy(Swapchain* swapchain);
 static Texture* lovrSwapchainAcquire(Swapchain* swapchain);
 static bool lovrSwapchainRelease(Swapchain* swapchain);
 
-static bool xrinit(void);
-static void xrdestroy(void);
+static void disconnect(void);
 static void xrthrow(XrResult result, const char* symbol);
 static XrBool32 onMessage(XrDebugUtilsMessageSeverityFlagsEXT severity, XrDebugUtilsMessageTypeFlagsEXT type, const XrDebugUtilsMessengerCallbackDataEXT* data, void* userdata);
 static bool hasExtension(XrExtensionProperties* extensions, uint32_t count, const char* extension);
@@ -384,23 +383,934 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
 
   lovrHeadsetSetClipDistance(.01f, 0.f);
 
-  // If OpenXR fails to boot up, log an error in debug mode and fall back to simulator
-  if (!xrinit() && config->debug) {
-    lovrLog(LOG_WARN, "XR", "Failed to start OpenXR, falling back to simulator (%s)", lovrGetError());
-  }
-
   return true;
 }
 
 void lovrHeadsetDestroy(void) {
-  xrdestroy();
+  disconnect();
   Simulator simulator = state.simulator; // Keep simulator state between restarts, for convenience
   memset(&state, 0, sizeof(state));
   state.simulator = simulator;
 }
 
+bool lovrHeadsetConnect(void) {
+  if (state.system) {
+    return true;
+  }
+
+  HeadsetConfig* config = &state.config;
+
+  XrResult result;
+
+  // Loader
+
+#if defined(__ANDROID__)
+  static PFN_xrInitializeLoaderKHR xrInitializeLoaderKHR;
+  XR_LOAD(xrInitializeLoaderKHR);
+  lovrAssert(xrInitializeLoaderKHR, "Failed to initialize loader");
+
+  XrLoaderInitInfoAndroidKHR loaderInfo = {
+    .type = XR_TYPE_LOADER_INIT_INFO_ANDROID_KHR,
+    .applicationVM = os_get_java_vm(),
+    .applicationContext = os_get_jni_context()
+  };
+
+  if (XR_FAILED(xrInitializeLoaderKHR((XrLoaderInitInfoBaseHeaderKHR*) &loaderInfo))) {
+    return true;
+  }
+#elif defined(__linux__) || defined(__APPLE__)
+  if (!config->debug) {
+    setenv("XR_LOADER_DEBUG", "none", 0);
+  }
+#elif defined(_WIN32)
+  if (!config->debug && GetEnvironmentVariable("XR_LOADER_DEBUG", NULL, 0) == 0 && GetLastError() == ERROR_ENVVAR_NOT_FOUND) {
+    SetEnvironmentVariable("XR_LOADER_DEBUG", "none");
+  }
+#endif
+
+  // Extensions
+
+  uint32_t extensionCount = 0;
+  XR(xrEnumerateInstanceExtensionProperties(NULL, 0, &extensionCount, NULL), "xrEnumerateInstanceExtensionProperties");
+
+  XrExtensionProperties* extensionProperties = lovrCalloc(extensionCount * sizeof(*extensionProperties));
+  for (uint32_t i = 0; i < extensionCount; i++) extensionProperties[i].type = XR_TYPE_EXTENSION_PROPERTIES;
+  xrEnumerateInstanceExtensionProperties(NULL, extensionCount, &extensionCount, extensionProperties);
+
+  // Extensions with feature == NULL must be present.  The enable flag can be used to
+  // conditionally enable extensions based on config, platform, etc.
+  struct { const char* name; bool* feature; bool enable; } extensions[] = {
+#ifdef __ANDROID__
+    { "XR_KHR_android_create_instance", NULL, true },
+    { "XR_KHR_android_thread_settings", &state.extensions.threadHint, true },
+#endif
+    { "XR_KHR_composition_layer_color_scale_bias", &state.extensions.layerColor, true },
+    { "XR_KHR_composition_layer_cylinder", &state.extensions.layerCurve, true },
+    { "XR_KHR_composition_layer_cube", &state.extensions.layerCube, true },
+    { "XR_KHR_composition_layer_depth", &state.extensions.depth, config->submitDepth },
+    { "XR_KHR_composition_layer_equirect", &state.extensions.layerEquirect, true },
+    { "XR_KHR_composition_layer_equirect2", &state.extensions.layerEquirect2, true },
+#ifndef _WIN32
+    { "XR_KHR_convert_timespec_time", NULL, true },
+#endif
+    { "XR_KHR_visibility_mask", &state.extensions.visibilityMask, config->mask },
+#ifdef LOVR_VK
+    { "XR_KHR_vulkan_enable2", NULL, true },
+#endif
+#ifdef _WIN32
+    { "XR_KHR_win32_convert_performance_counter_time", NULL, true },
+#endif
+    { "XR_EXT_debug_utils", &state.extensions.debug, true },
+    { "XR_EXT_eye_gaze_interaction", &state.extensions.gaze, true },
+    { "XR_EXT_hand_interaction", &state.extensions.handInteraction, true },
+    { "XR_EXT_hand_joints_motion_range", &state.extensions.handTrackingMotionRange, true },
+    { "XR_EXT_hand_tracking", &state.extensions.handTracking, true },
+    { "XR_EXT_hand_tracking_data_source", &state.extensions.handTrackingDataSource, true },
+    { "XR_EXT_interaction_render_model", &state.extensions.interactionRenderModel, true },
+    { "XR_EXT_local_floor", &state.extensions.localFloor, true },
+    { "XR_EXT_palm_pose", &state.extensions.palmPose, true },
+    { "XR_EXT_render_model", &state.extensions.renderModel, true },
+    { "XR_EXT_user_presence", &state.extensions.presence, true },
+    { "XR_EXT_uuid", &state.extensions.uuid, true },
+    { "XR_BD_controller_interaction", &state.extensions.picoController, true },
+    { "XR_FB_composition_layer_depth_test", &state.extensions.layerDepthTest, true },
+    { "XR_FB_composition_layer_settings", &state.extensions.layerSettings, true },
+    { "XR_FB_display_refresh_rate", &state.extensions.refreshRate, true },
+    { "XR_FB_foveation", &state.extensions.foveation, true },
+    { "XR_FB_foveation_configuration", &state.extensions.foveationConfig, true },
+    { "XR_FB_foveation_vulkan", &state.extensions.foveationVulkan, true },
+    { "XR_FB_hand_tracking_mesh", &state.extensions.handTrackingMesh, true },
+    { "XR_FB_keyboard_tracking", &state.extensions.keyboardTracking, true },
+    { "XR_FB_passthrough", &state.extensions.questPassthrough, true },
+    { "XR_FB_swapchain_update_state", &state.extensions.swapchainUpdate, true },
+    { "XR_FB_touch_controller_pro", &state.extensions.touchPro, true },
+    { "XR_LOGITECH_mx_ink_stylus_interaction", &state.extensions.mxInk, true },
+    { "XR_META_automatic_layer_filter", &state.extensions.layerAutoFilter, true },
+    { "XR_META_passthrough_preferences", &state.extensions.passthroughPreferences, true },
+    { "XR_ML_ml2_controller_interaction", &state.extensions.ml2Controller, true },
+    { "XR_MND_headless", &state.extensions.headless, true },
+    { "XR_ULTRALEAP_hand_tracking_forearm", &state.extensions.handTrackingElbow, true },
+    { "XR_EXTX_overlay", &state.extensions.overlay, config->overlay },
+    { "XR_HTCX_vive_tracker_interaction", &state.extensions.viveTrackers, true }
+  };
+
+  uint32_t enabledExtensionCount = 0;
+  const char* enabledExtensionNames[COUNTOF(extensions)];
+  for (uint32_t i = 0; i < COUNTOF(extensions); i++) {
+    if (!extensions[i].enable) continue;
+    if (!extensions[i].feature || hasExtension(extensionProperties, extensionCount, extensions[i].name)) {
+      enabledExtensionNames[enabledExtensionCount++] = extensions[i].name;
+      if (extensions[i].feature) *extensions[i].feature = true;
+    }
+  }
+
+  lovrFree(extensionProperties);
+
+  // Instance
+
+#ifdef __ANDROID__
+  XrInstanceCreateInfoAndroidKHR androidInfo = {
+    .type = XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR,
+    .applicationVM = os_get_java_vm(),
+    .applicationActivity = os_get_jni_context(),
+    .next = NULL
+  };
+#endif
+
+  XrInstanceCreateInfo instanceInfo = {
+    .type = XR_TYPE_INSTANCE_CREATE_INFO,
+#ifdef __ANDROID__
+    .next = &androidInfo,
+#endif
+    .applicationInfo.engineName = "LÖVR",
+    .applicationInfo.engineVersion = (LOVR_VERSION_MAJOR << 24) + (LOVR_VERSION_MINOR << 16) + LOVR_VERSION_PATCH,
+    .applicationInfo.applicationName = "LÖVR",
+    .applicationInfo.applicationVersion = 0,
+    .applicationInfo.apiVersion = XR_API_VERSION_1_0,
+    .enabledExtensionCount = enabledExtensionCount,
+    .enabledExtensionNames = enabledExtensionNames
+  };
+
+  XR(xrCreateInstance(&instanceInfo, &state.instance), "xrCreateInstance");
+  XR_FOREACH(XR_LOAD)
+  XR_FOREACH_PLATFORM(XR_LOAD)
+
+  if (state.extensions.debug) {
+    XrDebugUtilsMessengerCreateInfoEXT messengerInfo = {
+      .type = XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+      .messageSeverities =
+        (config->debug ? XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT : 0) |
+        (config->debug ? XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT : 0 ) |
+        XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+        XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+      .messageTypes =
+        XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+        (config->debug ? XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT : 0) |
+        XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+        XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT,
+      .userCallback = onMessage
+    };
+
+    xrCreateDebugUtilsMessengerEXT(state.instance, &messengerInfo, &state.messenger);
+  }
+
+  // System
+
+  XrSystemGetInfo systemInfo = {
+    .type = XR_TYPE_SYSTEM_GET_INFO,
+    .formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY
+  };
+
+  XRG(xrGetSystem(state.instance, &systemInfo, &state.system), "xrGetSystem", fail);
+
+  XrSystemEyeGazeInteractionPropertiesEXT eyeGazeProperties = { .type = XR_TYPE_SYSTEM_EYE_GAZE_INTERACTION_PROPERTIES_EXT };
+  XrSystemHandTrackingPropertiesEXT handTrackingProperties = { .type = XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT };
+  XrSystemKeyboardTrackingPropertiesFB keyboardTrackingProperties = { .type = XR_TYPE_SYSTEM_KEYBOARD_TRACKING_PROPERTIES_FB };
+  XrSystemUserPresencePropertiesEXT presenceProperties = { .type = XR_TYPE_SYSTEM_USER_PRESENCE_PROPERTIES_EXT };
+  XrSystemPassthroughProperties2FB passthroughProperties = { .type = XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES2_FB };
+  XrSystemProperties properties = { .type = XR_TYPE_SYSTEM_PROPERTIES };
+
+  if (state.extensions.gaze) {
+    eyeGazeProperties.next = properties.next;
+    properties.next = &eyeGazeProperties;
+  }
+
+  if (state.extensions.handTracking) {
+    handTrackingProperties.next = properties.next;
+    properties.next = &handTrackingProperties;
+  }
+
+  if (state.extensions.keyboardTracking) {
+    keyboardTrackingProperties.next = properties.next;
+    properties.next = &keyboardTrackingProperties;
+  }
+
+  if (state.extensions.presence) {
+    presenceProperties.next = properties.next;
+    properties.next = &presenceProperties;
+  }
+
+  if (state.extensions.questPassthrough) {
+    passthroughProperties.next = properties.next;
+    properties.next = &passthroughProperties;
+  }
+
+  XRG(xrGetSystemProperties(state.instance, state.system, &properties), "xrGetSystemProperties", fail);
+  state.extensions.gaze = eyeGazeProperties.supportsEyeGazeInteraction;
+  state.extensions.handTracking = handTrackingProperties.supportsHandTracking;
+  state.extensions.keyboardTracking = keyboardTrackingProperties.supportsKeyboardTracking;
+  state.extensions.presence = presenceProperties.supportsUserPresence;
+  state.extensions.questPassthrough = passthroughProperties.capabilities & XR_PASSTHROUGH_CAPABILITY_BIT_FB;
+
+  // View Configuration
+
+  uint32_t viewConfigurationCount;
+  XrViewConfigurationType viewConfigurations[2];
+  XRG(xrEnumerateViewConfigurations(state.instance, state.system, 2, &viewConfigurationCount, viewConfigurations), "xrEnumerateViewConfigurations", fail);
+
+  uint32_t viewCount;
+  XrViewConfigurationView views[2] = { [0].type = XR_TYPE_VIEW_CONFIGURATION_VIEW, [1].type = XR_TYPE_VIEW_CONFIGURATION_VIEW };
+  XRG(xrEnumerateViewConfigurationViews(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0, &viewCount, NULL), "xrEnumerateViewConfigurationViews", fail);
+  XRG(xrEnumerateViewConfigurationViews(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 2, &viewCount, views), "xrEnumerateViewConfigurationViews", fail);
+
+  if (viewCount != 2) {
+    return lovrSetError("Headset view count must be 2");
+  }
+
+  uint32_t maxWidth = MIN(views[0].maxImageRectWidth, views[1].maxImageRectWidth);
+  uint32_t maxHeight = MIN(views[0].maxImageRectHeight, views[1].maxImageRectHeight);
+  uint32_t recommendedWidth = MIN(views[0].recommendedImageRectWidth, views[1].recommendedImageRectWidth);
+  uint32_t recommendedHeight = MIN(views[0].recommendedImageRectHeight, views[1].recommendedImageRectHeight);
+
+  state.width = MIN(recommendedWidth * config->supersample, maxWidth);
+  state.height = MIN(recommendedHeight * config->supersample, maxHeight);
+
+  // Blend Modes
+
+  XRG(xrEnumerateEnvironmentBlendModes(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0, &state.blendModeCount, NULL), "xrEnumerateEnvironmentBlendModes", fail);
+  state.blendModes = lovrMalloc(state.blendModeCount * sizeof(XrEnvironmentBlendMode));
+  XRG(xrEnumerateEnvironmentBlendModes(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, state.blendModeCount, &state.blendModeCount, state.blendModes), "xrEnumerateEnvironmentBlendModes", fail);
+  state.blendMode = state.blendModes[0];
+
+  // Actions
+
+  XrActionSetCreateInfo actionSetInfo = {
+    .type = XR_TYPE_ACTION_SET_CREATE_INFO,
+    .localizedActionSetName = "Default",
+    .actionSetName = "default"
+  };
+
+  XRG(xrCreateActionSet(state.instance, &actionSetInfo, &state.actionSet), "xrCreateActionSet", fail);
+
+  // Subaction paths, for filtering actions by device
+  XRG(xrStringToPath(state.instance, "/user/hand/left", &state.actionFilters[DEVICE_HAND_LEFT]), "xrStringToPath", fail);
+  XRG(xrStringToPath(state.instance, "/user/hand/right", &state.actionFilters[DEVICE_HAND_RIGHT]), "xrStringToPath", fail);
+
+  state.actionFilters[DEVICE_HAND_LEFT_GRIP] = state.actionFilters[DEVICE_HAND_LEFT];
+  state.actionFilters[DEVICE_HAND_LEFT_POINT] = state.actionFilters[DEVICE_HAND_LEFT];
+  state.actionFilters[DEVICE_HAND_LEFT_PINCH] = state.actionFilters[DEVICE_HAND_LEFT];
+  state.actionFilters[DEVICE_HAND_LEFT_POKE] = state.actionFilters[DEVICE_HAND_LEFT];
+  state.actionFilters[DEVICE_HAND_LEFT_PALM] = state.actionFilters[DEVICE_HAND_LEFT];
+  state.actionFilters[DEVICE_HAND_RIGHT_GRIP] = state.actionFilters[DEVICE_HAND_RIGHT];
+  state.actionFilters[DEVICE_HAND_RIGHT_POINT] = state.actionFilters[DEVICE_HAND_RIGHT];
+  state.actionFilters[DEVICE_HAND_RIGHT_PINCH] = state.actionFilters[DEVICE_HAND_RIGHT];
+  state.actionFilters[DEVICE_HAND_RIGHT_POKE] = state.actionFilters[DEVICE_HAND_RIGHT];
+  state.actionFilters[DEVICE_HAND_RIGHT_PALM] = state.actionFilters[DEVICE_HAND_RIGHT];
+
+  if (state.extensions.viveTrackers) {
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/left_elbow", &state.actionFilters[DEVICE_ELBOW_LEFT]), "xrStringToPath", fail);
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/right_elbow", &state.actionFilters[DEVICE_ELBOW_RIGHT]), "xrStringToPath", fail);
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/left_shoulder", &state.actionFilters[DEVICE_SHOULDER_LEFT]), "xrStringToPath", fail);
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/right_shoulder", &state.actionFilters[DEVICE_SHOULDER_RIGHT]), "xrStringToPath", fail);
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/chest", &state.actionFilters[DEVICE_CHEST]), "xrStringToPath", fail);
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/waist", &state.actionFilters[DEVICE_WAIST]), "xrStringToPath", fail);
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/left_knee", &state.actionFilters[DEVICE_KNEE_LEFT]), "xrStringToPath", fail);
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/right_knee", &state.actionFilters[DEVICE_KNEE_RIGHT]), "xrStringToPath", fail);
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/left_foot", &state.actionFilters[DEVICE_FOOT_LEFT]), "xrStringToPath", fail);
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/right_foot", &state.actionFilters[DEVICE_FOOT_RIGHT]), "xrStringToPath", fail);
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/camera", &state.actionFilters[DEVICE_CAMERA]), "xrStringToPath", fail);
+    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/keyboard", &state.actionFilters[DEVICE_KEYBOARD]), "xrStringToPath", fail);
+  }
+
+  XrPath hands[] = {
+    state.actionFilters[DEVICE_HAND_LEFT],
+    state.actionFilters[DEVICE_HAND_RIGHT]
+  };
+
+  XrPath trackers[] = {
+    state.actionFilters[DEVICE_ELBOW_LEFT],
+    state.actionFilters[DEVICE_ELBOW_RIGHT],
+    state.actionFilters[DEVICE_SHOULDER_LEFT],
+    state.actionFilters[DEVICE_SHOULDER_RIGHT],
+    state.actionFilters[DEVICE_CHEST],
+    state.actionFilters[DEVICE_WAIST],
+    state.actionFilters[DEVICE_KNEE_LEFT],
+    state.actionFilters[DEVICE_KNEE_RIGHT],
+    state.actionFilters[DEVICE_FOOT_LEFT],
+    state.actionFilters[DEVICE_FOOT_RIGHT],
+    state.actionFilters[DEVICE_CAMERA],
+    state.actionFilters[DEVICE_KEYBOARD]
+  };
+
+  XrActionCreateInfo actionInfo[] = {
+    { 0 },
+    { 0, NULL, "grip_pose",        XR_ACTION_TYPE_POSE_INPUT,       2, hands, "Grip Pose" },
+    { 0, NULL, "pointer_pose",     XR_ACTION_TYPE_POSE_INPUT,       2, hands, "Pointer Pose" },
+    { 0, NULL, "pinch_pose",       XR_ACTION_TYPE_POSE_INPUT,       2, hands, "Pinch Pose" },
+    { 0, NULL, "poke_pose",        XR_ACTION_TYPE_POSE_INPUT,       2, hands, "Poke Pose" },
+    { 0, NULL, "palm_pose",        XR_ACTION_TYPE_POSE_INPUT,       2, hands, "Palm Pose" },
+    { 0, NULL, "tracker_pose",     XR_ACTION_TYPE_POSE_INPUT,       12, trackers, "Tracker Pose" },
+    { 0, NULL, "stylus_pose",      XR_ACTION_TYPE_POSE_INPUT,       0, NULL, "Stylus Pose" },
+    { 0, NULL, "gaze_pose",        XR_ACTION_TYPE_POSE_INPUT,       0, NULL, "Gaze Pose" },
+    { 0, NULL, "trigger_down",     XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Trigger Down" },
+    { 0, NULL, "trigger_touch",    XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Trigger Touch" },
+    { 0, NULL, "trigger_axis" ,    XR_ACTION_TYPE_FLOAT_INPUT,      2, hands, "Trigger Axis" },
+    { 0, NULL, "trackpad_down" ,   XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Trackpad Down" },
+    { 0, NULL, "trackpad_touch",   XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Trackpad Touch" },
+    { 0, NULL, "trackpad_axis",    XR_ACTION_TYPE_VECTOR2F_INPUT,   2, hands, "Trackpad Axis" },
+    { 0, NULL, "thumbstick_down",  XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Thumbstick Down" },
+    { 0, NULL, "thumbstick_touch", XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Thumbstick Touch" },
+    { 0, NULL, "thumbstick_axis" , XR_ACTION_TYPE_VECTOR2F_INPUT,   2, hands, "Thumbstick Axis" },
+    { 0, NULL, "thumbrest_touch",  XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Thumbrest Touch" },
+    { 0, NULL, "thumbrest_axis",   XR_ACTION_TYPE_FLOAT_INPUT  ,    2, hands, "Thumbrest Axis" },
+    { 0, NULL, "menu_down",        XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Menu Down" },
+    { 0, NULL, "menu_touch",       XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Menu Touch" },
+    { 0, NULL, "grip_down",        XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Grip Down" },
+    { 0, NULL, "grip_touch",       XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Grip Touch" },
+    { 0, NULL, "grip_axis",        XR_ACTION_TYPE_FLOAT_INPUT,      2, hands, "Grip Axis" },
+    { 0, NULL, "a_down",           XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "A Down" },
+    { 0, NULL, "a_touch",          XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "A Touch" },
+    { 0, NULL, "b_down",           XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "B Down" },
+    { 0, NULL, "b_touch",          XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "B Touch" },
+    { 0, NULL, "x_down",           XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "X Down" },
+    { 0, NULL, "x_touch",          XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "X Touch" },
+    { 0, NULL, "y_down",           XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Y Down" },
+    { 0, NULL, "y_touch",          XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Y Touch" },
+    { 0, NULL, "nib_down",         XR_ACTION_TYPE_BOOLEAN_INPUT,    0, NULL, "Nib Down" },
+    { 0, NULL, "nib_force",        XR_ACTION_TYPE_FLOAT_INPUT,      0, NULL, "Nib Force" },
+    { 0, NULL, "vibrate",          XR_ACTION_TYPE_VIBRATION_OUTPUT, 2, hands, "Vibrate" },
+    { 0, NULL, "stylus_vibrate",   XR_ACTION_TYPE_VIBRATION_OUTPUT, 0, NULL, "Stylus Vibrate" }
+  };
+
+  static_assert(COUNTOF(actionInfo) == MAX_ACTIONS, "Unbalanced action table!");
+
+  if (!state.extensions.viveTrackers) {
+    actionInfo[ACTION_TRACKER_POSE].countSubactionPaths = 0;
+  }
+
+  if (!state.extensions.gaze) {
+    actionInfo[ACTION_GAZE_POSE].countSubactionPaths = 0;
+  }
+
+  for (uint32_t i = 0; i < MAX_ACTIONS; i++) {
+    if (i == ACTION_NONE) continue;
+    actionInfo[i].type = XR_TYPE_ACTION_CREATE_INFO;
+    XRG(xrCreateAction(state.actionSet, &actionInfo[i], &state.actions[i]), "xrCreateAction", fail);
+  }
+
+  enum {
+    PROFILE_SIMPLE,
+    PROFILE_VIVE,
+    PROFILE_TOUCH,
+    PROFILE_TOUCH_PRO,
+    PROFILE_GO,
+    PROFILE_INDEX,
+    PROFILE_WMR,
+    PROFILE_ML2,
+    PROFILE_PICO_NEO3,
+    PROFILE_PICO4,
+    PROFILE_TRACKER,
+    PROFILE_MX_INK,
+    PROFILE_GAZE,
+    PROFILE_HAND,
+    MAX_PROFILES
+  };
+
+  const char* interactionProfilePaths[] = {
+    [PROFILE_SIMPLE] = "/interaction_profiles/khr/simple_controller",
+    [PROFILE_VIVE] = "/interaction_profiles/htc/vive_controller",
+    [PROFILE_TOUCH] = "/interaction_profiles/oculus/touch_controller",
+    [PROFILE_TOUCH_PRO] = "/interaction_profiles/facebook/touch_controller_pro",
+    [PROFILE_GO] = "/interaction_profiles/oculus/go_controller",
+    [PROFILE_INDEX] = "/interaction_profiles/valve/index_controller",
+    [PROFILE_WMR] = "/interaction_profiles/microsoft/motion_controller",
+    [PROFILE_ML2] = "/interaction_profiles/ml/ml2_controller",
+    [PROFILE_PICO_NEO3] = "/interaction_profiles/bytedance/pico_neo3_controller",
+    [PROFILE_PICO4] = "/interaction_profiles/bytedance/pico4_controller",
+    [PROFILE_TRACKER] = "/interaction_profiles/htc/vive_tracker_htcx",
+    [PROFILE_MX_INK] = "/interaction_profiles/logitech/mx_ink_stylus_logitech",
+    [PROFILE_GAZE] = "/interaction_profiles/ext/eye_gaze_interaction",
+    [PROFILE_HAND] = "/interaction_profiles/ext/hand_interaction_ext"
+  };
+
+  typedef struct {
+    int action;
+    const char* path;
+  } Binding;
+
+  Binding* bindings[] = {
+    [PROFILE_SIMPLE] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/select/click" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/select/click" },
+      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
+      { ACTION_MENU_DOWN, "/user/hand/right/input/menu/click" },
+      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_VIVE] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/click" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/click" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
+      { ACTION_TRACKPAD_DOWN, "/user/hand/left/input/trackpad/click" },
+      { ACTION_TRACKPAD_DOWN, "/user/hand/right/input/trackpad/click" },
+      { ACTION_TRACKPAD_TOUCH, "/user/hand/left/input/trackpad/touch" },
+      { ACTION_TRACKPAD_TOUCH, "/user/hand/right/input/trackpad/touch" },
+      { ACTION_TRACKPAD_AXIS, "/user/hand/left/input/trackpad" },
+      { ACTION_TRACKPAD_AXIS, "/user/hand/right/input/trackpad" },
+      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
+      { ACTION_MENU_DOWN, "/user/hand/right/input/menu/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/click" },
+      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_TOUCH] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/value" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/left/input/trigger/touch" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/right/input/trigger/touch" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/left/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/right/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
+      { ACTION_THUMBREST_TOUCH, "/user/hand/left/input/thumbrest/touch" },
+      { ACTION_THUMBREST_TOUCH, "/user/hand/right/input/thumbrest/touch" },
+      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
+      { ACTION_MENU_DOWN, "/user/hand/right/input/system/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/value" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/value" },
+      { ACTION_A_DOWN, "/user/hand/right/input/a/click" },
+      { ACTION_A_TOUCH, "/user/hand/right/input/a/touch" },
+      { ACTION_B_DOWN, "/user/hand/right/input/b/click" },
+      { ACTION_B_TOUCH, "/user/hand/right/input/b/touch" },
+      { ACTION_X_DOWN, "/user/hand/left/input/x/click" },
+      { ACTION_X_TOUCH, "/user/hand/left/input/x/touch" },
+      { ACTION_Y_DOWN, "/user/hand/left/input/y/click" },
+      { ACTION_Y_TOUCH, "/user/hand/left/input/y/touch" },
+      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_TOUCH_PRO] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/value" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/left/input/trigger/touch" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/right/input/trigger/touch" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/left/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/right/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
+      { ACTION_THUMBREST_TOUCH, "/user/hand/left/input/thumbrest/touch" },
+      { ACTION_THUMBREST_TOUCH, "/user/hand/right/input/thumbrest/touch" },
+      { ACTION_THUMBREST_AXIS, "/user/hand/left/input/thumbrest/force" },
+      { ACTION_THUMBREST_AXIS, "/user/hand/right/input/thumbrest/force" },
+      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
+      { ACTION_MENU_DOWN, "/user/hand/right/input/system/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/value" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/value" },
+      { ACTION_A_DOWN, "/user/hand/right/input/a/click" },
+      { ACTION_A_TOUCH, "/user/hand/right/input/a/touch" },
+      { ACTION_B_DOWN, "/user/hand/right/input/b/click" },
+      { ACTION_B_TOUCH, "/user/hand/right/input/b/touch" },
+      { ACTION_X_DOWN, "/user/hand/left/input/x/click" },
+      { ACTION_X_TOUCH, "/user/hand/left/input/x/touch" },
+      { ACTION_Y_DOWN, "/user/hand/left/input/y/click" },
+      { ACTION_Y_TOUCH, "/user/hand/left/input/y/touch" },
+      { ACTION_NIB_DOWN, "/user/hand/left/input/stylus_fb/force" },
+      { ACTION_NIB_DOWN, "/user/hand/right/input/stylus_fb/force" },
+      { ACTION_NIB_FORCE, "/user/hand/left/input/stylus_fb/force" },
+      { ACTION_NIB_FORCE, "/user/hand/right/input/stylus_fb/force" },
+      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_GO] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/click" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/click" },
+      { ACTION_TRACKPAD_DOWN, "/user/hand/left/input/trackpad/click" },
+      { ACTION_TRACKPAD_DOWN, "/user/hand/right/input/trackpad/click" },
+      { ACTION_TRACKPAD_TOUCH, "/user/hand/left/input/trackpad/touch" },
+      { ACTION_TRACKPAD_TOUCH, "/user/hand/right/input/trackpad/touch" },
+      { ACTION_TRACKPAD_AXIS, "/user/hand/left/input/trackpad" },
+      { ACTION_TRACKPAD_AXIS, "/user/hand/right/input/trackpad" },
+      { 0, NULL }
+    },
+    [PROFILE_INDEX] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/click" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/click" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/left/input/trigger/touch" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/right/input/trigger/touch" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
+      { ACTION_TRACKPAD_DOWN, "/user/hand/left/input/trackpad/force" },
+      { ACTION_TRACKPAD_DOWN, "/user/hand/right/input/trackpad/force" },
+      { ACTION_TRACKPAD_TOUCH, "/user/hand/left/input/trackpad/touch" },
+      { ACTION_TRACKPAD_TOUCH, "/user/hand/right/input/trackpad/touch" },
+      { ACTION_TRACKPAD_AXIS, "/user/hand/left/input/trackpad" },
+      { ACTION_TRACKPAD_AXIS, "/user/hand/right/input/trackpad" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/left/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/right/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/force" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/force" },
+      { ACTION_GRIP_TOUCH, "/user/hand/left/input/squeeze/value" },
+      { ACTION_GRIP_TOUCH, "/user/hand/right/input/squeeze/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/force" },
+      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/force" },
+      { ACTION_A_DOWN, "/user/hand/left/input/a/click" },
+      { ACTION_A_DOWN, "/user/hand/right/input/a/click" },
+      { ACTION_A_TOUCH, "/user/hand/left/input/a/touch" },
+      { ACTION_A_TOUCH, "/user/hand/right/input/a/touch" },
+      { ACTION_B_DOWN, "/user/hand/left/input/b/click" },
+      { ACTION_B_DOWN, "/user/hand/right/input/b/click" },
+      { ACTION_B_TOUCH, "/user/hand/left/input/b/touch" },
+      { ACTION_B_TOUCH, "/user/hand/right/input/b/touch" },
+      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_WMR] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
+      { ACTION_TRACKPAD_DOWN, "/user/hand/left/input/trackpad/click" },
+      { ACTION_TRACKPAD_DOWN, "/user/hand/right/input/trackpad/click" },
+      { ACTION_TRACKPAD_TOUCH, "/user/hand/left/input/trackpad/touch" },
+      { ACTION_TRACKPAD_TOUCH, "/user/hand/right/input/trackpad/touch" },
+      { ACTION_TRACKPAD_AXIS, "/user/hand/left/input/trackpad" },
+      { ACTION_TRACKPAD_AXIS, "/user/hand/right/input/trackpad" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
+      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
+      { ACTION_MENU_DOWN, "/user/hand/right/input/menu/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/click" },
+      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/click" },
+      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/click" },
+      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_ML2] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/click" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/click" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
+      { ACTION_TRACKPAD_DOWN, "/user/hand/left/input/trackpad/click" },
+      { ACTION_TRACKPAD_DOWN, "/user/hand/right/input/trackpad/click" },
+      { ACTION_TRACKPAD_TOUCH, "/user/hand/left/input/trackpad/touch" },
+      { ACTION_TRACKPAD_TOUCH, "/user/hand/right/input/trackpad/touch" },
+      { ACTION_TRACKPAD_AXIS, "/user/hand/left/input/trackpad" },
+      { ACTION_TRACKPAD_AXIS, "/user/hand/right/input/trackpad" },
+      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
+      { ACTION_MENU_DOWN, "/user/hand/right/input/menu/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/shoulder/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/shoulder/click" },
+      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_PICO_NEO3] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/click" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/click" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/left/input/trigger/touch" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/right/input/trigger/touch" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/left/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/right/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
+      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
+      { ACTION_MENU_DOWN, "/user/hand/right/input/menu/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/click" },
+      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/value" },
+      { ACTION_A_DOWN, "/user/hand/right/input/a/click" },
+      { ACTION_A_TOUCH, "/user/hand/right/input/a/touch" },
+      { ACTION_B_DOWN, "/user/hand/right/input/b/click" },
+      { ACTION_B_TOUCH, "/user/hand/right/input/b/touch" },
+      { ACTION_X_DOWN, "/user/hand/left/input/x/click" },
+      { ACTION_X_TOUCH, "/user/hand/left/input/x/touch" },
+      { ACTION_Y_DOWN, "/user/hand/left/input/y/click" },
+      { ACTION_Y_TOUCH, "/user/hand/left/input/y/touch" },
+      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_PICO4] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/value" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/left/input/trigger/touch" },
+      { ACTION_TRIGGER_TOUCH, "/user/hand/right/input/trigger/touch" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/left/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_TOUCH, "/user/hand/right/input/thumbstick/touch" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
+      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
+      { ACTION_MENU_DOWN, "/user/hand/right/input/system/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/click" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/click" },
+      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/value" },
+      { ACTION_A_DOWN, "/user/hand/right/input/a/click" },
+      { ACTION_A_TOUCH, "/user/hand/right/input/a/touch" },
+      { ACTION_B_DOWN, "/user/hand/right/input/b/click" },
+      { ACTION_B_TOUCH, "/user/hand/right/input/b/touch" },
+      { ACTION_X_DOWN, "/user/hand/left/input/x/click" },
+      { ACTION_X_TOUCH, "/user/hand/left/input/x/touch" },
+      { ACTION_Y_DOWN, "/user/hand/left/input/y/click" },
+      { ACTION_Y_TOUCH, "/user/hand/left/input/y/touch" },
+      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_TRACKER] = (Binding[]) {
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/left_elbow/input/grip/pose" },
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/right_elbow/input/grip/pose" },
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/left_shoulder/input/grip/pose" },
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/right_shoulder/input/grip/pose" },
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/chest/input/grip/pose" },
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/waist/input/grip/pose" },
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/left_knee/input/grip/pose" },
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/right_knee/input/grip/pose" },
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/left_foot/input/grip/pose" },
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/right_foot/input/grip/pose" },
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/camera/input/grip/pose" },
+      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/keyboard/input/grip/pose" },
+      { 0, NULL }
+    },
+    [PROFILE_MX_INK] = (Binding[]) {
+      { ACTION_STYLUS_POSE, "/user/hand/left/input/tip_logitech/pose" },
+      { ACTION_STYLUS_POSE, "/user/hand/right/input/tip_logitech/pose" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/cluster_middle_logitech/force" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/cluster_middle_logitech/force" },
+      { ACTION_GRIP_AXIS, "/user/hand/left/input/cluster_middle_logitech/force" },
+      { ACTION_GRIP_AXIS, "/user/hand/right/input/cluster_middle_logitech/force" },
+      { ACTION_A_DOWN, "/user/hand/left/input/cluster_front_logitech/click" },
+      { ACTION_A_DOWN, "/user/hand/right/input/cluster_front_logitech/click" },
+      { ACTION_B_DOWN, "/user/hand/left/input/cluster_back_logitech/click" },
+      { ACTION_B_DOWN, "/user/hand/right/input/cluster_back_logitech/click" },
+      { ACTION_NIB_DOWN, "/user/hand/left/input/tip_logitech/force" },
+      { ACTION_NIB_DOWN, "/user/hand/right/input/tip_logitech/force" },
+      { ACTION_NIB_FORCE, "/user/hand/left/input/tip_logitech/force" },
+      { ACTION_NIB_FORCE, "/user/hand/right/input/tip_logitech/force" },
+      { ACTION_STYLUS_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_STYLUS_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_GAZE] = (Binding[]) {
+      { ACTION_GAZE_POSE, "/user/eyes_ext/input/gaze_ext/pose" },
+      { 0, NULL }
+    },
+    [PROFILE_HAND] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/pinch_ext/value" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/pinch_ext/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/pinch_ext/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/pinch_ext/value" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/grasp_ext/value" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/grasp_ext/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/left/input/grasp_ext/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/right/input/grasp_ext/value" },
+      { 0, NULL }
+    }
+  };
+
+  uint32_t bindingCount[MAX_PROFILES] = { 0 };
+
+  for (uint32_t i = 0; i < MAX_PROFILES; i++) {
+    for (uint32_t j = 0; bindings[i][j].path; j++) {
+      bindingCount[i]++;
+    }
+  }
+
+  // Don't suggest bindings for unsupported input profiles
+
+  if (!state.extensions.ml2Controller) {
+    bindingCount[PROFILE_ML2] = 0;
+  }
+
+  if (!state.extensions.picoController) {
+    bindingCount[PROFILE_PICO_NEO3] = 0;
+    bindingCount[PROFILE_PICO4] = 0;
+  }
+
+  if (!state.extensions.viveTrackers) {
+    bindingCount[PROFILE_TRACKER] = 0;
+  }
+
+  if (!state.extensions.mxInk) {
+    bindingCount[PROFILE_MX_INK] = 0;
+  }
+
+  if (!state.extensions.gaze) {
+    bindingCount[PROFILE_GAZE] = 0;
+  }
+
+  if (!state.extensions.handInteraction) {
+    bindingCount[PROFILE_HAND] = 0;
+  }
+
+  if (!state.extensions.touchPro) {
+    bindingCount[PROFILE_TOUCH_PRO] = 0;
+  }
+
+  // Remove bindings for unsupported extensions
+
+  #define REMOVE_BINDINGS(bindings, length, index, count)\
+    if (index < length - count) memmove(&bindings[index], &bindings[index + count], (length - index - count) * sizeof(Binding));
+
+  if (!state.extensions.handInteraction) {
+    for (uint32_t i = 0; i < MAX_PROFILES; i++) {
+      for (uint32_t j = 0; j < bindingCount[i]; j++) {
+        if (bindings[i][j].action == ACTION_PINCH_POSE || bindings[i][j].action == ACTION_POKE_POSE) {
+          REMOVE_BINDINGS(bindings[i], bindingCount[i], j, 2);
+          bindingCount[i] -= 2;
+          i--;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!state.extensions.palmPose) {
+    for (uint32_t i = 0; i < MAX_PROFILES; i++) {
+      for (uint32_t j = 0; j < bindingCount[i]; j++) {
+        if (bindings[i][j].action == ACTION_PALM_POSE) {
+          REMOVE_BINDINGS(bindings[i], bindingCount[i], j, 2);
+          bindingCount[i] -= 2;
+          break;
+        }
+      }
+    }
+  }
+
+  XrPath path;
+  XrActionSuggestedBinding suggestedBindings[64];
+  for (uint32_t i = 0; i < MAX_PROFILES; i++) {
+    if (bindingCount[i] == 0) continue;
+
+    for (uint32_t j = 0; j < bindingCount[i]; j++) {
+      XRG(xrStringToPath(state.instance, bindings[i][j].path, &path), "xrStringToPath", fail);
+      suggestedBindings[j].action = state.actions[bindings[i][j].action];
+      suggestedBindings[j].binding = path;
+    }
+
+    XRG(xrStringToPath(state.instance, interactionProfilePaths[i], &path), "xrStringToPath", fail);
+
+    result = (xrSuggestInteractionProfileBindings(state.instance, &(XrInteractionProfileSuggestedBinding) {
+      .type = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
+      .interactionProfile = path,
+      .countSuggestedBindings = bindingCount[i],
+      .suggestedBindings = suggestedBindings
+    }));
+
+    if (XR_FAILED(result)) {
+      lovrLog(LOG_WARN, "XR", "Failed to suggest input bindings for %s", interactionProfilePaths[i]);
+    }
+  }
+
+  state.frameState.type = XR_TYPE_FRAME_STATE;
+  return true;
+fail:
+  disconnect();
+  return false;
+}
+
+bool lovrHeadsetIsConnected(void) {
+  return state.system;
+}
+
 bool lovrHeadsetGetName(char* name, size_t length) {
-  if (!state.instance) return false;
+  if (!state.system) return false;
   XrSystemProperties properties = { .type = XR_TYPE_SYSTEM_PROPERTIES };
   if (XR_FAILED(xrGetSystemProperties(state.instance, state.system, &properties))) return false;
   strncpy(name, properties.systemName, length - 1);
@@ -409,7 +1319,7 @@ bool lovrHeadsetGetName(char* name, size_t length) {
 }
 
 bool lovrHeadsetGetDriver(char* name, size_t length) {
-  if (!state.instance) return false;
+  if (!state.system) return false;
   XrInstanceProperties properties = { .type = XR_TYPE_INSTANCE_PROPERTIES };
   if (XR_FAILED(xrGetInstanceProperties(state.instance, &properties))) return false;
   strncpy(name, properties.runtimeName, length - 1);
@@ -444,12 +1354,12 @@ bool lovrHeadsetIsSeated(void) {
 }
 
 bool lovrHeadsetStart(void) {
-  if (!state.instance && !xrinit()) {
-    return false;
+  if (!lovrHeadsetIsConnected()) {
+    return lovrSetError("not connected");
   }
 
   if (state.session) {
-    return lovrSetError("Already started");
+    return lovrSetError("already started");
   }
 
 #ifdef LOVR_DISABLE_GRAPHICS
@@ -2877,921 +3787,14 @@ static bool lovrSwapchainRelease(Swapchain* swapchain) {
   return true;
 }
 
-static bool xrinit(void) {
-  HeadsetConfig* config = &state.config;
-
-  XrResult result;
-
-  // Loader
-
-#if defined(__ANDROID__)
-  static PFN_xrInitializeLoaderKHR xrInitializeLoaderKHR;
-  XR_LOAD(xrInitializeLoaderKHR);
-  lovrAssert(xrInitializeLoaderKHR, "Failed to initialize loader");
-
-  XrLoaderInitInfoAndroidKHR loaderInfo = {
-    .type = XR_TYPE_LOADER_INIT_INFO_ANDROID_KHR,
-    .applicationVM = os_get_java_vm(),
-    .applicationContext = os_get_jni_context()
-  };
-
-  if (XR_FAILED(xrInitializeLoaderKHR((XrLoaderInitInfoBaseHeaderKHR*) &loaderInfo))) {
-    return true;
-  }
-#elif defined(__linux__) || defined(__APPLE__)
-  if (!config->debug) {
-    setenv("XR_LOADER_DEBUG", "none", 0);
-  }
-#elif defined(_WIN32)
-  if (!config->debug && GetEnvironmentVariable("XR_LOADER_DEBUG", NULL, 0) == 0 && GetLastError() == ERROR_ENVVAR_NOT_FOUND) {
-    SetEnvironmentVariable("XR_LOADER_DEBUG", "none");
-  }
-#endif
-
-  // Extensions
-
-  uint32_t extensionCount = 0;
-  XR(xrEnumerateInstanceExtensionProperties(NULL, 0, &extensionCount, NULL), "xrEnumerateInstanceExtensionProperties");
-
-  XrExtensionProperties* extensionProperties = lovrCalloc(extensionCount * sizeof(*extensionProperties));
-  for (uint32_t i = 0; i < extensionCount; i++) extensionProperties[i].type = XR_TYPE_EXTENSION_PROPERTIES;
-  xrEnumerateInstanceExtensionProperties(NULL, extensionCount, &extensionCount, extensionProperties);
-
-  // Extensions with feature == NULL must be present.  The enable flag can be used to
-  // conditionally enable extensions based on config, platform, etc.
-  struct { const char* name; bool* feature; bool enable; } extensions[] = {
-#ifdef __ANDROID__
-    { "XR_KHR_android_create_instance", NULL, true },
-    { "XR_KHR_android_thread_settings", &state.extensions.threadHint, true },
-#endif
-    { "XR_KHR_composition_layer_color_scale_bias", &state.extensions.layerColor, true },
-    { "XR_KHR_composition_layer_cylinder", &state.extensions.layerCurve, true },
-    { "XR_KHR_composition_layer_cube", &state.extensions.layerCube, true },
-    { "XR_KHR_composition_layer_depth", &state.extensions.depth, config->submitDepth },
-    { "XR_KHR_composition_layer_equirect", &state.extensions.layerEquirect, true },
-    { "XR_KHR_composition_layer_equirect2", &state.extensions.layerEquirect2, true },
-#ifndef _WIN32
-    { "XR_KHR_convert_timespec_time", NULL, true },
-#endif
-    { "XR_KHR_visibility_mask", &state.extensions.visibilityMask, config->mask },
-#ifdef LOVR_VK
-    { "XR_KHR_vulkan_enable2", NULL, true },
-#endif
-#ifdef _WIN32
-    { "XR_KHR_win32_convert_performance_counter_time", NULL, true },
-#endif
-    { "XR_EXT_debug_utils", &state.extensions.debug, true },
-    { "XR_EXT_eye_gaze_interaction", &state.extensions.gaze, true },
-    { "XR_EXT_hand_interaction", &state.extensions.handInteraction, true },
-    { "XR_EXT_hand_joints_motion_range", &state.extensions.handTrackingMotionRange, true },
-    { "XR_EXT_hand_tracking", &state.extensions.handTracking, true },
-    { "XR_EXT_hand_tracking_data_source", &state.extensions.handTrackingDataSource, true },
-    { "XR_EXT_interaction_render_model", &state.extensions.interactionRenderModel, true },
-    { "XR_EXT_local_floor", &state.extensions.localFloor, true },
-    { "XR_EXT_palm_pose", &state.extensions.palmPose, true },
-    { "XR_EXT_render_model", &state.extensions.renderModel, true },
-    { "XR_EXT_user_presence", &state.extensions.presence, true },
-    { "XR_EXT_uuid", &state.extensions.uuid, true },
-    { "XR_BD_controller_interaction", &state.extensions.picoController, true },
-    { "XR_FB_composition_layer_depth_test", &state.extensions.layerDepthTest, true },
-    { "XR_FB_composition_layer_settings", &state.extensions.layerSettings, true },
-    { "XR_FB_display_refresh_rate", &state.extensions.refreshRate, true },
-    { "XR_FB_foveation", &state.extensions.foveation, true },
-    { "XR_FB_foveation_configuration", &state.extensions.foveationConfig, true },
-    { "XR_FB_foveation_vulkan", &state.extensions.foveationVulkan, true },
-    { "XR_FB_hand_tracking_mesh", &state.extensions.handTrackingMesh, true },
-    { "XR_FB_keyboard_tracking", &state.extensions.keyboardTracking, true },
-    { "XR_FB_passthrough", &state.extensions.questPassthrough, true },
-    { "XR_FB_swapchain_update_state", &state.extensions.swapchainUpdate, true },
-    { "XR_FB_touch_controller_pro", &state.extensions.touchPro, true },
-    { "XR_LOGITECH_mx_ink_stylus_interaction", &state.extensions.mxInk, true },
-    { "XR_META_automatic_layer_filter", &state.extensions.layerAutoFilter, true },
-    { "XR_META_passthrough_preferences", &state.extensions.passthroughPreferences, true },
-    { "XR_ML_ml2_controller_interaction", &state.extensions.ml2Controller, true },
-    { "XR_MND_headless", &state.extensions.headless, true },
-    { "XR_ULTRALEAP_hand_tracking_forearm", &state.extensions.handTrackingElbow, true },
-    { "XR_EXTX_overlay", &state.extensions.overlay, config->overlay },
-    { "XR_HTCX_vive_tracker_interaction", &state.extensions.viveTrackers, true }
-  };
-
-  uint32_t enabledExtensionCount = 0;
-  const char* enabledExtensionNames[COUNTOF(extensions)];
-  for (uint32_t i = 0; i < COUNTOF(extensions); i++) {
-    if (!extensions[i].enable) continue;
-    if (!extensions[i].feature || hasExtension(extensionProperties, extensionCount, extensions[i].name)) {
-      enabledExtensionNames[enabledExtensionCount++] = extensions[i].name;
-      if (extensions[i].feature) *extensions[i].feature = true;
-    }
-  }
-
-  lovrFree(extensionProperties);
-
-  // Instance
-
-#ifdef __ANDROID__
-  XrInstanceCreateInfoAndroidKHR androidInfo = {
-    .type = XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR,
-    .applicationVM = os_get_java_vm(),
-    .applicationActivity = os_get_jni_context(),
-    .next = NULL
-  };
-#endif
-
-  XrInstanceCreateInfo instanceInfo = {
-    .type = XR_TYPE_INSTANCE_CREATE_INFO,
-#ifdef __ANDROID__
-    .next = &androidInfo,
-#endif
-    .applicationInfo.engineName = "LÖVR",
-    .applicationInfo.engineVersion = (LOVR_VERSION_MAJOR << 24) + (LOVR_VERSION_MINOR << 16) + LOVR_VERSION_PATCH,
-    .applicationInfo.applicationName = "LÖVR",
-    .applicationInfo.applicationVersion = 0,
-    .applicationInfo.apiVersion = XR_API_VERSION_1_0,
-    .enabledExtensionCount = enabledExtensionCount,
-    .enabledExtensionNames = enabledExtensionNames
-  };
-
-  XR(xrCreateInstance(&instanceInfo, &state.instance), "xrCreateInstance");
-  XR_FOREACH(XR_LOAD)
-  XR_FOREACH_PLATFORM(XR_LOAD)
-
-  if (state.extensions.debug) {
-    XrDebugUtilsMessengerCreateInfoEXT messengerInfo = {
-      .type = XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-      .messageSeverities =
-        (config->debug ? XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT : 0) |
-        (config->debug ? XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT : 0 ) |
-        XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-        XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-      .messageTypes =
-        XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-        (config->debug ? XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT : 0) |
-        XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-        XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT,
-      .userCallback = onMessage
-    };
-
-    xrCreateDebugUtilsMessengerEXT(state.instance, &messengerInfo, &state.messenger);
-  }
-
-  // System
-
-  XrSystemGetInfo systemInfo = {
-    .type = XR_TYPE_SYSTEM_GET_INFO,
-    .formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY
-  };
-
-  XRG(xrGetSystem(state.instance, &systemInfo, &state.system), "xrGetSystem", fail);
-
-  XrSystemEyeGazeInteractionPropertiesEXT eyeGazeProperties = { .type = XR_TYPE_SYSTEM_EYE_GAZE_INTERACTION_PROPERTIES_EXT };
-  XrSystemHandTrackingPropertiesEXT handTrackingProperties = { .type = XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT };
-  XrSystemKeyboardTrackingPropertiesFB keyboardTrackingProperties = { .type = XR_TYPE_SYSTEM_KEYBOARD_TRACKING_PROPERTIES_FB };
-  XrSystemUserPresencePropertiesEXT presenceProperties = { .type = XR_TYPE_SYSTEM_USER_PRESENCE_PROPERTIES_EXT };
-  XrSystemPassthroughProperties2FB passthroughProperties = { .type = XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES2_FB };
-  XrSystemProperties properties = { .type = XR_TYPE_SYSTEM_PROPERTIES };
-
-  if (state.extensions.gaze) {
-    eyeGazeProperties.next = properties.next;
-    properties.next = &eyeGazeProperties;
-  }
-
-  if (state.extensions.handTracking) {
-    handTrackingProperties.next = properties.next;
-    properties.next = &handTrackingProperties;
-  }
-
-  if (state.extensions.keyboardTracking) {
-    keyboardTrackingProperties.next = properties.next;
-    properties.next = &keyboardTrackingProperties;
-  }
-
-  if (state.extensions.presence) {
-    presenceProperties.next = properties.next;
-    properties.next = &presenceProperties;
-  }
-
-  if (state.extensions.questPassthrough) {
-    passthroughProperties.next = properties.next;
-    properties.next = &passthroughProperties;
-  }
-
-  XRG(xrGetSystemProperties(state.instance, state.system, &properties), "xrGetSystemProperties", fail);
-  state.extensions.gaze = eyeGazeProperties.supportsEyeGazeInteraction;
-  state.extensions.handTracking = handTrackingProperties.supportsHandTracking;
-  state.extensions.keyboardTracking = keyboardTrackingProperties.supportsKeyboardTracking;
-  state.extensions.presence = presenceProperties.supportsUserPresence;
-  state.extensions.questPassthrough = passthroughProperties.capabilities & XR_PASSTHROUGH_CAPABILITY_BIT_FB;
-
-  // View Configuration
-
-  uint32_t viewConfigurationCount;
-  XrViewConfigurationType viewConfigurations[2];
-  XRG(xrEnumerateViewConfigurations(state.instance, state.system, 2, &viewConfigurationCount, viewConfigurations), "xrEnumerateViewConfigurations", fail);
-
-  uint32_t viewCount;
-  XrViewConfigurationView views[2] = { [0].type = XR_TYPE_VIEW_CONFIGURATION_VIEW, [1].type = XR_TYPE_VIEW_CONFIGURATION_VIEW };
-  XRG(xrEnumerateViewConfigurationViews(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0, &viewCount, NULL), "xrEnumerateViewConfigurationViews", fail);
-  XRG(xrEnumerateViewConfigurationViews(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 2, &viewCount, views), "xrEnumerateViewConfigurationViews", fail);
-
-  if (viewCount != 2) {
-    return lovrSetError("Headset view count must be 2");
-  }
-
-  uint32_t maxWidth = MIN(views[0].maxImageRectWidth, views[1].maxImageRectWidth);
-  uint32_t maxHeight = MIN(views[0].maxImageRectHeight, views[1].maxImageRectHeight);
-  uint32_t recommendedWidth = MIN(views[0].recommendedImageRectWidth, views[1].recommendedImageRectWidth);
-  uint32_t recommendedHeight = MIN(views[0].recommendedImageRectHeight, views[1].recommendedImageRectHeight);
-
-  state.width = MIN(recommendedWidth * config->supersample, maxWidth);
-  state.height = MIN(recommendedHeight * config->supersample, maxHeight);
-
-  // Blend Modes
-
-  XRG(xrEnumerateEnvironmentBlendModes(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0, &state.blendModeCount, NULL), "xrEnumerateEnvironmentBlendModes", fail);
-  state.blendModes = lovrMalloc(state.blendModeCount * sizeof(XrEnvironmentBlendMode));
-  XRG(xrEnumerateEnvironmentBlendModes(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, state.blendModeCount, &state.blendModeCount, state.blendModes), "xrEnumerateEnvironmentBlendModes", fail);
-  state.blendMode = state.blendModes[0];
-
-  // Actions
-
-  XrActionSetCreateInfo actionSetInfo = {
-    .type = XR_TYPE_ACTION_SET_CREATE_INFO,
-    .localizedActionSetName = "Default",
-    .actionSetName = "default"
-  };
-
-  XRG(xrCreateActionSet(state.instance, &actionSetInfo, &state.actionSet), "xrCreateActionSet", fail);
-
-  // Subaction paths, for filtering actions by device
-  XRG(xrStringToPath(state.instance, "/user/hand/left", &state.actionFilters[DEVICE_HAND_LEFT]), "xrStringToPath", fail);
-  XRG(xrStringToPath(state.instance, "/user/hand/right", &state.actionFilters[DEVICE_HAND_RIGHT]), "xrStringToPath", fail);
-
-  state.actionFilters[DEVICE_HAND_LEFT_GRIP] = state.actionFilters[DEVICE_HAND_LEFT];
-  state.actionFilters[DEVICE_HAND_LEFT_POINT] = state.actionFilters[DEVICE_HAND_LEFT];
-  state.actionFilters[DEVICE_HAND_LEFT_PINCH] = state.actionFilters[DEVICE_HAND_LEFT];
-  state.actionFilters[DEVICE_HAND_LEFT_POKE] = state.actionFilters[DEVICE_HAND_LEFT];
-  state.actionFilters[DEVICE_HAND_LEFT_PALM] = state.actionFilters[DEVICE_HAND_LEFT];
-  state.actionFilters[DEVICE_HAND_RIGHT_GRIP] = state.actionFilters[DEVICE_HAND_RIGHT];
-  state.actionFilters[DEVICE_HAND_RIGHT_POINT] = state.actionFilters[DEVICE_HAND_RIGHT];
-  state.actionFilters[DEVICE_HAND_RIGHT_PINCH] = state.actionFilters[DEVICE_HAND_RIGHT];
-  state.actionFilters[DEVICE_HAND_RIGHT_POKE] = state.actionFilters[DEVICE_HAND_RIGHT];
-  state.actionFilters[DEVICE_HAND_RIGHT_PALM] = state.actionFilters[DEVICE_HAND_RIGHT];
-
-  if (state.extensions.viveTrackers) {
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/left_elbow", &state.actionFilters[DEVICE_ELBOW_LEFT]), "xrStringToPath", fail);
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/right_elbow", &state.actionFilters[DEVICE_ELBOW_RIGHT]), "xrStringToPath", fail);
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/left_shoulder", &state.actionFilters[DEVICE_SHOULDER_LEFT]), "xrStringToPath", fail);
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/right_shoulder", &state.actionFilters[DEVICE_SHOULDER_RIGHT]), "xrStringToPath", fail);
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/chest", &state.actionFilters[DEVICE_CHEST]), "xrStringToPath", fail);
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/waist", &state.actionFilters[DEVICE_WAIST]), "xrStringToPath", fail);
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/left_knee", &state.actionFilters[DEVICE_KNEE_LEFT]), "xrStringToPath", fail);
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/right_knee", &state.actionFilters[DEVICE_KNEE_RIGHT]), "xrStringToPath", fail);
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/left_foot", &state.actionFilters[DEVICE_FOOT_LEFT]), "xrStringToPath", fail);
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/right_foot", &state.actionFilters[DEVICE_FOOT_RIGHT]), "xrStringToPath", fail);
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/camera", &state.actionFilters[DEVICE_CAMERA]), "xrStringToPath", fail);
-    XRG(xrStringToPath(state.instance, "/user/vive_tracker_htcx/role/keyboard", &state.actionFilters[DEVICE_KEYBOARD]), "xrStringToPath", fail);
-  }
-
-  XrPath hands[] = {
-    state.actionFilters[DEVICE_HAND_LEFT],
-    state.actionFilters[DEVICE_HAND_RIGHT]
-  };
-
-  XrPath trackers[] = {
-    state.actionFilters[DEVICE_ELBOW_LEFT],
-    state.actionFilters[DEVICE_ELBOW_RIGHT],
-    state.actionFilters[DEVICE_SHOULDER_LEFT],
-    state.actionFilters[DEVICE_SHOULDER_RIGHT],
-    state.actionFilters[DEVICE_CHEST],
-    state.actionFilters[DEVICE_WAIST],
-    state.actionFilters[DEVICE_KNEE_LEFT],
-    state.actionFilters[DEVICE_KNEE_RIGHT],
-    state.actionFilters[DEVICE_FOOT_LEFT],
-    state.actionFilters[DEVICE_FOOT_RIGHT],
-    state.actionFilters[DEVICE_CAMERA],
-    state.actionFilters[DEVICE_KEYBOARD]
-  };
-
-  XrActionCreateInfo actionInfo[] = {
-    { 0 },
-    { 0, NULL, "grip_pose",        XR_ACTION_TYPE_POSE_INPUT,       2, hands, "Grip Pose" },
-    { 0, NULL, "pointer_pose",     XR_ACTION_TYPE_POSE_INPUT,       2, hands, "Pointer Pose" },
-    { 0, NULL, "pinch_pose",       XR_ACTION_TYPE_POSE_INPUT,       2, hands, "Pinch Pose" },
-    { 0, NULL, "poke_pose",        XR_ACTION_TYPE_POSE_INPUT,       2, hands, "Poke Pose" },
-    { 0, NULL, "palm_pose",        XR_ACTION_TYPE_POSE_INPUT,       2, hands, "Palm Pose" },
-    { 0, NULL, "tracker_pose",     XR_ACTION_TYPE_POSE_INPUT,       12, trackers, "Tracker Pose" },
-    { 0, NULL, "stylus_pose",      XR_ACTION_TYPE_POSE_INPUT,       0, NULL, "Stylus Pose" },
-    { 0, NULL, "gaze_pose",        XR_ACTION_TYPE_POSE_INPUT,       0, NULL, "Gaze Pose" },
-    { 0, NULL, "trigger_down",     XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Trigger Down" },
-    { 0, NULL, "trigger_touch",    XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Trigger Touch" },
-    { 0, NULL, "trigger_axis" ,    XR_ACTION_TYPE_FLOAT_INPUT,      2, hands, "Trigger Axis" },
-    { 0, NULL, "trackpad_down" ,   XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Trackpad Down" },
-    { 0, NULL, "trackpad_touch",   XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Trackpad Touch" },
-    { 0, NULL, "trackpad_axis",    XR_ACTION_TYPE_VECTOR2F_INPUT,   2, hands, "Trackpad Axis" },
-    { 0, NULL, "thumbstick_down",  XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Thumbstick Down" },
-    { 0, NULL, "thumbstick_touch", XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Thumbstick Touch" },
-    { 0, NULL, "thumbstick_axis" , XR_ACTION_TYPE_VECTOR2F_INPUT,   2, hands, "Thumbstick Axis" },
-    { 0, NULL, "thumbrest_touch",  XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Thumbrest Touch" },
-    { 0, NULL, "thumbrest_axis",   XR_ACTION_TYPE_FLOAT_INPUT  ,    2, hands, "Thumbrest Axis" },
-    { 0, NULL, "menu_down",        XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Menu Down" },
-    { 0, NULL, "menu_touch",       XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Menu Touch" },
-    { 0, NULL, "grip_down",        XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Grip Down" },
-    { 0, NULL, "grip_touch",       XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Grip Touch" },
-    { 0, NULL, "grip_axis",        XR_ACTION_TYPE_FLOAT_INPUT,      2, hands, "Grip Axis" },
-    { 0, NULL, "a_down",           XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "A Down" },
-    { 0, NULL, "a_touch",          XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "A Touch" },
-    { 0, NULL, "b_down",           XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "B Down" },
-    { 0, NULL, "b_touch",          XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "B Touch" },
-    { 0, NULL, "x_down",           XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "X Down" },
-    { 0, NULL, "x_touch",          XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "X Touch" },
-    { 0, NULL, "y_down",           XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Y Down" },
-    { 0, NULL, "y_touch",          XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Y Touch" },
-    { 0, NULL, "nib_down",         XR_ACTION_TYPE_BOOLEAN_INPUT,    0, NULL, "Nib Down" },
-    { 0, NULL, "nib_force",        XR_ACTION_TYPE_FLOAT_INPUT,      0, NULL, "Nib Force" },
-    { 0, NULL, "vibrate",          XR_ACTION_TYPE_VIBRATION_OUTPUT, 2, hands, "Vibrate" },
-    { 0, NULL, "stylus_vibrate",   XR_ACTION_TYPE_VIBRATION_OUTPUT, 0, NULL, "Stylus Vibrate" }
-  };
-
-  static_assert(COUNTOF(actionInfo) == MAX_ACTIONS, "Unbalanced action table!");
-
-  if (!state.extensions.viveTrackers) {
-    actionInfo[ACTION_TRACKER_POSE].countSubactionPaths = 0;
-  }
-
-  if (!state.extensions.gaze) {
-    actionInfo[ACTION_GAZE_POSE].countSubactionPaths = 0;
-  }
-
-  for (uint32_t i = 0; i < MAX_ACTIONS; i++) {
-    if (i == ACTION_NONE) continue;
-    actionInfo[i].type = XR_TYPE_ACTION_CREATE_INFO;
-    XRG(xrCreateAction(state.actionSet, &actionInfo[i], &state.actions[i]), "xrCreateAction", fail);
-  }
-
-  enum {
-    PROFILE_SIMPLE,
-    PROFILE_VIVE,
-    PROFILE_TOUCH,
-    PROFILE_TOUCH_PRO,
-    PROFILE_GO,
-    PROFILE_INDEX,
-    PROFILE_WMR,
-    PROFILE_ML2,
-    PROFILE_PICO_NEO3,
-    PROFILE_PICO4,
-    PROFILE_TRACKER,
-    PROFILE_MX_INK,
-    PROFILE_GAZE,
-    PROFILE_HAND,
-    MAX_PROFILES
-  };
-
-  const char* interactionProfilePaths[] = {
-    [PROFILE_SIMPLE] = "/interaction_profiles/khr/simple_controller",
-    [PROFILE_VIVE] = "/interaction_profiles/htc/vive_controller",
-    [PROFILE_TOUCH] = "/interaction_profiles/oculus/touch_controller",
-    [PROFILE_TOUCH_PRO] = "/interaction_profiles/facebook/touch_controller_pro",
-    [PROFILE_GO] = "/interaction_profiles/oculus/go_controller",
-    [PROFILE_INDEX] = "/interaction_profiles/valve/index_controller",
-    [PROFILE_WMR] = "/interaction_profiles/microsoft/motion_controller",
-    [PROFILE_ML2] = "/interaction_profiles/ml/ml2_controller",
-    [PROFILE_PICO_NEO3] = "/interaction_profiles/bytedance/pico_neo3_controller",
-    [PROFILE_PICO4] = "/interaction_profiles/bytedance/pico4_controller",
-    [PROFILE_TRACKER] = "/interaction_profiles/htc/vive_tracker_htcx",
-    [PROFILE_MX_INK] = "/interaction_profiles/logitech/mx_ink_stylus_logitech",
-    [PROFILE_GAZE] = "/interaction_profiles/ext/eye_gaze_interaction",
-    [PROFILE_HAND] = "/interaction_profiles/ext/hand_interaction_ext"
-  };
-
-  typedef struct {
-    int action;
-    const char* path;
-  } Binding;
-
-  Binding* bindings[] = {
-    [PROFILE_SIMPLE] = (Binding[]) {
-      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
-      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/select/click" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/select/click" },
-      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
-      { ACTION_MENU_DOWN, "/user/hand/right/input/menu/click" },
-      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
-      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
-      { 0, NULL }
-    },
-    [PROFILE_VIVE] = (Binding[]) {
-      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
-      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/click" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/click" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
-      { ACTION_TRACKPAD_DOWN, "/user/hand/left/input/trackpad/click" },
-      { ACTION_TRACKPAD_DOWN, "/user/hand/right/input/trackpad/click" },
-      { ACTION_TRACKPAD_TOUCH, "/user/hand/left/input/trackpad/touch" },
-      { ACTION_TRACKPAD_TOUCH, "/user/hand/right/input/trackpad/touch" },
-      { ACTION_TRACKPAD_AXIS, "/user/hand/left/input/trackpad" },
-      { ACTION_TRACKPAD_AXIS, "/user/hand/right/input/trackpad" },
-      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
-      { ACTION_MENU_DOWN, "/user/hand/right/input/menu/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/click" },
-      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
-      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
-      { 0, NULL }
-    },
-    [PROFILE_TOUCH] = (Binding[]) {
-      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
-      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/value" },
-      { ACTION_TRIGGER_TOUCH, "/user/hand/left/input/trigger/touch" },
-      { ACTION_TRIGGER_TOUCH, "/user/hand/right/input/trigger/touch" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_TOUCH, "/user/hand/left/input/thumbstick/touch" },
-      { ACTION_THUMBSTICK_TOUCH, "/user/hand/right/input/thumbstick/touch" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
-      { ACTION_THUMBREST_TOUCH, "/user/hand/left/input/thumbrest/touch" },
-      { ACTION_THUMBREST_TOUCH, "/user/hand/right/input/thumbrest/touch" },
-      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
-      { ACTION_MENU_DOWN, "/user/hand/right/input/system/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/value" },
-      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/value" },
-      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/value" },
-      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/value" },
-      { ACTION_A_DOWN, "/user/hand/right/input/a/click" },
-      { ACTION_A_TOUCH, "/user/hand/right/input/a/touch" },
-      { ACTION_B_DOWN, "/user/hand/right/input/b/click" },
-      { ACTION_B_TOUCH, "/user/hand/right/input/b/touch" },
-      { ACTION_X_DOWN, "/user/hand/left/input/x/click" },
-      { ACTION_X_TOUCH, "/user/hand/left/input/x/touch" },
-      { ACTION_Y_DOWN, "/user/hand/left/input/y/click" },
-      { ACTION_Y_TOUCH, "/user/hand/left/input/y/touch" },
-      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
-      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
-      { 0, NULL }
-    },
-    [PROFILE_TOUCH_PRO] = (Binding[]) {
-      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
-      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/value" },
-      { ACTION_TRIGGER_TOUCH, "/user/hand/left/input/trigger/touch" },
-      { ACTION_TRIGGER_TOUCH, "/user/hand/right/input/trigger/touch" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_TOUCH, "/user/hand/left/input/thumbstick/touch" },
-      { ACTION_THUMBSTICK_TOUCH, "/user/hand/right/input/thumbstick/touch" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
-      { ACTION_THUMBREST_TOUCH, "/user/hand/left/input/thumbrest/touch" },
-      { ACTION_THUMBREST_TOUCH, "/user/hand/right/input/thumbrest/touch" },
-      { ACTION_THUMBREST_AXIS, "/user/hand/left/input/thumbrest/force" },
-      { ACTION_THUMBREST_AXIS, "/user/hand/right/input/thumbrest/force" },
-      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
-      { ACTION_MENU_DOWN, "/user/hand/right/input/system/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/value" },
-      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/value" },
-      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/value" },
-      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/value" },
-      { ACTION_A_DOWN, "/user/hand/right/input/a/click" },
-      { ACTION_A_TOUCH, "/user/hand/right/input/a/touch" },
-      { ACTION_B_DOWN, "/user/hand/right/input/b/click" },
-      { ACTION_B_TOUCH, "/user/hand/right/input/b/touch" },
-      { ACTION_X_DOWN, "/user/hand/left/input/x/click" },
-      { ACTION_X_TOUCH, "/user/hand/left/input/x/touch" },
-      { ACTION_Y_DOWN, "/user/hand/left/input/y/click" },
-      { ACTION_Y_TOUCH, "/user/hand/left/input/y/touch" },
-      { ACTION_NIB_DOWN, "/user/hand/left/input/stylus_fb/force" },
-      { ACTION_NIB_DOWN, "/user/hand/right/input/stylus_fb/force" },
-      { ACTION_NIB_FORCE, "/user/hand/left/input/stylus_fb/force" },
-      { ACTION_NIB_FORCE, "/user/hand/right/input/stylus_fb/force" },
-      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
-      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
-      { 0, NULL }
-    },
-    [PROFILE_GO] = (Binding[]) {
-      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
-      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/click" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/click" },
-      { ACTION_TRACKPAD_DOWN, "/user/hand/left/input/trackpad/click" },
-      { ACTION_TRACKPAD_DOWN, "/user/hand/right/input/trackpad/click" },
-      { ACTION_TRACKPAD_TOUCH, "/user/hand/left/input/trackpad/touch" },
-      { ACTION_TRACKPAD_TOUCH, "/user/hand/right/input/trackpad/touch" },
-      { ACTION_TRACKPAD_AXIS, "/user/hand/left/input/trackpad" },
-      { ACTION_TRACKPAD_AXIS, "/user/hand/right/input/trackpad" },
-      { 0, NULL }
-    },
-    [PROFILE_INDEX] = (Binding[]) {
-      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
-      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/click" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/click" },
-      { ACTION_TRIGGER_TOUCH, "/user/hand/left/input/trigger/touch" },
-      { ACTION_TRIGGER_TOUCH, "/user/hand/right/input/trigger/touch" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
-      { ACTION_TRACKPAD_DOWN, "/user/hand/left/input/trackpad/force" },
-      { ACTION_TRACKPAD_DOWN, "/user/hand/right/input/trackpad/force" },
-      { ACTION_TRACKPAD_TOUCH, "/user/hand/left/input/trackpad/touch" },
-      { ACTION_TRACKPAD_TOUCH, "/user/hand/right/input/trackpad/touch" },
-      { ACTION_TRACKPAD_AXIS, "/user/hand/left/input/trackpad" },
-      { ACTION_TRACKPAD_AXIS, "/user/hand/right/input/trackpad" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_TOUCH, "/user/hand/left/input/thumbstick/touch" },
-      { ACTION_THUMBSTICK_TOUCH, "/user/hand/right/input/thumbstick/touch" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
-      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/force" },
-      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/force" },
-      { ACTION_GRIP_TOUCH, "/user/hand/left/input/squeeze/value" },
-      { ACTION_GRIP_TOUCH, "/user/hand/right/input/squeeze/value" },
-      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/force" },
-      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/force" },
-      { ACTION_A_DOWN, "/user/hand/left/input/a/click" },
-      { ACTION_A_DOWN, "/user/hand/right/input/a/click" },
-      { ACTION_A_TOUCH, "/user/hand/left/input/a/touch" },
-      { ACTION_A_TOUCH, "/user/hand/right/input/a/touch" },
-      { ACTION_B_DOWN, "/user/hand/left/input/b/click" },
-      { ACTION_B_DOWN, "/user/hand/right/input/b/click" },
-      { ACTION_B_TOUCH, "/user/hand/left/input/b/touch" },
-      { ACTION_B_TOUCH, "/user/hand/right/input/b/touch" },
-      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
-      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
-      { 0, NULL }
-    },
-    [PROFILE_WMR] = (Binding[]) {
-      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
-      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/value" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
-      { ACTION_TRACKPAD_DOWN, "/user/hand/left/input/trackpad/click" },
-      { ACTION_TRACKPAD_DOWN, "/user/hand/right/input/trackpad/click" },
-      { ACTION_TRACKPAD_TOUCH, "/user/hand/left/input/trackpad/touch" },
-      { ACTION_TRACKPAD_TOUCH, "/user/hand/right/input/trackpad/touch" },
-      { ACTION_TRACKPAD_AXIS, "/user/hand/left/input/trackpad" },
-      { ACTION_TRACKPAD_AXIS, "/user/hand/right/input/trackpad" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
-      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
-      { ACTION_MENU_DOWN, "/user/hand/right/input/menu/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/click" },
-      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/click" },
-      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/click" },
-      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
-      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
-      { 0, NULL }
-    },
-    [PROFILE_ML2] = (Binding[]) {
-      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
-      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/click" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/click" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
-      { ACTION_TRACKPAD_DOWN, "/user/hand/left/input/trackpad/click" },
-      { ACTION_TRACKPAD_DOWN, "/user/hand/right/input/trackpad/click" },
-      { ACTION_TRACKPAD_TOUCH, "/user/hand/left/input/trackpad/touch" },
-      { ACTION_TRACKPAD_TOUCH, "/user/hand/right/input/trackpad/touch" },
-      { ACTION_TRACKPAD_AXIS, "/user/hand/left/input/trackpad" },
-      { ACTION_TRACKPAD_AXIS, "/user/hand/right/input/trackpad" },
-      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
-      { ACTION_MENU_DOWN, "/user/hand/right/input/menu/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/left/input/shoulder/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/right/input/shoulder/click" },
-      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
-      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
-      { 0, NULL }
-    },
-    [PROFILE_PICO_NEO3] = (Binding[]) {
-      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
-      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/click" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/click" },
-      { ACTION_TRIGGER_TOUCH, "/user/hand/left/input/trigger/touch" },
-      { ACTION_TRIGGER_TOUCH, "/user/hand/right/input/trigger/touch" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_TOUCH, "/user/hand/left/input/thumbstick/touch" },
-      { ACTION_THUMBSTICK_TOUCH, "/user/hand/right/input/thumbstick/touch" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
-      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
-      { ACTION_MENU_DOWN, "/user/hand/right/input/menu/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/click" },
-      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/value" },
-      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/value" },
-      { ACTION_A_DOWN, "/user/hand/right/input/a/click" },
-      { ACTION_A_TOUCH, "/user/hand/right/input/a/touch" },
-      { ACTION_B_DOWN, "/user/hand/right/input/b/click" },
-      { ACTION_B_TOUCH, "/user/hand/right/input/b/touch" },
-      { ACTION_X_DOWN, "/user/hand/left/input/x/click" },
-      { ACTION_X_TOUCH, "/user/hand/left/input/x/touch" },
-      { ACTION_Y_DOWN, "/user/hand/left/input/y/click" },
-      { ACTION_Y_TOUCH, "/user/hand/left/input/y/touch" },
-      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
-      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
-      { 0, NULL }
-    },
-    [PROFILE_PICO4] = (Binding[]) {
-      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
-      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/value" },
-      { ACTION_TRIGGER_TOUCH, "/user/hand/left/input/trigger/touch" },
-      { ACTION_TRIGGER_TOUCH, "/user/hand/right/input/trigger/touch" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
-      { ACTION_THUMBSTICK_TOUCH, "/user/hand/left/input/thumbstick/touch" },
-      { ACTION_THUMBSTICK_TOUCH, "/user/hand/right/input/thumbstick/touch" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
-      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
-      { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
-      { ACTION_MENU_DOWN, "/user/hand/right/input/system/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/click" },
-      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/click" },
-      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/value" },
-      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/value" },
-      { ACTION_A_DOWN, "/user/hand/right/input/a/click" },
-      { ACTION_A_TOUCH, "/user/hand/right/input/a/touch" },
-      { ACTION_B_DOWN, "/user/hand/right/input/b/click" },
-      { ACTION_B_TOUCH, "/user/hand/right/input/b/touch" },
-      { ACTION_X_DOWN, "/user/hand/left/input/x/click" },
-      { ACTION_X_TOUCH, "/user/hand/left/input/x/touch" },
-      { ACTION_Y_DOWN, "/user/hand/left/input/y/click" },
-      { ACTION_Y_TOUCH, "/user/hand/left/input/y/touch" },
-      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
-      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
-      { 0, NULL }
-    },
-    [PROFILE_TRACKER] = (Binding[]) {
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/left_elbow/input/grip/pose" },
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/right_elbow/input/grip/pose" },
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/left_shoulder/input/grip/pose" },
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/right_shoulder/input/grip/pose" },
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/chest/input/grip/pose" },
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/waist/input/grip/pose" },
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/left_knee/input/grip/pose" },
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/right_knee/input/grip/pose" },
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/left_foot/input/grip/pose" },
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/right_foot/input/grip/pose" },
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/camera/input/grip/pose" },
-      { ACTION_TRACKER_POSE, "/user/vive_tracker_htcx/role/keyboard/input/grip/pose" },
-      { 0, NULL }
-    },
-    [PROFILE_MX_INK] = (Binding[]) {
-      { ACTION_STYLUS_POSE, "/user/hand/left/input/tip_logitech/pose" },
-      { ACTION_STYLUS_POSE, "/user/hand/right/input/tip_logitech/pose" },
-      { ACTION_GRIP_DOWN, "/user/hand/left/input/cluster_middle_logitech/force" },
-      { ACTION_GRIP_DOWN, "/user/hand/right/input/cluster_middle_logitech/force" },
-      { ACTION_GRIP_AXIS, "/user/hand/left/input/cluster_middle_logitech/force" },
-      { ACTION_GRIP_AXIS, "/user/hand/right/input/cluster_middle_logitech/force" },
-      { ACTION_A_DOWN, "/user/hand/left/input/cluster_front_logitech/click" },
-      { ACTION_A_DOWN, "/user/hand/right/input/cluster_front_logitech/click" },
-      { ACTION_B_DOWN, "/user/hand/left/input/cluster_back_logitech/click" },
-      { ACTION_B_DOWN, "/user/hand/right/input/cluster_back_logitech/click" },
-      { ACTION_NIB_DOWN, "/user/hand/left/input/tip_logitech/force" },
-      { ACTION_NIB_DOWN, "/user/hand/right/input/tip_logitech/force" },
-      { ACTION_NIB_FORCE, "/user/hand/left/input/tip_logitech/force" },
-      { ACTION_NIB_FORCE, "/user/hand/right/input/tip_logitech/force" },
-      { ACTION_STYLUS_VIBRATE, "/user/hand/left/output/haptic" },
-      { ACTION_STYLUS_VIBRATE, "/user/hand/right/output/haptic" },
-      { 0, NULL }
-    },
-    [PROFILE_GAZE] = (Binding[]) {
-      { ACTION_GAZE_POSE, "/user/eyes_ext/input/gaze_ext/pose" },
-      { 0, NULL }
-    },
-    [PROFILE_HAND] = (Binding[]) {
-      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
-      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
-      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
-      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
-      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
-      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/pinch_ext/value" },
-      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/pinch_ext/value" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/pinch_ext/value" },
-      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/pinch_ext/value" },
-      { ACTION_GRIP_DOWN, "/user/hand/left/input/grasp_ext/value" },
-      { ACTION_GRIP_DOWN, "/user/hand/right/input/grasp_ext/value" },
-      { ACTION_GRIP_AXIS, "/user/hand/left/input/grasp_ext/value" },
-      { ACTION_GRIP_AXIS, "/user/hand/right/input/grasp_ext/value" },
-      { 0, NULL }
-    }
-  };
-
-  uint32_t bindingCount[MAX_PROFILES] = { 0 };
-
-  for (uint32_t i = 0; i < MAX_PROFILES; i++) {
-    for (uint32_t j = 0; bindings[i][j].path; j++) {
-      bindingCount[i]++;
-    }
-  }
-
-  // Don't suggest bindings for unsupported input profiles
-
-  if (!state.extensions.ml2Controller) {
-    bindingCount[PROFILE_ML2] = 0;
-  }
-
-  if (!state.extensions.picoController) {
-    bindingCount[PROFILE_PICO_NEO3] = 0;
-    bindingCount[PROFILE_PICO4] = 0;
-  }
-
-  if (!state.extensions.viveTrackers) {
-    bindingCount[PROFILE_TRACKER] = 0;
-  }
-
-  if (!state.extensions.mxInk) {
-    bindingCount[PROFILE_MX_INK] = 0;
-  }
-
-  if (!state.extensions.gaze) {
-    bindingCount[PROFILE_GAZE] = 0;
-  }
-
-  if (!state.extensions.handInteraction) {
-    bindingCount[PROFILE_HAND] = 0;
-  }
-
-  if (!state.extensions.touchPro) {
-    bindingCount[PROFILE_TOUCH_PRO] = 0;
-  }
-
-  // Remove bindings for unsupported extensions
-
-  #define REMOVE_BINDINGS(bindings, length, index, count)\
-    if (index < length - count) memmove(&bindings[index], &bindings[index + count], (length - index - count) * sizeof(Binding));
-
-  if (!state.extensions.handInteraction) {
-    for (uint32_t i = 0; i < MAX_PROFILES; i++) {
-      for (uint32_t j = 0; j < bindingCount[i]; j++) {
-        if (bindings[i][j].action == ACTION_PINCH_POSE || bindings[i][j].action == ACTION_POKE_POSE) {
-          REMOVE_BINDINGS(bindings[i], bindingCount[i], j, 2);
-          bindingCount[i] -= 2;
-          i--;
-          break;
-        }
-      }
-    }
-  }
-
-  if (!state.extensions.palmPose) {
-    for (uint32_t i = 0; i < MAX_PROFILES; i++) {
-      for (uint32_t j = 0; j < bindingCount[i]; j++) {
-        if (bindings[i][j].action == ACTION_PALM_POSE) {
-          REMOVE_BINDINGS(bindings[i], bindingCount[i], j, 2);
-          bindingCount[i] -= 2;
-          break;
-        }
-      }
-    }
-  }
-
-  XrPath path;
-  XrActionSuggestedBinding suggestedBindings[64];
-  for (uint32_t i = 0; i < MAX_PROFILES; i++) {
-    if (bindingCount[i] == 0) continue;
-
-    for (uint32_t j = 0; j < bindingCount[i]; j++) {
-      XRG(xrStringToPath(state.instance, bindings[i][j].path, &path), "xrStringToPath", fail);
-      suggestedBindings[j].action = state.actions[bindings[i][j].action];
-      suggestedBindings[j].binding = path;
-    }
-
-    XRG(xrStringToPath(state.instance, interactionProfilePaths[i], &path), "xrStringToPath", fail);
-
-    result = (xrSuggestInteractionProfileBindings(state.instance, &(XrInteractionProfileSuggestedBinding) {
-      .type = XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING,
-      .interactionProfile = path,
-      .countSuggestedBindings = bindingCount[i],
-      .suggestedBindings = suggestedBindings
-    }));
-
-    if (XR_FAILED(result)) {
-      lovrLog(LOG_WARN, "XR", "Failed to suggest input bindings for %s", interactionProfilePaths[i]);
-    }
-  }
-
-  state.frameState.type = XR_TYPE_FRAME_STATE;
-  return true;
-fail:
-  xrdestroy();
-  return false;
-}
-
-static void xrdestroy(void) {
+static void disconnect(void) {
   lovrHeadsetStop();
   if (state.actionSet) xrDestroyActionSet(state.actionSet);
   if (state.messenger) xrDestroyDebugUtilsMessengerEXT(state.messenger);
   if (state.instance) xrDestroyInstance(state.instance);
   state.actionSet = XR_NULL_HANDLE;
   state.messenger = XR_NULL_HANDLE;
+  state.system = XR_NULL_SYSTEM_ID;
   state.instance = XR_NULL_HANDLE;
 }
 

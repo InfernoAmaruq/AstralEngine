@@ -18,6 +18,7 @@ dev
 - Add support for Touch Pro controllers.
 - Add `Pass:setBlendState`.
 - Add `Pass:getViewRay`.
+- Add `lovr.headset.connect` and `t.headset.connect`.
 
 ### Change
 

@@ -1024,6 +1024,7 @@ bool gpu_surface_present(void) {
   }
 
   state.surface.imageIndex = ~0u;
+  state.frame++;
   return true;
 }
 

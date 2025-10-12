@@ -322,15 +322,13 @@ struct Readback {
   Readback* next;
   BufferView view;
   ReadbackType type;
+  bool complete;
   union {
     struct {
       Buffer* buffer;
       Blob* blob;
     };
-    struct {
-      Texture* texture;
-      Image* image;
-    };
+    Image* image;
     struct {
       TimingInfo* times;
       uint32_t count;
@@ -594,8 +592,7 @@ static struct {
   Sampler* defaultSamplers[2];
   Shader* defaultShaders[DEFAULT_SHADER_COUNT];
   gpu_vertex_format vertexFormats[VERTEX_FORMAT_COUNT];
-  Readback* oldestReadback;
-  Readback* newestReadback;
+  Readback* readbacks;
   MaterialBlock* materials;
   BufferAllocator bufferAllocators[4];
   PipelineJob* newPipelines;
@@ -620,7 +617,7 @@ static BufferView getBuffer(gpu_buffer_type type, uint32_t size, size_t align);
 static void recycleBlocks(BufferAllocator* allocator, BufferBlock* blocks);
 static void destroyBuffers(BufferAllocator* allocator);
 static int u64cmp(const void* a, const void* b);
-static void processReadbacks(void);
+static void pollReadbacks(void);
 static Layout* getLayout(gpu_slot* slots, uint32_t count);
 static gpu_bundle* getBundle(Layout* layout, gpu_binding* bindings, uint32_t count);
 static bool getBundles(Layout* layout, gpu_bundle** bundles, uint32_t count);
@@ -878,11 +875,10 @@ void lovrGraphicsDestroy(void) {
   // with module-level refcounting in the future.
   lovrHeadsetStop();
 #endif
-  Readback* readback = state.oldestReadback;
-  while (readback) {
-    Readback* next = readback->next;
-    lovrReadbackDestroy(readback);
-    readback = next;
+  while (state.readbacks) {
+    Readback* next = state.readbacks->next;
+    lovrReadbackDestroy(state.readbacks);
+    state.readbacks = next;
   }
   if (state.timestamps) gpu_tally_destroy(state.timestamps);
   lovrFree(state.timestamps);
@@ -1716,6 +1712,15 @@ static void syncAttachment(Texture* texture, bool depth, bool resolve, bool load
 }
 
 bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
+  // We might be submitting a command that copies GPU data to a readback, but there might be an
+  // older readback that references the same buffer.  We poll readbacks to avoid a situation where
+  // a submitted command overwrites buffer data that hasn't been copied to CPU memory yet.
+  // Also note that polling readbacks can cause another GPU submission, since the readback (and its
+  // buffer) gets released when it completes.  It's important to be careful when polling readbacks
+  // during a submit, because it can cause infinite loops, deadlocks, or other inconsistencies due
+  // to the nested submissions.
+  pollReadbacks();
+
   size_t stack = stackPush(&thread.stack);
 
   bool xrCanvas = false;
@@ -1995,7 +2000,6 @@ bool lovrGraphicsPresent(void) {
   state.waitTick = state.tick - 1;
 
   lovrProfileMarkFrame();
-  processReadbacks();
   return true;
 }
 
@@ -2005,7 +2009,7 @@ bool lovrGraphicsWait(void) {
   }
 
   lovrAssert(gpu_wait_idle(), "Failed to wait: %s", gpu_get_error());
-  processReadbacks();
+  pollReadbacks();
   return true;
 }
 
@@ -2201,7 +2205,9 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
 
 void lovrBufferDestroy(void* ref) {
   Buffer* buffer = ref;
-  lovrGraphicsSubmit(NULL, 0);
+  if (buffer->sync->lastTransferRead == state.tick || buffer->sync->lastTransferWrite == state.tick) {
+    lovrGraphicsSubmit(NULL, 0);
+  }
   gpu_buffer_destroy(buffer->gpu);
   lovrFree(buffer->sync);
   lovrFree(buffer);
@@ -2701,7 +2707,9 @@ void lovrTextureDestroy(void* ref) {
     if (texture->root == texture || texture->info.label != texture->root->info.label) {
       lovrFree((char*) texture->info.label);
     }
-    lovrGraphicsSubmit(NULL, 0);
+    if (texture->sync->lastTransferRead == state.tick || texture->sync->lastTransferWrite == state.tick) {
+      lovrGraphicsSubmit(NULL, 0);
+    }
     lovrRelease(texture->sampler, lovrSamplerDestroy);
     lovrRelease(texture->material, lovrMaterialDestroy);
     if (texture->root != texture) lovrRelease(texture->root, lovrTextureDestroy);
@@ -5652,10 +5660,10 @@ static Readback* lovrReadbackCreate(ReadbackType type) {
   readback->ref = 1;
   readback->tick = state.tick;
   readback->type = type;
-  if (!state.oldestReadback) state.oldestReadback = readback;
-  if (state.newestReadback) state.newestReadback->next = readback;
-  state.newestReadback = readback;
   lovrRetain(readback);
+  Readback** list = &state.readbacks;
+  while (*list) list = &(*list)->next;
+  *list = readback;
   return readback;
 }
 
@@ -5691,10 +5699,8 @@ Readback* lovrReadbackCreateTexture(Texture* texture, uint32_t offset[4], uint32
   Image* image = lovrImageCreateRaw(extent[0], extent[1], texture->info.format, texture->info.srgb);
   lovrAssert(image, "Failed to create image: %s", lovrGetError());
   Readback* readback = lovrReadbackCreate(READBACK_TEXTURE);
-  readback->texture = texture;
   readback->image = image;
   readback->view = view;
-  lovrRetain(texture);
   gpu_barrier barrier = syncTransfer(texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
   gpu_sync(state.stream, &barrier, 1);
   gpu_copy_texture_buffer(state.stream, texture->gpu, readback->view.buffer, offset, readback->view.offset, extent);
@@ -5717,7 +5723,6 @@ void lovrReadbackDestroy(void* ref) {
       lovrRelease(readback->blob, lovrBlobDestroy);
       break;
     case READBACK_TEXTURE:
-      lovrRelease(readback->texture, lovrTextureDestroy);
       lovrRelease(readback->image, lovrImageDestroy);
       break;
     case READBACK_TIMESTAMP:
@@ -5731,12 +5736,36 @@ void lovrReadbackDestroy(void* ref) {
   lovrFree(readback);
 }
 
-bool lovrReadbackIsComplete(Readback* readback) {
-  return gpu_is_complete(readback->tick);
+bool lovrReadbackPoll(Readback* readback) {
+  if (!readback->complete && gpu_is_complete(readback->tick)) {
+    switch (readback->type) {
+      case READBACK_BUFFER:
+        memcpy(readback->blob->data, readback->view.pointer, readback->view.extent);
+        break;
+      case READBACK_TEXTURE:;
+        size_t size = lovrImageGetLayerSize(readback->image, 0);
+        void* data = lovrImageGetLayerData(readback->image, 0, 0);
+        memcpy(data, readback->view.pointer, size);
+        break;
+      case READBACK_TIMESTAMP:;
+        uint32_t* timestamps = readback->view.pointer;
+        for (uint32_t i = 0; i < readback->count; i++) {
+          Pass* pass = readback->times[i].pass;
+          pass->stats.submitTime = readback->times[i].cpuTime;
+          pass->stats.gpuTime = (timestamps[2 * i + 1] - timestamps[2 * i + 0]) * state.limits.timestampPeriod / 1e9;
+        }
+        break;
+      default: break;
+    }
+
+    readback->complete = true;
+  }
+
+  return readback->complete;
 }
 
 bool lovrReadbackWait(Readback* readback) {
-  if (lovrReadbackIsComplete(readback)) {
+  if (lovrReadbackPoll(readback)) {
     return true;
   }
 
@@ -5750,12 +5779,13 @@ bool lovrReadbackWait(Readback* readback) {
     return lovrSetError("Failed to wait for readback: %s", gpu_get_error());
   }
 
-  processReadbacks();
+  lovrReadbackPoll(readback);
+
   return true;
 }
 
 void* lovrReadbackGetData(Readback* readback, DataField** format, uint32_t* count) {
-  if (!lovrReadbackIsComplete(readback)) return NULL;
+  if (!lovrReadbackPoll(readback)) return NULL;
 
   if (readback->type == READBACK_BUFFER && readback->buffer->info.format) {
     *format = readback->buffer->info.format;
@@ -5767,11 +5797,11 @@ void* lovrReadbackGetData(Readback* readback, DataField** format, uint32_t* coun
 }
 
 Blob* lovrReadbackGetBlob(Readback* readback) {
-  return lovrReadbackIsComplete(readback) ? readback->blob : NULL;
+  return lovrReadbackPoll(readback) ? readback->blob : NULL;
 }
 
 Image* lovrReadbackGetImage(Readback* readback) {
-  return lovrReadbackIsComplete(readback) ? readback->image : NULL;
+  return lovrReadbackPoll(readback) ? readback->image : NULL;
 }
 
 // Pass
@@ -8478,37 +8508,11 @@ static int u64cmp(const void* a, const void* b) {
   return (x > y) - (x < y);
 }
 
-static void processReadbacks(void) {
-  while (state.oldestReadback && gpu_is_complete(state.oldestReadback->tick)) {
-    Readback* readback = state.oldestReadback;
-
-    switch (readback->type) {
-      case READBACK_BUFFER:
-        memcpy(readback->blob->data, readback->view.pointer, readback->view.extent);
-        break;
-      case READBACK_TEXTURE:;
-        size_t size = lovrImageGetLayerSize(readback->image, 0);
-        void* data = lovrImageGetLayerData(readback->image, 0, 0);
-        memcpy(data, readback->view.pointer, size);
-        break;
-      case READBACK_TIMESTAMP:;
-        uint32_t* timestamps = readback->view.pointer;
-        for (uint32_t i = 0; i < readback->count; i++) {
-          Pass* pass = readback->times[i].pass;
-          pass->stats.submitTime = readback->times[i].cpuTime;
-          pass->stats.gpuTime = (timestamps[2 * i + 1] - timestamps[2 * i + 0]) * state.limits.timestampPeriod / 1e9;
-        }
-        break;
-      default: break;
-    }
-
-    Readback* next = readback->next;
+static void pollReadbacks(void) {
+  while (state.readbacks && lovrReadbackPoll(state.readbacks)) {
+    Readback* readback = state.readbacks;
+    state.readbacks = readback->next;
     lovrRelease(readback, lovrReadbackDestroy);
-    state.oldestReadback = next;
-  }
-
-  if (!state.oldestReadback) {
-    state.newestReadback = NULL;
   }
 }
 

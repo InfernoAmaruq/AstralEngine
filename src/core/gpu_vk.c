@@ -3410,7 +3410,7 @@ static void expunge(uint64_t tick) {
 
 static uint64_t getFinishedTick(void) {
   uint64_t value;
-  VK(vkGetSemaphoreCounterValueKHR(state.device, state.semaphore, &value), "vkGetSemaphoreCounterValue") return false;
+  VK(vkGetSemaphoreCounterValueKHR(state.device, state.semaphore, &value), "vkGetSemaphoreCounterValue") return 0;
   return value;
 }
 

@@ -504,6 +504,7 @@ static int l_lovrBufferNewReadback(lua_State* L) {
   uint32_t offset = luax_optu32(L, 2, 0);
   uint32_t extent = luax_optu32(L, 3, ~0u);
   Readback* readback = lovrReadbackCreateBuffer(buffer, offset, extent);
+  luax_assert(L, readback);
   luax_pushtype(L, Readback, readback);
   lovrRelease(readback, lovrReadbackDestroy);
   return 1;

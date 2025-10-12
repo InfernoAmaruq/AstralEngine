@@ -503,7 +503,7 @@ Material* lovrModelGetMaterial(Model* model, uint32_t index);
 Readback* lovrReadbackCreateBuffer(Buffer* buffer, uint32_t offset, uint32_t extent);
 Readback* lovrReadbackCreateTexture(Texture* texture, uint32_t offset[4], uint32_t extent[3]);
 void lovrReadbackDestroy(void* ref);
-bool lovrReadbackIsComplete(Readback* readback);
+bool lovrReadbackPoll(Readback* readback);
 bool lovrReadbackWait(Readback* readback);
 void* lovrReadbackGetData(Readback* readback, DataField** format, uint32_t* count);
 struct Blob* lovrReadbackGetBlob(Readback* readback);

@@ -6,7 +6,7 @@
 
 static int l_lovrReadbackIsComplete(lua_State* L) {
   Readback* readback = luax_checktype(L, 1, Readback);
-  bool complete = lovrReadbackIsComplete(readback);
+  bool complete = lovrReadbackPoll(readback);
   lua_pushboolean(L, complete);
   return 1;
 }

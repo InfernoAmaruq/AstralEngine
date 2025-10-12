@@ -3149,7 +3149,7 @@ fail:
 void gpu_destroy(void) {
   if (state.device) vkDeviceWaitIdle(state.device);
   expunge(UINT64_MAX);
-  for (gpu_thread_state* t = state.threads; t; t = t->next) {
+  for (gpu_thread_state* t = state.threads, *next; t; t = next) {
     for (gpu_stream_pool* pool = t->streamPools, *next; pool; pool = next) {
       vkDestroyCommandPool(state.device, pool->handle, NULL);
       for (gpu_stream* stream = pool->head, *next; stream; stream = next) {
@@ -3159,7 +3159,8 @@ void gpu_destroy(void) {
       next = pool->next;
       state.config.fnFree(pool);
     }
-    t->initialized = false;
+    next = t->next;
+    memset(t, 0, sizeof(*t));
   }
   if (state.pipelineCache) vkDestroyPipelineCache(state.device, state.pipelineCache, NULL);
   for (uint32_t i = 0; i < FRAME_DEPTH; i++) {

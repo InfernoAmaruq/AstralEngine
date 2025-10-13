@@ -111,7 +111,16 @@ if(LOVR_USE_LUAU)
     list(FILTER defs EXCLUDE REGEX [[LUA.*_API]])
     set_target_properties(${target} PROPERTIES INTERFACE_COMPILE_DEFINITIONS "${defs}")
   endforeach()
-  set_target_properties(Luau.Require Luau.RequireNavigator PROPERTIES EXCLUDE_FROM_ALL 1)
+  set_target_properties(
+    Luau.Analysis
+    Luau.CLI.lib
+    Luau.CodeGen
+    Luau.Config
+    Luau.EqSat
+    Luau.Require
+    Luau.RequireNavigator
+    PROPERTIES EXCLUDE_FROM_ALL 1
+  )
   set(LOVR_LUA Luau.VM Luau.Compiler Luau.Ast)
   set_target_properties(${LOVR_LUA} PROPERTIES POSITION_INDEPENDENT_CODE 1)
 elseif(LOVR_USE_LUAJIT AND NOT EMSCRIPTEN)

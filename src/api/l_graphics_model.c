@@ -248,8 +248,7 @@ int luax_modelmeshiterator(lua_State* L) {
   } else {
     lua_pushinteger(L, next + 1);
     lua_pushinteger(L, meta->nodes[next].mesh + 1);
-    luax_pushtype(L, Mesh, lovrModelGetMesh(model, meta->nodes[next].mesh));
-    return 3;
+    return 2;
   }
 }
 

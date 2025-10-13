@@ -3127,30 +3127,33 @@ bool lovrGraphicsCompileShader(ShaderSource* stages, ShaderSource* outputs, uint
     spvOptions.generate_debug_info = true;
     spvOptions.emit_nonsemantic_shader_debug_info = true;
     spvOptions.emit_nonsemantic_shader_debug_source = true;
+
+    for (uint32_t i = 0; i < stageCount; i++) {
+      if (shaders[i]) {
+        glslang_program_add_source_text(program, stageMap[stages[i].stage], stages[i].code, stages[i].size);
+      }
+    }
   }
 
   for (uint32_t i = 0; i < stageCount; i++) {
     if (!shaders[i]) continue;
 
-    ShaderSource* source = &stages[i];
-
-    if (state.config.debug && state.features.shaderDebug) {
-      glslang_program_add_source_text(program, stageMap[source->stage], source->code, source->size);
-    }
-
-    glslang_program_SPIRV_generate_with_options(program, stageMap[source->stage], &spvOptions);
-
+    glslang_program_SPIRV_generate_with_options(program, stageMap[stages[i].stage], &spvOptions);
     void* words = glslang_program_SPIRV_get_ptr(program);
     size_t size = glslang_program_SPIRV_get_size(program) * 4;
 
     void* data = lovrMalloc(size);
     memcpy(data, words, size);
 
-    outputs[i].stage = source->stage;
+    outputs[i].stage = stages[i].stage;
     outputs[i].code = data;
     outputs[i].size = size;
+  }
 
-    glslang_shader_delete(shaders[i]);
+  for (uint32_t i = 0; i < stageCount; i++) {
+    if (shaders[i]) {
+      glslang_shader_delete(shaders[i]);
+    }
   }
 
   glslang_program_delete(program);

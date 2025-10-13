@@ -22,7 +22,7 @@ option(LOVR_ENABLE_UTF8 "Enable the utf8 module" ON)
 
 option(LOVR_USE_GLFW "Use GLFW for desktop windows" ON)
 option(LOVR_USE_LUAJIT "Use LuaJIT instead of Lua" ON)
-option(LOVR_USE_LUAU "Use Luau instead of Lua" ON)
+option(LOVR_USE_LUAU "Use Luau instead of Lua" OFF)
 option(LOVR_USE_GLSLANG "Use glslang to compile GLSL shaders" ON)
 option(LOVR_USE_VULKAN "Use the Vulkan renderer" ON)
 option(LOVR_USE_WEBGPU "Use the WebGPU renderer" OFF)

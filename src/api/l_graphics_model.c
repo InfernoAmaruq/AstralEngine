@@ -218,29 +218,6 @@ static int l_lovrModelResetBlendShapes(lua_State* L) {
   return 0;
 }
 
-static int l_lovrModelGetVertexBuffer(lua_State* L) {
-  Model* model = luax_checktype(L, 1, Model);
-  Buffer* buffer = lovrModelGetVertexBuffer(model);
-  luax_pushtype(L, Buffer, buffer);
-  return 1;
-}
-
-static int l_lovrModelGetIndexBuffer(lua_State* L) {
-  Model* model = luax_checktype(L, 1, Model);
-  Buffer* buffer = lovrModelGetIndexBuffer(model);
-  luax_pushtype(L, Buffer, buffer);
-  return 1;
-}
-
-static int l_lovrModelGetMesh(lua_State* L) {
-  Model* model = luax_checktype(L, 1, Model);
-  uint32_t index = luax_checku32(L, 2) - 1;
-  Mesh* mesh = lovrModelGetMesh(model, index);
-  luax_assert(L, mesh);
-  luax_pushtype(L, Mesh, mesh);
-  return 1;
-}
-
 static int l_lovrModelGetTexture(lua_State* L) {
   Model* model = luax_checktype(L, 1, Model);
   uint32_t index = luax_checku32(L, 2) - 1;
@@ -282,6 +259,31 @@ int l_lovrModelMeshes(lua_State* L) {
   lua_pushvalue(L, 1);
   lua_pushnil(L);
   return 3;
+}
+
+// Deprecated
+
+static int l_lovrModelGetVertexBuffer(lua_State* L) {
+  Model* model = luax_checktype(L, 1, Model);
+  Buffer* buffer = lovrModelGetVertexBuffer(model);
+  luax_pushtype(L, Buffer, buffer);
+  return 1;
+}
+
+static int l_lovrModelGetIndexBuffer(lua_State* L) {
+  Model* model = luax_checktype(L, 1, Model);
+  Buffer* buffer = lovrModelGetIndexBuffer(model);
+  luax_pushtype(L, Buffer, buffer);
+  return 1;
+}
+
+static int l_lovrModelGetMesh(lua_State* L) {
+  Model* model = luax_checktype(L, 1, Model);
+  uint32_t index = luax_checku32(L, 2) - 1;
+  Mesh* mesh = lovrModelGetMesh(model, index);
+  luax_assert(L, mesh);
+  luax_pushtype(L, Mesh, mesh);
+  return 1;
 }
 
 // Shared Model/ModelData methods
@@ -353,19 +355,21 @@ const luaL_Reg lovrModel[] = {
   { "getDimensions", l_lovrModelMetaGetDimensions },
   { "getCenter", l_lovrModelMetaGetCenter },
   { "getBoundingBox", l_lovrModelMetaGetBoundingBox },
-  { "getVertexBuffer", l_lovrModelGetVertexBuffer },
-  { "getIndexBuffer", l_lovrModelGetIndexBuffer },
   { "getMeshCount", l_lovrModelMetaGetMeshCount },
   { "getMeshPartCount", l_lovrModelMetaGetMeshPartCount },
   { "getMeshDrawMode", l_lovrModelMetaGetMeshDrawMode },
   { "getMeshDrawRange", l_lovrModelMetaGetMeshDrawRange },
   { "getMeshBaseVertex", l_lovrModelMetaGetMeshBaseVertex },
   { "getMeshMaterial", l_lovrModelMetaGetMeshMaterial },
-  { "getMesh", l_lovrModelGetMesh },
   { "getTextureCount", l_lovrModelMetaGetImageCount },
   { "getTexture", l_lovrModelGetTexture },
   { "getMaterialCount", l_lovrModelMetaGetMaterialCount },
   { "getMaterialName", l_lovrModelMetaGetMaterialName },
   { "getMaterial", l_lovrModelGetMaterial },
+
+  { "getVertexBuffer", l_lovrModelGetVertexBuffer }, // Deprecated
+  { "getIndexBuffer", l_lovrModelGetIndexBuffer }, // Deprecated
+  { "getMesh", l_lovrModelGetMesh }, // Deprecated
+
   { NULL, NULL }
 };

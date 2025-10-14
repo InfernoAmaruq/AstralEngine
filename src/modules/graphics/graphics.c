@@ -8121,6 +8121,51 @@ bool lovrPassDrawModel(Pass* pass, Model* model, float* transform, uint32_t inst
   return true;
 }
 
+bool lovrPassDrawPart(Pass* pass, Model* model, uint32_t meshIndex, uint32_t partIndex, float* transform, uint32_t instances) {
+  lovrCheck(meshIndex < model->meta.meshCount, "Model mesh index %d is out of range", meshIndex + 1);
+  lovrCheck(partIndex == ~0u || partIndex < model->meta.meshes[meshIndex].partCount, "Model part index %d is out of range", partIndex + 1);
+
+  if (!lovrModelAnimateVertices(model)) {
+    return false;
+  }
+
+  if (model->transformsDirty) {
+    updateModelTransforms(model, model->meta.rootNode, (float[]) MAT4_IDENTITY);
+    model->transformsDirty = false;
+  }
+
+  ModelMesh* mesh = &model->meta.meshes[meshIndex];
+
+  uint32_t partCount = 1;
+  if (partIndex == ~0u) {
+    partIndex = 0;
+    partCount = mesh->partCount;
+  }
+
+  for (uint32_t i = 0; i < partCount; i++) {
+    ModelPart* part = &model->meta.parts[partIndex + i];
+
+    DrawInfo draw = {
+      .mode = part->mode == DRAW_POINT_LIST ? DRAW_POINTS : part->mode == DRAW_LINE_LIST ? DRAW_LINES : DRAW_TRIANGLES,
+      .material = model->materials && part->material != ~0u ? model->materials[part->material] : NULL,
+      .transform = transform, // TODO fix skinned mesh transforms?
+      .bounds = part->bounds,
+      .vertex.buffer = model->vertexBuffer,
+      .index.buffer = mesh->indexCount > 0 ? model->indexBuffer : NULL,
+      .start = part->start,
+      .count = part->count,
+      .baseVertex = part->baseVertex,
+      .instances = instances
+    };
+
+    if (!lovrPassDraw(pass, &draw)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 bool lovrPassDrawTexture(Pass* pass, Texture* texture, float* transform) {
   uint32_t key[] = { SHAPE_PLANE, STYLE_FILL, 1, 1 };
   ShapeVertex* vertices;

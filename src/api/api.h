@@ -139,7 +139,7 @@ uint32_t _luax_checku32(lua_State* L, int index);
 uint32_t _luax_optu32(lua_State* L, int index, uint32_t fallback);
 void luax_readcolor(lua_State* L, int index, float color[4]);
 void luax_optcolor(lua_State* L, int index, float color[4]);
-int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCount, uint32_t** indices, uint32_t* indexCount, bool* shouldFree);
+int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCount, uint32_t** indices, uint32_t* indexCount);
 
 // Module helpers
 

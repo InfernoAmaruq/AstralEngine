@@ -200,27 +200,6 @@ bool lovrModelDataFinalize(ModelData* model) {
   return true;
 }
 
-static void countVertices(ModelData* model, uint32_t nodeIndex, uint32_t* vertexCount, uint32_t* indexCount) {
-  ModelNode* node = &model->meta.nodes[nodeIndex];
-
-  if (node->mesh != ~0u) {
-    ModelMesh* mesh = &model->meta.meshes[node->mesh];
-    ModelPart* part = mesh->parts;
-
-    model->triangleVertexCount += mesh->vertexCount;
-
-    for (uint32_t i = 0; i < mesh->partCount; i++, part++) {
-      if (part->mode == DRAW_TRIANGLE_LIST) {
-        model->triangleIndexCount += part->count;
-      }
-    }
-  }
-
-  for (uint32_t i = node->child; i != ~0u; i = model->meta.nodes[i].sibling) {
-    countVertices(model, i, vertexCount, indexCount);
-  }
-}
-
 static void collectVertices(ModelData* model, uint32_t nodeIndex, float** vertices, uint32_t** indices, uint32_t* baseIndex, float* parentTransform) {
   ModelNode* node = &model->meta.nodes[nodeIndex];
 
@@ -249,31 +228,33 @@ static void collectVertices(ModelData* model, uint32_t nodeIndex, float** vertic
       *vertices += 3;
     }
 
-    for (uint32_t i = 0; i < mesh->partCount; i++, part++) {
-      if (part->mode != DRAW_TRIANGLE_LIST) {
-        continue;
-      }
+    if (*indices) {
+      for (uint32_t i = 0; i < mesh->partCount; i++, part++) {
+        if (part->mode != DRAW_TRIANGLE_LIST) {
+          continue;
+        }
 
-      if (mesh->indexCount > 0) {
-        if (model->meta.indexSize == 4) {
-          uint32_t* indexData = (uint32_t*) model->indices + part->start;
-          for (uint32_t j = 0; j < part->count; j++) {
-            **indices = indexData[j] + *baseIndex;
-            *indices += 1;
-          }
-        } else if (model->meta.indexSize == 2) {
-          uint16_t* indexData = (uint16_t*) model->indices + part->start;
-          for (uint32_t j = 0; j < part->count; j++) {
-            **indices = (uint32_t) indexData[j] + *baseIndex;
-            *indices += 1;
+        if (mesh->indexCount > 0) {
+          if (model->meta.indexSize == 4) {
+            uint32_t* indexData = (uint32_t*) model->indices + part->start;
+            for (uint32_t j = 0; j < part->count; j++) {
+              **indices = indexData[j] + *baseIndex;
+              *indices += 1;
+            }
+          } else if (model->meta.indexSize == 2) {
+            uint16_t* indexData = (uint16_t*) model->indices + part->start;
+            for (uint32_t j = 0; j < part->count; j++) {
+              **indices = (uint32_t) indexData[j] + *baseIndex;
+              *indices += 1;
+            }
+          } else {
+            lovrUnreachable();
           }
         } else {
-          lovrUnreachable();
-        }
-      } else {
-        for (uint32_t j = 0; j < part->count; j++) {
-          **indices = *baseIndex + j;
-          *indices += 1;
+          for (uint32_t j = 0; j < part->count; j++) {
+            **indices = *baseIndex + j;
+            *indices += 1;
+          }
         }
       }
     }
@@ -287,45 +268,32 @@ static void collectVertices(ModelData* model, uint32_t nodeIndex, float** vertic
 }
 
 void lovrModelDataGetTriangles(ModelData* model, float** vertices, uint32_t** indices, uint32_t* vertexCount, uint32_t* indexCount) {
-  if (model->triangleVertexCount == 0) {
-    countVertices(model, model->meta.rootNode, vertexCount, indexCount);
-  }
+  ModelMetadata* meta = &model->meta;
 
-  if (vertices && !model->triangleVertices) {
-    uint32_t* tempIndices;
-    uint32_t baseIndex = 0;
-    model->triangleVertices = lovrMalloc(model->triangleVertexCount * 3 * sizeof(float));
-    model->triangleIndices = lovrMalloc(model->triangleIndexCount * sizeof(uint32_t));
-    *vertices = model->triangleVertices;
-    tempIndices = model->triangleIndices;
-    collectVertices(model, model->meta.rootNode, vertices, &tempIndices, &baseIndex, (float[16]) MAT4_IDENTITY);
-  }
+  *vertexCount = 0;
+  *indexCount = 0;
 
-  if (vertexCount) *vertexCount = model->triangleVertexCount;
-  if (indexCount) *indexCount = model->triangleIndexCount;
-
-  if (vertices) *vertices = model->triangleVertices;
-  if (indices) *indices = model->triangleIndices;
-}
-
-uint32_t lovrModelMetadataGetTotalVertexCount(ModelMetadata* meta) {
-  uint32_t count = 0;
   for (uint32_t i = 0; i < meta->nodeCount; i++) {
     if (meta->nodes[i].mesh != ~0u) {
-      count += meta->meshes[meta->nodes[i].mesh].vertexCount;
-    }
-  }
-  return count;
-}
+      ModelMesh* mesh = &meta->meshes[meta->nodes[i].mesh];
+      *vertexCount += mesh->vertexCount;
 
-uint32_t lovrModelMetadataGetTotalIndexCount(ModelMetadata* meta) {
-  uint32_t count = 0;
-  for (uint32_t i = 0; i < meta->nodeCount; i++) {
-    if (meta->nodes[i].mesh != ~0u) {
-      count += meta->meshes[meta->nodes[i].mesh].indexCount;
+      for (uint32_t j = 0; j < mesh->partCount; j++) {
+        if (mesh->parts[j].mode == DRAW_TRIANGLE_LIST) {
+          *indexCount += mesh->parts[j].count;
+        }
+      }
     }
   }
-  return count;
+
+  float* positions = lovrMalloc(*vertexCount * 3 * sizeof(float));
+  uint32_t* indexData = indices ? lovrMalloc(*indexCount * sizeof(uint32_t)) : NULL;
+
+  *vertices = positions;
+  if (indices) *indices = indexData;
+
+  uint32_t baseIndex = 0;
+  collectVertices(model, model->meta.rootNode, &positions, &indexData, &baseIndex, (float[16]) MAT4_IDENTITY);
 }
 
 static void boundingBoxHelper(ModelMetadata* meta, uint32_t nodeIndex, float* parentTransform) {

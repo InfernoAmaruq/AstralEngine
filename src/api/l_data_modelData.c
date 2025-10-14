@@ -103,25 +103,6 @@ static ModelPart* luax_checkmeshpart(lua_State* L, int index, ModelMetadata* met
   return &meta->meshes[mesh].parts[part];
 }
 
-static int luax_pushmodelvertex(lua_State* L, ModelVertex* vertex) {
-  lua_pushnumber(L, vertex->position.x);
-  lua_pushnumber(L, vertex->position.y);
-  lua_pushnumber(L, vertex->position.z);
-  lua_pushnumber(L, (float) ((vertex->normal >>  0) & 0x3ff) / 511.f);
-  lua_pushnumber(L, (float) ((vertex->normal >> 10) & 0x3ff) / 511.f);
-  lua_pushnumber(L, (float) ((vertex->normal >> 20) & 0x3ff) / 511.f);
-  lua_pushnumber(L, vertex->uv.u);
-  lua_pushnumber(L, vertex->uv.v);
-  lua_pushinteger(L, vertex->color.r);
-  lua_pushinteger(L, vertex->color.g);
-  lua_pushinteger(L, vertex->color.b);
-  lua_pushinteger(L, vertex->color.a);
-  lua_pushnumber(L, (float) ((vertex->tangent >>  0) & 0x3ff) / 511.f);
-  lua_pushnumber(L, (float) ((vertex->tangent >> 10) & 0x3ff) / 511.f);
-  lua_pushnumber(L, (float) ((vertex->tangent >> 20) & 0x3ff) / 511.f);
-  return 15;
-}
-
 int l_lovrModelMetaGetMetadata(lua_State* L) {
   ModelMetadata* meta = luax_checkmodelmeta(L, 1);
 
@@ -340,6 +321,83 @@ int l_lovrModelMetaGetMeshCount(lua_State* L) {
   return 1;
 }
 
+int l_lovrModelMetaGetMeshVertexCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  if (lua_isnoneornil(L, 2)) {
+    lua_pushinteger(L, meta->vertexCount);
+  } else {
+    uint32_t mesh = luax_checkmeshindex(L, 2, meta);
+    lua_pushinteger(L, meta->meshes[mesh].vertexCount);
+  }
+  return 1;
+}
+
+int l_lovrModelMetaGetMeshIndexCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  if (lua_isnoneornil(L, 2)) {
+    lua_pushinteger(L, meta->indexCount);
+  } else {
+    uint32_t mesh = luax_checkmeshindex(L, 2, meta);
+    lua_pushinteger(L, meta->meshes[mesh].indexCount);
+  }
+  return 1;
+}
+
+static int l_lovrModelDataGetMeshVertex(lua_State* L) {
+  ModelData* model = luax_checktype(L, 1, ModelData);
+
+  uint32_t index;
+  if (lua_isnil(L, 2)) {
+    index = luax_checku32(L, 3) - 1;
+    luax_check(L, index < model->meta.vertexCount, "Vertex %d is out of range", index + 1);
+  } else {
+    uint32_t mesh = luax_checkmeshindex(L, 2, &model->meta);
+    uint32_t index = luax_checku32(L, 3) - 1;
+    luax_check(L, index < model->meta.meshes[mesh].vertexCount, "Vertex %d is out of range", index + 1);
+    index += model->meta.meshes[mesh].vertexOffset;
+  }
+
+  ModelVertex* vertex = &model->vertices[index];
+  lua_pushnumber(L, vertex->position.x);
+  lua_pushnumber(L, vertex->position.y);
+  lua_pushnumber(L, vertex->position.z);
+  lua_pushnumber(L, (float) ((vertex->normal >>  0) & 0x3ff) / 511.f);
+  lua_pushnumber(L, (float) ((vertex->normal >> 10) & 0x3ff) / 511.f);
+  lua_pushnumber(L, (float) ((vertex->normal >> 20) & 0x3ff) / 511.f);
+  lua_pushnumber(L, vertex->uv.u);
+  lua_pushnumber(L, vertex->uv.v);
+  lua_pushinteger(L, vertex->color.r);
+  lua_pushinteger(L, vertex->color.g);
+  lua_pushinteger(L, vertex->color.b);
+  lua_pushinteger(L, vertex->color.a);
+  lua_pushnumber(L, (float) ((vertex->tangent >>  0) & 0x3ff) / 511.f);
+  lua_pushnumber(L, (float) ((vertex->tangent >> 10) & 0x3ff) / 511.f);
+  lua_pushnumber(L, (float) ((vertex->tangent >> 20) & 0x3ff) / 511.f);
+  return 15;
+}
+
+static int l_lovrModelDataGetMeshIndex(lua_State* L) {
+  ModelData* model = luax_checktype(L, 1, ModelData);
+
+  uint32_t index;
+  if (lua_isnoneornil(L, 2)) {
+    index = luax_checku32(L, 3) - 1;
+    luax_check(L, index < model->meta.indexCount, "Index %d is out of range", index + 1);
+  } else {
+    uint32_t mesh = luax_checkmeshindex(L, 2, &model->meta);
+    index = luax_checku32(L, 3) - 1;
+    luax_check(L, index < model->meta.indexCount, "Index %d is out of range", index + 1);
+  }
+
+  if (model->meta.indexSize == 4) {
+    lua_pushinteger(L, ((uint32_t*) model->indices)[index]);
+  } else {
+    lua_pushinteger(L, ((uint16_t*) model->indices)[index]);
+  }
+
+  return 1;
+}
+
 int l_lovrModelMetaGetMeshPartCount(lua_State* L) {
   ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   uint32_t mesh = luax_checkmeshindex(L, 2, meta);
@@ -373,222 +431,6 @@ int l_lovrModelMetaGetMeshMaterial(lua_State* L) {
   ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   ModelPart* part = luax_checkmeshpart(L, 2, meta);
   lua_pushinteger(L, part->material + 1);
-  return 1;
-}
-
-int l_lovrModelMetaGetMeshVertexCount(lua_State* L) {
-  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
-  if (lua_isnoneornil(L, 2)) {
-    lua_pushinteger(L, meta->vertexCount);
-  } else {
-    uint32_t mesh = luax_checkmeshindex(L, 2, meta);
-    lua_pushinteger(L, meta->meshes[mesh].vertexCount);
-  }
-  return 1;
-}
-
-int l_lovrModelMetaGetMeshIndexCount(lua_State* L) {
-  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
-  if (lua_isnoneornil(L, 2)) {
-    lua_pushinteger(L, meta->indexCount);
-  } else {
-    uint32_t mesh = luax_checkmeshindex(L, 2, meta);
-    lua_pushinteger(L, meta->meshes[mesh].indexCount);
-  }
-  return 1;
-}
-
-static int l_lovrModelDataGetMeshVertices(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-
-  uint32_t start, count;
-  if (lua_isnoneornil(L, 2)) {
-    start = 0;
-    count = model->meta.vertexCount;
-  } else {
-    uint32_t mesh = luax_checkmeshindex(L, 2, &model->meta);
-    start = model->meta.meshes[mesh].vertexOffset;
-    count = model->meta.meshes[mesh].vertexCount;
-  }
-
-  lua_createtable(L, (int) count, 0);
-  for (uint32_t i = 0; i < count; i++) {
-    lua_createtable(L, 15, 0);
-    luax_pushmodelvertex(L, &model->vertices[start + i]);
-    for (int j = 15; j >= 1; j--) {
-      lua_rawseti(L, -j - 1, j);
-    }
-    lua_rawseti(L, -2, (int) i + 1);
-  }
-
-  return 1;
-}
-
-static int l_lovrModelDataGetMeshIndices(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-
-  uint32_t start, count;
-  if (lua_isnoneornil(L, 2)) {
-    start = 0;
-    count = model->meta.indexCount;
-  } else {
-    uint32_t mesh = luax_checkmeshindex(L, 2, &model->meta);
-    start = model->meta.meshes[mesh].indexOffset;
-    count = model->meta.meshes[mesh].indexCount;
-  }
-
-  lua_createtable(L, (int) count, 0);
-  if (model->meta.indexSize == 4) {
-    uint32_t* indices = (uint32_t*) model->indices + start;
-    for (uint32_t i = 0; i < count; i++) {
-      lua_pushinteger(L, indices[i]);
-      lua_rawseti(L, -2, i + 1);
-    }
-  } else {
-    uint16_t* indices = (uint16_t*) model->indices + start;
-    for (uint32_t i = 0; i < count; i++) {
-      lua_pushinteger(L, indices[i]);
-      lua_rawseti(L, -2, i + 1);
-    }
-  }
-
-  return 1;
-}
-
-static int l_lovrModelDataGetMeshVertex(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-
-  uint32_t index;
-  if (lua_isnil(L, 2)) {
-    index = luax_checku32(L, 3) - 1;
-    luax_check(L, index < model->meta.vertexCount, "Vertex %d is out of range", index + 1);
-  } else {
-    uint32_t mesh = luax_checkmeshindex(L, 2, &model->meta);
-    uint32_t index = luax_checku32(L, 3) - 1;
-    luax_check(L, index < model->meta.meshes[mesh].vertexCount, "Vertex %d is out of range", index + 1);
-    index += model->meta.meshes[mesh].vertexOffset;
-  }
-
-  return luax_pushmodelvertex(L, &model->vertices[index]);
-}
-
-static int l_lovrModelDataGetMeshIndex(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-
-  uint32_t index;
-  if (lua_isnoneornil(L, 2)) {
-    index = luax_checku32(L, 3) - 1;
-    luax_check(L, index < model->meta.indexCount, "Index %d is out of range", index + 1);
-  } else {
-    uint32_t mesh = luax_checkmeshindex(L, 2, &model->meta);
-    index = luax_checku32(L, 3) - 1;
-    luax_check(L, index < model->meta.indexCount, "Index %d is out of range", index + 1);
-  }
-
-  if (model->meta.indexSize == 4) {
-    lua_pushinteger(L, ((uint32_t*) model->indices)[index]);
-  } else {
-    lua_pushinteger(L, ((uint16_t*) model->indices)[index]);
-  }
-
-  return 1;
-}
-
-int l_lovrModelMetaGetVertexCount(lua_State* L) {
-  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
-  lua_pushinteger(L, lovrModelMetadataGetTotalVertexCount(meta));
-  return 1;
-}
-
-int l_lovrModelMetaGetIndexCount(lua_State* L) {
-  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
-  lua_pushinteger(L, lovrModelMetadataGetTotalIndexCount(meta));
-  return 1;
-}
-
-static int l_lovrModelDataGetTriangles(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-
-  if (lua_isnoneornil(L, 2)) {
-    float* vertices = NULL;
-    uint32_t* indices = NULL;
-    uint32_t vertexCount = 0;
-    uint32_t indexCount = 0;
-    lovrModelDataGetTriangles(model, &vertices, &indices, &vertexCount, &indexCount);
-
-    lua_createtable(L, vertexCount * 3, 0);
-    for (uint32_t i = 0; i < vertexCount * 3; i++) {
-      lua_pushnumber(L, vertices[i]);
-      lua_rawseti(L, -2, i + 1);
-    }
-
-    lua_createtable(L, indexCount, 0);
-    for (uint32_t i = 0; i < indexCount; i++) {
-      lua_pushinteger(L, indices[i] + 1);
-      lua_rawseti(L, -2, i + 1);
-    }
-  } else {
-    uint32_t meshIndex = luax_checku32(L, 2) - 1;
-    luax_check(L, meshIndex < model->meta.meshCount, "Invalid mesh index '%d'", meshIndex + 1);
-
-    ModelMesh* mesh = &model->meta.meshes[meshIndex];
-    ModelVertex* vertex = model->vertices + mesh->vertexOffset;
-
-    lua_createtable(L, mesh->vertexCount, 0);
-    for (uint32_t i = 0; i < mesh->vertexCount; i++, vertex++) {
-      lua_pushnumber(L, vertex->position.x);
-      lua_rawseti(L, -2, 3 * i + 1);
-
-      lua_pushnumber(L, vertex->position.y);
-      lua_rawseti(L, -2, 3 * i + 2);
-
-      lua_pushnumber(L, vertex->position.z);
-      lua_rawseti(L, -2, 3 * i + 3);
-    }
-
-    if (mesh->indexCount > 0) {
-      void* indices = model->indices;
-      uint32_t base = mesh->parts->baseVertex;
-      lua_createtable(L, mesh->indexCount, 0);
-
-      for (uint32_t i = 0; i < mesh->indexCount; i++) {
-        uint32_t index = model->meta.indexSize == 4 ? ((uint32_t*) indices)[i] : ((uint16_t*) indices)[i];
-        lua_pushinteger(L, index - base + 1);
-        lua_rawseti(L, -2, i + 1);
-      }
-    } else {
-      for (uint32_t i = 0; i < mesh->vertexCount; i++) {
-        lua_pushinteger(L, i + 1);
-        lua_rawseti(L, -2, i + 1);
-      }
-    }
-  }
-
-  return 2;
-}
-
-static int l_lovrModelDataGetTriangleCount(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-
-  if (lua_isnoneornil(L, 2)) {
-    uint32_t vertexCount, indexCount;
-    lovrModelDataGetTriangles(model, NULL, NULL, &vertexCount, &indexCount);
-    lua_pushinteger(L, indexCount / 3);
-  } else {
-    uint32_t meshIndex = luax_checku32(L, 2) - 1;
-    luax_check(L, meshIndex < model->meta.meshCount, "Invalid mesh index '%d'", meshIndex + 1);
-    ModelMesh* mesh = &model->meta.meshes[meshIndex];
-    uint32_t count = 0;
-
-    for (uint32_t i = 0; i < mesh->partCount; i++) {
-      if (mesh->parts[i].mode == DRAW_TRIANGLE_LIST) {
-        count += mesh->parts[i].count / 3;
-      }
-    }
-
-    lua_pushinteger(L, count);
-  }
-
   return 1;
 }
 
@@ -913,21 +755,15 @@ const luaL_Reg lovrModelData[] = {
   { "getNodeMesh", l_lovrModelMetaGetNodeMesh },
   { "getNodeSkin", l_lovrModelMetaGetNodeSkin },
   { "getMeshCount", l_lovrModelMetaGetMeshCount },
+  { "getMeshVertexCount", l_lovrModelMetaGetMeshVertexCount },
+  { "getMeshIndexCount", l_lovrModelMetaGetMeshIndexCount },
+  { "getMeshVertex", l_lovrModelDataGetMeshVertex },
+  { "getMeshIndex", l_lovrModelDataGetMeshIndex },
   { "getMeshPartCount", l_lovrModelMetaGetMeshPartCount },
   { "getMeshDrawMode", l_lovrModelMetaGetMeshDrawMode },
   { "getMeshDrawRange", l_lovrModelMetaGetMeshDrawRange },
   { "getMeshBaseVertex", l_lovrModelMetaGetMeshBaseVertex },
   { "getMeshMaterial", l_lovrModelMetaGetMeshMaterial },
-  { "getMeshVertexCount", l_lovrModelMetaGetMeshVertexCount },
-  { "getMeshIndexCount", l_lovrModelMetaGetMeshIndexCount },
-  { "getMeshVertices", l_lovrModelDataGetMeshVertices },
-  { "getMeshIndices", l_lovrModelDataGetMeshIndices },
-  { "getMeshVertex", l_lovrModelDataGetMeshVertex },
-  { "getMeshIndex", l_lovrModelDataGetMeshIndex },
-  { "getVertexCount", l_lovrModelMetaGetVertexCount },
-  { "getIndexCount", l_lovrModelMetaGetIndexCount },
-  { "getTriangles", l_lovrModelDataGetTriangles },
-  { "getTriangleCount", l_lovrModelDataGetTriangleCount },
   { "getWidth", l_lovrModelMetaGetWidth },
   { "getHeight", l_lovrModelMetaGetHeight },
   { "getDepth", l_lovrModelMetaGetDepth },

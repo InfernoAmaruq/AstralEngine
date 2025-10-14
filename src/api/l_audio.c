@@ -193,14 +193,11 @@ static int l_lovrAudioSetGeometry(lua_State* L) {
   float* vertices;
   uint32_t* indices;
   uint32_t vertexCount, indexCount;
-  bool shouldFree;
-  int index = luax_readmesh(L, 1, &vertices, &vertexCount, &indices, &indexCount, &shouldFree);
+  int index = luax_readmesh(L, 1, &vertices, &vertexCount, &indices, &indexCount);
   AudioMaterial material = luax_checkenum(L, index, AudioMaterial, "generic");
   bool success = lovrAudioSetGeometry(vertices, indices, vertexCount, indexCount, material);
-  if (shouldFree) {
-    lovrFree(vertices);
-    lovrFree(indices);
-  }
+  lovrFree(vertices);
+  lovrFree(indices);
   lua_pushboolean(L, success);
   return 1;
 }

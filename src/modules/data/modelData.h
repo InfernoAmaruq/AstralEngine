@@ -193,17 +193,11 @@ typedef struct ModelMetadata {
 typedef struct ModelData {
   uint32_t ref;
   ModelMetadata meta;
-
   ModelVertex* vertices;
   void* indices;
   SkinData* skinData;
   BlendData* blendData;
   struct Image** images;
-
-  uint32_t triangleVertexCount;
-  uint32_t triangleIndexCount;
-  float* triangleVertices;
-  uint32_t* triangleIndices;
 } ModelData;
 
 typedef void* ModelDataIO(const char* filename, size_t* bytesRead);
@@ -215,10 +209,8 @@ bool lovrModelDataInitStl(ModelData** model, struct Blob* blob, ModelDataIO* io)
 void lovrModelDataDestroy(void* ref);
 void lovrModelDataAllocate(ModelData* model);
 bool lovrModelDataFinalize(ModelData* model);
-void lovrModelDataGetTriangles(ModelData* data, float** vertices, uint32_t** indices, uint32_t* vertexCount, uint32_t* indexCount);
+void lovrModelDataGetTriangles(ModelData* model, float** vertices, uint32_t** indices, uint32_t* vertexCount, uint32_t* indexCount);
 
-uint32_t lovrModelMetadataGetTotalVertexCount(ModelMetadata* meta);
-uint32_t lovrModelMetadataGetTotalIndexCount(ModelMetadata* meta);
 void lovrModelMetadataGetBoundingBox(ModelMetadata* meta, float box[6]);
 void lovrModelMetadataGetMeshBoundingBox(ModelMetadata* meta, uint32_t index, float box[6]);
 uint32_t lovrModelMetadataNextNodeWithMesh(ModelMetadata* meta, uint32_t node);

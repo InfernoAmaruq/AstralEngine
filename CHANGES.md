@@ -19,6 +19,7 @@ dev
 - Add `Pass:setBlendState`.
 - Add `Pass:getViewRay`.
 - Add `lovr.headset.connect` and `t.headset.connect`.
+- Add support for creating 3D texture views.
 
 ### Change
 

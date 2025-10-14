@@ -686,12 +686,13 @@ bool gpu_texture_init(gpu_texture* texture, gpu_texture_info* info) {
 
 bool gpu_texture_init_view(gpu_texture* texture, gpu_texture_view_info* info) {
   if (texture != info->source) {
+    uint32_t layers = info->layerCount ? info->layerCount : (info->source->layers - info->layerIndex);
     texture->handle = info->source->handle;
     texture->memory = NULL;
     texture->imported = false;
     texture->layout = info->source->layout;
     texture->samples = info->source->samples;
-    texture->layers = info->layerCount ? info->layerCount : (info->source->layers - info->layerIndex);
+    texture->layers = info->type == GPU_TEXTURE_3D ? 0 : layers;
     texture->baseLevel = info->levelIndex;
     texture->format = info->source->format;
     texture->srgb = info->srgb;
@@ -740,7 +741,7 @@ bool gpu_texture_init_view(gpu_texture* texture, gpu_texture_view_info* info) {
       .baseMipLevel = info->levelIndex,
       .levelCount = info->levelCount ? info->levelCount : VK_REMAINING_MIP_LEVELS,
       .baseArrayLayer = info ? info->layerIndex : 0,
-      .layerCount = info->layerCount ? info->layerCount : VK_REMAINING_ARRAY_LAYERS
+      .layerCount = info->source->layers && info->layerCount ? info->layerCount : VK_REMAINING_ARRAY_LAYERS
     }
   };
 

@@ -2577,17 +2577,23 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
 Texture* lovrTextureCreateView(Texture* parent, const TextureViewInfo* info) {
   const TextureInfo* base = &parent->info;
   uint32_t maxLayers = base->type == TEXTURE_3D ? MAX(base->layers >> info->levelIndex, 1) : base->layers;
-  uint32_t layers = info->layerCount == ~0u ? base->layers - info->layerIndex : info->layerCount;
+  uint32_t layers = info->layerCount == ~0u ? maxLayers - info->layerIndex : info->layerCount;
   uint32_t levels = info->levelCount == ~0u ? base->mipmaps - info->levelIndex : info->levelCount;
 
-  lovrCheck(info->type != TEXTURE_3D, "Texture views can't be 3D textures");
   lovrCheck(layers > 0, "Texture view must have at least one layer");
   lovrCheck(levels > 0, "Texture view must have at least one mipmap");
-  lovrCheck(info->layerIndex + layers <= maxLayers, "Texture view layer range exceeds layer count of parent texture");
-  lovrCheck(info->levelIndex + levels <= base->mipmaps, "Texture view mipmap range exceeds mipmap count of parent texture");
+  lovrCheck(info->layerIndex < maxLayers, "Texture view layer range exceeds layer count of parent texture");
+  lovrCheck(layers <= maxLayers - info->layerIndex, "Texture view layer range exceeds layer count of parent texture");
+  lovrCheck(info->levelIndex < base->mipmaps, "Texture view mipmap range exceeds mipmap count of parent texture");
+  lovrCheck(levels <= base->mipmaps - info->levelIndex, "Texture view mipmap range exceeds mipmap count of parent texture");
   lovrCheck(layers == 1 || info->type != TEXTURE_2D, "2D textures can only have a single layer");
-  lovrCheck(levels == 1 || base->type != TEXTURE_3D, "Views of 3D textures can only have a single mipmap level");
+  lovrCheck(levels == 1 || base->type != TEXTURE_3D || info->type == TEXTURE_3D, "2D texture views of 3D textures can only have a single mipmap level");
+  lovrCheck(info->type != TEXTURE_CUBE || base->type != TEXTURE_3D, "Can not create a cubemap texture view from a 3D texture");
+  lovrCheck(base->samples == 1 || info->type != TEXTURE_CUBE, "Cubemap textures can not be multisampled");
+  lovrCheck(base->samples == 1 || info->type != TEXTURE_3D, "3D textures can not be multisampled");
   lovrCheck(layers % 6 == 0 || info->type != TEXTURE_CUBE, "Cubemap layer count must be a multiple of 6");
+  lovrCheck(info->type != TEXTURE_3D || base->type == TEXTURE_3D, "3D texture views can only be created from 3D textures");
+  lovrCheck(info->type != TEXTURE_3D || (info->layerIndex == 0 && layers == maxLayers), "3D texture views can not reference a subset of layers");
 
   Texture* texture = lovrCalloc(sizeof(Texture) + gpu_sizeof_texture());
   texture->ref = 1;

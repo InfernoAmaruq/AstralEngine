@@ -626,9 +626,9 @@ bool lovrHeadsetConnect(void) {
         break;
       }
     }
-
-    lovrAssertGoto(fail, i + 1 < COUNTOF(supportedViewConfigurations), "No supported view configuration available");
   }
+
+  lovrAssertGoto(fail, state.viewConfiguration, "No supported view configuration available");
 
   XrViewConfigurationView views[4] = {
     [0].type = XR_TYPE_VIEW_CONFIGURATION_VIEW,

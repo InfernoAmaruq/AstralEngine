@@ -99,6 +99,28 @@ static int l_lovrDataNewBlob(lua_State* L) {
   return 1;
 }
 
+static int l_lovrDataNewBlobView(lua_State* L) {
+  Blob* parent = luax_checktype(L, 1, Blob);
+  int ioffset = luaL_checknumber(L, 2);
+  luax_check(L, ioffset >= 0, "BlobView offset must be non-negative");
+  luax_check(L, ioffset < parent->size, "BlobView offset must be less than parent size");
+  size_t offset = (size_t) ioffset;
+  size_t size = 0;
+  if (lua_isnoneornil(L, 3)) {
+    size = parent->size - offset;
+  } else {
+    int isize = luaL_checknumber(L, 3);
+    luax_check(L, isize > 0, "BlobView size must be positive");
+    size = (size_t) isize;
+    luax_check(L, size <= parent->size - offset, "BlobView offset + size can't be greater then parent's size");
+  }
+  const char* name = luaL_optstring(L, 4, "");
+  Blob* blob = lovrBlobCreateView(parent, offset, size, name);
+  luax_pushtype(L, Blob, blob);
+  lovrRelease(blob, lovrBlobDestroy);
+  return 1;
+}
+
 static int l_lovrDataNewImage(lua_State* L) {
   Image* image = NULL;
   if (lua_type(L, 1) == LUA_TNUMBER) {
@@ -202,6 +224,7 @@ static int l_lovrDataNewSound(lua_State* L) {
 
 static const luaL_Reg lovrData[] = {
   { "newBlob", l_lovrDataNewBlob },
+  { "newBlobView", l_lovrDataNewBlobView },
   { "newImage", l_lovrDataNewImage },
   { "newModelData", l_lovrDataNewModelData },
   { "newRasterizer", l_lovrDataNewRasterizer },

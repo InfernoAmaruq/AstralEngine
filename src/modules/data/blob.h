@@ -8,7 +8,9 @@ typedef struct Blob {
   void* data;
   size_t size;
   char* name;
+  struct Blob* root;
 } Blob;
 
 Blob* lovrBlobCreate(void* data, size_t size, const char* name);
+Blob* lovrBlobCreateView(Blob* blob, size_t offset, size_t size, const char* name);
 void lovrBlobDestroy(void* ref);

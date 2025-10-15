@@ -111,8 +111,8 @@ static int l_lovrDataNewBlobView(lua_State* L) {
   } else {
     int isize = luaL_checknumber(L, 3);
     luax_check(L, isize > 0, "BlobView size must be positive");
-    luax_check(L, offset + isize <= parent->size, "BlobView offset + size can't be greater then parent's size");
     size = (size_t) isize;
+    luax_check(L, size <= parent->size - offset, "BlobView offset + size can't be greater then parent's size");
   }
   const char* name = luaL_optstring(L, 4, "");
   Blob* blob = lovrBlobCreateView(parent, offset, size, name);

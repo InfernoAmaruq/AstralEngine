@@ -3734,7 +3734,7 @@ static bool lovrSwapchainInit(Swapchain* swapchain, uint32_t width, uint32_t hei
 
   for (uint32_t i = 0; i < textureCount; i++, swapchain->textureCount++) {
     swapchain->textures[i] = lovrTextureCreate(&(TextureInfo) {
-      .type = cube ? TEXTURE_CUBE : (stereo ? TEXTURE_ARRAY : TEXTURE_2D),
+      .type = cube ? TEXTURE_CUBE : (stereo || view ? TEXTURE_ARRAY : TEXTURE_2D),
       .format = depth ? state.depthFormat : FORMAT_RGBA8,
       .srgb = !depth,
       .width = width,
@@ -3754,7 +3754,7 @@ static bool lovrSwapchainInit(Swapchain* swapchain, uint32_t width, uint32_t hei
 #ifdef LOVR_VK
     if (foveated) {
       swapchain->foveationTextures[i] = lovrTextureCreate(&(TextureInfo) {
-        .type = stereo ? TEXTURE_ARRAY : TEXTURE_2D,
+        .type = stereo || view ? TEXTURE_ARRAY : TEXTURE_2D,
         .format = FORMAT_RG8,
         .width = foveationImages[i].width,
         .height = foveationImages[i].height,

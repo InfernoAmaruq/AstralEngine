@@ -8083,9 +8083,9 @@ static bool drawNode(Pass* pass, Model* model, uint32_t index, uint32_t instance
         .bounds = part->bounds,
         .vertex.buffer = model->vertexBuffer,
         .index.buffer = mesh->indexCount > 0 ? model->indexBuffer : NULL,
-        .start = part->start,
+        .start = (mesh->indexCount > 0 ? mesh->indexOffset : mesh->vertexOffset) + part->start,
         .count = part->count,
-        .baseVertex = part->baseVertex,
+        .baseVertex = mesh->vertexOffset + part->baseVertex,
         .instances = instances
       };
 
@@ -8152,9 +8152,9 @@ bool lovrPassDrawPart(Pass* pass, Model* model, uint32_t meshIndex, uint32_t par
       .bounds = part->bounds,
       .vertex.buffer = model->vertexBuffer,
       .index.buffer = mesh->indexCount > 0 ? model->indexBuffer : NULL,
-      .start = part->start,
+      .start = (mesh->indexCount > 0 ? mesh->indexOffset : mesh->vertexOffset) + part->start,
       .count = part->count,
-      .baseVertex = part->baseVertex,
+      .baseVertex = mesh->indexOffset + part->baseVertex,
       .instances = instances
     };
 

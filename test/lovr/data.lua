@@ -103,4 +103,85 @@ group('data', function()
       expect({ image:getPixel(3, 3) }).to.equal({ 9, 8, 0, 1 })
     end)
   end)
+
+  group('ModelData', function()
+    local blob = lovr.data.newBlob([[{
+      "asset": { "version": "2.0" },
+      "scene": 0,
+      "scenes": [{ "nodes": [0] }],
+      "nodes": [{ "mesh": 0 }],
+      "meshes": [
+        {
+          "primitives": [{ "attributes": { "POSITION": 0 } }]
+        }
+      ],
+      "buffers": [
+        {
+          "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA",
+          "byteLength": 36
+        }
+      ],
+      "bufferViews": [
+        {
+          "buffer": 0,
+          "byteOffset": 0,
+          "byteLength": 36,
+          "target": 34962
+        }
+      ],
+      "accessors": [
+        {
+          "bufferView": 0,
+          "byteOffset": 0,
+          "componentType": 5126,
+          "count": 3,
+          "type": "VEC3",
+          "max": [1, 1, 0],
+          "min": [0, 0, 0]
+        }
+      ]
+    }]])
+
+    local model = lovr.data.newModelData(blob)
+
+    test('getMetadata', function()
+      expect(model:getMetadata()).to.equal(blob:getString())
+    end)
+
+    test('nodes', function()
+      expect(model:getRootNode()).to.equal(1)
+      expect(model:getNodeCount()).to.equal(1)
+      expect(model:getNodeName(1)).to.equal(nil)
+      expect(model:getNodeChild(1)).to.equal(nil)
+      expect(model:getNodeSibling(1)).to.equal(nil)
+      expect(model:getNodeParent(1)).to.equal(nil)
+      expect({ model:getNodeTransform(1) }).to.equal({ 0, 0, 0, 1, 1, 1, 0, 0, 0, 0 })
+      expect(model:getNodeMesh(1)).to.equal(1)
+      expect(model:getNodeSkin(1)).to.equal(nil)
+      expect(function() model:getNodeChild(2) end).to.fail()
+    end)
+
+    test('meshes', function()
+      expect(model:getMeshCount()).to.equal(1)
+      expect(model:getMeshBlendShapeCount(1)).to.equal(0)
+      expect(model:getMeshVertexCount(1)).to.equal(3)
+      expect(model:getMeshIndexCount(1)).to.equal(0)
+      expect({ model:getMeshVertex(1, 1) }).to.equal({ 0, 0, 0; 0, 0, 0; 0, 0; 255, 255, 255, 255; 0, 0, 0 })
+      expect({ model:getMeshVertex(1, 2) }).to.equal({ 1, 0, 0; 0, 0, 0; 0, 0; 255, 255, 255, 255; 0, 0, 0 })
+      expect({ model:getMeshVertex(1, 3) }).to.equal({ 0, 1, 0; 0, 0, 0; 0, 0; 255, 255, 255, 255; 0, 0, 0 })
+      expect(model:getMeshPartCount(1)).to.equal(1)
+      expect(model:getMeshDrawMode(1)).to.equal('triangles')
+      expect(model:getMeshDrawRange(1)).to.equal(1, 3)
+      expect(model:getMeshMaterial(1)).to.equal(nil)
+    end)
+
+    test('bounds', function()
+      expect(model:getWidth()).to.equal(1)
+      expect(model:getHeight()).to.equal(1)
+      expect(model:getDepth()).to.equal(0)
+      expect({ model:getDimensions() }).to.equal({ 1, 1, 0 })
+      expect({ model:getCenter() }).to.equal({ .5, .5, 0 })
+      expect({ model:getBoundingBox() }).to.equal({ 0, 1, 0, 1, 0, 0 })
+    end)
+  end)
 end)

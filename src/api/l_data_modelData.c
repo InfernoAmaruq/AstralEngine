@@ -446,7 +446,11 @@ int l_lovrModelMetaGetMeshDrawRange(lua_State* L) {
 int l_lovrModelMetaGetMeshMaterial(lua_State* L) {
   ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   ModelPart* part = luax_checkmeshpart(L, 2, meta);
-  lua_pushinteger(L, part->material + 1);
+  if (part->material == ~0u) {
+    lua_pushnil(L);
+  } else {
+    lua_pushinteger(L, part->material + 1);
+  }
   return 1;
 }
 

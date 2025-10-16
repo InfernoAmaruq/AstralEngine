@@ -153,10 +153,10 @@ void lovrModelDataAllocate(ModelData* model) {
   }
 
   meta->bounds[0] = FLT_MAX;
-  meta->bounds[1] = FLT_MAX;
+  meta->bounds[1] = -FLT_MAX;
   meta->bounds[2] = FLT_MAX;
   meta->bounds[3] = -FLT_MAX;
-  meta->bounds[4] = -FLT_MAX;
+  meta->bounds[4] = FLT_MAX;
   meta->bounds[5] = -FLT_MAX;
 }
 

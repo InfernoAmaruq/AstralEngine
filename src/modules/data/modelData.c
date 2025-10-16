@@ -103,7 +103,7 @@ void lovrModelDataAllocate(ModelData* model) {
   model->indices = meta->indexCount > 0 ? lovrMalloc(meta->indexCount * meta->indexSize) : NULL;
   model->skinData = meta->skinnedVertexCount > 0 ? lovrMalloc(meta->skinnedVertexCount * sizeof(SkinData)) : NULL;
   model->blendData = meta->blendedVertexCount > 0 ? lovrMalloc(meta->blendedVertexCount * sizeof(BlendData)) : NULL;
-  model->images = meta->imageCount > 0 ? lovrMalloc(meta->imageCount * sizeof(Image*)) : NULL;
+  model->images = meta->imageCount > 0 ? lovrCalloc(meta->imageCount * sizeof(Image*)) : NULL;
 
   for (uint32_t i = 0; i < meta->meshCount; i++) {
     meta->meshes[i].vertexOffset = ~0u;

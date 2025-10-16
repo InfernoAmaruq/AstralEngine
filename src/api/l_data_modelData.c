@@ -549,7 +549,7 @@ int l_lovrModelMetaGetMaterialCount(lua_State* L) {
 int l_lovrModelMetaGetMaterialName(lua_State* L) {
   ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   uint32_t index = luax_checku32(L, 2) - 1;
-  luax_check(L, index < meta->nodeCount, "Invalid material index '%d'", index + 1);
+  luax_check(L, index < meta->materialCount, "Invalid material index '%d'", index + 1);
   lua_pushstring(L, meta->materials[index].name);
   return 1;
 }
@@ -590,9 +590,9 @@ static int l_lovrModelDataGetMaterial(lua_State* L) {
   lua_setfield(L, -2, "uvShift");
 
   lua_createtable(L, 2, 0);
-  lua_pushnumber(L, material->uvShift[0]);
+  lua_pushnumber(L, material->uvScale[0]);
   lua_rawseti(L, -2, 1);
-  lua_pushnumber(L, material->uvShift[1]);
+  lua_pushnumber(L, material->uvScale[1]);
   lua_rawseti(L, -2, 2);
   lua_setfield(L, -2, "uvScale");
 
@@ -731,7 +731,7 @@ int l_lovrModelMetaGetSkinInverseBindMatrix(lua_State* L) {
   luax_check(L, index < meta->skinCount, "Invalid skin index '%d'", index + 1);
   ModelSkin* skin = &meta->skins[index];
   uint32_t joint = luax_checku32(L, 3) - 1;
-  luax_check(L, index < skin->jointCount, "Invalid joint index '%d'", joint + 1);
+  luax_check(L, joint < skin->jointCount, "Invalid joint index '%d'", joint + 1);
   if (!skin->inverseBindMatrices) return lua_pushnil(L), 1;
   float* m = skin->inverseBindMatrices + joint * 16;
   for (uint32_t i = 0; i < 16; i++) {

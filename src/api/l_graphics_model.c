@@ -310,7 +310,6 @@ int l_lovrModelMetaGetMeshCount(lua_State* L);
 int l_lovrModelMetaGetMeshPartCount(lua_State* L);
 int l_lovrModelMetaGetMeshDrawMode(lua_State* L);
 int l_lovrModelMetaGetMeshDrawRange(lua_State* L);
-int l_lovrModelMetaGetMeshBaseVertex(lua_State* L);
 int l_lovrModelMetaGetMeshMaterial(lua_State* L);
 int l_lovrModelMetaGetImageCount(lua_State* L);
 int l_lovrModelMetaGetMaterialCount(lua_State* L);
@@ -358,7 +357,6 @@ const luaL_Reg lovrModel[] = {
   { "getMeshPartCount", l_lovrModelMetaGetMeshPartCount },
   { "getMeshDrawMode", l_lovrModelMetaGetMeshDrawMode },
   { "getMeshDrawRange", l_lovrModelMetaGetMeshDrawRange },
-  { "getMeshBaseVertex", l_lovrModelMetaGetMeshBaseVertex },
   { "getMeshMaterial", l_lovrModelMetaGetMeshMaterial },
   { "getTextureCount", l_lovrModelMetaGetImageCount },
   { "getTexture", l_lovrModelGetTexture },

@@ -323,41 +323,24 @@ int l_lovrModelMetaGetMeshCount(lua_State* L) {
 
 int l_lovrModelMetaGetMeshVertexCount(lua_State* L) {
   ModelMetadata* meta = luax_checkmodelmeta(L, 1);
-  if (lua_isnoneornil(L, 2)) {
-    lua_pushinteger(L, meta->vertexCount);
-  } else {
-    uint32_t mesh = luax_checkmeshindex(L, 2, meta);
-    lua_pushinteger(L, meta->meshes[mesh].vertexCount);
-  }
+  uint32_t mesh = luax_checkmeshindex(L, 2, meta);
+  lua_pushinteger(L, meta->meshes[mesh].vertexCount);
   return 1;
 }
 
 int l_lovrModelMetaGetMeshIndexCount(lua_State* L) {
   ModelMetadata* meta = luax_checkmodelmeta(L, 1);
-  if (lua_isnoneornil(L, 2)) {
-    lua_pushinteger(L, meta->indexCount);
-  } else {
-    uint32_t mesh = luax_checkmeshindex(L, 2, meta);
-    lua_pushinteger(L, meta->meshes[mesh].indexCount);
-  }
+  uint32_t mesh = luax_checkmeshindex(L, 2, meta);
+  lua_pushinteger(L, meta->meshes[mesh].indexCount);
   return 1;
 }
 
 static int l_lovrModelDataGetMeshVertex(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
-
-  uint32_t index;
-  if (lua_isnil(L, 2)) {
-    index = luax_checku32(L, 3) - 1;
-    luax_check(L, index < model->meta.vertexCount, "Vertex %d is out of range", index + 1);
-  } else {
-    uint32_t mesh = luax_checkmeshindex(L, 2, &model->meta);
-    uint32_t index = luax_checku32(L, 3) - 1;
-    luax_check(L, index < model->meta.meshes[mesh].vertexCount, "Vertex %d is out of range", index + 1);
-    index += model->meta.meshes[mesh].vertexOffset;
-  }
-
-  ModelVertex* vertex = &model->vertices[index];
+  uint32_t mesh = luax_checkmeshindex(L, 2, &model->meta);
+  uint32_t index = luax_checku32(L, 3) - 1;
+  luax_check(L, index < model->meta.meshes[mesh].vertexCount, "Vertex %d is out of range", index + 1);
+  ModelVertex* vertex = &model->vertices[model->meta.meshes[mesh].vertexOffset + index];
   lua_pushnumber(L, vertex->position.x);
   lua_pushnumber(L, vertex->position.y);
   lua_pushnumber(L, vertex->position.z);
@@ -378,21 +361,23 @@ static int l_lovrModelDataGetMeshVertex(lua_State* L) {
 
 static int l_lovrModelDataGetMeshIndex(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
+  uint32_t meshIndex = luax_checkmeshindex(L, 2, &model->meta);
+  ModelMesh* mesh = &model->meta.meshes[meshIndex];
 
-  uint32_t index;
-  if (lua_isnoneornil(L, 2)) {
-    index = luax_checku32(L, 3) - 1;
-    luax_check(L, index < model->meta.indexCount, "Index %d is out of range", index + 1);
-  } else {
-    uint32_t mesh = luax_checkmeshindex(L, 2, &model->meta);
-    index = luax_checku32(L, 3) - 1;
-    luax_check(L, index < model->meta.indexCount, "Index %d is out of range", index + 1);
+  uint32_t index = luax_checku32(L, 3) - 1;
+  luax_check(L, index < mesh->indexCount, "Index %d is out of range", index + 1);
+
+  // Add the part's base vertex to the index value, so that everything is relative to the beginning
+  // of the mesh and people don't have to worry about base vertex.  But we have to find the part...
+  uint32_t part = 0;
+  while (index < mesh->parts[part].start) {
+    part++;
   }
 
   if (model->meta.indexSize == 4) {
-    lua_pushinteger(L, ((uint32_t*) model->indices)[index]);
+    lua_pushinteger(L, ((uint32_t*) model->indices)[mesh->indexOffset + index] + mesh->parts[part].baseVertex);
   } else {
-    lua_pushinteger(L, ((uint16_t*) model->indices)[index]);
+    lua_pushinteger(L, ((uint16_t*) model->indices)[mesh->indexOffset + index] + mesh->parts[part].baseVertex);
   }
 
   return 1;
@@ -418,13 +403,6 @@ int l_lovrModelMetaGetMeshDrawRange(lua_State* L) {
   lua_pushinteger(L, part->start + 1);
   lua_pushinteger(L, part->count);
   return 2;
-}
-
-int l_lovrModelMetaGetMeshBaseVertex(lua_State* L) {
-  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
-  ModelPart* part = luax_checkmeshpart(L, 2, meta);
-  lua_pushinteger(L, part->baseVertex);
-  return 1;
 }
 
 int l_lovrModelMetaGetMeshMaterial(lua_State* L) {
@@ -740,6 +718,7 @@ int l_lovrModelMetaGetBlendShapeName(lua_State* L) {
 
 const luaL_Reg lovrModelData[] = {
   { "getMetadata", l_lovrModelMetaGetMetadata },
+
   { "getRootNode", l_lovrModelMetaGetRootNode },
   { "getNodeCount", l_lovrModelMetaGetNodeCount },
   { "getNodeName", l_lovrModelMetaGetNodeName },
@@ -754,6 +733,7 @@ const luaL_Reg lovrModelData[] = {
   { "getNodeTransform", l_lovrModelMetaGetNodeTransform },
   { "getNodeMesh", l_lovrModelMetaGetNodeMesh },
   { "getNodeSkin", l_lovrModelMetaGetNodeSkin },
+
   { "getMeshCount", l_lovrModelMetaGetMeshCount },
   { "getMeshVertexCount", l_lovrModelMetaGetMeshVertexCount },
   { "getMeshIndexCount", l_lovrModelMetaGetMeshIndexCount },
@@ -762,19 +742,21 @@ const luaL_Reg lovrModelData[] = {
   { "getMeshPartCount", l_lovrModelMetaGetMeshPartCount },
   { "getMeshDrawMode", l_lovrModelMetaGetMeshDrawMode },
   { "getMeshDrawRange", l_lovrModelMetaGetMeshDrawRange },
-  { "getMeshBaseVertex", l_lovrModelMetaGetMeshBaseVertex },
   { "getMeshMaterial", l_lovrModelMetaGetMeshMaterial },
+
   { "getWidth", l_lovrModelMetaGetWidth },
   { "getHeight", l_lovrModelMetaGetHeight },
   { "getDepth", l_lovrModelMetaGetDepth },
   { "getDimensions", l_lovrModelMetaGetDimensions },
   { "getCenter", l_lovrModelMetaGetCenter },
   { "getBoundingBox", l_lovrModelMetaGetBoundingBox },
+
   { "getImageCount", l_lovrModelMetaGetImageCount },
   { "getImage", l_lovrModelDataGetImage },
   { "getMaterialCount", l_lovrModelMetaGetMaterialCount },
   { "getMaterialName", l_lovrModelMetaGetMaterialName },
   { "getMaterial", l_lovrModelDataGetMaterial },
+
   { "getAnimationCount", l_lovrModelMetaGetAnimationCount },
   { "getAnimationName", l_lovrModelMetaGetAnimationName },
   { "getAnimationDuration", l_lovrModelMetaGetAnimationDuration },
@@ -787,7 +769,9 @@ const luaL_Reg lovrModelData[] = {
   { "getSkinCount", l_lovrModelMetaGetSkinCount },
   { "getSkinJoints", l_lovrModelMetaGetSkinJoints },
   { "getSkinInverseBindMatrix", l_lovrModelMetaGetSkinInverseBindMatrix },
+
   { "getBlendShapeCount", l_lovrModelMetaGetBlendShapeCount },
   { "getBlendShapeName", l_lovrModelMetaGetBlendShapeName },
+
   { NULL, NULL }
 };

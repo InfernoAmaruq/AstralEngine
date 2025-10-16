@@ -95,11 +95,10 @@ Shape* luax_newconvexshape(lua_State* L, int index) {
 
   float* points;
   uint32_t count;
-  bool shouldFree;
-  index = luax_readmesh(L, index, &points, &count, NULL, NULL, &shouldFree);
+  index = luax_readmesh(L, index, &points, &count, NULL, NULL);
   float scale = luax_optfloat(L, index, 1.f);
   ConvexShape* shape = lovrConvexShapeCreate(points, count, scale);
-  if (shouldFree) lovrFree(points);
+  lovrFree(points);
   luax_assert(L, shape);
   return shape;
 }
@@ -116,18 +115,14 @@ Shape* luax_newmeshshape(lua_State* L, int index) {
   uint32_t* indices;
   uint32_t vertexCount;
   uint32_t indexCount;
-  bool shouldFree;
 
-  index = luax_readmesh(L, index, &vertices, &vertexCount, &indices, &indexCount, &shouldFree);
+  index = luax_readmesh(L, index, &vertices, &vertexCount, &indices, &indexCount);
 
   float scale = luax_optfloat(L, index, 1.f);
   Shape* shape = lovrMeshShapeCreate(vertexCount, vertices, indexCount, indices, scale);
 
-  if (shouldFree) {
-    lovrFree(vertices);
-    lovrFree(indices);
-  }
-
+  lovrFree(vertices);
+  lovrFree(indices);
   luax_assert(L, shape);
   return shape;
 }

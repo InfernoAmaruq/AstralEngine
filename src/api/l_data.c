@@ -16,28 +16,6 @@ StringEntry lovrAnimationProperty[] = {
   { 0 }
 };
 
-StringEntry lovrAttributeType[] = {
-  [I8] = ENTRY("i8"),
-  [U8] = ENTRY("u8"),
-  [I16] = ENTRY("i16"),
-  [U16] = ENTRY("u16"),
-  [I32] = ENTRY("i32"),
-  [U32] = ENTRY("u32"),
-  [F32] = ENTRY("f32"),
-  { 0 }
-};
-
-StringEntry lovrDefaultAttribute[] = {
-  [ATTR_POSITION] = ENTRY("position"),
-  [ATTR_NORMAL] = ENTRY("normal"),
-  [ATTR_UV] = ENTRY("uv"),
-  [ATTR_COLOR] = ENTRY("color"),
-  [ATTR_TANGENT] = ENTRY("tangent"),
-  [ATTR_JOINTS] = ENTRY("joints"),
-  [ATTR_WEIGHTS] = ENTRY("weights"),
-  { 0 }
-};
-
 StringEntry lovrModelDrawMode[] = {
   [DRAW_POINT_LIST] = ENTRY("points"),
   [DRAW_LINE_LIST] = ENTRY("lines"),

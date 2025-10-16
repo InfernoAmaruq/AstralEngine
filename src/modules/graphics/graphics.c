@@ -68,6 +68,7 @@ typedef struct {
 struct Buffer {
   uint32_t ref;
   uint32_t base;
+  Buffer* root;
   Sync* sync;
   gpu_buffer* gpu;
   bool supportsMesh;
@@ -274,18 +275,10 @@ typedef struct {
   float scale[3];
 } NodeTransform;
 
-typedef struct {
-  uint32_t index;
-  uint32_t count;
-  uint32_t vertexIndex;
-  uint32_t vertexCount;
-} BlendGroup;
-
 struct Model {
   uint32_t ref;
   Model* parent;
-  ModelInfo info;
-  DrawInfo* draws;
+  ModelMetadata meta;
   Buffer* rawVertexBuffer;
   Buffer* vertexBuffer;
   Buffer* indexBuffer;
@@ -296,12 +289,9 @@ struct Model {
   Material** materials;
   NodeTransform* localTransforms;
   float* globalTransforms;
-  float* boundingBoxes;
+  float* blendShapeWeights;
   bool transformsDirty;
   bool blendShapesDirty;
-  float* blendShapeWeights;
-  BlendGroup* blendGroups;
-  uint32_t blendGroupCount;
   uint32_t lastVertexAnimation;
 };
 
@@ -353,14 +343,6 @@ typedef struct {
   struct { float x, y, z; } normal;
   struct { float u, v; } uv;
 } ShapeVertex;
-
-typedef struct {
-  struct { float x, y, z; } position;
-  uint32_t normal;
-  struct { float u, v; } uv;
-  struct { uint8_t r, g, b, a; } color;
-  uint32_t tangent;
-} ModelVertex;
 
 typedef struct {
   struct { float x, y, z; } position;
@@ -2114,8 +2096,9 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
 
   Buffer* buffer = lovrCalloc(sizeof(Buffer) + gpu_sizeof_buffer() + charCount + fieldCount * sizeof(DataField));
   buffer->ref = 1;
-  buffer->gpu = (gpu_buffer*) (buffer + 1);
+  buffer->root = buffer;
   buffer->sync = lovrCalloc(sizeof(Sync));
+  buffer->gpu = (gpu_buffer*) (buffer + 1);
   buffer->info = *info;
   buffer->info.fieldCount = fieldCount;
   buffer->info.size = size;
@@ -2203,13 +2186,37 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
   return buffer;
 }
 
+Buffer* lovrBufferCreateView(Buffer* parent, uint32_t offset, uint32_t extent) {
+  lovrCheck(offset < parent->info.size, "Buffer view byte range exceeds the size of its parent");
+  lovrCheck(extent < parent->info.size - offset , "Buffer view byte range exceeds the size of its parent");
+  lovrCheck(offset % parent->info.format->stride == 0, "Buffer view offset must be a multiple of its stride");
+  lovrCheck(extent % parent->info.format->stride == 0, "Buffer view extent must be a multiple of its stride");
+
+  Buffer* buffer = lovrCalloc(sizeof(Buffer));
+  buffer->ref = 1;
+  buffer->base = parent->base + offset;
+  buffer->root = parent->root;
+  buffer->sync = parent->sync;
+  buffer->gpu = parent->gpu;
+  buffer->supportsMesh = parent->supportsMesh;
+  buffer->info = parent->info;
+  buffer->info.size = extent;
+  lovrRetain(buffer->root);
+
+  return buffer;
+}
+
 void lovrBufferDestroy(void* ref) {
   Buffer* buffer = ref;
-  if (buffer->sync->lastTransferRead == state.tick || buffer->sync->lastTransferWrite == state.tick) {
-    lovrGraphicsSubmit(NULL, 0);
+  if (buffer->root == buffer) {
+    if (buffer->sync->lastTransferRead == state.tick || buffer->sync->lastTransferWrite == state.tick) {
+      lovrGraphicsSubmit(NULL, 0);
+    }
+    gpu_buffer_destroy(buffer->gpu);
+    lovrFree(buffer->sync);
+  } else {
+    lovrRelease(buffer->root, lovrBufferDestroy);
   }
-  gpu_buffer_destroy(buffer->gpu);
-  lovrFree(buffer->sync);
   lovrFree(buffer);
 }
 
@@ -4834,21 +4841,26 @@ void lovrMeshSetDrawMode(Mesh* mesh, DrawMode mode) {
   mesh->mode = mode;
 }
 
-void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count, uint32_t* offset) {
+void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count) {
   *start = mesh->drawStart;
   *count = mesh->drawCount;
-  *offset = mesh->baseVertex;
 }
 
-bool lovrMeshSetDrawRange(Mesh* mesh, uint32_t start, uint32_t count, uint32_t offset) {
+bool lovrMeshSetDrawRange(Mesh* mesh, uint32_t start, uint32_t count) {
   uint32_t vertexCount = mesh->vertexBuffer->info.format->length;
   uint32_t extent = mesh->indexCount > 0 ? mesh->indexCount : vertexCount;
   lovrCheck(start < extent && count <= extent - start, "Invalid draw range [%d,%d]", start + 1, start + 1 + count);
-  lovrCheck(offset < vertexCount, "Mesh vertex offset must be less than the vertex count");
   mesh->drawStart = start;
   mesh->drawCount = count;
-  mesh->baseVertex = offset;
   return true;
+}
+
+uint32_t lovrMeshGetBaseVertex(Mesh* mesh) {
+  return mesh->baseVertex;
+}
+
+void lovrMeshSetBaseVertex(Mesh* mesh, uint32_t base) {
+  mesh->baseVertex = base;
 }
 
 Material* lovrMeshGetMaterial(Mesh* mesh) {
@@ -4891,25 +4903,21 @@ static bool lovrMeshFlush(Mesh* mesh) {
 // Model
 
 Model* lovrModelCreate(const ModelInfo* info) {
-  ModelData* data = info->data;
   Model* model = lovrCalloc(sizeof(Model));
   model->ref = 1;
-  model->info = *info;
-  lovrRetain(info->data);
+  model->meta = info->data->meta;
+  lovrRetain(model->meta.blob);
 
-  size_t stack = 0;
-
-  for (uint32_t i = 0; i < data->skinCount; i++) {
-    lovrCheckGoto(fail, data->skins[i].jointCount <= 256, "Currently, the max number of joints per skin is 256");
-  }
+  ModelData* data = info->data;
+  ModelMetadata* meta = &model->meta;
 
   // Materials and Textures
   if (info->materials) {
-    model->textures = lovrCalloc(data->imageCount * sizeof(Texture*));
-    model->materials = lovrMalloc(data->materialCount * sizeof(Material*));
-    for (uint32_t i = 0; i < data->materialCount; i++) {
+    model->textures = lovrCalloc(meta->imageCount * sizeof(Texture*));
+    model->materials = lovrMalloc(meta->materialCount * sizeof(Material*));
+    for (uint32_t i = 0; i < meta->materialCount; i++) {
       MaterialInfo material;
-      ModelMaterial* properties = &data->materials[i];
+      ModelMaterial* properties = &meta->materials[i];
       memcpy(&material.data, properties, sizeof(MaterialData));
 
       struct { uint32_t index; Texture** texture; } textures[] = {
@@ -4930,17 +4938,19 @@ Model* lovrModelCreate(const ModelInfo* info) {
           *texture = NULL;
         } else {
           if (!model->textures[index]) {
+            Image* image = data->images[index];
+
             model->textures[index] = lovrTextureCreate(&(TextureInfo) {
               .type = TEXTURE_2D,
               .usage = TEXTURE_SAMPLE,
-              .format = lovrImageGetFormat(data->images[index]),
-              .width = lovrImageGetWidth(data->images[index], 0),
-              .height = lovrImageGetHeight(data->images[index], 0),
+              .format = lovrImageGetFormat(image),
+              .width = lovrImageGetWidth(image, 0),
+              .height = lovrImageGetHeight(image, 0),
               .layers = 1,
-              .mipmaps = info->mipmaps || lovrImageGetLevelCount(data->images[index]) > 1 ? ~0u : 1,
+              .mipmaps = info->mipmaps || lovrImageGetLevelCount(image) > 1 ? ~0u : 1,
               .samples = 1,
               .srgb = texture == &material.texture || texture == &material.glowTexture,
-              .images = &data->images[index],
+              .images = &image,
               .imageCount = 1
             });
 
@@ -4956,246 +4966,113 @@ Model* lovrModelCreate(const ModelInfo* info) {
     }
   }
 
-  // Buffers
-  char* vertexData = NULL;
-  char* indexData = NULL;
-  char* blendData = NULL;
-  char* skinData = NULL;
+  // Vertices
+  if (meta->vertexCount > 0) {
+    BufferInfo bufferInfo = {
+      .format = (DataField[]) {
+        { .length = meta->vertexCount, .stride = sizeof(ModelVertex), .fieldCount = 5 },
+        { .name = "VertexPosition", .type = TYPE_F32x3, .offset = offsetof(ModelVertex, position) },
+        { .name = "VertexNormal", .type = TYPE_SN10x3, .offset = offsetof(ModelVertex, normal) },
+        { .name = "VertexUV", .type = TYPE_F32x2, .offset = offsetof(ModelVertex, uv) },
+        { .name = "VertexColor", .type = TYPE_UN8x4, .offset = offsetof(ModelVertex, color) },
+        { .name = "VertexTangent", .type = TYPE_SN10x3, .offset = offsetof(ModelVertex, tangent) }
+      }
+    };
 
-  BufferInfo vertexBufferInfo = {
-    .format = (DataField[]) {
-      { .length = data->vertexCount, .stride = sizeof(ModelVertex), .fieldCount = 5 },
-      { .name = "VertexPosition", .type = TYPE_F32x3, .offset = offsetof(ModelVertex, position) },
-      { .name = "VertexNormal", .type = TYPE_SN10x3, .offset = offsetof(ModelVertex, normal) },
-      { .name = "VertexUV", .type = TYPE_F32x2, .offset = offsetof(ModelVertex, uv) },
-      { .name = "VertexColor", .type = TYPE_UN8x4, .offset = offsetof(ModelVertex, color) },
-      { .name = "VertexTangent", .type = TYPE_SN10x3, .offset = offsetof(ModelVertex, tangent) }
-    }
-  };
-
-  if (data->vertexCount > 0) {
-    model->vertexBuffer = lovrBufferCreate(&vertexBufferInfo, (void**) &vertexData);
+    void* vertexData = NULL;
+    model->vertexBuffer = lovrBufferCreate(&bufferInfo, (void**) &vertexData);
     lovrAssertGoto(fail, model->vertexBuffer, "Failed to create model vertex buffer: %s", lovrGetError());
+    memcpy(vertexData, data->vertices, meta->vertexCount * sizeof(ModelVertex));
+
+    // Animated vertices are ones that are blended or skinned.  They need a copy of the original vertex
+    if (meta->animatedVertexCount > 0) {
+      bufferInfo.format->length = meta->animatedVertexCount;
+      model->rawVertexBuffer = lovrBufferCreate(&bufferInfo, &vertexData);
+      lovrAssertGoto(fail, model->rawVertexBuffer, "Failed to create model raw vertex buffer: %s", lovrGetError());
+
+      ModelMesh* mesh = meta->meshes;
+      for (uint32_t i = 0; i < meta->meshCount; i++, mesh++) {
+        if (mesh->skinDataOffset == ~0u && mesh->blendDataOffset == ~0u) continue;
+        memcpy(vertexData, data->vertices + mesh->vertexOffset, mesh->vertexCount * sizeof(ModelVertex));
+        vertexData = (ModelVertex*) vertexData + mesh->vertexCount;
+      }
+    }
   }
 
-  if (data->blendShapeVertexCount > 0) {
-    model->blendBuffer = lovrBufferCreate(&(BufferInfo) {
+  // Indices
+  if (meta->indexCount > 0) {
+    BufferInfo bufferInfo = {
+      .format = &(DataField) {
+        .length = meta->indexCount,
+        .stride = meta->indexSize,
+        .type = meta->indexSize == 4 ? TYPE_INDEX32 : TYPE_INDEX16
+      }
+    };
+
+    void* indexData = NULL;
+    model->indexBuffer = lovrBufferCreate(&bufferInfo, &indexData);
+    lovrAssertGoto(fail, model->indexBuffer, "Failed to create model index buffer: %s", lovrGetError());
+    memcpy(indexData, data->indices, meta->indexCount * meta->indexSize);
+  }
+
+  // Joints
+  if (meta->skinnedVertexCount > 0) {
+    BufferInfo bufferInfo = {
       .format = (DataField[]) {
-        { .length = data->blendShapeVertexCount, .stride = sizeof(BlendVertex), .fieldCount = 3 },
+        { .length = meta->skinnedVertexCount, .stride = 8, .fieldCount = 2 },
+        { .type = TYPE_UN8x4, .offset = 0 },
+        { .type = TYPE_U8x4, .offset = 4 }
+      }
+    };
+
+    void* skinData = NULL;
+    model->skinBuffer = lovrBufferCreate(&bufferInfo, &skinData);
+    lovrAssertGoto(fail, model->skinBuffer, "Failed to create model skinning buffer: %s", lovrGetError());
+    memcpy(skinData, data->skinData, meta->skinnedVertexCount * 8);
+  }
+
+  // Blend Shapes
+  if (meta->blendedVertexCount > 0) {
+    BufferInfo bufferInfo = {
+      .format = (DataField[]) {
+        { .length = meta->blendedVertexCount, .stride = sizeof(BlendVertex), .fieldCount = 3 },
         { .type = TYPE_F32x3, .offset = offsetof(BlendVertex, position) },
         { .type = TYPE_F32x3, .offset = offsetof(BlendVertex, normal) },
         { .type = TYPE_F32x3, .offset = offsetof(BlendVertex, tangent) }
       }
-    }, (void**) &blendData);
+    };
 
+    void* blendData = NULL;
+    model->blendBuffer = lovrBufferCreate(&bufferInfo, &blendData);
     lovrAssertGoto(fail, model->blendBuffer, "Failed to create model blend shape buffer: %s", lovrGetError());
-  }
-
-  if (data->skinnedVertexCount > 0) {
-    model->skinBuffer = lovrBufferCreate(&(BufferInfo) {
-      .format = (DataField[]) {
-        { .length = data->skinnedVertexCount, .stride = 8, .fieldCount = 2 },
-        { .type = TYPE_UN8x4, .offset = 0 },
-        { .type = TYPE_U8x4, .offset = 4 }
-      }
-    }, (void**) &skinData);
-
-    lovrAssertGoto(fail, model->skinBuffer, "Failed to create model skinning buffer: %s", lovrGetError());
-  }
-
-  // Dynamic vertices are ones that are blended or skinned.  They need a copy of the original vertex
-  if (data->dynamicVertexCount > 0) {
-    vertexBufferInfo.format->length = data->dynamicVertexCount;
-    model->rawVertexBuffer = lovrBufferCreate(&vertexBufferInfo, NULL);
-    lovrAssertGoto(fail, model->rawVertexBuffer, "Failed to create model raw vertex buffer: %s", lovrGetError());
-
-    // The vertex buffer may already have a pending copy if its memory was not host-visible, need to
-    // wait for that to complete before copying to the raw vertex buffer
-    gpu_barrier barrier = syncTransfer(model->vertexBuffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
-    gpu_sync(state.stream, &barrier, 1);
-
-    Buffer* src = model->vertexBuffer;
-    Buffer* dst = model->rawVertexBuffer;
-    gpu_copy_buffers(state.stream, src->gpu, dst->gpu, 0, 0, data->dynamicVertexCount * sizeof(ModelVertex));
-
-    gpu_sync(state.stream, &(gpu_barrier) {
-      .prev = GPU_PHASE_COPY,
-      .next = GPU_PHASE_SHADER_COMPUTE,
-      .flush = GPU_CACHE_TRANSFER_WRITE,
-      .clear = GPU_CACHE_STORAGE_READ | GPU_CACHE_STORAGE_WRITE
-    }, 1);
-  }
-
-  DataType indexType = data->indexType == U32 ? TYPE_INDEX32 : TYPE_INDEX16;
-  uint32_t indexSize = data->indexType == U32 ? 4 : 2;
-
-  if (data->indexCount > 0) {
-    model->indexBuffer = lovrBufferCreate(&(BufferInfo) {
-      .format = (DataField[]) {
-        { .length = data->indexCount, .stride = indexSize, .type = indexType }
-      }
-    }, (void**) &indexData);
-
-    lovrAssertGoto(fail, model->indexBuffer, "Failed to create model index buffer: %s", lovrGetError());
-  }
-
-  // Primitives are sorted to ensure animated/blended vertices are close together:
-  // - Skinned primitives come first
-  //   - Within a skin, the primitives with blend shapes come first
-  //   - Followed by the primitives without blend shapes
-  // - Primitives with blend shapes (but no skinning) are next
-  // - Then the remaining "non-dynamic" primitives follow
-  // Within each section, primitives are still sorted by their index
-  // All of a node's primitives will remain together, since skin/blend shapes are per-node
-
-  stack = stackPush(&thread.stack);
-  uint64_t* primitiveOrder = allocate(&thread.stack, data->primitiveCount * sizeof(uint64_t));
-  uint32_t* baseVertex = allocate(&thread.stack, data->primitiveCount * sizeof(uint32_t));
-
-  // The sort key only has 31 bits for the skin
-  lovrCheckGoto(fail, data->skinCount < (1u << 31), "Too many skins!");
-
-  for (uint32_t i = 0; i < data->primitiveCount; i++) {
-    primitiveOrder[i] = 0;
-    primitiveOrder[i] |= (uint64_t) data->primitives[i].skin << 33;
-    primitiveOrder[i] |= (uint64_t) (data->primitives[i].blendShapeCount == 0) << 32;
-    primitiveOrder[i] |= i;
-  }
-
-  qsort(primitiveOrder, data->primitiveCount, sizeof(uint64_t), u64cmp);
-
-  // Draws
-  model->draws = lovrCalloc(data->primitiveCount * sizeof(DrawInfo));
-  model->boundingBoxes = lovrMalloc(data->primitiveCount * 6 * sizeof(float));
-  for (uint32_t i = 0, vertexCursor = 0, indexCursor = 0; i < data->primitiveCount; i++) {
-    ModelPrimitive* primitive = &data->primitives[primitiveOrder[i] & ~0u];
-    ModelAttribute* position = primitive->attributes[ATTR_POSITION];
-    DrawInfo* draw = &model->draws[primitiveOrder[i] & ~0u];
-
-    switch (primitive->mode) {
-      case DRAW_POINT_LIST: draw->mode = DRAW_POINTS; break;
-      case DRAW_LINE_LIST: draw->mode = DRAW_LINES; break;
-      case DRAW_TRIANGLE_LIST: draw->mode = DRAW_TRIANGLES; break;
-      default: lovrSetError("Model uses an unsupported draw mode (lineloop, linestrip, strip, fan)"); goto fail;
-    }
-
-    draw->material = !info->materials || primitive->material == ~0u ? NULL: model->materials[primitive->material];
-    draw->vertex.buffer = model->vertexBuffer;
-
-    if (primitive->indices) {
-      draw->index.buffer = model->indexBuffer;
-      draw->start = indexCursor;
-      draw->count = primitive->indices->count;
-      draw->baseVertex = vertexCursor;
-      indexCursor += draw->count;
-    } else {
-      draw->start = vertexCursor;
-      draw->count = position->count;
-    }
-
-    draw->bounds = model->boundingBoxes + i * 6;
-    draw->bounds[0] = (position->min[0] + position->max[0]) / 2.f;
-    draw->bounds[1] = (position->min[1] + position->max[1]) / 2.f;
-    draw->bounds[2] = (position->min[2] + position->max[2]) / 2.f;
-    draw->bounds[3] = (position->max[0] - position->min[0]) / 2.f;
-    draw->bounds[4] = (position->max[1] - position->min[1]) / 2.f;
-    draw->bounds[5] = (position->max[2] - position->min[2]) / 2.f;
-
-    baseVertex[primitiveOrder[i] & ~0u] = vertexCursor;
-    vertexCursor += position->count;
-  }
-
-  // Vertices
-  for (uint32_t i = 0; i < data->primitiveCount; i++) {
-    ModelPrimitive* primitive = &data->primitives[primitiveOrder[i] & ~0u];
-    ModelAttribute** attributes = primitive->attributes;
-    uint32_t count = attributes[ATTR_POSITION]->count;
-    size_t stride = sizeof(ModelVertex);
-
-    lovrModelDataCopyAttribute(data, attributes[ATTR_POSITION], vertexData + 0, F32, 3, false, count, stride, 0);
-    lovrModelDataCopyAttribute(data, attributes[ATTR_NORMAL], vertexData + 12, SN10x3, 1, false, count, stride, 0);
-    lovrModelDataCopyAttribute(data, attributes[ATTR_UV], vertexData + 16, F32, 2, false, count, stride, 0);
-    lovrModelDataCopyAttribute(data, attributes[ATTR_COLOR], vertexData + 24, U8, 4, true, count, stride, 255);
-    lovrModelDataCopyAttribute(data, attributes[ATTR_TANGENT], vertexData + 28, SN10x3, 1, false, count, stride, 0);
-    vertexData += count * stride;
-
-    if (data->skinnedVertexCount > 0 && primitive->skin != ~0u) {
-      lovrModelDataCopyAttribute(data, attributes[ATTR_JOINTS], skinData + 0, U8, 4, false, count, 8, 0);
-      lovrModelDataCopyAttribute(data, attributes[ATTR_WEIGHTS], skinData + 4, U8, 4, true, count, 8, 0);
-      skinData += count * 8;
-    }
-
-    if (primitive->indices) {
-      uint32_t indexCount = primitive->indices->count;
-      lovrModelDataCopyAttribute(data, primitive->indices, indexData, data->indexType, 1, false, indexCount, indexSize, 0);
-      indexData += indexCount * indexSize;
-    }
+    memcpy(blendData, data->blendData, meta->blendedVertexCount * sizeof(BlendData));
   }
 
   // Blend shapes
-  if (data->blendShapeCount > 0) {
-    for (uint32_t i = 0; i < data->blendShapeCount; i++) {
-      if (i == 0 || data->blendShapes[i - 1].node != data->blendShapes[i].node) {
-        model->blendGroupCount++;
-      }
-    }
-
-    model->blendGroups = lovrMalloc(model->blendGroupCount * sizeof(BlendGroup));
-    model->blendShapeWeights = lovrMalloc(data->blendShapeCount * sizeof(float));
-
-    BlendGroup* group = model->blendGroups;
-
-    for (uint32_t i = 0; i < data->blendShapeCount; i++) {
-      ModelBlendShape* blendShape = &data->blendShapes[i];
-      ModelNode* node = &data->nodes[blendShape->node];
-      uint32_t groupVertexCount = 0;
-
-      for (uint32_t p = 0; p < node->primitiveCount; p++) {
-        ModelPrimitive* primitive = &data->primitives[node->primitiveIndex + p];
-        uint32_t vertexCount = primitive->attributes[ATTR_POSITION]->count;
-        size_t stride = sizeof(BlendVertex);
-
-        ModelBlendData* blendAttributes = &primitive->blendShapes[i - node->blendShapeIndex];
-        lovrModelDataCopyAttribute(data, blendAttributes->positions, blendData + offsetof(BlendVertex, position), F32, 3, false, vertexCount, stride, 0);
-        lovrModelDataCopyAttribute(data, blendAttributes->normals, blendData + offsetof(BlendVertex, normal), F32, 3, false, vertexCount, stride, 0);
-        lovrModelDataCopyAttribute(data, blendAttributes->tangents, blendData + offsetof(BlendVertex, tangent), F32, 3, false, vertexCount, stride, 0);
-        blendData += vertexCount * stride;
-        groupVertexCount += vertexCount;
-      }
-
-      if (i == 0 || blendShape[-1].node != blendShape[0].node) {
-        group->index = node->blendShapeIndex;
-        group->count = node->blendShapeCount;
-        group->vertexIndex = baseVertex[node->primitiveIndex];
-        group->vertexCount = groupVertexCount;
-        group++;
-      }
-    }
-
+  if (meta->blendShapeCount > 0) {
+    model->blendShapeWeights = lovrMalloc(meta->blendShapeCount * sizeof(float));
     lovrModelResetBlendShapes(model);
   }
 
   // Transforms
-  model->localTransforms = lovrMalloc(sizeof(NodeTransform) * data->nodeCount);
-  model->globalTransforms = lovrMalloc(16 * sizeof(float) * data->nodeCount);
+  model->localTransforms = lovrMalloc(sizeof(NodeTransform) * meta->nodeCount);
+  model->globalTransforms = lovrMalloc(16 * sizeof(float) * meta->nodeCount);
   lovrModelResetNodeTransforms(model);
-
-  stackPop(&thread.stack, stack);
 
   return model;
 fail:
-  if (stack) stackPop(&thread.stack, stack);
   lovrModelDestroy(model);
   return NULL;
 }
 
 Model* lovrModelClone(Model* parent) {
-  ModelData* data = parent->info.data;
   Model* model = lovrCalloc(sizeof(Model));
   model->ref = 1;
   model->parent = parent;
-  model->info = parent->info;
+  model->meta = parent->meta;
   lovrRetain(parent);
+
+  ModelMetadata* meta = &model->meta;
 
   model->textures = parent->textures;
   model->materials = parent->materials;
@@ -5204,9 +5081,6 @@ Model* lovrModelClone(Model* parent) {
   model->indexBuffer = parent->indexBuffer;
   model->blendBuffer = parent->blendBuffer;
   model->skinBuffer = parent->skinBuffer;
-
-  model->blendGroups = parent->blendGroups;
-  model->blendGroupCount = parent->blendGroupCount;
 
   if (parent->vertexBuffer) {
     model->vertexBuffer = lovrBufferCreate(&parent->vertexBuffer->info, NULL);
@@ -5231,18 +5105,11 @@ Model* lovrModelClone(Model* parent) {
     }, 1);
   }
 
-  model->draws = lovrMalloc(data->primitiveCount * sizeof(DrawInfo));
-
-  for (uint32_t i = 0; i < data->primitiveCount; i++) {
-    model->draws[i] = parent->draws[i];
-    model->draws[i].vertex.buffer = model->vertexBuffer;
-  }
-
-  model->blendShapeWeights = lovrMalloc(data->blendShapeCount * sizeof(float));
+  model->blendShapeWeights = lovrMalloc(meta->blendShapeCount * sizeof(float));
   lovrModelResetBlendShapes(model);
 
-  model->localTransforms = lovrMalloc(sizeof(NodeTransform) * data->nodeCount);
-  model->globalTransforms = lovrMalloc(16 * sizeof(float) * data->nodeCount);
+  model->localTransforms = lovrMalloc(sizeof(NodeTransform) * meta->nodeCount);
+  model->globalTransforms = lovrMalloc(16 * sizeof(float) * meta->nodeCount);
   lovrModelResetNodeTransforms(model);
 
   return model;
@@ -5257,23 +5124,22 @@ void lovrModelDestroy(void* ref) {
     lovrFree(model->globalTransforms);
     lovrFree(model->blendShapeWeights);
     lovrFree(model->meshes);
-    lovrFree(model->draws);
     lovrFree(model);
     return;
   }
-  ModelData* data = model->info.data;
-  if (model->info.materials) {
-    for (uint32_t i = 0; i < data->materialCount; i++) {
+  ModelMetadata* meta = &model->meta;
+  if (model->materials) {
+    for (uint32_t i = 0; i < meta->materialCount; i++) {
       lovrRelease(model->materials[i], lovrMaterialDestroy);
     }
-    for (uint32_t i = 0; i < data->imageCount; i++) {
+    for (uint32_t i = 0; i < meta->imageCount; i++) {
       lovrRelease(model->textures[i], lovrTextureDestroy);
     }
     lovrFree(model->materials);
     lovrFree(model->textures);
   }
   if (model->meshes) {
-    for (uint32_t i = 0; i < data->primitiveCount; i++) {
+    for (uint32_t i = 0; i < meta->meshCount; i++) {
       lovrRelease(model->meshes[i], lovrMeshDestroy);
     }
   }
@@ -5282,42 +5148,38 @@ void lovrModelDestroy(void* ref) {
   lovrRelease(model->indexBuffer, lovrBufferDestroy);
   lovrRelease(model->blendBuffer, lovrBufferDestroy);
   lovrRelease(model->skinBuffer, lovrBufferDestroy);
-  lovrRelease(model->info.data, lovrModelDataDestroy);
+  lovrRelease(model->meta.blob, lovrBlobDestroy);
   lovrFree(model->localTransforms);
   lovrFree(model->globalTransforms);
-  lovrFree(model->boundingBoxes);
   lovrFree(model->blendShapeWeights);
-  lovrFree(model->blendGroups);
   lovrFree(model->meshes);
-  lovrFree(model->draws);
   lovrFree(model);
 }
 
-const ModelInfo* lovrModelGetInfo(Model* model) {
-  return &model->info;
+ModelMetadata* lovrModelGetMetadata(Model* model) {
+  return &model->meta;
 }
 
 void lovrModelResetNodeTransforms(Model* model) {
-  ModelData* data = model->info.data;
-  for (uint32_t i = 0; i < data->nodeCount; i++) {
+  ModelMetadata* meta = &model->meta;
+  for (uint32_t i = 0; i < meta->nodeCount; i++) {
     NodeTransform* transform = &model->localTransforms[i];
-    if (data->nodes[i].hasMatrix) {
-      mat4_getPosition(data->nodes[i].transform.matrix, transform->position);
-      mat4_getOrientation(data->nodes[i].transform.matrix, transform->rotation);
-      mat4_getScale(data->nodes[i].transform.matrix, transform->scale);
+    if (meta->nodes[i].hasMatrix) {
+      mat4_getPosition(meta->nodes[i].transform.matrix, transform->position);
+      mat4_getOrientation(meta->nodes[i].transform.matrix, transform->rotation);
+      mat4_getScale(meta->nodes[i].transform.matrix, transform->scale);
     } else {
-      vec3_init(transform->position, data->nodes[i].transform.translation);
-      quat_init(transform->rotation, data->nodes[i].transform.rotation);
-      vec3_init(transform->scale, data->nodes[i].transform.scale);
+      vec3_init(transform->position, meta->nodes[i].transform.translation);
+      quat_init(transform->rotation, meta->nodes[i].transform.rotation);
+      vec3_init(transform->scale, meta->nodes[i].transform.scale);
     }
   }
   model->transformsDirty = true;
 }
 
 void lovrModelResetBlendShapes(Model* model) {
-  ModelData* data = model->info.data;
-  for (uint32_t i = 0; i < data->blendShapeCount; i++) {
-    model->blendShapeWeights[i] = data->blendShapes[i].weight;
+  for (uint32_t i = 0; i < model->meta.blendShapeCount; i++) {
+    model->blendShapeWeights[i] = model->meta.blendShapes[i].weight;
   }
   model->blendShapesDirty = true;
 }
@@ -5325,9 +5187,9 @@ void lovrModelResetBlendShapes(Model* model) {
 bool lovrModelAnimate(Model* model, uint32_t animationIndex, float time, float alpha) {
   if (alpha <= 0.f) return true;
 
-  ModelData* data = model->info.data;
-  lovrCheck(animationIndex < data->animationCount, "Invalid animation index '%d' (Model has %d animation%s)", animationIndex + 1, data->animationCount, data->animationCount == 1 ? "" : "s");
-  ModelAnimation* animation = &data->animations[animationIndex];
+  ModelMetadata* meta = &model->meta;
+  lovrCheck(animationIndex < meta->animationCount, "Invalid animation index '%d' (Model has %d animation%s)", animationIndex + 1, meta->animationCount, meta->animationCount == 1 ? "" : "s");
+  ModelAnimation* animation = &meta->animations[animationIndex];
   time = fmodf(time, animation->duration);
 
   size_t stack = stackPush(&thread.stack);
@@ -5346,7 +5208,7 @@ bool lovrModelAnimate(Model* model, uint32_t animationIndex, float time, float a
       case PROP_TRANSLATION: n = 3; break;
       case PROP_SCALE: n = 3; break;
       case PROP_ROTATION: n = 4; break;
-      case PROP_WEIGHTS: n = data->nodes[node].blendShapeCount; break;
+      case PROP_WEIGHTS: n = meta->meshes[meta->nodes[node].mesh].blendShapeCount; break;
     }
 
     float* property = allocate(&thread.stack, n * sizeof(float));
@@ -5414,7 +5276,10 @@ bool lovrModelAnimate(Model* model, uint32_t animationIndex, float time, float a
       case PROP_TRANSLATION: dst = model->localTransforms[node].position; break;
       case PROP_SCALE: dst = model->localTransforms[node].scale; break;
       case PROP_ROTATION: dst = model->localTransforms[node].rotation; break;
-      case PROP_WEIGHTS: dst = &model->blendShapeWeights[data->nodes[node].blendShapeIndex]; break;
+      case PROP_WEIGHTS:;
+        ModelMesh* mesh = &meta->meshes[meta->nodes[node].mesh];
+        dst = &model->blendShapeWeights[mesh->blendShapes - meta->blendShapes];
+        break;
     }
 
     if (alpha >= 1.f) {
@@ -5446,7 +5311,7 @@ void lovrModelGetNodeTransform(Model* model, uint32_t node, float position[3], f
     quat_init(rotation, model->localTransforms[node].rotation);
   } else {
     if (model->transformsDirty) {
-      updateModelTransforms(model, model->info.data->rootNode, (float[]) MAT4_IDENTITY);
+      updateModelTransforms(model, model->meta.rootNode, (float[]) MAT4_IDENTITY);
       model->transformsDirty = false;
     }
     mat4_getPosition(model->globalTransforms + 16 * node, position);
@@ -5482,24 +5347,46 @@ Buffer* lovrModelGetIndexBuffer(Model* model) {
 }
 
 Mesh* lovrModelGetMesh(Model* model, uint32_t index) {
-  ModelData* data = model->info.data;
-  lovrCheck(index < data->primitiveCount, "Invalid mesh index '%d' (Model has %d mesh%s)", index + 1, data->primitiveCount, data->primitiveCount == 1 ? "" : "es");
+  ModelMetadata* meta = &model->meta;
+  uint32_t meshCount = meta->meshCount;
+  lovrCheck(index < meshCount, "Invalid mesh index '%d' (Model has %d mesh%s)", index + 1, meshCount, meshCount == 1 ? "" : "es");
 
   if (!model->meshes) {
-    model->meshes = lovrCalloc(data->primitiveCount * sizeof(Mesh*));
+    model->meshes = lovrCalloc(meshCount * sizeof(Mesh*));
   }
 
   if (!model->meshes[index]) {
-    DrawInfo* draw = &model->draws[index];
-    MeshInfo info = { .vertexBuffer = model->vertexBuffer, .storage = MESH_GPU };
-    Mesh* mesh = lovrMeshCreate(&info, NULL);
-    if (!mesh) return NULL;
-    if (draw->index.buffer) lovrMeshSetIndexBuffer(mesh, model->indexBuffer);
-    lovrMeshSetDrawMode(mesh, draw->mode);
-    lovrMeshSetDrawRange(mesh, draw->start, draw->count, draw->baseVertex);
-    lovrMeshSetMaterial(mesh, draw->material);
-    memcpy(mesh->bounds, draw->bounds, sizeof(mesh->bounds));
-    mesh->hasBounds = true;
+    ModelMesh* data = &meta->meshes[index];
+    uint32_t offset = data->vertexOffset * sizeof(ModelVertex);
+    uint32_t extent = data->vertexCount * sizeof(ModelVertex);
+    Buffer* vertexBuffer = offset ? lovrBufferCreateView(model->vertexBuffer, offset, extent) : model->vertexBuffer;
+    Mesh* mesh = lovrMeshCreate(&(MeshInfo) { .vertexBuffer = vertexBuffer, .storage = MESH_GPU }, NULL);
+
+    if (!mesh) {
+      return NULL;
+    }
+
+    ModelPart* part = &data->parts[0];
+
+    lovrMeshSetIndexBuffer(mesh, model->indexBuffer);
+    lovrMeshSetDrawRange(mesh, part->start, part->count);
+    lovrMeshSetBaseVertex(mesh, part->baseVertex);
+
+    switch (part->mode) {
+      case DRAW_POINT_LIST: lovrMeshSetDrawMode(mesh, DRAW_POINTS); break;
+      case DRAW_LINE_LIST: lovrMeshSetDrawMode(mesh, DRAW_LINES); break;
+      case DRAW_TRIANGLE_LIST: lovrMeshSetDrawMode(mesh, DRAW_TRIANGLES); break;
+      default: lovrUnreachable();
+    }
+
+    if (model->materials && part->material != ~0u) {
+      lovrMeshSetMaterial(mesh, model->materials[part->material]);
+    }
+
+    float bounds[6];
+    lovrModelMetadataGetMeshBoundingBox(meta, index, bounds);
+    lovrMeshSetBoundingBox(mesh, bounds);
+
     model->meshes[index] = mesh;
   }
 
@@ -5507,29 +5394,29 @@ Mesh* lovrModelGetMesh(Model* model, uint32_t index) {
 }
 
 Texture* lovrModelGetTexture(Model* model, uint32_t index) {
-  ModelData* data = model->info.data;
-  lovrCheck(index < data->imageCount, "Invalid texture index '%d' (Model has %d texture%s)", index + 1, data->imageCount, data->imageCount == 1 ? "" : "s");
+  uint32_t count = model->meta.imageCount;
+  lovrCheck(index < count, "Invalid texture index '%d' (Model has %d texture%s)", index + 1, count, count == 1 ? "" : "s");
   return model->textures[index];
 }
 
 Material* lovrModelGetMaterial(Model* model, uint32_t index) {
-  ModelData* data = model->info.data;
-  lovrCheck(index < data->materialCount, "Invalid material index '%d' (Model has %d material%s)", index + 1, data->materialCount, data->materialCount == 1 ? "" : "s");
+  uint32_t count = model->meta.materialCount;
+  lovrCheck(index < count, "Invalid material index '%d' (Model has %d material%s)", index + 1, count, count == 1 ? "" : "s");
   return model->materials[index];
 }
 
 static bool lovrModelAnimateVertices(Model* model) {
-  ModelData* data = model->info.data;
+  ModelMetadata* meta = &model->meta;
 
-  bool blend = model->blendGroupCount > 0;
-  bool skin = data->skinCount > 0;
+  bool blend = !!model->blendShapeWeights;
+  bool skin = meta->skinCount > 0;
 
   if ((!blend && !skin) || (!model->transformsDirty && !model->blendShapesDirty) || model->lastVertexAnimation == state.tick || !model->vertexBuffer) {
     return true;
   }
 
   if (model->transformsDirty) {
-    updateModelTransforms(model, model->info.data->rootNode, (float[]) MAT4_IDENTITY);
+    updateModelTransforms(model, meta->rootNode, (float[]) MAT4_IDENTITY);
     model->transformsDirty = false;
   }
 
@@ -5537,8 +5424,10 @@ static bool lovrModelAnimateVertices(Model* model) {
 
   if (blend) {
     Shader* shader = lovrGraphicsGetDefaultShader(SHADER_BLENDER);
-    uint32_t vertexCount = data->dynamicVertexCount;
+    uint32_t vertexCount = meta->animatedVertexCount;
     uint32_t blendBufferCursor = 0;
+    uint32_t blendShapeCursor = 0;
+    uint32_t vertexCursor = 0;
     uint32_t chunkSize = 64;
 
     if (!shader) return false;
@@ -5552,28 +5441,28 @@ static bool lovrModelAnimateVertices(Model* model) {
 
     gpu_bind_pipeline(state.stream, shader->computePipeline, GPU_PIPELINE_COMPUTE);
 
-    for (uint32_t i = 0; i < model->blendGroupCount; i++) {
-      BlendGroup* group = &model->blendGroups[i];
+    for (uint32_t i = 0; i < meta->meshCount; i++) {
+      ModelMesh* mesh = &meta->meshes[i];
 
-      for (uint32_t j = 0; j < group->count; j += chunkSize) {
-        uint32_t count = MIN(group->count - j, chunkSize);
+      for (uint32_t j = 0; j < mesh->blendShapeCount; j += chunkSize) {
+        uint32_t blendShapeCount = MIN(mesh->blendShapeCount - j, chunkSize);
         bool inplace = j > 0;
 
         BufferView view = getBuffer(GPU_BUFFER_STREAM, chunkSize * sizeof(float), state.limits.uniformBufferAlign);
         if (!view.buffer) return false;
-        memcpy(view.pointer, model->blendShapeWeights + group->index + j, count * sizeof(float));
+        memcpy(view.pointer, model->blendShapeWeights + blendShapeCursor, blendShapeCount * sizeof(float));
         bindings[3].buffer = (gpu_buffer_binding) { view.buffer, view.offset, view.extent };
 
         gpu_bundle* bundle = getBundle(shader->layout, bindings, COUNTOF(bindings));
         if (!bundle) return false;
-        uint32_t constants[] = { group->vertexIndex, group->vertexCount, count, blendBufferCursor, inplace };
+        uint32_t constants[] = { vertexCursor, mesh->vertexCount, blendShapeCount, blendBufferCursor, inplace };
         uint32_t subgroupSize = state.device.subgroupSize;
 
         gpu_bind_bundles(state.stream, shader->gpu, &bundle, 0, 1, NULL, 0);
         gpu_push_constants(state.stream, shader->gpu, constants, sizeof(constants));
-        gpu_compute(state.stream, (group->vertexCount + subgroupSize - 1) / subgroupSize, 1, 1);
+        gpu_compute(state.stream, (mesh->vertexCount + subgroupSize - 1) / subgroupSize, 1, 1);
 
-        if (j + count < group->count) {
+        if (j + blendShapeCount < mesh->blendShapeCount) {
           gpu_sync(state.stream, &(gpu_barrier) {
             .prev = GPU_PHASE_SHADER_COMPUTE,
             .next = GPU_PHASE_SHADER_COMPUTE,
@@ -5582,8 +5471,11 @@ static bool lovrModelAnimateVertices(Model* model) {
           }, 1);
         }
 
-        blendBufferCursor += group->vertexCount * count;
+        blendBufferCursor += mesh->vertexCount * blendShapeCount;
+        blendShapeCursor += blendShapeCount;
       }
+
+      vertexCursor += mesh->vertexCount;
     }
 
     model->blendShapesDirty = false;
@@ -5603,51 +5495,72 @@ static bool lovrModelAnimateVertices(Model* model) {
     if (!shader) return false;
 
     gpu_binding bindings[] = {
-      { 0, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->rawVertexBuffer->gpu, 0, data->skinnedVertexCount * sizeof(ModelVertex) } },
-      { 1, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->vertexBuffer->gpu, 0, data->skinnedVertexCount * sizeof(ModelVertex) } },
-      { 2, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->skinBuffer->gpu, 0, data->skinnedVertexCount * 8 } },
+      { 0, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->rawVertexBuffer->gpu, 0, meta->skinnedVertexCount * sizeof(ModelVertex) } },
+      { 1, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->vertexBuffer->gpu, 0, meta->vertexCount * sizeof(ModelVertex) } },
+      { 2, GPU_SLOT_STORAGE_BUFFER, .buffer = { model->skinBuffer->gpu, 0, meta->skinnedVertexCount * 8 } },
       { 3, GPU_SLOT_UNIFORM_BUFFER, .buffer = { NULL, 0, 0 } } // Filled in for each skin
     };
 
     gpu_bind_pipeline(state.stream, shader->computePipeline, GPU_PIPELINE_COMPUTE);
 
-    for (uint32_t i = 0, baseVertex = 0; i < data->skinCount; i++) {
-      ModelSkin* skin = &data->skins[i];
+    uint32_t skinVertexCursor = 0;
+    ModelSkin* prevSkin = NULL;
 
-      uint32_t align = state.limits.uniformBufferAlign;
-      BufferView view = getBuffer(GPU_BUFFER_STREAM, skin->jointCount * 16 * sizeof(float), align);
-      if (!view.buffer) return false;
-      bindings[3].buffer = (gpu_buffer_binding) { view.buffer, view.offset, view.extent };
+    for (uint32_t i = 0; i < meta->meshCount; i++) {
+      ModelMesh* mesh = &meta->meshes[i];
+      ModelSkin* skin = NULL;
 
-      float transform[16];
-      float* joints = view.pointer;
-      for (uint32_t j = 0; j < skin->jointCount; j++) {
-        mat4_init(transform, model->globalTransforms + 16 * skin->joints[j]);
-        if (skin->inverseBindMatrices) mat4_mul(transform, skin->inverseBindMatrices + 16 * j);
-        memcpy(joints, transform, sizeof(transform));
-        joints += 16;
+      if (mesh->skinDataOffset == ~0u) {
+        continue;
       }
 
-      gpu_bundle* bundle = getBundle(shader->layout, bindings, COUNTOF(bindings));
-      if (!bundle) return false;
-      gpu_bind_bundles(state.stream, shader->gpu, &bundle, 0, 1, NULL, 0);
-
-      // Animate in 2 passes: first animate vertices with blend shapes, then animate the rest
-      // We do this because the source buffer is different for blended vs. unblended vertices:
-      // - Unblended vertices should animate the original vertices from rawVertexBuffer
-      // - Blended vertices should animate the post-blended vertices in-place
-      for (uint32_t j = 0; j < 2; j++) {
-        uint32_t subgroupSize = state.device.subgroupSize; 
-        uint32_t verticesRemaining = j == 0 ? skin->blendedVertexCount : (skin->vertexCount - skin->blendedVertexCount);
-        uint32_t maxVerticesPerDispatch = (uint32_t) MIN((uint64_t) state.limits.workgroupCount[0] * subgroupSize, (uint64_t) verticesRemaining);
-
-        while (verticesRemaining > 0) {
-          uint32_t vertexCount = MIN(verticesRemaining, maxVerticesPerDispatch);
-          gpu_push_constants(state.stream, shader->gpu, (uint32_t[3]) { baseVertex, vertexCount, j == 0 }, 12);
-          gpu_compute(state.stream, (vertexCount + subgroupSize - 1) / subgroupSize, 1, 1);
-          verticesRemaining -= vertexCount;
-          baseVertex += vertexCount;
+      // Search through nodes to find the skin for this mesh
+      for (uint32_t j = 0; j < meta->nodeCount; j++) {
+        if (meta->nodes[j].mesh == i && meta->nodes[j].skin != ~0u) {
+          skin = &meta->skins[meta->nodes[j].skin];
+          break;
         }
+      }
+
+      if (!skin) {
+        continue;
+      }
+
+      if (skin != prevSkin) {
+        uint32_t align = state.limits.uniformBufferAlign;
+        BufferView view = getBuffer(GPU_BUFFER_STREAM, skin->jointCount * 16 * sizeof(float), align);
+        if (!view.buffer) return false;
+        bindings[3].buffer = (gpu_buffer_binding) { view.buffer, view.offset, view.extent };
+
+        float transform[16];
+        float* joints = view.pointer;
+        for (uint32_t j = 0; j < skin->jointCount; j++) {
+          mat4_init(transform, model->globalTransforms + 16 * skin->joints[j]);
+          if (skin->inverseBindMatrices) mat4_mul(transform, skin->inverseBindMatrices + 16 * j);
+          memcpy(joints, transform, sizeof(transform));
+          joints += 16;
+        }
+
+        gpu_bundle* bundle = getBundle(shader->layout, bindings, COUNTOF(bindings));
+        if (!bundle) return false;
+        gpu_bind_bundles(state.stream, shader->gpu, &bundle, 0, 1, NULL, 0);
+
+        prevSkin = skin;
+      }
+
+      uint32_t subgroupSize = state.device.subgroupSize;
+      uint32_t verticesRemaining = mesh->vertexCount;
+      uint32_t maxVerticesPerDispatch = (uint32_t) MIN((uint64_t) state.limits.workgroupCount[0] * subgroupSize, (uint64_t) verticesRemaining);
+      uint32_t baseVertex = mesh->vertexOffset;
+      bool inplace = mesh->blendShapeCount > 0;
+
+      while (verticesRemaining > 0) {
+        uint32_t vertexCount = MIN(verticesRemaining, maxVerticesPerDispatch);
+        gpu_push_constants(state.stream, shader->gpu, (uint32_t[4]) { skinVertexCursor, baseVertex, vertexCount, inplace }, 16);
+        gpu_compute(state.stream, (vertexCount + subgroupSize - 1) / subgroupSize, 1, 1);
+        verticesRemaining -= vertexCount;
+        skinVertexCursor += vertexCount;
+        baseVertex += vertexCount;
       }
     }
   }
@@ -8154,17 +8067,35 @@ bool lovrPassDrawMesh(Pass* pass, Mesh* mesh, float* transform, uint32_t instanc
 }
 
 static bool drawNode(Pass* pass, Model* model, uint32_t index, uint32_t instances) {
-  ModelNode* node = &model->info.data->nodes[index];
+  ModelMetadata* meta = &model->meta;
+  ModelNode* node = &meta->nodes[index];
   mat4 globalTransform = model->globalTransforms + 16 * index;
 
-  for (uint32_t i = 0; i < node->primitiveCount; i++) {
-    DrawInfo draw = model->draws[node->primitiveIndex + i];
-    if (node->skin == ~0u) draw.transform = globalTransform;
-    draw.instances = instances;
-    if (!lovrPassDraw(pass, &draw)) return false;
+  if (node->mesh != ~0u) {
+    ModelMesh* mesh = &meta->meshes[node->mesh];
+    ModelPart* part = mesh->parts;
+
+    for (uint32_t i = 0; i < mesh->partCount; i++, part++) {
+      DrawInfo draw = {
+        .mode = part->mode == DRAW_POINT_LIST ? DRAW_POINTS : part->mode == DRAW_LINE_LIST ? DRAW_LINES : DRAW_TRIANGLES,
+        .material = model->materials && part->material != ~0u ? model->materials[part->material] : NULL,
+        .transform = node->skin == ~0u ? globalTransform : NULL,
+        .bounds = part->bounds,
+        .vertex.buffer = model->vertexBuffer,
+        .index.buffer = mesh->indexCount > 0 ? model->indexBuffer : NULL,
+        .start = (mesh->indexCount > 0 ? mesh->indexOffset : mesh->vertexOffset) + part->start,
+        .count = part->count,
+        .baseVertex = mesh->vertexOffset + part->baseVertex,
+        .instances = instances
+      };
+
+      if (!lovrPassDraw(pass, &draw)) {
+        return false;
+      }
+    }
   }
 
-  for (uint32_t i = node->child; i != ~0u; i = model->info.data->nodes[i].sibling) {
+  for (uint32_t i = node->child; i != ~0u; i = meta->nodes[i].sibling) {
     if (!drawNode(pass, model, i, instances)) {
       return false;
     }
@@ -8179,14 +8110,59 @@ bool lovrPassDrawModel(Pass* pass, Model* model, float* transform, uint32_t inst
   }
 
   if (model->transformsDirty) {
-    updateModelTransforms(model, model->info.data->rootNode, (float[]) MAT4_IDENTITY);
+    updateModelTransforms(model, model->meta.rootNode, (float[]) MAT4_IDENTITY);
     model->transformsDirty = false;
   }
 
   if (!lovrPassPush(pass, STACK_TRANSFORM)) return false;
   lovrPassTransform(pass, transform);
-  if (!drawNode(pass, model, model->info.data->rootNode, instances)) return false;
+  if (!drawNode(pass, model, model->meta.rootNode, instances)) return false;
   if (!lovrPassPop(pass, STACK_TRANSFORM)) return false;
+  return true;
+}
+
+bool lovrPassDrawPart(Pass* pass, Model* model, uint32_t meshIndex, uint32_t partIndex, float* transform, uint32_t instances) {
+  lovrCheck(meshIndex < model->meta.meshCount, "Model mesh index %d is out of range", meshIndex + 1);
+  lovrCheck(partIndex == ~0u || partIndex < model->meta.meshes[meshIndex].partCount, "Model part index %d is out of range", partIndex + 1);
+
+  if (!lovrModelAnimateVertices(model)) {
+    return false;
+  }
+
+  if (model->transformsDirty) {
+    updateModelTransforms(model, model->meta.rootNode, (float[]) MAT4_IDENTITY);
+    model->transformsDirty = false;
+  }
+
+  ModelMesh* mesh = &model->meta.meshes[meshIndex];
+
+  uint32_t partCount = 1;
+  if (partIndex == ~0u) {
+    partIndex = 0;
+    partCount = mesh->partCount;
+  }
+
+  for (uint32_t i = 0; i < partCount; i++) {
+    ModelPart* part = &model->meta.parts[partIndex + i];
+
+    DrawInfo draw = {
+      .mode = part->mode == DRAW_POINT_LIST ? DRAW_POINTS : part->mode == DRAW_LINE_LIST ? DRAW_LINES : DRAW_TRIANGLES,
+      .material = model->materials && part->material != ~0u ? model->materials[part->material] : NULL,
+      .transform = transform, // TODO fix skinned mesh transforms?
+      .bounds = part->bounds,
+      .vertex.buffer = model->vertexBuffer,
+      .index.buffer = mesh->indexCount > 0 ? model->indexBuffer : NULL,
+      .start = (mesh->indexCount > 0 ? mesh->indexOffset : mesh->vertexOffset) + part->start,
+      .count = part->count,
+      .baseVertex = mesh->vertexOffset + part->baseVertex,
+      .instances = instances
+    };
+
+    if (!lovrPassDraw(pass, &draw)) {
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -8951,7 +8927,7 @@ static void updateModelTransforms(Model* model, uint32_t nodeIndex, float* paren
   mat4_rotateQuat(global, local->rotation);
   mat4_scale(global, local->scale[0], local->scale[1], local->scale[2]);
 
-  ModelNode* nodes = model->info.data->nodes;
+  ModelNode* nodes = model->meta.nodes;
   for (uint32_t i = nodes[nodeIndex].child; i != ~0u; i = nodes[i].sibling) {
     updateModelTransforms(model, i, global);
   }

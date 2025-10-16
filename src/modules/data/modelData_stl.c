@@ -1,9 +1,8 @@
 #include "data/modelData.h"
 #include "data/blob.h"
-#include "core/maf.h"
 #include "util.h"
-#include <stdlib.h>
 #include <string.h>
+#include <float.h>
 
 static bool lovrModelDataInitStlAscii(ModelData** result, Blob* source, ModelDataIO* io) {
   return lovrSetError("ASCII STL files are not supported yet");
@@ -15,50 +14,47 @@ static bool lovrModelDataInitStlBinary(ModelData** result, Blob* source, ModelDa
   char* data = (char*) source->data + 84;
 
   uint32_t vertexCount = triangleCount * 3;
-  size_t vertexBufferSize = vertexCount * 6 * sizeof(float);
-  float* vertices = lovrMalloc(vertexBufferSize);
 
   ModelData* model = lovrCalloc(sizeof(ModelData));
   model->ref = 1;
-  model->blobCount = 1;
-  model->bufferCount = 1;
-  model->attributeCount = 2;
-  model->primitiveCount = 1;
-  model->nodeCount = 1;
+  model->meta.meshCount = 1;
+  model->meta.vertexCount = vertexCount;
+  model->meta.meshCount = 1;
+  model->meta.nodeCount = 1;
 
   lovrModelDataAllocate(model);
 
-  model->blobs[0] = lovrBlobCreate(vertices, vertexBufferSize, "stl vertex data");
-  model->buffers[0] = (ModelBuffer) { .data = (char*) vertices, .size = vertexBufferSize, .stride = 6 * sizeof(float) };
-  model->attributes[0] = (ModelAttribute) { .count = vertexCount, .components = 3, .type = F32, .offset = 0 * sizeof(float) };
-  model->attributes[1] = (ModelAttribute) { .count = vertexCount, .components = 3, .type = F32, .offset = 3 * sizeof(float) };
-  model->primitives[0] = (ModelPrimitive) {
-    .mode = DRAW_TRIANGLE_LIST,
-    .material = ~0u,
-    .attributes = {
-      [ATTR_POSITION] = &model->attributes[0],
-      [ATTR_NORMAL] = &model->attributes[1]
-    }
-  };
-  model->nodes[0] = (ModelNode) {
-    .hasMatrix = true,
-    .transform.matrix = MAT4_IDENTITY,
-    .primitiveCount = 1,
-    .child = ~0u,
-    .sibling = ~0u,
-    .parent = ~0u,
-    .skin = ~0u
-  };
+  model->meta.meshes[0].vertexOffset = 0;
+  model->meta.meshes[0].vertexCount = vertexCount;
+  model->meta.nodes[0].mesh = 0;
+
+  ModelVertex* vertices = model->vertices;
+  float* bounds = model->meta.parts[0].bounds;
 
   for (uint32_t i = 0; i < triangleCount; i++) {
-    memcpy(vertices + 3, data, 12);
-    memcpy(vertices + 9, data, 12);
-    memcpy(vertices + 15, data, 12), data += 12;
-    memcpy(vertices + 0, data, 12), data += 12;
-    memcpy(vertices + 6, data, 12), data += 12;
-    memcpy(vertices + 12, data, 12), data += 12;
-    vertices += 18;
-    data += 2;
+    float* f = (float*) data;
+    float* v[3] = { f + 3, f + 6, f + 9 };
+
+    uint32_t normal =
+      ((((uint32_t) (int32_t) (f[0] * 511.f)) & 0x3ff) <<  0) |
+      ((((uint32_t) (int32_t) (f[1] * 511.f)) & 0x3ff) << 10) |
+      ((((uint32_t) (int32_t) (f[2] * 511.f)) & 0x3ff) << 20);
+
+    for (uint32_t j = 0; j < 3; j++) {
+      *vertices++ = (ModelVertex) {
+        .position = { v[j][0], v[j][1], v[j][2] },
+        .normal = normal,
+        .color = { 0xff, 0xff, 0xff, 0xff }
+      };
+      bounds[0] = MIN(bounds[0], v[j][0]);
+      bounds[1] = MAX(bounds[1], v[j][0]);
+      bounds[2] = MIN(bounds[2], v[j][1]);
+      bounds[3] = MAX(bounds[3], v[j][1]);
+      bounds[4] = MIN(bounds[4], v[j][2]);
+      bounds[5] = MAX(bounds[5], v[j][2]);
+    }
+
+    data += 50;
   }
 
   *result = model;

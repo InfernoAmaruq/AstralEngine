@@ -6,7 +6,8 @@
 layout(local_size_x = 32, local_size_x_id = 0) in;
 
 layout(push_constant) uniform PushConstants {
-  uint baseVertex;
+  uint baseVertexIn;
+  uint baseVertexOut;
   uint vertexCount;
   bool inplace;
 };
@@ -31,14 +32,14 @@ layout(set = 0, binding = 3) uniform JointTransforms { mat4 joints[256]; };
 
 void lovrmain() {
   if (GlobalThreadID.x >= vertexCount) return;
-  uint vertexIndex = baseVertex + GlobalThreadID.x;
+  uint id = GlobalThreadID.x;
 
-  uint indices = skin[vertexIndex].indices;
+  uint indices = skin[baseVertexIn + id].indices;
   uint i0 = (indices >> 0) & 0xff;
   uint i1 = (indices >> 8) & 0xff;
   uint i2 = (indices >> 16) & 0xff;
   uint i3 = (indices >> 24) & 0xff;
-  vec4 weights = unpackUnorm4x8(skin[vertexIndex].weights);
+  vec4 weights = unpackUnorm4x8(skin[baseVertexIn + id].weights);
 
   // Model loader does not currently renormalize weights post-quantization
   weights /= weights[0] + weights[1] + weights[2] + weights[3];
@@ -49,15 +50,15 @@ void lovrmain() {
   matrix += joints[i2] * weights[2];
   matrix += joints[i3] * weights[3];
 
-  ModelVertex vertex = inplace ? vertexOut[vertexIndex] : vertexIn[vertexIndex];
+  ModelVertex vertex = inplace ? vertexOut[baseVertexOut + id] : vertexIn[baseVertexIn + id];
   vec4 position = vec4(vertex.x, vertex.y, vertex.z, 1.);
   vec3 normal = normalize(unpackSnorm10x3(vertex.normal).xyz);
 
   vec3 skinnedPosition = (matrix * position).xyz;
   vec3 skinnedNormal = mat3(matrix) * normal;
 
-  vertexOut[vertexIndex].x = skinnedPosition.x;
-  vertexOut[vertexIndex].y = skinnedPosition.y;
-  vertexOut[vertexIndex].z = skinnedPosition.z;
-  vertexOut[vertexIndex].normal = packSnorm10x3(vec4(skinnedNormal, 0.));
+  vertexOut[baseVertexOut + id].x = skinnedPosition.x;
+  vertexOut[baseVertexOut + id].y = skinnedPosition.y;
+  vertexOut[baseVertexOut + id].z = skinnedPosition.z;
+  vertexOut[baseVertexOut + id].normal = packSnorm10x3(vec4(skinnedNormal, 0.));
 }

@@ -545,7 +545,7 @@ void luax_optcolor(lua_State* L, int index, float color[4]) {
   }
 }
 
-int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCount, uint32_t** indices, uint32_t* indexCount, bool* shouldFree) {
+int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCount, uint32_t** indices, uint32_t* indexCount) {
   if (lua_istable(L, index)) {
     lua_rawgeti(L, index, 1);
     bool nested = lua_type(L, -1) == LUA_TTABLE;
@@ -554,7 +554,6 @@ int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCou
     *vertexCount = luax_len(L, index) / (nested ? 1 : 3);
     luax_check(L, *vertexCount > 0, "Invalid mesh data: vertex count is zero");
     *vertices = lovrMalloc(sizeof(float) * *vertexCount * 3);
-    *shouldFree = true;
 
     if (nested) {
       for (uint32_t i = 0; i < *vertexCount; i++) {
@@ -598,29 +597,18 @@ int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCou
 
   if (modelData) {
     lovrModelDataGetTriangles(modelData, vertices, indices, vertexCount, indexCount);
-    *shouldFree = false;
     return index + 1;
   }
 
 #ifndef LOVR_DISABLE_GRAPHICS
-  Model* model = luax_totype(L, index, Model);
-
-  if (model) {
-    ModelData* modelData = lovrModelGetInfo(model)->data;
-    lovrModelDataGetTriangles(modelData, vertices, indices, vertexCount, indexCount);
-    *shouldFree = false;
-    return index + 1;
-  }
-
   Mesh* mesh = luax_totype(L, index, Mesh);
 
   if (mesh) {
     luax_assert(L, lovrMeshGetTriangles(mesh, vertices, indices, vertexCount, indexCount));
-    *shouldFree = true;
     return index + 1;
   }
 
-  luaL_argerror(L, index, "table, ModelData, Model, or Mesh expected");
+  luaL_argerror(L, index, "table, ModelData, or Mesh expected");
 #else
   luaL_argerror(L, index, "table or ModelData expected");
 #endif

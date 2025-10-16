@@ -8,6 +8,7 @@ struct Blob;
 struct Image;
 struct Rasterizer;
 struct ModelData;
+struct ModelMetadata;
 
 typedef struct Buffer Buffer;
 typedef struct Texture Texture;
@@ -463,8 +464,10 @@ void lovrMeshSetBoundingBox(Mesh* mesh, float box[6]);
 bool lovrMeshComputeBoundingBox(Mesh* mesh);
 DrawMode lovrMeshGetDrawMode(Mesh* mesh);
 void lovrMeshSetDrawMode(Mesh* mesh, DrawMode mode);
-void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count, uint32_t* offset);
-bool lovrMeshSetDrawRange(Mesh* mesh, uint32_t start, uint32_t count, uint32_t offset);
+void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count);
+bool lovrMeshSetDrawRange(Mesh* mesh, uint32_t start, uint32_t count);
+uint32_t lovrMeshGetBaseVertex(Mesh* mesh);
+void lovrMeshSetBaseVertex(Mesh* mesh, uint32_t base);
 Material* lovrMeshGetMaterial(Mesh* mesh);
 void lovrMeshSetMaterial(Mesh* mesh, Material* material);
 
@@ -484,7 +487,7 @@ typedef enum {
 Model* lovrModelCreate(const ModelInfo* info);
 Model* lovrModelClone(Model* model);
 void lovrModelDestroy(void* ref);
-const ModelInfo* lovrModelGetInfo(Model* model);
+struct ModelMetadata* lovrModelGetMetadata(Model* model);
 void lovrModelResetNodeTransforms(Model* model);
 void lovrModelResetBlendShapes(Model* model);
 bool lovrModelAnimate(Model* model, uint32_t animationIndex, float time, float alpha);
@@ -691,6 +694,7 @@ bool lovrPassSkybox(Pass* pass, Texture* texture);
 bool lovrPassFill(Pass* pass, Texture* texture);
 bool lovrPassMonkey(Pass* pass, float* transform);
 bool lovrPassDrawModel(Pass* pass, Model* model, float* transform, uint32_t instances);
+bool lovrPassDrawPart(Pass* pass, Model* model, uint32_t mesh, uint32_t part, float* transform, uint32_t instances);
 bool lovrPassDrawMesh(Pass* pass, Mesh* mesh, float* transform, uint32_t instances);
 bool lovrPassDrawTexture(Pass* pass, Texture* texture, float* transform);
 bool lovrPassMesh(Pass* pass, Buffer* vertices, Buffer* indices, float* transform, uint32_t start, uint32_t count, uint32_t instances, uint32_t baseVertex);

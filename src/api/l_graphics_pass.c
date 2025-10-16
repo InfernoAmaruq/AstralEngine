@@ -1041,6 +1041,18 @@ static int l_lovrPassDraw(lua_State* L) {
   return luax_typeerror(L, 2, "Mesh, Model, or Texture");
 }
 
+static int l_lovrPassDrawPart(lua_State* L) {
+  Pass* pass = luax_checktype(L, 1, Pass);
+  Model* model = luax_checktype(L, 2, Model);
+  uint32_t mesh = luax_checku32(L, 3) - 1;
+  uint32_t part = lua_isnoneornil(L, 4) ? ~0u : luax_checku32(L, 4) - 1;
+  float transform[16];
+  int index = luax_readmat4(L, 5, transform, 1);
+  uint32_t instances = luax_optu32(L, index, 1);
+  luax_assert(L, lovrPassDrawPart(pass, model, mesh, part, transform, instances));
+  return 0;
+}
+
 static int l_lovrPassMesh(lua_State* L) {
   Pass* pass = luax_checktype(L, 1, Pass);
   Buffer* vertices = (!lua_toboolean(L, 2) || lua_type(L, 2) == LUA_TNUMBER) ? NULL : luax_checktype(L, 2, Buffer);
@@ -1207,6 +1219,7 @@ const luaL_Reg lovrPass[] = {
   { "fill", l_lovrPassFill },
   { "monkey", l_lovrPassMonkey },
   { "draw", l_lovrPassDraw },
+  { "drawPart", l_lovrPassDrawPart },
   { "mesh", l_lovrPassMesh },
 
   { "beginTally", l_lovrPassBeginTally },

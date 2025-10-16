@@ -307,6 +307,8 @@ int l_lovrModelMetaGetDimensions(lua_State* L);
 int l_lovrModelMetaGetCenter(lua_State* L);
 int l_lovrModelMetaGetBoundingBox(lua_State* L);
 int l_lovrModelMetaGetMeshCount(lua_State* L);
+int l_lovrModelMetaGetMeshVertexCount(lua_State* L);
+int l_lovrModelMetaGetMeshIndexCount(lua_State* L);
 int l_lovrModelMetaGetMeshPartCount(lua_State* L);
 int l_lovrModelMetaGetMeshDrawMode(lua_State* L);
 int l_lovrModelMetaGetMeshDrawRange(lua_State* L);
@@ -354,6 +356,8 @@ const luaL_Reg lovrModel[] = {
   { "getCenter", l_lovrModelMetaGetCenter },
   { "getBoundingBox", l_lovrModelMetaGetBoundingBox },
   { "getMeshCount", l_lovrModelMetaGetMeshCount },
+  { "getMeshVertexCount", l_lovrModelMetaGetMeshVertexCount },
+  { "getMeshIndexCount", l_lovrModelMetaGetMeshIndexCount },
   { "getMeshPartCount", l_lovrModelMetaGetMeshPartCount },
   { "getMeshDrawMode", l_lovrModelMetaGetMeshDrawMode },
   { "getMeshDrawRange", l_lovrModelMetaGetMeshDrawRange },

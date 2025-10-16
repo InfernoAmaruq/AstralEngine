@@ -20,6 +20,14 @@ dev
 - Add `Pass:getViewRay`.
 - Add `lovr.headset.connect` and `t.headset.connect`.
 - Add support for creating 3D texture views.
+- Add `Model:meshes` to iterate over model nodes with meshes.
+- Add `Pass:drawPart` to draw a single part or mesh of a `Model`.
+- Add `Model(Data):getNodeChild/getNodeSibling`.
+- Add `Model(Data):getNodeMesh` (replaces `:getNodeMeshes`).
+- Add `ModelData:getMeshBlendShapeCount/getMeshBlendShapeName/getBlendVertex`.
+- Add `ModelData:getMeshPartCount`.
+- Add `ModelData:getMeshDrawRange`.
+- Add `Mesh:get/setBaseVertex`.
 
 ### Change
 
@@ -29,6 +37,11 @@ dev
 - Change `lovr.headset.getPosition/Orientation/Direction/Pose` to also take a `Model`.
 - Change `TerrainShape` to support `nil` heights (treated as holes).
 - Change `Curve:render` to no longer always return 2 points for curves with 2 control points.
+- Change `ModelData:getMeshVertex` to return data in a consistent vertex format.
+- Change `ModelData:getMeshDrawMode/getMeshMaterial` to take an optional part index.
+- Change `ModelData:getWidth/Height/Depth/Dimensions/BoundingBox` to take an optional mesh/part index.
+- Change model loading to use multiple threads to load images.
+- Change `lovr.graphics.newModel` to no longer retain its `ModelData`, allowing its memory to be freed.
 
 ### Fix
 
@@ -52,10 +65,23 @@ dev
 ### Deprecate
 
 - Deprecate variant of `lovr.headset.newModel` that takes a `Device`.
+- Deprecate `Model(Data):getNodeChildren` (use `:getNodeChild` and `:getNodeSibling`).
+- Deprecate base vertex argument in `Mesh:get/setDrawRange` (use `Mesh:get/setBaseVertex`).
+- Deprecate `Model:getVertexBuffer/getIndexBuffer/getMesh` (create your own from `ModelData`).
 
 ### Remove
 
 - Remove `animated` flag in `lovr.headset.newModel` (all models are animated now).
+- Remove support for creating `ConvexShape` and `MeshShape` from a `Model` (use `ModelData`).
+- Remove support for passing a `Model` to `lovr.audio.setGeometry` (use `ModelData`).
+- Remove `ModelData:getBlobCount` and `ModelData:getBlob`.
+- Remove `ModelData:getNodeMeshes` (use `ModelData:getNodeMesh`).
+- Remove `ModelData:getMeshVertexFormat/getMeshIndexFormat`.
+- Remove `ModelData:getTriangleCount` (use `ModelData:getMeshVertexCount/getMeshIndexCount`).
+- Remove `ModelData:getTriangles` (use `ModelData:getMeshVertex/getMeshIndex`).
+- Remove `Model(Data):getBoundingSphere`.
+- Remove `Model:getVertexCount` (use `ModelData:getMeshVertexCount`).
+- Remove `Model:getData` (create and keep a `ModelData` around as needed).
 
 v0.18.0 - 2025-02-14
 ---

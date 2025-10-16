@@ -321,6 +321,44 @@ int l_lovrModelMetaGetMeshCount(lua_State* L) {
   return 1;
 }
 
+int l_lovrModelMetaGetMeshBlendShapeCount(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  uint32_t mesh = luax_checkmeshindex(L, 2, meta);
+  lua_pushinteger(L, meta->meshes[mesh].blendShapeCount);
+  return 1;
+}
+
+int l_lovrModelMetaGetMeshBlendShapeName(lua_State* L) {
+  ModelMetadata* meta = luax_checkmodelmeta(L, 1);
+  uint32_t mesh = luax_checkmeshindex(L, 2, meta);
+  uint32_t blendShape = luax_checku32(L, 3) - 1;
+  luax_check(L, blendShape < meta->meshes[mesh].blendShapeCount, "Blend shape %d is out of range", blendShape + 1);
+  lua_pushstring(L, meta->meshes[mesh].blendShapes[blendShape].name);
+  return 1;
+}
+
+int l_lovrModelDataGetMeshBlendVertex(lua_State* L) {
+  ModelData* model = luax_checktype(L, 1, ModelData);
+  ModelMetadata* meta = &model->meta;
+  uint32_t meshIndex = luax_checkmeshindex(L, 2, meta);
+  uint32_t blendShape = luax_checku32(L, 3) - 1;
+  uint32_t vertex = luax_checku32(L, 4) - 1;
+  ModelMesh* mesh = &meta->meshes[meshIndex];
+  luax_check(L, blendShape < mesh->blendShapeCount, "Blend shape %d is out of range", blendShape + 1);
+  luax_check(L, vertex < mesh->vertexCount, "Vertex %d is out of range", vertex + 1);
+  BlendData* data = &model->blendData[mesh->blendDataOffset + blendShape * mesh->vertexCount + vertex];
+  lua_pushnumber(L, data->x);
+  lua_pushnumber(L, data->y);
+  lua_pushnumber(L, data->z);
+  lua_pushnumber(L, data->nx);
+  lua_pushnumber(L, data->ny);
+  lua_pushnumber(L, data->nz);
+  lua_pushnumber(L, data->tx);
+  lua_pushnumber(L, data->ty);
+  lua_pushnumber(L, data->tz);
+  return 9;
+}
+
 int l_lovrModelMetaGetMeshVertexCount(lua_State* L) {
   ModelMetadata* meta = luax_checkmodelmeta(L, 1);
   uint32_t mesh = luax_checkmeshindex(L, 2, meta);
@@ -735,6 +773,9 @@ const luaL_Reg lovrModelData[] = {
   { "getNodeSkin", l_lovrModelMetaGetNodeSkin },
 
   { "getMeshCount", l_lovrModelMetaGetMeshCount },
+  { "getMeshBlendShapeCount", l_lovrModelMetaGetMeshBlendShapeCount },
+  { "getMeshBlendShapeName", l_lovrModelMetaGetMeshBlendShapeName },
+  { "getMeshBlendVertex", l_lovrModelDataGetMeshBlendVertex },
   { "getMeshVertexCount", l_lovrModelMetaGetMeshVertexCount },
   { "getMeshIndexCount", l_lovrModelMetaGetMeshIndexCount },
   { "getMeshVertex", l_lovrModelDataGetMeshVertex },
@@ -769,9 +810,6 @@ const luaL_Reg lovrModelData[] = {
   { "getSkinCount", l_lovrModelMetaGetSkinCount },
   { "getSkinJoints", l_lovrModelMetaGetSkinJoints },
   { "getSkinInverseBindMatrix", l_lovrModelMetaGetSkinInverseBindMatrix },
-
-  { "getBlendShapeCount", l_lovrModelMetaGetBlendShapeCount },
-  { "getBlendShapeName", l_lovrModelMetaGetBlendShapeName },
 
   { NULL, NULL }
 };

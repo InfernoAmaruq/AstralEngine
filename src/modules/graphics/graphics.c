@@ -8154,7 +8154,7 @@ bool lovrPassDrawPart(Pass* pass, Model* model, uint32_t meshIndex, uint32_t par
       .index.buffer = mesh->indexCount > 0 ? model->indexBuffer : NULL,
       .start = (mesh->indexCount > 0 ? mesh->indexOffset : mesh->vertexOffset) + part->start,
       .count = part->count,
-      .baseVertex = mesh->indexOffset + part->baseVertex,
+      .baseVertex = mesh->vertexOffset + part->baseVertex,
       .instances = instances
     };
 

@@ -4,7 +4,7 @@ vector = {}
 vector.__index = vector
 
 function vector.pack(x, y, z)
-  local v = { x = x or 0, y = y or 0, z = z or 0 }
+  local v = { x = x, y = y or x, z = z or (y and 0 or x) }
   setmetatable(v, vector)
   return v
 end
@@ -174,8 +174,7 @@ end
 
 setmetatable(vector, {
   __call = function(self, x, y, z)
-    x = x or 0
-    local instance = { x = x, y = y or x, z = z or x }
+    local instance = { x = x, y = y or x, z = z or (y and 0 or x) }
     setmetatable(instance, self)
     return instance
   end

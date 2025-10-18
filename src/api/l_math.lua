@@ -422,7 +422,7 @@ function quaternion.__mul(q, b)
     return result
   else
     local ux, uy, uz = q.x, q.y, q.z
-    local cx, cy, cz = q.y * b.z - q.z * b.y, q.z * b.x - q.x * b.z, q.x * b.y - q.y * b.z
+    local cx, cy, cz = q.y * b.z - q.z * b.y, q.z * b.x - q.x * b.z, q.x * b.y - q.y * b.x
 
     local uu = ux * ux + uy * uy + uz * uz
     local uv = ux * b.x + uy * b.y + uz * b.z

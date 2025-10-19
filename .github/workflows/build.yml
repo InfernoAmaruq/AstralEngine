@@ -66,15 +66,19 @@ jobs:
     name: Android
     strategy:
       matrix:
-        abi: [arm64-v8a, x86_64]
+        include:
+          - abi: arm64-v8a
+            android_version: 32
+          - abi: x86_64
+            android_version: 29
     runs-on: ubuntu-22.04
     steps:
       - name: Update Packages
         run: sudo apt update
       - name: Install Packages
         run: sudo apt install -y glslang-tools
-      - name: Install Android 29
-        run: ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-29"
+      - name: Install Android
+        run: ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-${{ matrix.android_version }}"
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -98,7 +102,7 @@ jobs:
           -D ANDROID_SDK=$ANDROID_HOME
           -D ANDROID_ABI=${{ matrix.abi }}
           -D ANDROID_STL=c++_shared
-          -D ANDROID_NATIVE_API_LEVEL=29
+          -D ANDROID_NATIVE_API_LEVEL=${{ matrix.android_version }}
           -D ANDROID_BUILD_TOOLS_VERSION=34.0.0
           -D ANDROID_KEYSTORE=key.keystore
           -D ANDROID_KEYSTORE_PASS=pass:hunter2

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.lovr.app" android:installLocation="auto" android:versionCode="1">
-  <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="29"/>
   <uses-feature android:name="android.hardware.vulkan.version" android:version="0x00401000" android:required="true"/>
   <uses-feature android:name="android.hardware.vr.headtracking" android:required="false"/>
+
   <!-- Oculus -->
   <uses-feature android:name="oculus.software.handtracking" android:required="false"/>
   <uses-feature android:name="oculus.software.trackedkeyboard" android:required="false"/>
@@ -15,6 +15,8 @@
   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
   <uses-permission android:name="android.permission.INTERNET"/>
+
+  <!-- Magic Leap -->
   <uses-permission android:name="com.magicleap.permission.HAND_TRACKING" />
 
   <!-- Khronos/Generic -->
@@ -27,7 +29,7 @@
   <application android:allowBackup="false" android:label="LÖVR" android:extractNativeLibs="false" android:debuggable="true">
     <meta-data android:name="pvr.app.type" android:value="vr"/> <!-- Pico -->
     <meta-data android:name="com.samsung.android.vr.application.mode" android:value="vr_only"/>
-    <meta-data android:name="com.oculus.supportedDevices" android:value="quest|quest2"/>
+    <meta-data android:name="com.oculus.supportedDevices" android:value="quest2|questpro|quest3|quest3s"/>
     <meta-data android:name="com.oculus.handtracking.version" android:value="V2.0"/>
     <activity android:name="Activity" android:launchMode="singleTask" android:screenOrientation="landscape" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" android:excludeFromRecents="true" android:exported="true">
       <meta-data android:name="android.app.lib_name" android:value="lovr"/>

@@ -732,6 +732,9 @@ elseif(ANDROID)
   configure_file(${PROJECT_SOURCE_DIR}/etc/Activity.java ${PROJECT_BINARY_DIR}/Activity.java)
   target_compile_definitions(lovr PRIVATE "LOVR_JAVA_PACKAGE=${ANDROID_PACKAGE_C}")
 
+  set(ANDROID_MIN_SDK_VERSION ${ANDROID_NATIVE_API_LEVEL})
+  set(ANDROID_TARGET_SDK_VERSION ${ANDROID_MIN_SDK_VERSION} CACHE STRING "The targetSdkVersion to use")
+
   target_sources(lovr PRIVATE src/core/os_android.c)
   target_link_libraries(lovr log android dl)
   target_include_directories(lovr PRIVATE "${ANDROID_NDK}/sources/android/native_app_glue")
@@ -777,9 +780,10 @@ elseif(ANDROID)
       COMMAND
         ${ANDROID_TOOLS}/aapt
         package -f
-        ${PACKAGE_RENAME}
         -0 so
         -M AndroidManifest.xml
+        --min-sdk-version ${ANDROID_MIN_SDK_VERSION}
+        --target-sdk-version ${ANDROID_TARGET_SDK_VERSION}
         -I ${ANDROID_JAR}
         -F lovr.unaligned.apk
         -A ${ANDROID_ASSETS}

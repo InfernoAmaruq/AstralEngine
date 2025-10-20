@@ -2447,8 +2447,8 @@ void gpu_clear_texture(gpu_stream* stream, gpu_texture* texture, float value[4],
     .aspectMask = texture->aspect,
     .baseMipLevel = level,
     .levelCount = levelCount,
-    .baseArrayLayer = layer,
-    .layerCount = layerCount
+    .baseArrayLayer = texture->layers ? layer : 0,
+    .layerCount = texture->layers ? layerCount : 1
   };
 
   if (texture->aspect == VK_IMAGE_ASPECT_COLOR_BIT) {

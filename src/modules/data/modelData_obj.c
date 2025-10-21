@@ -327,8 +327,8 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
 
   ModelMetadata* meta = &model->meta;
   meta->meshCount = 1;
-  meta->vertexCount = vertices.length;
-  meta->indexCount = indices.length;
+  meta->vertexCount = (uint32_t) vertices.length;
+  meta->indexCount = (uint32_t) indices.length;
   meta->indexSize = 4;
   meta->partCount = (uint32_t) groups.length;
   meta->nodeCount = 1;
@@ -370,9 +370,9 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
 
   meta->meshes[0] = (ModelMesh) {
     .parts = meta->parts,
-    .partCount = groups.length,
-    .vertexCount = vertices.length,
-    .indexCount = indices.length,
+    .partCount = (uint32_t) groups.length,
+    .vertexCount = meta->vertexCount,
+    .indexCount = meta->indexCount,
     .skinDataOffset = ~0u,
     .blendDataOffset = ~0u
   };

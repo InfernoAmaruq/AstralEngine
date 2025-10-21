@@ -753,6 +753,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                 uint32_t index = NOM_U32(json, token);
                 indexCount = accessors[index].count;
                 meta->indexSize = MAX(meta->indexSize, typeSizes[accessors[index].type]);
+                meta->indexSize = MAX(meta->indexSize, 2); // U8 indices aren't supported
                 indexed = true;
               } else if (STR_EQ(key, "targets")) {
                 lovrAssertGoto(fail, blendShapeCount == 0 || blendShapeCount == token->size, "Model has inconsistent blend shape counts");

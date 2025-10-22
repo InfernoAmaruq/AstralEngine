@@ -4,6 +4,7 @@
 #include "data/image.h"
 #include "data/modelData.h"
 #include "data/rasterizer.h"
+#include "math/math.h"
 #include "util.h"
 #include <stdlib.h>
 #include <string.h>
@@ -246,8 +247,7 @@ static uint32_t luax_checkdatatype(lua_State* L, int index) {
   const char* string = luaL_checklstring(L, index, &length);
 
   if (length < 3) {
-    luaL_error(L, "invalid DataType '%s'", string);
-    return 0;
+    return luaL_error(L, "invalid DataType '%s'", string);
   }
 
   // Deprecated: plurals are allowed and ignored
@@ -291,8 +291,7 @@ static uint32_t luax_checkdatatype(lua_State* L, int index) {
     }
   }
 
-  luaL_error(L, "invalid DataType '%s'", string);
-  return 0;
+  return luaL_error(L, "invalid DataType '%s'", string);
 }
 
 uint32_t luax_checkcomparemode(lua_State* L, int index) {
@@ -667,6 +666,7 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
   BufferInfo info = { 0 };
   DataLayout layout = LAYOUT_PACKED;
   bool hasData = false;
+  Mat4* matrix = NULL;
   Blob* blob = NULL;
 
   int type = lua_type(L, 1);
@@ -770,18 +770,24 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
           lua_pop(L, 1);
           hasData = true;
           break;
+#ifdef LOVR_USE_LUAU
+        case LUA_TVECTOR:
+          format->length = 0;
+          hasData = true;
+          break;
+#endif
         default:
           if ((blob = luax_totype(L, 2, Blob)) != NULL) {
             luax_check(L, blob->size < UINT32_MAX, "Blob is too big to create a Buffer (max size is 1GB)");
             info.size = (uint32_t) blob->size;
             format->length = info.size / format->stride;
             break;
-          } else if (luax_tovector(L, 2, NULL)) {
+          } else if ((matrix = luax_totype(L, 2, Mat4)) != NULL) {
             format->length = 0;
             hasData = true;
             break;
           }
-          return luax_typeerror(L, 2, "nil, number, vector, table, or Blob");
+          return luax_typeerror(L, 2, "nil, number, table, vector, Blob, or Mat4");
       }
     }
   }
@@ -916,7 +922,7 @@ static int l_lovrGraphicsNewTexture(lua_State* L) {
       info.mipmaps = (info.samples > 1 || info.imageCount == 0 || !mipmappable) ? 1 : ~0u;
     }
     if (info.imageCount > 0 && info.mipmaps > 1 && !mipmappable) {
-      luaL_error(L, "This texture format does not support blitting, which is required for mipmap generation");
+      return luaL_error(L, "This texture format does not support blitting, which is required for mipmap generation");
     }
     lua_pop(L, 1);
 
@@ -933,7 +939,7 @@ static int l_lovrGraphicsNewTexture(lua_State* L) {
         }
         break;
       case LUA_TNIL: break;
-      default: luaL_error(L, "Expected Texture usage to be a string, table, or nil"); return 0;
+      default: return luaL_error(L, "Expected Texture usage to be a string, table, or nil");
     }
     lua_pop(L, 1);
 
@@ -1030,7 +1036,7 @@ static int l_lovrGraphicsNewSampler(lua_State* L) {
     info.mip = luax_checkenum(L, -1, FilterMode, NULL);
     lua_pop(L, 3);
   } else if (!lua_isnil(L, -1)) {
-    luaL_error(L, "Expected string or table for Sampler filter");
+    return luaL_error(L, "Expected string or table for Sampler filter");
   }
   lua_pop(L, 1);
 
@@ -1046,7 +1052,7 @@ static int l_lovrGraphicsNewSampler(lua_State* L) {
     info.wrap[2] = luax_checkenum(L, -1, WrapMode, NULL);
     lua_pop(L, 3);
   } else if (!lua_isnil(L, -1)) {
-    luaL_error(L, "Expected string or table for Sampler wrap");
+    return luaL_error(L, "Expected string or table for Sampler wrap");
   }
   lua_pop(L, 1);
 
@@ -1179,7 +1185,7 @@ static int l_lovrGraphicsNewShader(lua_State* L) {
         switch (lua_type(L, -2)) {
           case LUA_TSTRING: flag.name = lua_tostring(L, -2); break;
           case LUA_TNUMBER: flag.id = lua_tointeger(L, -2); break;
-          default: luaL_error(L, "Unexpected ShaderFlag key type (%s)", lua_typename(L, lua_type(L, -2)));
+          default: return luaL_error(L, "Unexpected ShaderFlag key type (%s)", lua_typename(L, lua_type(L, -2)));
         }
         arr_push(&flags, flag);
         lua_pop(L, 1);
@@ -1192,8 +1198,7 @@ static int l_lovrGraphicsNewShader(lua_State* L) {
           if (shouldFree[i]) lovrFree((void*) source[i].code);
         }
         arr_free(&flags);
-        luaL_error(L, "Too many shader flags");
-        return 0;
+        return luaL_error(L, "Too many shader flags");
       }
     }
     lua_pop(L, 1);
@@ -1289,10 +1294,6 @@ static int l_lovrGraphicsNewMaterial(lua_State* L) {
     info.data.uvShift[0] = luax_optfloat(L, -2, 0.f);
     info.data.uvShift[1] = luax_optfloat(L, -1, 0.f);
     lua_pop(L, 2);
-  } else if (!lua_isnil(L, -1)) {
-    float* v = luax_checkvector(L, -1, V_VEC2, "vec2, table, or nil");
-    info.data.uvShift[0] = v[0];
-    info.data.uvShift[1] = v[1];
   }
   lua_pop(L, 1);
 
@@ -1310,10 +1311,6 @@ static int l_lovrGraphicsNewMaterial(lua_State* L) {
     info.data.uvScale[0] = luax_optfloat(L, -2, 1.f);
     info.data.uvScale[1] = luax_optfloat(L, -1, 1.f);
     lua_pop(L, 2);
-  } else {
-    float* v = luax_checkvector(L, -1, V_VEC2, "vec2, table, or nil");
-    info.data.uvScale[0] = v[0];
-    info.data.uvScale[1] = v[1];
   }
   lua_pop(L, 1);
 

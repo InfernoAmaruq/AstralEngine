@@ -22,6 +22,7 @@ option(LOVR_ENABLE_UTF8 "Enable the utf8 module" ON)
 
 option(LOVR_USE_GLFW "Use GLFW for desktop windows" ON)
 option(LOVR_USE_LUAJIT "Use LuaJIT instead of Lua" ON)
+option(LOVR_USE_LUAU "Use Luau instead of Lua" OFF)
 option(LOVR_USE_GLSLANG "Use glslang to compile GLSL shaders" ON)
 option(LOVR_USE_VULKAN "Use the Vulkan renderer" ON)
 option(LOVR_USE_WEBGPU "Use the WebGPU renderer" OFF)
@@ -99,7 +100,30 @@ if(LOVR_USE_GLFW AND NOT (EMSCRIPTEN OR ANDROID))
 endif()
 
 # Lua
-if(LOVR_USE_LUAJIT AND NOT EMSCRIPTEN)
+if(LOVR_USE_LUAU)
+  set(LOVR_ENABLE_UTF8 OFF)
+  set(LUAU_BUILD_TESTS OFF CACHE BOOL "")
+  set(LUAU_BUILD_CLI OFF CACHE BOOL "")
+  set(LUAU_EXTERN_C ON CACHE BOOL "")
+  add_subdirectory(deps/luau luau)
+  foreach(target Luau.VM Luau.Compiler)
+    get_target_property(defs ${target} INTERFACE_COMPILE_DEFINITIONS)
+    list(FILTER defs EXCLUDE REGEX [[LUA.*_API]])
+    set_target_properties(${target} PROPERTIES INTERFACE_COMPILE_DEFINITIONS "${defs}")
+  endforeach()
+  set_target_properties(
+    Luau.Analysis
+    Luau.CLI.lib
+    Luau.CodeGen
+    Luau.Config
+    Luau.EqSat
+    Luau.Require
+    Luau.RequireNavigator
+    PROPERTIES EXCLUDE_FROM_ALL 1
+  )
+  set(LOVR_LUA Luau.VM Luau.Compiler Luau.Ast)
+  set_target_properties(${LOVR_LUA} PROPERTIES POSITION_INDEPENDENT_CODE 1)
+elseif(LOVR_USE_LUAJIT AND NOT EMSCRIPTEN)
   if(LOVR_SYSTEM_LUA)
     pkg_search_module(LUAJIT REQUIRED luajit)
     list(APPEND LOVR_LIB_DIRS ${LUAJIT_LIBRARY_DIRS})
@@ -315,6 +339,10 @@ if(LOVR_PROFILE)
   target_include_directories(lovr PRIVATE deps/tracy/public/tracy)
 endif()
 
+if(LOVR_USE_LUAU)
+  target_compile_definitions(lovr PRIVATE LOVR_USE_LUAU)
+endif()
+
 if(LOVR_ENABLE_AUDIO OR LOVR_ENABLE_DATA)
   target_sources(lovr PRIVATE
     src/lib/miniaudio/miniaudio.c
@@ -481,8 +509,8 @@ if(LOVR_ENABLE_MATH)
     src/modules/math/math.c
     src/api/l_math.c
     src/api/l_math_curve.c
+    src/api/l_math_mat4.c
     src/api/l_math_randomGenerator.c
-    src/api/l_math_vectors.c
     src/lib/noise/simplexnoise1234.c
   )
 else()
@@ -555,7 +583,7 @@ if(NOT EMSCRIPTEN)
     set(${targets} ${${targets}} ${dir_targets} PARENT_SCOPE)
   endfunction()
   foreach(PLUGIN_PATH ${LOVR_PLUGINS})
-    if(IS_DIRECTORY ${PLUGIN_PATH} AND EXISTS ${PLUGIN_PATH}/CMakeLists.txt)
+    if(IS_DIRECTORY ${PLUGIN_PATH} AND EXISTS ${PLUGIN_PATH}/CMakeLists.txt AND NOT ${PLUGIN_PATH} MATCHES "[/\\]\\.")
       get_filename_component(PLUGIN "${PLUGIN_PATH}" NAME)
       add_subdirectory(${PLUGIN_PATH} "${PROJECT_BINARY_DIR}/plugins/${PLUGIN}")
       get_directory_property(PLUGIN_TARGETS DIRECTORY ${PLUGIN_PATH} DEFINITION LOVR_PLUGIN_TARGETS)
@@ -574,7 +602,7 @@ if(NOT EMSCRIPTEN)
 endif()
 
 # Resources
-file(GLOB LOVR_RESOURCES "etc/*.ttf" "etc/*.lua" "etc/shaders/*.glsl")
+file(GLOB LOVR_RESOURCES "etc/*.ttf" "etc/*.lua" "etc/shaders/*.glsl" "src/api/l_math.lua")
 foreach(path ${LOVR_RESOURCES})
 
   # Turn the absolute path into a C variable like etc_boot_lua
@@ -750,7 +778,9 @@ elseif(ANDROID)
   )
 
   # Build Lua libraries with global symbols, so plugins don't need to explicitly link against Lua
-  target_link_options(${LOVR_LUA} PRIVATE "-Wl,-z,global")
+  foreach(target ${LOVR_LUA})
+    target_link_options(${target} PRIVATE "-Wl,-z,global")
+  endforeach()
 
   if(LOVR_BUILD_EXE)
     set(ANDROID_JAR "${ANDROID_SDK}/platforms/${ANDROID_PLATFORM}/android.jar")

@@ -112,7 +112,7 @@ typedef struct {
 #define luax_checkfloat(L, i) (float) luaL_checknumber(L, i)
 #define luax_optfloat(L, i, x) (float) luaL_optnumber(L, i, x)
 #define luax_tofloat(L, i) (float) lua_tonumber(L, i)
-#define luax_assert(L, c) if (!(c)) { luaL_error(L, lovrGetError()); }
+#define luax_assert(L, c) if (!(c)) { lua_pushstring(L, lovrGetError()); lua_error(L); }
 #define luax_pushnilerror(L) lua_pushnil(L), lua_pushstring(L, lovrGetError()), 2
 
 void luax_preload(lua_State* L);
@@ -140,6 +140,10 @@ uint32_t _luax_optu32(lua_State* L, int index, uint32_t fallback);
 void luax_readcolor(lua_State* L, int index, float color[4]);
 void luax_optcolor(lua_State* L, int index, float color[4]);
 int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCount, uint32_t** indices, uint32_t* indexCount);
+int luax_readvec3(lua_State* L, int index, float* v, const char* expected);
+int luax_readscale(lua_State* L, int index, float* v, int components, const char* expected);
+int luax_readquat(lua_State* L, int index, float* q, const char* expected);
+int luax_readmat4(lua_State* L, int index, float* m, int scaleComponents);
 
 // Module helpers
 
@@ -180,16 +184,6 @@ struct ColoredString* luax_checkcoloredstrings(lua_State* L, int index, uint32_t
 #endif
 
 #ifndef LOVR_DISABLE_MATH
-#include "math/math.h" // TODO
-float* luax_tovector(lua_State* L, int index, VectorType* type);
-float* luax_checkvector(lua_State* L, int index, VectorType type, const char* expected);
-float* luax_newtempvector(lua_State* L, VectorType type);
-int luax_readvec2(lua_State* L, int index, float* v, const char* expected);
-int luax_readvec3(lua_State* L, int index, float* v, const char* expected);
-int luax_readvec4(lua_State* L, int index, float* v, const char* expected);
-int luax_readscale(lua_State* L, int index, float* v, int components, const char* expected);
-int luax_readquat(lua_State* L, int index, float* q, const char* expected);
-int luax_readmat4(lua_State* L, int index, float* m, int scaleComponents);
 uint64_t luax_checkrandomseed(lua_State* L, int index);
 #endif
 

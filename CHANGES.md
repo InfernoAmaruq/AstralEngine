@@ -28,10 +28,14 @@ dev
 - Add `ModelData:getMeshPartCount`.
 - Add `ModelData:getMeshDrawRange`.
 - Add `Mesh:get/setBaseVertex`.
+- Add support for compiling with Luau as the Lua implementation, instead of Lua/LuaJIT.
+- Add support for passing Luau `vector` and `quaternion` types to functions.
+- Add `vector` and `quaternion` modules.
 
 ### Change
 
 - Change `require` to have better errors when files/plugins aren't found.
+- Change default require path to also search for `.luau` files, when using Luau.
 - Change `lovr.headset.newModel` to also take a lightuserdata.
 - Change `lovr.headset.isTracked` to also take a `Model`.
 - Change `lovr.headset.getPosition/Orientation/Direction/Pose` to also take a `Model`.
@@ -42,6 +46,10 @@ dev
 - Change `ModelData:getWidth/Height/Depth/Dimensions/BoundingBox` to take an optional mesh/part index.
 - Change model loading to use multiple threads to load images.
 - Change `lovr.graphics.newModel` to no longer retain its `ModelData`, allowing its memory to be freed.
+- Change functions to accept tables for vector/quaternion arguments instead of userdata vector types.
+- Change `lovr.graphics.newBuffer` to also accept a Luau `vector` for the initial buffer data.
+- Change `Pass:transform` to also take a pose (7 numbers for the position and orientation).
+- Change `Mat4` to be a regular object instead of a vector type.
 
 ### Fix
 
@@ -68,6 +76,10 @@ dev
 - Deprecate `Model(Data):getNodeChildren` (use `:getNodeChild` and `:getNodeSibling`).
 - Deprecate base vertex argument in `Mesh:get/setDrawRange` (use `Mesh:get/setBaseVertex`).
 - Deprecate `Model:getVertexBuffer/getIndexBuffer/getMesh` (create your own from `ModelData`).
+- Deprecate `lovr.math.drain` (it does nothing now, since temporary vectors were removed).
+- Deprecate `lovr.math.vec2/vec3/vec4/quat/newVec2/newVec3/newVec4/newQuat` (use `vector` and `quaternion`).
+- Deprecate `lovr.math.mat4` (use `lovr.math.newMat4`).
+- Deprecate `t.math.globals` (use `vector` and `quaternion`).
 
 ### Remove
 
@@ -82,6 +94,7 @@ dev
 - Remove `Model(Data):getBoundingSphere`.
 - Remove `Model:getVertexCount` (use `ModelData:getMeshVertexCount`).
 - Remove `Model:getData` (create and keep a `ModelData` around as needed).
+- Remove userdata vector types (use tables, and the `vector` and `quaternion` modules).
 
 v0.18.0 - 2025-02-14
 ---

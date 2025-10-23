@@ -160,11 +160,12 @@ static int l_lovrMat4Mul(lua_State* L) {
     mat4_mulVec4(lovrMat4GetData(matrix), v);
     if (lua_istable(L, 2)) {
       luax_pushvec3(L, v, luax_len(L, 2) > 0);
+      if (lua_getmetatable(L, 2)) {
+        lua_setmetatable(L, -2);
+      }
     } else {
 #ifdef LOVR_USE_LUAU
       lua_pushvector(L, v[0], v[1], v[2]);
-#else
-      luax_pushvec3(L, v, false);
 #endif
     }
     return 1;
@@ -325,6 +326,9 @@ static int l_lovrMat4__mul(lua_State* L) {
     luax_readvec3(L, 2, v, NULL);
     mat4_mulPoint(lovrMat4GetData(self), v);
     luax_pushvec3(L, v, luax_len(L, 2) > 0);
+    if (lua_getmetatable(L, 2)) {
+      lua_setmetatable(L, -2);
+    }
     return 1;
   }
 

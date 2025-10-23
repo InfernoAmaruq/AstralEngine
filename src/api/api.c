@@ -832,7 +832,5 @@ void luax_pushvec3(lua_State* L, float v[3], bool tableArray) {
     lua_setfield(L, -2, "y");
     lua_pushnumber(L, v[2]);
     lua_setfield(L, -2, "z");
-    lua_getmetatable(L, 2);
-    lua_setmetatable(L, -2);
   }
 }

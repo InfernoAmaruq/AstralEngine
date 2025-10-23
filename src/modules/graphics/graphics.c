@@ -1935,7 +1935,7 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
     atomic_store(&state.newPipelines, NULL);
   }
 
-  lovrAssertGoto(fail, gpu_submit(streams, streamCount, state.tick), "Failed to submit GPU command buffers: %s", gpu_get_error());
+  lovrAssertGoto(fail, gpu_submit(streams, streamCount, state.tick++), "Failed to submit GPU command buffers: %s", gpu_get_error());
 
   state.stream = gpu_stream_begin("Internal");
   lovrAssertGoto(fail, state.stream, "Failed to begin new command buffer: %s", gpu_get_error());
@@ -1958,7 +1958,6 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
 
   memset(&state.barrier, 0, sizeof(gpu_barrier));
   memset(&state.transferBarrier, 0, sizeof(gpu_barrier));
-  state.tick++;
 
   stackPop(&thread.stack, stack);
   return true;
@@ -2352,12 +2351,15 @@ bool lovrGraphicsGetWindowTexture(Texture** texture) {
   }
 
   if (state.window && !state.window->gpu) {
-    if (state.resized) {
-      lovrAssert(gpu_surface_resize(state.window->info.width, state.window->info.height), "Failed to resize window: %s", gpu_get_error());
+   if (state.resized) {
+      uint32_t width, height;
+      os_window_get_size(&width, &height);
+      float density = os_window_get_pixel_density();
+      lovrAssert(gpu_surface_resize(width * density, height * density), "Failed to resize window: %s", gpu_get_error());
       state.resized = false;
     }
 
-    lovrAssert(gpu_surface_acquire(&state.window->gpu), "Failed to get window texture: %s", gpu_get_error());
+    lovrAssert(gpu_surface_acquire(&state.window->gpu, &state.window->info.width, &state.window->info.height), "Failed to get window texture: %s", gpu_get_error());
     state.window->renderView = state.window->gpu;
 
     // Window texture may be unavailable during a resize
@@ -8995,20 +8997,13 @@ static bool checkShaderFeatures(uint32_t* features, uint32_t count) {
 }
 
 static void onResize(uint32_t width, uint32_t height) {
-  float density = os_window_get_pixel_density();
-
-  width *= density;
-  height *= density;
-
-  state.window->info.width = width;
-  state.window->info.height = height;
-  state.resized = true;
-
   lovrEventPush((Event) {
     .type = EVENT_RESIZE,
-    .data.resize.width = width,
-    .data.resize.height = height
+    .data.resize.width = width * os_window_get_pixel_density(),
+    .data.resize.height = height * os_window_get_pixel_density()
   });
+
+  state.resized = true;
 }
 
 static void onMessage(void* context, const char* message) {

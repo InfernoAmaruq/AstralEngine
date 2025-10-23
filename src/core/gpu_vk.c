@@ -149,9 +149,14 @@ typedef struct {
   VkSurfaceCapabilitiesKHR capabilities;
   VkSurfaceFormatKHR vkformat;
   gpu_texture_format format;
-  VkSemaphore semaphore;
+  uint32_t acquireTick[FRAME_DEPTH];
+  VkSemaphore acquireSemaphores[FRAME_DEPTH];
+  VkSemaphore acquireSemaphore;
+  VkSemaphore presentSemaphores[8];
   gpu_texture images[8];
   uint32_t imageIndex;
+  uint32_t width;
+  uint32_t height;
   bool vsync;
   bool valid;
 } gpu_surface;
@@ -210,8 +215,6 @@ static struct {
   uint32_t tick;
   uint32_t frame;
   VkSemaphore semaphore;
-  VkSemaphore acquireSemaphore[FRAME_DEPTH];
-  VkSemaphore presentSemaphore[FRAME_DEPTH];
   VkPipelineCache pipelineCache;
   VkDebugUtilsMessengerEXT messenger;
   gpu_allocator allocators[GPU_MEMORY_COUNT];
@@ -856,12 +859,11 @@ bool gpu_surface_init(gpu_surface_info* info) {
     return false;
   }
 
-  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(state.adapter, surface->handle, &surface->capabilities);
-
   surface->imageIndex = ~0u;
   surface->vsync = info->vsync;
 
   gpu_surface_resize(info->width, info->height);
+
   return true;
 }
 
@@ -874,18 +876,35 @@ bool gpu_surface_is_hdr(void) {
 }
 
 bool gpu_surface_resize(uint32_t width, uint32_t height) {
+  gpu_surface* surface = &state.surface;
+
+  surface->valid = false;
+  surface->width = 0;
+  surface->height = 0;
+
   if (width == 0 || height == 0) {
-    state.surface.valid = false;
     return true;
   }
 
-  gpu_surface* surface = &state.surface;
-  VkSwapchainKHR oldSwapchain = surface->swapchain;
-
-  if (oldSwapchain) {
-    vkDeviceWaitIdle(state.device);
-    surface->swapchain = VK_NULL_HANDLE;
+  if (surface->swapchain) {
+    VK(vkDeviceWaitIdle(state.device), "vkDeviceWaitIdle") {
+      return false;
+    }
   }
+
+  VK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(state.adapter, surface->handle, &surface->capabilities), "vkGetPhysicalDeviceSurfaceCapabilitiesKHR") {
+    return false;
+  }
+
+  if (width == ~0u || height == ~0u) {
+    width = surface->capabilities.currentExtent.width;
+    height = surface->capabilities.currentExtent.height;
+  }
+
+  width = MIN(width, surface->capabilities.maxImageExtent.width);
+  width = MAX(width, surface->capabilities.minImageExtent.width);
+  height = MIN(height, surface->capabilities.maxImageExtent.height);
+  height = MAX(height, surface->capabilities.minImageExtent.height);
 
   VkSwapchainCreateInfoKHR swapchainInfo = {
     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -900,42 +919,42 @@ bool gpu_surface_resize(uint32_t width, uint32_t height) {
     .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
     .presentMode = surface->vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR,
     .clipped = VK_TRUE,
-    .oldSwapchain = oldSwapchain
+    .oldSwapchain = surface->swapchain
   };
 
   VK(vkCreateSwapchainKHR(state.device, &swapchainInfo, NULL, &surface->swapchain), "vkCreateSwapchainKHR") {
     return false;
   }
 
-  if (oldSwapchain) {
-    for (uint32_t i = 0; i < COUNTOF(surface->images); i++) {
-      if (surface->images[i].view) {
-        vkDestroyImageView(state.device, surface->images[i].view, NULL);
-      }
+  if (swapchainInfo.oldSwapchain) {
+    for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
+      vkDestroySemaphore(state.device, surface->acquireSemaphores[i], NULL);
+      surface->acquireSemaphores[i] = VK_NULL_HANDLE;
+      surface->acquireTick[i] = 0;
     }
 
-    memset(surface->images, 0, sizeof(surface->images));
-    vkDestroySwapchainKHR(state.device, oldSwapchain, NULL);
+    for (uint32_t i = 0; i < COUNTOF(surface->images); i++) {
+      vkDestroySemaphore(state.device, surface->presentSemaphores[i], NULL);
+      vkDestroyImageView(state.device, surface->images[i].view, NULL);
+      surface->presentSemaphores[i] = VK_NULL_HANDLE;
+      surface->images[i].view = VK_NULL_HANDLE;
+    }
+
+    vkDestroySwapchainKHR(state.device, swapchainInfo.oldSwapchain, NULL);
   }
 
   uint32_t imageCount;
   VkImage images[COUNTOF(surface->images)];
   VK(vkGetSwapchainImagesKHR(state.device, surface->swapchain, &imageCount, NULL), "vkGetSwapchainImagesKHR") {
-    vkDestroySwapchainKHR(state.device, oldSwapchain, NULL);
-    surface->swapchain = VK_NULL_HANDLE;
-    return false;
+    goto fail;
   }
 
   ASSERT(imageCount <= COUNTOF(images), "Too many swapchain images!") {
-    vkDestroySwapchainKHR(state.device, oldSwapchain, NULL);
-    surface->swapchain = VK_NULL_HANDLE;
-    return false;
+    goto fail;
   }
 
   VK(vkGetSwapchainImagesKHR(state.device, surface->swapchain, &imageCount, images), "vkGetSwapchainImagesKHR") {
-    vkDestroySwapchainKHR(state.device, oldSwapchain, NULL);
-    surface->swapchain = VK_NULL_HANDLE;
-    return false;
+    goto fail;
   }
 
   for (uint32_t i = 0; i < imageCount; i++) {
@@ -957,48 +976,94 @@ bool gpu_surface_resize(uint32_t width, uint32_t height) {
     };
 
     if (!gpu_texture_init_view(texture, &view)) {
-      vkDestroySwapchainKHR(state.device, surface->swapchain, NULL);
-      surface->swapchain = VK_NULL_HANDLE;
-      return false;
+      goto fail;
     }
   }
 
+  VkSemaphoreCreateInfo semaphoreInfo = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+
+  for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
+    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &surface->acquireSemaphores[i]), "vkCreateSemaphore") {
+      goto fail;
+    }
+  }
+
+  for (uint32_t i = 0; i < imageCount; i++) {
+    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &surface->presentSemaphores[i]), "vkCreateSemaphore") {
+      goto fail;
+    }
+  }
+
+  surface->width = width;
+  surface->height = height;
   surface->valid = true;
   return true;
+fail:
+  for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
+    vkDestroySemaphore(state.device, surface->acquireSemaphores[i], NULL);
+    surface->acquireSemaphores[i] = VK_NULL_HANDLE;
+  }
+
+  for (uint32_t i = 0; i < COUNTOF(surface->images); i++) {
+    vkDestroySemaphore(state.device, surface->presentSemaphores[i], NULL);
+    vkDestroyImageView(state.device, surface->images[i].view, NULL);
+    surface->presentSemaphores[i] = VK_NULL_HANDLE;
+    surface->images[i].view = VK_NULL_HANDLE;
+  }
+
+  vkDestroySwapchainKHR(state.device, surface->swapchain, NULL);
+  surface->swapchain = VK_NULL_HANDLE;
+  return false;
 }
 
-bool gpu_surface_acquire(gpu_texture** texture) {
-  if (!state.surface.valid) {
+bool gpu_surface_acquire(gpu_texture** texture, uint32_t* width, uint32_t* height) {
+  gpu_surface* surface = &state.surface;
+
+  *width = surface->width;
+  *height = surface->height;
+
+  if (!surface->valid) {
     *texture = NULL;
     return true;
   }
 
-  gpu_surface* surface = &state.surface;
-  VkSemaphore semaphore = state.acquireSemaphore[state.frame & FRAME_MASK];
+  gpu_wait_tick(surface->acquireTick[state.frame & FRAME_MASK]);
+  VkSemaphore semaphore = surface->acquireSemaphores[state.frame & FRAME_MASK];
   VkResult result = vkAcquireNextImageKHR(state.device, surface->swapchain, UINT64_MAX, semaphore, VK_NULL_HANDLE, &surface->imageIndex);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    surface->imageIndex = ~0u;
-    surface->valid = false;
-    *texture = NULL;
-    return true;
+    gpu_surface_resize(~0u, ~0u);
+    return gpu_surface_acquire(texture, width, height);
   } else if (result < 0) {
     vkerror(result, "vkAcquireNextImageKHR");
     return false;
   }
 
   *texture = &surface->images[surface->imageIndex];
-  surface->semaphore = semaphore;
+  surface->acquireSemaphore = semaphore;
   return true;
 }
 
 bool gpu_surface_present(void) {
-  VkSemaphore semaphore = state.presentSemaphore[state.frame & FRAME_MASK];
+  gpu_surface* surface = &state.surface;
+
+  VkSemaphore presentSemaphore = surface->presentSemaphores[surface->imageIndex];
+  VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR;
 
   VkSubmitInfo submit = {
     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+    .pNext = &(VkTimelineSemaphoreSubmitInfo) {
+      .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+      .waitSemaphoreValueCount = 1,
+      .pWaitSemaphoreValues = (uint64_t[1]) { state.tick },
+      .signalSemaphoreValueCount = 1,
+      .pSignalSemaphoreValues = (uint64_t[1]) { 0 }
+    },
+    .waitSemaphoreCount = 1,
+    .pWaitSemaphores = &state.semaphore,
+    .pWaitDstStageMask = &waitStage,
     .signalSemaphoreCount = 1,
-    .pSignalSemaphores = &semaphore
+    .pSignalSemaphores = &presentSemaphore
   };
 
   VK(vkQueueSubmit(state.queue, 1, &submit, VK_NULL_HANDLE), "vkQueueSubmit") {
@@ -1008,16 +1073,16 @@ bool gpu_surface_present(void) {
   VkPresentInfoKHR present = {
     .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
     .waitSemaphoreCount = 1,
-    .pWaitSemaphores = &semaphore,
+    .pWaitSemaphores = &presentSemaphore,
     .swapchainCount = 1,
-    .pSwapchains = &state.surface.swapchain,
-    .pImageIndices = &state.surface.imageIndex
+    .pSwapchains = &surface->swapchain,
+    .pImageIndices = &surface->imageIndex
   };
 
   VkResult result = vkQueuePresentKHR(state.queue, &present);
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    state.surface.valid = false;
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    gpu_surface_resize(~0u, ~0u);
   } else if (result < 0) {
     // TODO wait on semaphore, for errors that don't wait on it
     vkerror(result, "vkQueuePresentKHR");
@@ -3105,13 +3170,7 @@ bool gpu_init(gpu_config* config) {
     }
   }
 
-  // Semaphores
-
-  for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
-    VkSemaphoreCreateInfo semaphoreInfo = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &state.acquireSemaphore[i]), "vkCreateSemaphore") goto fail;
-    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &state.presentSemaphore[i]), "vkCreateSemaphore") goto fail;
-  }
+  // Semaphore
 
   VkSemaphoreCreateInfo timelineSemaphoreInfo = {
     .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
@@ -3165,15 +3224,15 @@ void gpu_destroy(void) {
     memset(t, 0, sizeof(*t));
   }
   if (state.pipelineCache) vkDestroyPipelineCache(state.device, state.pipelineCache, NULL);
-  for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
-    if (state.acquireSemaphore[i]) vkDestroySemaphore(state.device, state.acquireSemaphore[i], NULL);
-    if (state.presentSemaphore[i]) vkDestroySemaphore(state.device, state.presentSemaphore[i], NULL);
-  }
   if (state.semaphore) vkDestroySemaphore(state.device, state.semaphore, NULL);
   for (uint32_t i = 0; i < COUNTOF(state.memory); i++) {
     if (state.memory[i].handle) vkFreeMemory(state.device, state.memory[i].handle, NULL);
   }
+  for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
+    if (state.surface.acquireSemaphores[i]) vkDestroySemaphore(state.device, state.surface.acquireSemaphores[i], NULL);
+  }
   for (uint32_t i = 0; i < COUNTOF(state.surface.images); i++) {
+    if (state.surface.presentSemaphores[i]) vkDestroySemaphore(state.device, state.surface.presentSemaphores[i], NULL);
     if (state.surface.images[i].view) vkDestroyImageView(state.device, state.surface.images[i].view, NULL);
   }
   if (state.surface.swapchain) vkDestroySwapchainKHR(state.device, state.surface.swapchain, NULL);
@@ -3219,11 +3278,13 @@ bool gpu_submit(gpu_stream** streams, uint32_t count, uint32_t tick) {
     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
     .pNext = &(VkTimelineSemaphoreSubmitInfo) {
       .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+      .waitSemaphoreValueCount = !!state.surface.acquireSemaphore,
+      .pWaitSemaphoreValues = (uint64_t[1]) { 0 },
       .signalSemaphoreValueCount = 1,
       .pSignalSemaphoreValues = (uint64_t[1]) { tick }
     },
-    .waitSemaphoreCount = !!state.surface.semaphore,
-    .pWaitSemaphores = &state.surface.semaphore,
+    .waitSemaphoreCount = !!state.surface.acquireSemaphore,
+    .pWaitSemaphores = &state.surface.acquireSemaphore,
     .pWaitDstStageMask = &waitStage,
     .signalSemaphoreCount = 1,
     .pSignalSemaphores = &state.semaphore,
@@ -3239,7 +3300,12 @@ bool gpu_submit(gpu_stream** streams, uint32_t count, uint32_t tick) {
   expunge(getFinishedTick());
 
   if (commandBuffers != stack) state.config.fnFree(commandBuffers);
-  state.surface.semaphore = VK_NULL_HANDLE;
+
+  if (state.surface.acquireSemaphore) {
+    state.surface.acquireSemaphore = VK_NULL_HANDLE;
+    state.surface.acquireTick[state.frame & FRAME_MASK] = tick;
+  }
+
   state.tick = tick;
   return true;
 }

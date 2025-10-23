@@ -212,7 +212,7 @@ bool gpu_surface_resize(uint32_t width, uint32_t height) {
   return false; // TODO
 }
 
-bool gpu_surface_acquire(gpu_texture** texture) {
+bool gpu_surface_acquire(gpu_texture** texture, uint32_t* width, uint32_t* height) {
   return false; // TODO
 }
 

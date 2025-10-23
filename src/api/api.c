@@ -814,3 +814,25 @@ int luax_readmat4(lua_State* L, int index, mat4 m, int scaleComponents) {
       return luax_typeerror(L, index, "number, table, vector, or Mat4");
   }
 }
+
+void luax_pushvec3(lua_State* L, float v[3], bool tableArray) {
+  if (tableArray) {
+    lua_createtable(L, 3, 0);
+    lua_pushnumber(L, v[0]);
+    lua_rawseti(L, -2, 1);
+    lua_pushnumber(L, v[1]);
+    lua_rawseti(L, -2, 2);
+    lua_pushnumber(L, v[2]);
+    lua_rawseti(L, -2, 3);
+  } else {
+    lua_createtable(L, 0, 3);
+    lua_pushnumber(L, v[0]);
+    lua_setfield(L, -2, "x");
+    lua_pushnumber(L, v[1]);
+    lua_setfield(L, -2, "y");
+    lua_pushnumber(L, v[2]);
+    lua_setfield(L, -2, "z");
+    lua_getmetatable(L, 2);
+    lua_setmetatable(L, -2);
+  }
+}

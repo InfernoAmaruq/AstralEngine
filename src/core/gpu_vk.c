@@ -178,6 +178,7 @@ typedef struct {
   bool surfaceOS;
   bool swapchain;
   bool colorspace;
+  bool swapchainMaintenance;
   bool depthResolve;
   bool formatList;
   bool renderPass2;
@@ -908,6 +909,7 @@ bool gpu_surface_resize(uint32_t width, uint32_t height) {
 
   VkSwapchainCreateInfoKHR swapchainInfo = {
     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+    .flags = state.extensions.swapchainMaintenance ? VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_KHR : 0,
     .surface = surface->handle,
     .minImageCount = surface->capabilities.minImageCount,
     .imageFormat = surface->vkformat.format,
@@ -2772,6 +2774,7 @@ bool gpu_init(gpu_config* config) {
     struct { const char* name; bool shouldEnable; bool* flag; } extensions[] = {
       { "VK_KHR_create_renderpass2", true, &state.extensions.renderPass2 },
       { "VK_KHR_swapchain", true, &state.extensions.swapchain },
+      { "VK_KHR_swapchain_maintenance1", true, &state.extensions.swapchainMaintenance },
       { "VK_KHR_portability_subset", true, &state.extensions.portability },
       { "VK_KHR_depth_stencil_resolve", true, &state.extensions.depthResolve },
       { "VK_KHR_shader_non_semantic_info", config->debug, &state.extensions.shaderDebug },
@@ -2877,6 +2880,7 @@ bool gpu_init(gpu_config* config) {
     VkPhysicalDeviceFragmentDensityMapFeaturesEXT fragmentDensityMapFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT };
     VkPhysicalDevicePipelineCreationCacheControlFeaturesEXT pipelineCreationCacheControlFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES_EXT };
     VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timelineSemaphoreFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR };
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchainMaintenanceFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR };
 
     vkGetPhysicalDeviceFeatures2(state.adapter, &supported);
 
@@ -2932,6 +2936,11 @@ bool gpu_init(gpu_config* config) {
     if (state.extensions.pipelineCacheControl) {
       pipelineCreationCacheControlFeatures.pipelineCreationCacheControl = true;
       CHAIN(pipelineCreationCacheControlFeatures);
+    }
+
+    if (state.extensions.swapchainMaintenance) {
+      swapchainMaintenanceFeatures.swapchainMaintenance1 = true;
+      CHAIN(swapchainMaintenanceFeatures);
     }
 
     if (config->features) {

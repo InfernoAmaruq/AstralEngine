@@ -473,11 +473,13 @@ bool os_window_open(const os_window_config* config) {
 
   state.screen = xcb_setup_roots_iterator(xcb_get_setup(state.connection)).data;
 
+  bool fullscreen = (config->width == 0 && config->height == 0) || config->fullscreen;
+
   uint8_t depth = XCB_COPY_FROM_PARENT;
   state.window = xcb_generate_id(state.connection);
   xcb_window_t parent = state.screen->root;
-  uint16_t w = config->width == 0 ? state.screen->width_in_pixels : config->width;
-  uint16_t h = config->height == 0 ? state.screen->height_in_pixels : config->height;
+  uint16_t w = fullscreen ? state.screen->width_in_pixels : config->width;
+  uint16_t h = fullscreen ? state.screen->height_in_pixels : config->height;
   uint16_t border = 0;
   xcb_window_class_t class = XCB_WINDOW_CLASS_INPUT_OUTPUT;
   xcb_visualid_t visual = state.screen->root_visual;
@@ -501,8 +503,8 @@ bool os_window_open(const os_window_config* config) {
   // Close event
   xcb_intern_atom_cookie_t protocols = xcb_intern_atom(state.connection, 1, 12, "WM_PROTOCOLS");
   xcb_intern_atom_cookie_t delete = xcb_intern_atom(state.connection, 1, 16, "WM_DELETE_WINDOW");
-  xcb_intern_atom_reply_t* protocolReply = xcb_intern_atom_reply(state.connection, protocols, 0);
-  xcb_intern_atom_reply_t* deleteReply = xcb_intern_atom_reply(state.connection, delete, 0);
+  xcb_intern_atom_reply_t* protocolReply = xcb_intern_atom_reply(state.connection, protocols, NULL);
+  xcb_intern_atom_reply_t* deleteReply = xcb_intern_atom_reply(state.connection, delete, NULL);
   xcb_change_property(state.connection, XCB_PROP_MODE_REPLACE, state.window, protocolReply->atom, 4, 32, 1, &deleteReply->atom);
   state.deleteWindow = deleteReply;
   free(protocolReply);
@@ -532,6 +534,15 @@ bool os_window_open(const os_window_config* config) {
     };
 
     xcb_change_property(state.connection, XCB_PROP_MODE_REPLACE, state.window, XCB_ATOM_WM_NORMAL_HINTS, XCB_ATOM_WM_SIZE_HINTS, 32, sizeof(hints) / 4, &hints);
+  }
+
+  // Fullscreen
+  if (fullscreen) {
+    xcb_intern_atom_cookie_t wmState = xcb_intern_atom(state.connection, 0, 13, "_NET_WM_STATE");
+    xcb_intern_atom_cookie_t wmFullscreen = xcb_intern_atom(state.connection, 0, 24, "_NET_WM_STATE_FULLSCREEN");
+    xcb_intern_atom_reply_t* stateReply = xcb_intern_atom_reply(state.connection, wmState, NULL);
+    xcb_intern_atom_reply_t* fullscreenReply = xcb_intern_atom_reply(state.connection, wmFullscreen, NULL);
+    xcb_change_property(state.connection, XCB_PROP_MODE_REPLACE, state.window, stateReply->atom, 4, 32, 1, &fullscreenReply->atom);
   }
 
   // Show window and flush messages

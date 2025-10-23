@@ -30,6 +30,7 @@ static struct {
   xcb_cursor_t hiddenCursor;
   xcb_intern_atom_reply_t* deleteWindow;
   fn_quit* onQuit;
+  fn_visible* onVisible;
   fn_focus* onFocus;
   fn_resize* onResize;
   fn_key* onKey;
@@ -46,6 +47,8 @@ static struct {
   int16_t mouseY;
   int16_t grabX;
   int16_t grabY;
+  bool visible;
+  bool focused;
 } state;
 #endif
 
@@ -238,6 +241,7 @@ void os_poll_events(void) {
     xcb_ge_generic_event_t* generic;
     xcb_client_message_event_t* message;
     xcb_configure_notify_event_t* configure;
+    xcb_map_notify_event_t* map;
     xcb_focus_in_event_t* focus;
     xcb_key_press_event_t* key;
     xcb_button_press_event_t* mouse;
@@ -341,10 +345,17 @@ void os_poll_events(void) {
         }
         break;
 
+      case XCB_MAP_NOTIFY:
+      case XCB_UNMAP_NOTIFY:
+        state.visible = type == XCB_MAP_NOTIFY;
+        if (state.onVisible) state.onVisible(state.visible);
+        break;
+
       case XCB_FOCUS_IN:
       case XCB_FOCUS_OUT:
         if (event.focus->mode == XCB_NOTIFY_MODE_GRAB || event.focus->mode == XCB_NOTIFY_MODE_UNGRAB) break;
-        if (state.onFocus) state.onFocus(type == XCB_FOCUS_IN);
+        state.focused = type == XCB_FOCUS_IN;
+        if (state.onFocus) state.onFocus(state.focused);
         break;
 
       default:
@@ -368,6 +379,10 @@ void os_poll_events(void) {
 
 void os_on_quit(fn_quit* callback) {
   state.onQuit = callback;
+}
+
+void os_on_visible(fn_visible* callback) {
+  state.onVisible = callback;
 }
 
 void os_on_focus(fn_focus* callback) {
@@ -527,6 +542,14 @@ bool os_window_open(const os_window_config* config) {
 
 bool os_window_is_open(void) {
   return state.connection;
+}
+
+bool os_window_is_visible(void) {
+  return state.visible;
+}
+
+bool os_window_is_focused(void) {
+  return state.focused;
 }
 
 void os_window_get_size(uint32_t* width, uint32_t* height) {

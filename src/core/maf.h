@@ -525,6 +525,10 @@ MAF void mat4_getPosition(mat4 m, vec3 position) {
   vec3_init(position, m + 12);
 }
 
+MAF void mat4_setPosition(mat4 m, vec3 position) {
+  vec3_init(m + 12, position);
+}
+
 MAF void mat4_getOrientation(mat4 m, quat orientation) {
   quat_fromMat4(orientation, m);
 }
@@ -552,6 +556,22 @@ MAF void mat4_getAngleAxis(mat4 m, float* angle, float* ax, float* ay, float* az
 
 MAF void mat4_getScale(mat4 m, vec3 scale) {
   vec3_set(scale, vec3_length(m + 0), vec3_length(m + 4), vec3_length(m + 8));
+}
+
+MAF void mat4_setScale(mat4 m, vec3 scale) {
+  vec3_scale(m + 0, scale[0] / vec3_length(m + 0));
+  vec3_scale(m + 4, scale[1] / vec3_length(m + 4));
+  vec3_scale(m + 8, scale[2] / vec3_length(m + 8));
+}
+
+MAF void mat4_setOrientation(mat4 m, quat orientation) {
+  float t[16];
+  mat4_fromQuat(t, orientation);
+  float scale[3];
+  mat4_getScale(m, scale);
+  vec3_init(m + 0, vec3_scale(t + 0, scale[0]));
+  vec3_init(m + 4, vec3_scale(t + 4, scale[1]));
+  vec3_init(m + 8, vec3_scale(t + 8, scale[2]));
 }
 
 // Does not have a Y flip, maps z = [-n,-f] to [0,1]

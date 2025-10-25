@@ -834,3 +834,26 @@ void luax_pushvec3(lua_State* L, float v[3], bool tableArray) {
     lua_setfield(L, -2, "z");
   }
 }
+
+bool luax_isquat(lua_State* L, int index) {
+  if (lua_istable(L, index)) {
+    int len = luax_len(L, index);
+    if (len == 4) {
+      return true;
+    } else if (len == 0) {
+      lua_pushstring(L, "w");
+      lua_gettable(L, index);
+      bool is_num = lua_isnumber(L, -1);
+      lua_pop(L, 1);
+      return is_num;
+    }
+  }
+
+#ifdef LOVR_USE_LUAU
+  if (lua_type(L, index) == LUA_TQUATERNION) {
+    return true;
+  }
+#endif
+
+  return false;
+}

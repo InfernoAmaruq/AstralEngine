@@ -563,6 +563,12 @@ bool gpu_geotree_init(gpu_geotree* geotree, gpu_geotree_info* info, gpu_address*
     .type = type
   };
 
+  VK(vkCreateAccelerationStructureKHR(state.device, &createInfo, NULL, &geotree->handle), "vkCreateAccelerationStructureKHR") {
+    gpu_buffer_destroy(&geotree->scratch);
+    gpu_buffer_destroy(&geotree->buffer);
+    return false;
+  }
+
   return true;
 }
 

@@ -57,6 +57,15 @@ static int l_lovrMat4GetPosition(lua_State* L) {
   return 3;
 }
 
+static int l_lovrMat4SetPosition(lua_State* L) {
+  float* m = lovrMat4GetData(luax_checktype(L, 1, Mat4));
+  float position[3];
+  luax_readvec3(L, 2, position, "nil, number, vec3");
+  mat4_setPosition(m, position);
+  lua_settop(L, 1);
+  return 1;
+}
+
 static int l_lovrMat4GetOrientation(lua_State* L) {
   float* m = lovrMat4GetData(luax_checktype(L, 1, Mat4));
   float angle, ax, ay, az;
@@ -68,6 +77,15 @@ static int l_lovrMat4GetOrientation(lua_State* L) {
   return 4;
 }
 
+static int l_lovrMat4SetOrientation(lua_State* L) {
+  float* m = lovrMat4GetData(luax_checktype(L, 1, Mat4));
+  float orientation[4];
+  luax_readquat(L, 2, orientation, "nil, number, quat");
+  mat4_setOrientation(m, orientation);
+  lua_settop(L, 1);
+  return 1;
+}
+
 static int l_lovrMat4GetScale(lua_State* L) {
   float* m = lovrMat4GetData(luax_checktype(L, 1, Mat4));
   float scale[3];
@@ -76,6 +94,15 @@ static int l_lovrMat4GetScale(lua_State* L) {
   lua_pushnumber(L, scale[1]);
   lua_pushnumber(L, scale[2]);
   return 3;
+}
+
+static int l_lovrMat4SetScale(lua_State* L) {
+  float* m = lovrMat4GetData(luax_checktype(L, 1, Mat4));
+  float scale[3];
+  luax_readvec3(L, 2, scale, "nil, number, vec3");
+  mat4_setScale(m, scale);
+  lua_settop(L, 1);
+  return 1;
 }
 
 static int l_lovrMat4GetPose(lua_State* L) {
@@ -91,6 +118,18 @@ static int l_lovrMat4GetPose(lua_State* L) {
   lua_pushnumber(L, ay);
   lua_pushnumber(L, az);
   return 7;
+}
+
+static int l_lovrMat4SetPose(lua_State* L) {
+  float* m = lovrMat4GetData(luax_checktype(L, 1, Mat4));
+  float pos[3];
+  float orientation[4];
+  int index = luax_readvec3(L, 2, pos, "nil, number, vec3");
+  luax_readquat(L, index, orientation, "nil, number, quat");
+  mat4_setPosition(m, pos);
+  mat4_setOrientation(m, orientation);
+  lua_settop(L, 1);
+  return 1;
 }
 
 int l_lovrMat4Set(lua_State* L) {
@@ -403,9 +442,13 @@ const luaL_Reg lovrMat4[] = {
   { "equals", l_lovrMat4Equals },
   { "unpack", l_lovrMat4Unpack },
   { "getPosition", l_lovrMat4GetPosition },
+  { "setPosition", l_lovrMat4SetPosition },
   { "getOrientation", l_lovrMat4GetOrientation },
+  { "setOrientation", l_lovrMat4SetOrientation },
   { "getScale", l_lovrMat4GetScale },
+  { "setScale", l_lovrMat4SetScale },
   { "getPose", l_lovrMat4GetPose },
+  { "setPose", l_lovrMat4SetPose },
   { "set", l_lovrMat4Set },
   { "mul", l_lovrMat4Mul },
   { "identity", l_lovrMat4Identity },

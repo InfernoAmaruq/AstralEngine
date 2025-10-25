@@ -98,7 +98,11 @@ bool os_init(void) {
 }
 
 void os_destroy(void) {
+#ifdef LOVR_USE_GLFW
+  glfwTerminate();
+#else
   if (state.window) DestroyWindow(state.window);
+#endif
   os_thread_detach();
   memset(&state, 0, sizeof(state));
 }

@@ -159,7 +159,7 @@ int l_lovrMat4Set(lua_State* L) {
     m[14] = position[2];
 
     // 1 more arg or 4 numbers: rotation, otherwise scale + rotation
-    if (top == index || ((top - index) == 3 && lua_type(L, top) == LUA_TNUMBER)) {
+    if (luax_isquat(L, index) || ((top - index) == 3 && lua_type(L, top) == LUA_TNUMBER)) {
       luax_readquat(L, index, orientation, NULL);
       mat4_rotateQuat(m, orientation);
     } else {

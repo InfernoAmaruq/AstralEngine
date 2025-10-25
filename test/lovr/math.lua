@@ -18,6 +18,36 @@ group('math', function()
   end)
 
   group('mat4', function()
+    test('new & set', function()
+      local rot = quat(1.2, 1, 0, 0)
+      local rotarr = { rot:unpack() }
+      local scale = { x = 1.5, y = 2.5, z = 3.5 }
+      local scalearr = { 1.5, 2.5, 3.5 }
+
+      expect({ mat4({ 1, 2, 3 }, scale, rot):unpack() })
+        .to.equal({ 1,2,3, 1.5,2.5,3.5, 1.2,1,0,0 }, 1e-4)
+      expect({ mat4({ 1, 2, 3 }, scalearr, rotarr):unpack() })
+        .to.equal({ 1,2,3, 1.5,2.5,3.5, 1.2,1,0,0 }, 1e-4)
+
+      expect({ mat4({ 1, 2, 3 }, scale):unpack() })
+        .to.equal({ 1,2,3, 1.5,2.5,3.5, 0,0,0,0 }, 1e-4)
+      expect({ mat4({ 1, 2, 3 }, scalearr):unpack() })
+        .to.equal({ 1,2,3, 1.5,2.5,3.5, 0,0,0,0 }, 1e-4)
+      expect({ mat4():set({ 1, 2, 3 }, scale):unpack() })
+        .to.equal({ 1,2,3, 1.5,2.5,3.5, 0,0,0,0 }, 1e-4)
+      expect({ mat4():set({ 1, 2, 3 }, scalearr):unpack() })
+        .to.equal({ 1,2,3, 1.5,2.5,3.5, 0,0,0,0 }, 1e-4)
+
+      expect({ mat4({ 1, 2, 3 }, rot):unpack() })
+        .to.equal({ 1,2,3, 1,1,1, 1.2,1,0,0 }, 1e-4)
+      expect({ mat4({ 1, 2, 3 }, rotarr):unpack() })
+        .to.equal({ 1,2,3, 1,1,1, 1.2,1,0,0 }, 1e-4)
+      expect({ mat4():set({ 1, 2, 3 }, rot):unpack() })
+        .to.equal({ 1,2,3, 1,1,1, 1.2,1,0,0 }, 1e-4)
+      expect({ mat4():set({ 1, 2, 3 }, rotarr):unpack() })
+        .to.equal({ 1,2,3, 1,1,1, 1.2,1,0,0 }, 1e-4)
+    end)
+
     test('mul mat4', function()
       local a = mat4():perspective(math.rad(80), 1440 / 900, 0.01, 0)
       local b = mat4({ 0, 1.7, 0 }, { 0, 0, 0, 1 }):invert()

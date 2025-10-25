@@ -72,9 +72,9 @@ group('math', function()
         expect(matrix * keyval).to.equal({ x = 1, y = 4, z = 3 })
         expect(matrix:mul(keyval)).to.equal({ x = 1, y = 4, z = 3 })
 
-        expect(getmetatable(matrix * array)).to.equal(getmetatable(array))
-        expect(getmetatable(matrix * keyval)).to.equal(getmetatable(keyval))
-        expect(getmetatable(matrix * v)).to.equal(getmetatable(v))
+        expect(getmetatable(matrix * array)).to.be(getmetatable(array))
+        expect(getmetatable(matrix * keyval)).to.be(getmetatable(keyval))
+        expect(getmetatable(matrix * v)).to.be(getmetatable(v))
       end)
     end)
 

@@ -395,10 +395,10 @@ static bool createReferenceSpace(XrTime time) {
     return true;
   }
 
-  if (state.extensions.localFloor) {
-    info.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL_FLOOR_EXT;
-  } else if (state.config.seated) {
+  if (state.config.seated) {
     info.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
+  } else if (state.extensions.localFloor) {
+    info.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL_FLOOR_EXT;
   } else if (state.spaces[DEVICE_FLOOR]) {
     XrSpace local;
     info.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;

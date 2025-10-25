@@ -18,6 +18,7 @@ typedef struct gpu_tally gpu_tally;
 typedef struct gpu_stream gpu_stream;
 
 size_t gpu_sizeof_buffer(void);
+size_t gpu_sizeof_geotree(void);
 size_t gpu_sizeof_texture(void);
 size_t gpu_sizeof_sampler(void);
 size_t gpu_sizeof_layout(void);

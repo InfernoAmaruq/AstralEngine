@@ -296,6 +296,13 @@ struct Model {
   uint32_t lastVertexAnimation;
 };
 
+struct Raytracer {
+  uint32_t ref;
+  RaytracerInfo info;
+  gpu_address address;
+  gpu_geotree* gpu;
+};
+
 typedef enum {
   READBACK_BUFFER,
   READBACK_TEXTURE,
@@ -5593,6 +5600,34 @@ static bool lovrModelAnimateVertices(Model* model) {
   state.barrier.clear |= GPU_CACHE_VERTEX;
   model->lastVertexAnimation = state.tick;
   return true;
+}
+
+// Raytracer
+
+Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
+  Raytracer* raytracer = lovrCalloc(sizeof(Raytracer) + gpu_sizeof_geotree());
+  raytracer->ref = 1;
+  raytracer->info = *info;
+  raytracer->gpu = (gpu_geotree*) (raytracer + 1);
+
+  gpu_geotree_info gpuinfo = {
+    .type = GPU_GEOTREE_ROOT,
+    .capacity = info->capacity
+  };
+
+  if (!gpu_geotree_init(raytracer->gpu, &gpuinfo, &raytracer->address)) {
+    lovrSetError("Failed to create raytracer: %s", gpu_get_error());
+    lovrFree(raytracer);
+    return NULL;
+  }
+
+  return raytracer;
+}
+
+void lovrRaytracerDestroy(void* ref) {
+  Raytracer* raytracer = ref;
+  gpu_geotree_destroy(raytracer->gpu);
+  lovrFree(raytracer);
 }
 
 // Readback

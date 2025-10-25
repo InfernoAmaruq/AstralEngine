@@ -18,6 +18,7 @@ typedef struct Material Material;
 typedef struct Font Font;
 typedef struct Mesh Mesh;
 typedef struct Model Model;
+typedef struct Raytracer Raytracer;
 typedef struct Readback Readback;
 typedef struct Pass Pass;
 
@@ -508,6 +509,15 @@ Buffer* lovrModelGetIndexBuffer(Model* model);
 Mesh* lovrModelGetMesh(Model* model, uint32_t index);
 Texture* lovrModelGetTexture(Model* model, uint32_t index);
 Material* lovrModelGetMaterial(Model* model, uint32_t index);
+
+// Raytracer
+
+typedef struct {
+  uint32_t capacity;
+} RaytracerInfo;
+
+Raytracer* lovrRaytracerCreate(const RaytracerInfo* info);
+void lovrRaytracerDestroy(void* ref);
 
 // Readback
 

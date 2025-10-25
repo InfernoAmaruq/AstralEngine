@@ -1628,6 +1628,7 @@ extern const luaL_Reg lovrMaterial[];
 extern const luaL_Reg lovrFont[];
 extern const luaL_Reg lovrMesh[];
 extern const luaL_Reg lovrModel[];
+extern const luaL_Reg lovrRaytracer[];
 extern const luaL_Reg lovrReadback[];
 extern const luaL_Reg lovrPass[];
 
@@ -1642,6 +1643,7 @@ int luaopen_lovr_graphics(lua_State* L) {
   luax_registertype(L, Font);
   luax_registertype(L, Mesh);
   luax_registertype(L, Model);
+  luax_registertype(L, Raytracer);
   luax_registertype(L, Readback);
   luax_registertype(L, Pass);
 

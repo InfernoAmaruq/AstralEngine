@@ -93,6 +93,7 @@ struct gpu_stream {
 };
 
 size_t gpu_sizeof_buffer(void) { return sizeof(gpu_buffer); }
+size_t gpu_sizeof_geotree(void) { return sizeof(gpu_geotree); }
 size_t gpu_sizeof_texture(void) { return sizeof(gpu_texture); }
 size_t gpu_sizeof_sampler(void) { return sizeof(gpu_sampler); }
 size_t gpu_sizeof_layout(void) { return sizeof(gpu_layout); }

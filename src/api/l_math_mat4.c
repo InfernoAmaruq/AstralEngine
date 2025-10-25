@@ -60,7 +60,7 @@ static int l_lovrMat4GetPosition(lua_State* L) {
 static int l_lovrMat4SetPosition(lua_State* L) {
   float* m = lovrMat4GetData(luax_checktype(L, 1, Mat4));
   float position[3];
-  luax_readvec3(L, 2, position, "nil, number, vec3");
+  luax_readvec3(L, 2, position, NULL);
   mat4_setPosition(m, position);
   lua_settop(L, 1);
   return 1;
@@ -80,7 +80,7 @@ static int l_lovrMat4GetOrientation(lua_State* L) {
 static int l_lovrMat4SetOrientation(lua_State* L) {
   float* m = lovrMat4GetData(luax_checktype(L, 1, Mat4));
   float orientation[4];
-  luax_readquat(L, 2, orientation, "nil, number, quat");
+  luax_readquat(L, 2, orientation, NULL);
   mat4_setOrientation(m, orientation);
   lua_settop(L, 1);
   return 1;
@@ -99,7 +99,7 @@ static int l_lovrMat4GetScale(lua_State* L) {
 static int l_lovrMat4SetScale(lua_State* L) {
   float* m = lovrMat4GetData(luax_checktype(L, 1, Mat4));
   float scale[3];
-  luax_readvec3(L, 2, scale, "nil, number, vec3");
+  luax_readvec3(L, 2, scale, NULL);
   mat4_setScale(m, scale);
   lua_settop(L, 1);
   return 1;
@@ -124,8 +124,8 @@ static int l_lovrMat4SetPose(lua_State* L) {
   float* m = lovrMat4GetData(luax_checktype(L, 1, Mat4));
   float pos[3];
   float orientation[4];
-  int index = luax_readvec3(L, 2, pos, "nil, number, vec3");
-  luax_readquat(L, index, orientation, "nil, number, quat");
+  int index = luax_readvec3(L, 2, pos, NULL);
+  luax_readquat(L, index, orientation, NULL);
   mat4_setPosition(m, pos);
   mat4_setOrientation(m, orientation);
   lua_settop(L, 1);
@@ -153,7 +153,7 @@ int l_lovrMat4Set(lua_State* L) {
     mat4_identity(m);
 
     float position[3], orientation[4], scale[3];
-    index = luax_readvec3(L, index, position, "nil, number, vec3, or mat4");
+    index = luax_readvec3(L, index, position, "nil, number, table, vector, or Mat4");
     m[12] = position[0];
     m[13] = position[1];
     m[14] = position[2];
@@ -163,7 +163,7 @@ int l_lovrMat4Set(lua_State* L) {
       luax_readquat(L, index, orientation, NULL);
       mat4_rotateQuat(m, orientation);
     } else {
-      index = luax_readscale(L, index, scale, 3, NULL);
+      index = luax_readscale(L, index, scale, 3, "nil, number, table, vector, or quaternion");
       index = luax_readquat(L, index, orientation, NULL);
       mat4_rotateQuat(m, orientation);
       mat4_scale(m, scale[0], scale[1], scale[2]);
@@ -382,7 +382,7 @@ static int l_lovrMat4__mul(lua_State* L) {
   }
 #endif
 
-  return luaL_error(L, "Bad right hand side for Mat4 * operator: expected a Mat4 or a vector");
+  return luaL_error(L, "Bad right hand side for Mat4 * operator: expected a Mat4, table, or vector");
 }
 
 static int l_lovrMat4__tostring(lua_State* L) {
@@ -408,7 +408,7 @@ static int l_lovrMat4__newindex(lua_State* L) {
   lua_getglobal(L, "tostring");
   lua_pushvalue(L, 2);
   lua_call(L, 1, 1);
-  return luaL_error(L, "attempt to assign property %s of mat4 (invalid property)", lua_tostring(L, -1));
+  return luaL_error(L, "attempt to assign property %s of Mat4 (invalid property)", lua_tostring(L, -1));
 }
 
 static int l_lovrMat4__index(lua_State* L) {
@@ -435,7 +435,7 @@ static int l_lovrMat4__index(lua_State* L) {
   lua_getglobal(L, "tostring");
   lua_pushvalue(L, 2);
   lua_call(L, 1, 1);
-  return luaL_error(L, "attempt to index field %s of mat4 (invalid property)", lua_tostring(L, -1));
+  return luaL_error(L, "attempt to index field %s of Mat4 (invalid property)", lua_tostring(L, -1));
 }
 
 const luaL_Reg lovrMat4[] = {

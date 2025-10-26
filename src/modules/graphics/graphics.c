@@ -300,7 +300,7 @@ struct Raytracer {
   uint32_t ref;
   RaytracerInfo info;
   gpu_address address;
-  gpu_geotree* gpu;
+  gpu_tree* gpu;
 };
 
 typedef enum {
@@ -5605,17 +5605,17 @@ static bool lovrModelAnimateVertices(Model* model) {
 // Raytracer
 
 Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
-  Raytracer* raytracer = lovrCalloc(sizeof(Raytracer) + gpu_sizeof_geotree());
+  Raytracer* raytracer = lovrCalloc(sizeof(Raytracer) + gpu_sizeof_tree());
   raytracer->ref = 1;
   raytracer->info = *info;
-  raytracer->gpu = (gpu_geotree*) (raytracer + 1);
+  raytracer->gpu = (gpu_tree*) (raytracer + 1);
 
-  gpu_geotree_info gpuinfo = {
-    .type = GPU_GEOTREE_ROOT,
+  gpu_tree_info gpuinfo = {
+    .type = GPU_TREE_TOP,
     .capacity = info->capacity
   };
 
-  if (!gpu_geotree_init(raytracer->gpu, &gpuinfo, &raytracer->address)) {
+  if (!gpu_tree_init(raytracer->gpu, &gpuinfo, &raytracer->address)) {
     lovrSetError("Failed to create raytracer: %s", gpu_get_error());
     lovrFree(raytracer);
     return NULL;
@@ -5626,7 +5626,7 @@ Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
 
 void lovrRaytracerDestroy(void* ref) {
   Raytracer* raytracer = ref;
-  gpu_geotree_destroy(raytracer->gpu);
+  gpu_tree_destroy(raytracer->gpu);
   lovrFree(raytracer);
 }
 

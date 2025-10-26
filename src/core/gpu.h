@@ -5,7 +5,7 @@
 #pragma once
 
 typedef struct gpu_buffer gpu_buffer;
-typedef struct gpu_geotree gpu_geotree;
+typedef struct gpu_tree gpu_tree;
 typedef struct gpu_texture gpu_texture;
 typedef struct gpu_sampler gpu_sampler;
 typedef struct gpu_layout gpu_layout;
@@ -18,7 +18,7 @@ typedef struct gpu_tally gpu_tally;
 typedef struct gpu_stream gpu_stream;
 
 size_t gpu_sizeof_buffer(void);
-size_t gpu_sizeof_geotree(void);
+size_t gpu_sizeof_tree(void);
 size_t gpu_sizeof_texture(void);
 size_t gpu_sizeof_sampler(void);
 size_t gpu_sizeof_layout(void);
@@ -38,7 +38,7 @@ typedef enum {
   GPU_BUFFER_STREAM,
   GPU_BUFFER_UPLOAD,
   GPU_BUFFER_DOWNLOAD,
-  GPU_BUFFER_GEOTREE
+  GPU_BUFFER_TREE
 } gpu_buffer_type;
 
 typedef struct {
@@ -53,18 +53,18 @@ bool gpu_buffer_init(gpu_buffer* buffer, gpu_buffer_info* info);
 void gpu_buffer_destroy(gpu_buffer* buffer);
 gpu_address gpu_buffer_get_address(gpu_buffer* buffer, uint32_t offset);
 
-// Geotree
+// Tree
 
 typedef enum {
-  GPU_GEOTREE_LEAF,
-  GPU_GEOTREE_ROOT
-} gpu_geotree_type;
+  GPU_TREE_TOP,
+  GPU_TREE_BOTTOM
+} gpu_tree_type;
 
 enum {
-  GPU_GEOTREE_WILL_UPDATE = (1 << 0),
-  GPU_GEOTREE_FAST_TRACE = (1 << 1),
-  GPU_GEOTREE_FAST_BUILD = (1 << 2),
-  GPU_GEOTREE_LOW_MEMORY = (1 << 3)
+  GPU_TREE_WILL_UPDATE = (1 << 0),
+  GPU_TREE_FAST_TRACE = (1 << 1),
+  GPU_TREE_FAST_BUILD = (1 << 2),
+  GPU_TREE_LOW_MEMORY = (1 << 3)
 };
 
 typedef enum {
@@ -125,13 +125,13 @@ typedef struct {
   unsigned id : 24;
   unsigned mask : 8;
   uint32_t padding;
-  gpu_address geotree;
+  gpu_address tree;
 } gpu_instance_data;
 
 typedef union {
   gpu_triangle_data triangles;
   gpu_buffer* instances;
-} gpu_geotree_data;
+} gpu_tree_data;
 
 typedef enum {
   GPU_BUILD_CREATE,
@@ -139,25 +139,25 @@ typedef enum {
 } gpu_build_mode;
 
 typedef struct {
-  gpu_geotree_type type;
+  gpu_tree_level type;
   gpu_build_mode mode;
   uint32_t flags;
-  gpu_geotree_data data;
+  gpu_tree_data data;
   uint32_t primitiveCount;
   uint32_t primitiveOffset;
   uint32_t firstVertex;
 } gpu_build_info;
 
 typedef struct {
-  gpu_geotree_type type;
+  gpu_tree_type type;
   uint32_t flags;
   uint32_t capacity;
   gpu_triangle_format format;
   const char* label;
-} gpu_geotree_info;
+} gpu_tree_info;
 
-bool gpu_geotree_init(gpu_geotree* geotree, gpu_geotree_info* info, gpu_address* address);
-void gpu_geotree_destroy(gpu_geotree* geotree);
+bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info, gpu_address* address);
+void gpu_tree_destroy(gpu_tree* tree);
 
 // Texture
 
@@ -347,7 +347,7 @@ typedef enum {
   GPU_SLOT_SAMPLED_TEXTURE,
   GPU_SLOT_STORAGE_TEXTURE,
   GPU_SLOT_SAMPLER,
-  GPU_SLOT_GEOTREE
+  GPU_SLOT_TREE
 } gpu_slot_type;
 
 enum {
@@ -412,7 +412,7 @@ typedef struct {
     gpu_texture_binding texture;
     gpu_buffer_binding* buffers;
     gpu_texture_binding* textures;
-    gpu_geotree* geotree;
+    gpu_tree* tree;
   };
 } gpu_binding;
 
@@ -669,7 +669,7 @@ typedef enum {
   GPU_PHASE_COPY = (1 << 9),
   GPU_PHASE_CLEAR = (1 << 10),
   GPU_PHASE_BLIT = (1 << 11),
-  GPU_PHASE_GEOTREE_BUILD = (1 << 12)
+  GPU_PHASE_TREE_BUILD = (1 << 12)
 } gpu_phase;
 
 typedef enum {
@@ -686,14 +686,14 @@ typedef enum {
   GPU_CACHE_COLOR_WRITE = (1 << 10),
   GPU_CACHE_TRANSFER_READ = (1 << 11),
   GPU_CACHE_TRANSFER_WRITE = (1 << 12),
-  GPU_CACHE_GEOTREE_READ  = (1 << 13),
-  GPU_CACHE_GEOTREE_WRITE  = (1 << 14),
+  GPU_CACHE_TREE_READ  = (1 << 13),
+  GPU_CACHE_TREE_WRITE  = (1 << 14),
   GPU_CACHE_WRITE_MASK =
     GPU_CACHE_STORAGE_WRITE |
     GPU_CACHE_DEPTH_WRITE |
     GPU_CACHE_COLOR_WRITE |
     GPU_CACHE_TRANSFER_WRITE |
-    GPU_CACHE_GEOTREE_WRITE,
+    GPU_CACHE_TREE_WRITE,
   GPU_CACHE_READ_MASK = ~GPU_CACHE_WRITE_MASK
 } gpu_cache;
 
@@ -732,7 +732,7 @@ void gpu_clear_buffer(gpu_stream* stream, gpu_buffer* buffer, uint32_t offset, u
 void gpu_clear_texture(gpu_stream* stream, gpu_texture* texture, float value[4], uint32_t layer, uint32_t layerCount, uint32_t level, uint32_t levelCount);
 void gpu_clear_tally(gpu_stream* stream, gpu_tally* tally, uint32_t index, uint32_t count);
 void gpu_blit(gpu_stream* stream, gpu_texture* src, gpu_texture* dst, uint32_t srcOffset[4], uint32_t dstOffset[4], uint32_t srcExtent[3], uint32_t dstExtent[3], gpu_filter filter);
-void gpu_build_geotree(gpu_stream* stream, gpu_geotree* geotree, gpu_build_info* info);
+void gpu_build_tree(gpu_stream* stream, gpu_tree* tree, gpu_build_info* info);
 void gpu_sync(gpu_stream* stream, gpu_barrier* barriers, uint32_t count);
 void gpu_tally_begin(gpu_stream* stream, gpu_tally* tally, uint32_t index);
 void gpu_tally_finish(gpu_stream* stream, gpu_tally* tally, uint32_t index);

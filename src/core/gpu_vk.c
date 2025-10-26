@@ -36,7 +36,7 @@ struct gpu_buffer {
   VkDeviceSize offset;
 };
 
-struct gpu_geotree {
+struct gpu_tree {
   VkAccelerationStructureKHR handle;
   gpu_buffer buffer;
   gpu_buffer scratch;
@@ -93,7 +93,7 @@ struct gpu_stream {
 };
 
 size_t gpu_sizeof_buffer(void) { return sizeof(gpu_buffer); }
-size_t gpu_sizeof_geotree(void) { return sizeof(gpu_geotree); }
+size_t gpu_sizeof_tree(void) { return sizeof(gpu_tree); }
 size_t gpu_sizeof_texture(void) { return sizeof(gpu_texture); }
 size_t gpu_sizeof_sampler(void) { return sizeof(gpu_sampler); }
 size_t gpu_sizeof_layout(void) { return sizeof(gpu_layout); }
@@ -119,7 +119,7 @@ typedef enum {
   GPU_MEMORY_BUFFER_STREAM,
   GPU_MEMORY_BUFFER_UPLOAD,
   GPU_MEMORY_BUFFER_DOWNLOAD,
-  GPU_MEMORY_BUFFER_GEOTREE,
+  GPU_MEMORY_BUFFER_TREE,
   GPU_MEMORY_TEXTURE_COLOR,
   GPU_MEMORY_TEXTURE_D16,
   GPU_MEMORY_TEXTURE_D24,
@@ -491,16 +491,16 @@ gpu_address gpu_buffer_get_address(gpu_buffer* buffer, uint32_t offset) {
   }) + offset;
 }
 
-// Geotree
+// Tree
 
-bool gpu_geotree_init(gpu_geotree* geotree, gpu_geotree_info* info, gpu_address* address) {
-  VkAccelerationStructureTypeKHR type = info->type == GPU_GEOTREE_ROOT ?
+bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info, gpu_address* address) {
+  VkAccelerationStructureTypeKHR type = info->type == GPU_TREE_TOP ?
     VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :
     VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 
   VkAccelerationStructureGeometryDataKHR geometry;
 
-  if (info->type == GPU_GEOTREE_ROOT) {
+  if (info->type == GPU_TREE_ROOT) {
     geometry.instances = (VkAccelerationStructureGeometryInstancesDataKHR) {
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR
     };
@@ -518,14 +518,14 @@ bool gpu_geotree_init(gpu_geotree* geotree, gpu_geotree_info* info, gpu_address*
     .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
     .type = type,
     .flags =
-      ((info->flags & GPU_GEOTREE_WILL_UPDATE) ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0) |
-      ((info->flags & GPU_GEOTREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
-      ((info->flags & GPU_GEOTREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
-      ((info->flags & GPU_GEOTREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0),
+      ((info->flags & GPU_TREE_WILL_UPDATE) ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0) |
+      ((info->flags & GPU_TREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
+      ((info->flags & GPU_TREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
+      ((info->flags & GPU_TREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0),
     .geometryCount = 1,
     .pGeometries = &(VkAccelerationStructureGeometryKHR) {
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
-      .geometryType = info->type == GPU_GEOTREE_ROOT ? VK_GEOMETRY_TYPE_INSTANCES_KHR : VK_GEOMETRY_TYPE_TRIANGLES_KHR,
+      .geometryType = info->type == GPU_TREE_ROOT ? VK_GEOMETRY_TYPE_INSTANCES_KHR : VK_GEOMETRY_TYPE_TRIANGLES_KHR,
       .flags = VK_GEOMETRY_OPAQUE_BIT_KHR,
       .geometry = geometry
     }
@@ -537,46 +537,46 @@ bool gpu_geotree_init(gpu_geotree* geotree, gpu_geotree_info* info, gpu_address*
   vkGetAccelerationStructureBuildSizesKHR(state.device, buildType, &buildInfo, &info->capacity, &sizes);
 
   gpu_buffer_info bufferInfo = {
-    .type = GPU_BUFFER_GEOTREE,
+    .type = GPU_BUFFER_TREE,
     .size = sizes.accelerationStructureSize
   };
 
-  if (!gpu_buffer_init(&geotree->buffer, &bufferInfo)) {
+  if (!gpu_buffer_init(&tree->buffer, &bufferInfo)) {
     return false;
   }
 
   if (address) {
-    *address = gpu_buffer_get_address(&geotree->buffer, 0);
+    *address = gpu_buffer_get_address(&tree->buffer, 0);
   }
 
   bufferInfo.type = GPU_BUFFER_STATIC;
   bufferInfo.size = MAX(sizes.updateScratchSize, sizes.buildScratchSize);
 
-  if (!gpu_buffer_init(&geotree->scratch, &bufferInfo)) {
-    gpu_buffer_destroy(&geotree->buffer);
+  if (!gpu_buffer_init(&tree->scratch, &bufferInfo)) {
+    gpu_buffer_destroy(&tree->buffer);
     return false;
   }
 
   VkAccelerationStructureCreateInfoKHR createInfo = {
     .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
-    .buffer = geotree->buffer.handle,
+    .buffer = tree->buffer.handle,
     .size = sizes.accelerationStructureSize,
     .type = type
   };
 
-  VK(vkCreateAccelerationStructureKHR(state.device, &createInfo, NULL, &geotree->handle), "vkCreateAccelerationStructureKHR") {
-    gpu_buffer_destroy(&geotree->scratch);
-    gpu_buffer_destroy(&geotree->buffer);
+  VK(vkCreateAccelerationStructureKHR(state.device, &createInfo, NULL, &tree->handle), "vkCreateAccelerationStructureKHR") {
+    gpu_buffer_destroy(&tree->scratch);
+    gpu_buffer_destroy(&tree->buffer);
     return false;
   }
 
   return true;
 }
 
-void gpu_geotree_destroy(gpu_geotree* geotree) {
-  condemn(geotree->handle, VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR);
-  gpu_buffer_destroy(&geotree->buffer);
-  gpu_buffer_destroy(&geotree->scratch);
+void gpu_tree_destroy(gpu_tree* tree) {
+  condemn(tree->handle, VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR);
+  gpu_buffer_destroy(&tree->buffer);
+  gpu_buffer_destroy(&tree->scratch);
 }
 
 // Texture
@@ -1480,11 +1480,11 @@ void gpu_bundle_pool_destroy(gpu_bundle_pool* pool) {
 void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t count) {
   VkDescriptorBufferInfo bufferInfo[256];
   VkDescriptorImageInfo imageInfo[256];
-  VkWriteDescriptorSetAccelerationStructureKHR geotreeInfo[256];
+  VkWriteDescriptorSetAccelerationStructureKHR treeInfo[256];
   VkWriteDescriptorSet writes[256];
   uint32_t bufferCount = 0;
   uint32_t imageCount = 0;
-  uint32_t geotreeCount = 0;
+  uint32_t treeCount = 0;
   uint32_t writeCount = 0;
 
   static const VkDescriptorType types[] = {
@@ -1496,7 +1496,7 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
     [GPU_SLOT_SAMPLED_TEXTURE] = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
     [GPU_SLOT_STORAGE_TEXTURE] = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
     [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER,
-    [GPU_SLOT_GEOTREE] = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
+    [GPU_SLOT_TREE] = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
   };
 
   for (uint32_t i = 0; i < count; i++) {
@@ -1507,14 +1507,14 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
       gpu_buffer_binding* buffers = binding->count > 0 ? binding->buffers : &binding->buffer;
       gpu_texture_binding* textures = binding->count > 0 ? binding->textures : &binding->texture;
       bool image = binding->type > GPU_SLOT_STORAGE_BUFFER_DYNAMIC;
-      bool geotree = binding->type == GPU_SLOT_GEOTREE;
+      bool tree = binding->type == GPU_SLOT_TREE;
 
       uint32_t index = 0;
       uint32_t descriptorCount = MAX(binding->count, 1);
 
       while (index < descriptorCount) {
         uint32_t available =
-          geotree ? COUNTOF(geotreeInfo) - geotreeCount :
+          tree ? COUNTOF(treeInfo) - treeCount :
           image ? COUNTOF(imageInfo) - imageCount :
           COUNTOF(bufferInfo) - bufferCount;
 
@@ -1522,7 +1522,7 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
 
         writes[writeCount++] = (VkWriteDescriptorSet) {
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-          .pNext = geotree ? &geotreeInfo[geotreeCount] : NULL,
+          .pNext = tree ? &treeInfo[treeCount] : NULL,
           .dstSet = bundles[i]->handle,
           .dstBinding = binding->number,
           .dstArrayElement = index,
@@ -1532,11 +1532,11 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
           .pImageInfo = &imageInfo[imageCount]
         };
 
-        if (geotree) {
-          geotreeInfo[geotreeCount++] = (VkWriteDescriptorSetAccelerationStructureKHR) {
+        if (tree) {
+          treeInfo[treeCount++] = (VkWriteDescriptorSetAccelerationStructureKHR) {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
             .accelerationStructureCount = 1,
-            .pAccelerationStructures = &binding->geotree->handle
+            .pAccelerationStructures = &binding->tree->handle
           };
         } else if (image) {
           for (uint32_t n = 0; n < chunk; n++, index++) {
@@ -1559,12 +1559,12 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
         bool flush =
           bufferCount == COUNTOF(bufferInfo) ||
           imageCount == COUNTOF(imageInfo) ||
-          geotreeCount == COUNTOF(geotreeInfo) ||
+          treeCount == COUNTOF(treeInfo) ||
           writeCount == COUNTOF(writes);
 
         if (flush) {
           vkUpdateDescriptorSets(state.device, writeCount, writes, 0, NULL);
-          bufferCount = imageCount = geotreeCount = writeCount = 0;
+          bufferCount = imageCount = treeCount = writeCount = 0;
         }
       }
     }
@@ -2682,10 +2682,10 @@ void gpu_blit(gpu_stream* stream, gpu_texture* src, gpu_texture* dst, uint32_t s
   vkCmdBlitImage(stream->commands, src->handle, VK_IMAGE_LAYOUT_GENERAL, dst->handle, VK_IMAGE_LAYOUT_GENERAL, 1, &region, filters[filter]);
 }
 
-void gpu_build_geotree(gpu_stream* stream, gpu_geotree* geotree, gpu_build_info* info) {
+void gpu_build_tree(gpu_stream* stream, gpu_geotree* geotree, gpu_build_info* info) {
   VkAccelerationStructureGeometryDataKHR geometry;
 
-  if (info->type == GPU_GEOTREE_ROOT) {
+  if (info->type == GPU_TREE_TOP) {
     geometry.instances = (VkAccelerationStructureGeometryInstancesDataKHR) {
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR,
       .data.deviceAddress = gpu_buffer_get_address(info->data.instances, 0) // Can use primitiveOffset to offset
@@ -2704,14 +2704,14 @@ void gpu_build_geotree(gpu_stream* stream, gpu_geotree* geotree, gpu_build_info*
 
   VkAccelerationStructureBuildGeometryInfoKHR build = {
     .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
-    .type = info->type == GPU_GEOTREE_ROOT ?
+    .type = info->type == GPU_TREE_TOP ?
       VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :
       VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
     .flags =
-      ((info->flags & GPU_GEOTREE_WILL_UPDATE) ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0) |
-      ((info->flags & GPU_GEOTREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
-      ((info->flags & GPU_GEOTREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
-      ((info->flags & GPU_GEOTREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0),
+      ((info->flags & GPU_TREE_WILL_UPDATE) ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0) |
+      ((info->flags & GPU_TREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
+      ((info->flags & GPU_TREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
+      ((info->flags & GPU_TREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0),
     .mode = info->mode == GPU_BUILD_CREATE ?
       VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR :
       VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR,
@@ -2719,7 +2719,7 @@ void gpu_build_geotree(gpu_stream* stream, gpu_geotree* geotree, gpu_build_info*
     .geometryCount = 1,
     .pGeometries = &(VkAccelerationStructureGeometryKHR) {
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
-      .geometryType = info->type == GPU_GEOTREE_ROOT ? VK_GEOMETRY_TYPE_INSTANCES_KHR : VK_GEOMETRY_TYPE_TRIANGLES_KHR,
+      .geometryType = info->type == GPU_TREE_TOP ? VK_GEOMETRY_TYPE_INSTANCES_KHR : VK_GEOMETRY_TYPE_TRIANGLES_KHR,
       .flags = VK_GEOMETRY_OPAQUE_BIT_KHR,
       .geometry = geometry
     },
@@ -3265,14 +3265,14 @@ bool gpu_init(gpu_config* config) {
       [GPU_MEMORY_BUFFER_STREAM] = hostVisible | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
       [GPU_MEMORY_BUFFER_UPLOAD] = hostVisible,
       [GPU_MEMORY_BUFFER_DOWNLOAD] = hostVisible | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-      [GPU_MEMORY_BUFFER_GEOTREE] = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+      [GPU_MEMORY_BUFFER_TREE] = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     };
 
     for (uint32_t i = 0; i < COUNTOF(bufferFlags); i++) {
       gpu_allocator* allocator = &state.allocators[i];
       state.allocatorLookup[i] = i;
 
-      if (i == GPU_MEMORY_BUFFER_GEOTREE && !state.extensions.accelerationStructure) {
+      if (i == GPU_MEMORY_BUFFER_TREE && !state.extensions.accelerationStructure) {
         continue;
       }
 
@@ -3619,7 +3619,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     [GPU_MEMORY_BUFFER_STREAM] = 0,
     [GPU_MEMORY_BUFFER_UPLOAD] = 0,
     [GPU_MEMORY_BUFFER_DOWNLOAD] = 0,
-    [GPU_MEMORY_BUFFER_GEOTREE] = 1 << 24,
+    [GPU_MEMORY_BUFFER_TREE] = 1 << 24,
     [GPU_MEMORY_TEXTURE_COLOR] = 1 << 26,
     [GPU_MEMORY_TEXTURE_D16] = 1 << 26,
     [GPU_MEMORY_TEXTURE_D24] = 1 << 26,
@@ -3892,7 +3892,7 @@ static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type) {
       return VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     case GPU_BUFFER_DOWNLOAD:
       return VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    case GPU_BUFFER_GEOTREE:
+    case GPU_BUFFER_TREE:
       return VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     default: return 0;
   }
@@ -4063,7 +4063,7 @@ static VkPipelineStageFlags2 convertPhase(gpu_phase phase, bool dst) {
   if (phase & GPU_PHASE_COPY) flags |= VK_PIPELINE_STAGE_2_COPY_BIT_KHR;
   if (phase & GPU_PHASE_CLEAR) flags |= VK_PIPELINE_STAGE_2_CLEAR_BIT_KHR;
   if (phase & GPU_PHASE_BLIT) flags |= VK_PIPELINE_STAGE_2_BLIT_BIT_KHR;
-  if (phase & GPU_PHASE_GEOTREE_BUILD) flags |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+  if (phase & GPU_PHASE_TREE_BUILD) flags |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
   return flags;
 }
 
@@ -4082,8 +4082,8 @@ static VkAccessFlags2 convertCache(gpu_cache cache) {
   if (cache & GPU_CACHE_COLOR_WRITE) flags |= VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR;
   if (cache & GPU_CACHE_TRANSFER_READ) flags |= VK_ACCESS_2_TRANSFER_READ_BIT_KHR;
   if (cache & GPU_CACHE_TRANSFER_WRITE) flags |= VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-  if (cache & GPU_CACHE_GEOTREE_READ) flags |= VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-  if (cache & GPU_CACHE_GEOTREE_WRITE) flags |= VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+  if (cache & GPU_CACHE_TREE_READ) flags |= VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+  if (cache & GPU_CACHE_TREE_WRITE) flags |= VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
   return flags;
 }
 

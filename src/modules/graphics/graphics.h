@@ -518,6 +518,7 @@ typedef struct {
 
 Raytracer* lovrRaytracerCreate(const RaytracerInfo* info);
 void lovrRaytracerDestroy(void* ref);
+uint32_t lovrRaytracerGetCapacity(Raytracer* raytracer);
 
 // Readback
 

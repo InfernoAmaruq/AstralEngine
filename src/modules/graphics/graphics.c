@@ -5630,6 +5630,10 @@ void lovrRaytracerDestroy(void* ref) {
   lovrFree(raytracer);
 }
 
+uint32_t lovrRaytracerGetCapacity(Raytracer* raytracer) {
+  return raytracer->info.capacity;
+}
+
 // Readback
 
 static Readback* lovrReadbackCreate(ReadbackType type) {

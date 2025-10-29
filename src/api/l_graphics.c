@@ -1566,6 +1566,16 @@ static int l_lovrGraphicsNewModel(lua_State* L) {
   return 1;
 }
 
+static int l_lovrGraphicsNewRaytracer(lua_State* L) {
+  RaytracerInfo info = { 0 };
+  info.capacity = luax_checku32(L, 1);
+  Raytracer* raytracer = lovrRaytracerCreate(&info);
+  luax_assert(L, raytracer);
+  luax_pushtype(L, Raytracer, raytracer);
+  lovrRelease(raytracer, lovrRaytracerDestroy);
+  return 1;
+}
+
 int l_lovrPassSetCanvas(lua_State* L);
 
 static int l_lovrGraphicsNewPass(lua_State* L) {
@@ -1613,6 +1623,7 @@ static const luaL_Reg lovrGraphics[] = {
   { "newFont", l_lovrGraphicsNewFont },
   { "newMesh", l_lovrGraphicsNewMesh },
   { "newModel", l_lovrGraphicsNewModel },
+  { "newRaytracer", l_lovrGraphicsNewRaytracer },
   { "newPass", l_lovrGraphicsNewPass },
   { NULL, NULL }
 };

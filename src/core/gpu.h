@@ -110,7 +110,7 @@ typedef struct {
   unsigned mask : 8;
   uint32_t padding;
   gpu_address tree;
-} gpu_instance_data;
+} gpu_tree_instance;
 
 typedef enum {
   GPU_TREE_TOP,
@@ -154,8 +154,9 @@ typedef struct {
   const char* label;
 } gpu_tree_info;
 
-bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info, gpu_address* address);
+bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info);
 void gpu_tree_destroy(gpu_tree* tree);
+gpu_address gpu_tree_get_address(gpu_tree* tree);
 
 // Texture
 

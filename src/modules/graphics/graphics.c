@@ -230,6 +230,7 @@ struct Mesh {
   uint32_t drawCount;
   uint32_t baseVertex;
   Material* material;
+  gpu_tree* tree;
 };
 
 typedef struct {
@@ -294,6 +295,7 @@ struct Model {
   bool transformsDirty;
   bool blendShapesDirty;
   uint32_t lastVertexAnimation;
+  gpu_tree* tree;
 };
 
 struct Raytracer {
@@ -301,6 +303,9 @@ struct Raytracer {
   RaytracerInfo info;
   gpu_address address;
   gpu_tree* gpu;
+  gpu_tree_instance* instances;
+  uint32_t count;
+  bool dirty;
 };
 
 typedef enum {
@@ -4635,11 +4640,13 @@ Mesh* lovrMeshCreate(const MeshInfo* info, void** vertices) {
 
 void lovrMeshDestroy(void* ref) {
   Mesh* mesh = ref;
+  if (mesh->tree) gpu_tree_destroy(mesh->tree);
   lovrRelease(mesh->vertexBuffer, lovrBufferDestroy);
   lovrRelease(mesh->indexBuffer, lovrBufferDestroy);
   lovrRelease(mesh->material, lovrMaterialDestroy);
   lovrFree(mesh->vertices);
   lovrFree(mesh->indices);
+  lovrFree(mesh->tree);
   lovrFree(mesh);
 }
 
@@ -4927,6 +4934,10 @@ static bool lovrMeshFlush(Mesh* mesh) {
   return true;
 }
 
+static gpu_tree* lovrMeshGetTree(Mesh* mesh) {
+  return NULL;
+}
+
 // Model
 
 Model* lovrModelCreate(const ModelInfo* info) {
@@ -5170,6 +5181,7 @@ void lovrModelDestroy(void* ref) {
       lovrRelease(model->meshes[i], lovrMeshDestroy);
     }
   }
+  if (mesh->tree) gpu_tree_destroy(mesh->tree);
   lovrRelease(model->rawVertexBuffer, lovrBufferDestroy);
   lovrRelease(model->vertexBuffer, lovrBufferDestroy);
   lovrRelease(model->indexBuffer, lovrBufferDestroy);
@@ -5180,6 +5192,7 @@ void lovrModelDestroy(void* ref) {
   lovrFree(model->globalTransforms);
   lovrFree(model->blendShapeWeights);
   lovrFree(model->meshes);
+  lovrFree(model->tree);
   lovrFree(model);
 }
 
@@ -5602,13 +5615,20 @@ static bool lovrModelAnimateVertices(Model* model) {
   return true;
 }
 
+static gpu_tree* lovrModelGetTree(Model* model) {
+  return NULL;
+}
+
 // Raytracer
 
 Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
+  lovrCheck(state.features.rayQuery, "This GPU does not support ray tracing");
+
   Raytracer* raytracer = lovrCalloc(sizeof(Raytracer) + gpu_sizeof_tree());
   raytracer->ref = 1;
   raytracer->info = *info;
   raytracer->gpu = (gpu_tree*) (raytracer + 1);
+  raytracer->instances = lovrMalloc(info->capacity * sizeof(gpu_tree_instance));
 
   gpu_tree_info gpuinfo = {
     .type = GPU_TREE_TOP,
@@ -5627,11 +5647,44 @@ Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
 void lovrRaytracerDestroy(void* ref) {
   Raytracer* raytracer = ref;
   gpu_tree_destroy(raytracer->gpu);
+  lovrFree(raytracer->instances);
   lovrFree(raytracer);
 }
 
 uint32_t lovrRaytracerGetCapacity(Raytracer* raytracer) {
   return raytracer->info.capacity;
+}
+
+uint32_t lovrRaytracerGetCount(Raytracer* raytracer) {
+  return raytracer->count;
+}
+
+void lovrRaytracerClear(Raytracer* raytracer) {
+  raytracer->count = 0;
+}
+
+static uint32_t lovrRaytracerAdd(Raytracer* raytracer, gpu_tree* tree, float transform[16]) {
+  if (raytracer->count >= raytracer->info.capacity) {
+    return ~0u;
+  }
+
+  uint32_t id = raytracer->count++;
+
+  for (uint32_t row = 0; row < 3; row++) {
+    for (uint32_t col = 0; col < 4; col++) {
+      raytracer->instances[id].transform[row][col] = transform[col * 4 + row];
+    }
+  }
+
+  return id;
+}
+
+uint32_t lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16]) {
+  return lovrRaytracerAdd(raytracer, lovrMeshGetTree(mesh), transform);
+}
+
+uint32_t lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16]) {
+  return lovrRaytracerAdd(raytracer, lovrModelGetTree(model), transform);
 }
 
 // Readback

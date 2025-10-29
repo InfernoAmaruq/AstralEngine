@@ -580,10 +580,6 @@ bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info, gpu_address* address) {
     return false;
   }
 
-  if (address) {
-    *address = gpu_buffer_get_address(&tree->buffer, 0);
-  }
-
   bufferInfo.type = GPU_BUFFER_STATIC;
   bufferInfo.size = MAX(sizes.updateScratchSize, sizes.buildScratchSize);
 
@@ -614,6 +610,10 @@ void gpu_tree_destroy(gpu_tree* tree) {
   state.config.fnFree(tree->ranges);
   gpu_buffer_destroy(&tree->buffer);
   gpu_buffer_destroy(&tree->scratch);
+}
+
+gpu_address gpu_tree_get_address(gpu_tree* tree) {
+  return gpu_buffer_get_address(tree->buffer, 0);
 }
 
 // Texture

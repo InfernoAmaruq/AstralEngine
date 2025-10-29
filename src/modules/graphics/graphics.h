@@ -519,6 +519,10 @@ typedef struct {
 Raytracer* lovrRaytracerCreate(const RaytracerInfo* info);
 void lovrRaytracerDestroy(void* ref);
 uint32_t lovrRaytracerGetCapacity(Raytracer* raytracer);
+uint32_t lovrRaytracerGetCount(Raytracer* raytracer);
+void lovrRaytracerClear(Raytracer* raytracer);
+uint32_t lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16]);
+uint32_t lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16]);
 
 // Readback
 

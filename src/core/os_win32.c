@@ -38,8 +38,6 @@ static struct {
   fn_mouse_move* onMouseMove;
   fn_mouse_move* onWheelMove;
   WCHAR surrogate;
-  bool keyDown[OS_KEY_COUNT];
-  bool mouseDown[3];
   uint8_t captureMask;
   double mouseX;
   double mouseY;
@@ -310,8 +308,6 @@ static void mousePressed(uint8_t button) {
   if (state.captureMask == 0) SetCapture(state.window);
   state.captureMask |= (1 << button);
 
-  state.mouseDown[button] = true;
-
   if (state.onMouseButton) {
     state.onMouseButton(button, true);
   }
@@ -320,8 +316,6 @@ static void mousePressed(uint8_t button) {
 static void mouseReleased(uint8_t button) {
   state.captureMask &= ~(1 << button);
   if (state.captureMask == 0) ReleaseCapture();
-
-  state.mouseDown[button] = false;
 
   if (state.onMouseButton) {
     state.onMouseButton(button, false);
@@ -338,7 +332,6 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM param, LPAR
       state.focused = true;
       break;
     case WM_KILLFOCUS:
-      memset(state.mouseDown, false, sizeof(state.mouseDown));
       os_set_mouse_mode(MOUSE_MODE_NORMAL);
       if (state.onFocus) state.onFocus(false);
       state.focused = false;
@@ -381,7 +374,6 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM param, LPAR
         os_button_action action = pressed ? BUTTON_PRESSED : BUTTON_RELEASED;
         bool repeat = !!(HIWORD(lparam) & KF_REPEAT);
 
-        state.keyDown[key] = pressed;
         if (state.onKey) state.onKey(action, key, scancode, repeat);
       }
       break;
@@ -608,14 +600,6 @@ void os_set_mouse_mode(os_mouse_mode mode) {
   }
 
   state.mouseMode = mode;
-}
-
-bool os_is_mouse_down(os_mouse_button button) {
-  return state.mouseDown[button];
-}
-
-bool os_is_key_down(os_key key) {
-  return state.keyDown[key];
 }
 
 uintptr_t os_get_win32_instance(void) {

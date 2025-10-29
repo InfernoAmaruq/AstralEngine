@@ -41,7 +41,6 @@ static struct {
   uint32_t width;
   uint32_t height;
   bool keyDown[OS_KEY_COUNT];
-  bool mouseDown[2];
   os_mouse_mode mouseMode;
   int16_t mouseX;
   int16_t mouseY;
@@ -277,8 +276,8 @@ void os_poll_events(void) {
         bool press = type == XCB_KEY_PRESS;
 
         if (key < OS_KEY_COUNT) {
-          bool repeat = press && state.keyDown[key];
           os_button_action action = press ? BUTTON_PRESSED : BUTTON_RELEASED;
+          bool repeat = press && state.keyDown[key];
           state.keyDown[key] = press;
           if (state.onKey) state.onKey(action, key, keycode, repeat);
         }
@@ -313,10 +312,6 @@ void os_poll_events(void) {
           case 6: if (state.onWheelMove) state.onWheelMove(+1., 0.); break;
           case 7: if (state.onWheelMove) state.onWheelMove(-1., 0.); break;
           default: if (state.onMouseButton) state.onMouseButton(event.mouse->detail - 5, type == XCB_BUTTON_PRESS); break;
-        }
-
-        if (event.mouse->detail == 1 || event.mouse->detail == 3) {
-          state.mouseDown[event.mouse->detail == 1 ? MOUSE_LEFT : MOUSE_RIGHT] = type == XCB_BUTTON_PRESS;
         }
         break;
 
@@ -619,14 +614,6 @@ void os_set_mouse_mode(os_mouse_mode mode) {
     state.mouseX = state.grabX;
     state.mouseY = state.grabY;
   }
-}
-
-bool os_is_mouse_down(os_mouse_button button) {
-  return state.mouseDown[button];
-}
-
-bool os_is_key_down(os_key key) {
-  return state.keyDown[key];
 }
 
 uintptr_t os_get_xcb_connection(void) {

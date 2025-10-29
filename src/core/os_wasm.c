@@ -17,8 +17,6 @@ static struct {
   fn_mouse_button* onMouseButton;
   fn_mouse_move* onMouseMove;
   fn_mousewheel_move* onMouseWheelMove;
-  bool keyMap[OS_KEY_COUNT];
-  bool mouseMap[2];
   os_mouse_mode mouseMode;
   long mouseX;
   long mouseY;
@@ -79,7 +77,6 @@ static EM_BOOL onMouseButton(int type, const EmscriptenMouseEvent* data, void* u
     state.onMouseButton((int) button, pressed);
   }
 
-  state.mouseMap[button] = pressed;
   return false;
 }
 
@@ -196,7 +193,6 @@ static EM_BOOL onKeyEvent(int type, const EmscriptenKeyboardEvent* data, void* u
   }
 
   os_button_action action = type == EMSCRIPTEN_EVENT_KEYDOWN ? BUTTON_PRESSED : BUTTON_RELEASED;
-  state.keyMap[key] = action == BUTTON_PRESSED;
 
   if (state.onKeyboardEvent) {
     state.onKeyboardEvent(action, key, scancode, data->repeat);
@@ -414,12 +410,4 @@ void os_set_mouse_mode(os_mouse_mode mode) {
       emscripten_run_script("document.exitPointerLock();");
     }
   }
-}
-
-bool os_is_mouse_down(os_mouse_button button) {
-  return state.mouseMap[button];
-}
-
-bool os_is_key_down(os_key key) {
-  return state.keyMap[key];
 }

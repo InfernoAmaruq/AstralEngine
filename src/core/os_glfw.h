@@ -81,14 +81,6 @@ void os_set_mouse_mode(os_mouse_mode mode) {
   //
 }
 
-bool os_is_mouse_down(os_mouse_button button) {
-  return false;
-}
-
-bool os_is_key_down(os_key key) {
-  return false;
-}
-
 uintptr_t os_get_win32_window(void) {
   return 0;
 }
@@ -514,14 +506,6 @@ void os_set_mouse_mode(os_mouse_mode mode) {
     int m = (mode == MOUSE_MODE_GRABBED) ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL;
     glfwSetInputMode(glfwState.window, GLFW_CURSOR, m);
   }
-}
-
-bool os_is_mouse_down(os_mouse_button button) {
-  return glfwState.window ? glfwGetMouseButton(glfwState.window, convertMouseButton(button)) == GLFW_PRESS : false;
-}
-
-bool os_is_key_down(os_key key) {
-  return glfwState.window ? glfwGetKey(glfwState.window, convertKey(key)) == GLFW_PRESS : false;
 }
 
 #if defined(_WIN32)

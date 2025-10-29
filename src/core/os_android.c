@@ -444,14 +444,6 @@ void os_set_mouse_mode(os_mouse_mode mode) {
   //
 }
 
-bool os_is_mouse_down(os_mouse_button button) {
-  return false;
-}
-
-bool os_is_key_down(os_key key) {
-  return false;
-}
-
 // Private, must be declared manually to use
 
 void* os_get_java_vm(void) {

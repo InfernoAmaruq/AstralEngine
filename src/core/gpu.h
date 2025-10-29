@@ -56,18 +56,6 @@ gpu_address gpu_buffer_get_address(gpu_buffer* buffer, uint32_t offset);
 // Tree
 
 typedef enum {
-  GPU_TREE_TOP,
-  GPU_TREE_BOTTOM
-} gpu_tree_type;
-
-enum {
-  GPU_TREE_WILL_UPDATE = (1 << 0),
-  GPU_TREE_FAST_TRACE = (1 << 1),
-  GPU_TREE_FAST_BUILD = (1 << 2),
-  GPU_TREE_LOW_MEMORY = (1 << 3)
-};
-
-typedef enum {
   GPU_TYPE_I8x4,
   GPU_TYPE_U8x4,
   GPU_TYPE_SN8x4,
@@ -106,19 +94,15 @@ typedef enum {
 } gpu_index_type;
 
 typedef struct {
+  uint32_t vertexCount;
+  uint32_t triangleCount;
   gpu_attribute_type vertexType;
-  uint32_t vertexStride;
   gpu_index_type indexType;
-  uint32_t maxIndex;
-} gpu_triangle_format;
-
-typedef struct {
-  gpu_triangle_format format;
-  gpu_buffer* vertices;
-  gpu_buffer* indices;
+  uint32_t vertexStride;
   uint32_t vertexOffset;
   uint32_t indexOffset;
-} gpu_triangle_data;
+  uint32_t transformOffset;
+} gpu_mesh_info;
 
 typedef struct {
   float transform[3][4];
@@ -128,31 +112,45 @@ typedef struct {
   gpu_address tree;
 } gpu_instance_data;
 
-typedef union {
-  gpu_triangle_data triangles;
-  gpu_buffer* instances;
-} gpu_tree_data;
+typedef enum {
+  GPU_TREE_TOP,
+  GPU_TREE_BOTTOM
+} gpu_tree_level;
 
 typedef enum {
   GPU_BUILD_CREATE,
   GPU_BUILD_UPDATE
 } gpu_build_mode;
 
+enum {
+  GPU_TREE_WILL_UPDATE = (1 << 0),
+  GPU_TREE_FAST_TRACE = (1 << 1),
+  GPU_TREE_FAST_BUILD = (1 << 2),
+  GPU_TREE_LOW_MEMORY = (1 << 3)
+};
+
 typedef struct {
   gpu_tree_level type;
   gpu_build_mode mode;
   uint32_t flags;
-  gpu_tree_data data;
-  uint32_t primitiveCount;
-  uint32_t primitiveOffset;
-  uint32_t firstVertex;
+  uint32_t count;
+  union {
+    struct {
+      gpu_address instances;
+    };
+    struct {
+      gpu_address vertices;
+      gpu_address indices;
+      gpu_address transforms;
+    };
+  };
 } gpu_build_info;
 
 typedef struct {
-  gpu_tree_type type;
+  gpu_tree_level type;
   uint32_t flags;
   uint32_t capacity;
-  gpu_triangle_format format;
+  gpu_mesh_info* meshes;
   const char* label;
 } gpu_tree_info;
 

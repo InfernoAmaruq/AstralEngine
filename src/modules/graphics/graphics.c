@@ -301,7 +301,6 @@ struct Model {
 struct Raytracer {
   uint32_t ref;
   RaytracerInfo info;
-  gpu_address address;
   gpu_tree* gpu;
   gpu_tree_instance* instances;
   uint32_t count;
@@ -4768,26 +4767,27 @@ void* lovrMeshSetIndices(Mesh* mesh, uint32_t count, DataType type) {
   }
 }
 
-static float* lovrMeshGetPositions(Mesh* mesh) {
-  if (mesh->storage == MESH_GPU) return NULL;
+static const DataField* lovrMeshGetPositions(Mesh* mesh) {
   const DataField* format = lovrMeshGetVertexFormat(mesh);
   uint32_t positionHash = (uint32_t) hash64("VertexPosition", strlen("VertexPosition"));
   for (uint32_t i = 0; i < MAX(format->fieldCount, 1); i++) {
     const DataField* attribute = format->fieldCount > 0 ? &format->fields[i] : format;
     if (attribute->type == TYPE_F32x3 && attribute->hash == positionHash) {
-      return (float*) ((char*) mesh->vertices + attribute->offset);
+      return attribute;
     }
   }
   return NULL;
 }
 
 bool lovrMeshGetTriangles(Mesh* mesh, float** vertices, uint32_t** indices, uint32_t* vertexCount, uint32_t* indexCount) {
-  float* position = lovrMeshGetPositions(mesh);
   const DataField* format = lovrMeshGetVertexFormat(mesh);
   lovrCheck(mesh->storage == MESH_CPU, "Mesh storage mode must be 'cpu'");
   lovrCheck(mesh->mode == DRAW_TRIANGLES, "Mesh draw mode must be 'triangles'");
-  lovrCheck(position, "Mesh has no VertexPosition attribute with vec3 type");
   lovrCheck(mesh->indexCount > 0 || format->length % 3 == 0, "Mesh vertex count must be divisible by 3");
+
+  const DataField* attribute = lovrMeshGetPositions(mesh);
+  lovrCheck(attribute, "Mesh has no VertexPosition attribute with vec3 type");
+  float* position = (float*) ((char*) mesh->vertices + attribute->offset);
 
   *vertices = lovrMalloc(format->length * 3 * sizeof(float));
   *vertexCount = format->length;
@@ -4846,13 +4846,14 @@ void lovrMeshSetBoundingBox(Mesh* mesh, float box[6]) {
 
 bool lovrMeshComputeBoundingBox(Mesh* mesh) {
   const DataField* format = lovrMeshGetVertexFormat(mesh);
-  float* position = lovrMeshGetPositions(mesh);
+  const DataField* attribute = lovrMeshGetPositions(mesh);
 
-  if (!position) {
+  if (!attribute || mesh->storage == MESH_GPU) {
     return false;
   }
 
   float box[6] = { FLT_MAX, FLT_MIN, FLT_MAX, FLT_MIN, FLT_MAX, FLT_MIN };
+  float* position = (float*) ((char*) mesh->vertices + attribute->offset);
 
   for (uint32_t i = 0; i < format->length; i++, position = (float*) ((char*) position + format->stride)) {
     box[0] = MIN(box[0], position[0]);
@@ -4935,7 +4936,38 @@ static bool lovrMeshFlush(Mesh* mesh) {
 }
 
 static gpu_tree* lovrMeshGetTree(Mesh* mesh) {
-  return NULL;
+  if (!mesh->tree) {
+    const DataField* vertex = mesh->vertexBuffer->info.format;
+    const DataField* index = mesh->indexCount > 0 ? mesh->indexBuffer->info.format : NULL;
+    const DataField* positions = lovrMeshGetPositions(mesh);
+
+    lovrCheck(positions, "Mesh has no VertexPosition attribute with vec3 type");
+
+    mesh->tree = lovrMalloc(gpu_sizeof_tree());
+
+    gpu_tree_info info = {
+      .type = GPU_TREE_BOTTOM,
+      .capacity = 1,
+      .meshes = &(gpu_mesh_info) {
+        .vertexCount = vertex->length,
+        .triangleCount = index ? mesh->indexCount / 3 : vertex->length / 3,
+        .vertexType = (gpu_attribute_type) positions->type,
+        .indexType = index && index->stride == 2 ? GPU_INDEX_U16 : GPU_INDEX_U32,
+        .vertexStride = vertex->stride,
+        .vertexOffset = 0,
+        .indexOffset = index ? 0 : ~0u,
+        .transformOffset = ~0u
+      }
+    };
+
+    if (!gpu_tree_init(mesh->tree, &info)) {
+      lovrSetError("Could not create mesh raytracing data: %s", gpu_get_error());
+      lovrFree(mesh->tree);
+      return NULL;
+    }
+  }
+
+  return mesh->tree;
 }
 
 // Model
@@ -5181,7 +5213,7 @@ void lovrModelDestroy(void* ref) {
       lovrRelease(model->meshes[i], lovrMeshDestroy);
     }
   }
-  if (mesh->tree) gpu_tree_destroy(mesh->tree);
+  if (model->tree) gpu_tree_destroy(model->tree);
   lovrRelease(model->rawVertexBuffer, lovrBufferDestroy);
   lovrRelease(model->vertexBuffer, lovrBufferDestroy);
   lovrRelease(model->indexBuffer, lovrBufferDestroy);
@@ -5623,6 +5655,7 @@ static gpu_tree* lovrModelGetTree(Model* model) {
 
 Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
   lovrCheck(state.features.rayQuery, "This GPU does not support ray tracing");
+  lovrCheck(info->capacity < (1 << 24) - 1, "Currently, the max raytracer capacity is %d", (1 << 24) - 1);
 
   Raytracer* raytracer = lovrCalloc(sizeof(Raytracer) + gpu_sizeof_tree());
   raytracer->ref = 1;
@@ -5635,7 +5668,7 @@ Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
     .capacity = info->capacity
   };
 
-  if (!gpu_tree_init(raytracer->gpu, &gpuinfo, &raytracer->address)) {
+  if (!gpu_tree_init(raytracer->gpu, &gpuinfo)) {
     lovrSetError("Failed to create raytracer: %s", gpu_get_error());
     lovrFree(raytracer);
     return NULL;
@@ -5663,28 +5696,60 @@ void lovrRaytracerClear(Raytracer* raytracer) {
   raytracer->count = 0;
 }
 
-static uint32_t lovrRaytracerAdd(Raytracer* raytracer, gpu_tree* tree, float transform[16]) {
+static uint32_t lovrRaytracerAdd(Raytracer* raytracer, gpu_tree* tree, float transform[16], uint32_t layers, uint32_t tag) {
+  if (!tree) {
+    return ~0u;
+  }
+
   if (raytracer->count >= raytracer->info.capacity) {
+    lovrSetError("Raytracer is full!");
     return ~0u;
   }
 
   uint32_t id = raytracer->count++;
 
-  for (uint32_t row = 0; row < 3; row++) {
-    for (uint32_t col = 0; col < 4; col++) {
-      raytracer->instances[id].transform[row][col] = transform[col * 4 + row];
-    }
-  }
+  raytracer->instances[id] = (gpu_tree_instance) {
+    .transform = {
+      { transform[0], transform[4], transform[8], transform[12] },
+      { transform[1], transform[5], transform[9], transform[13] },
+      { transform[2], transform[6], transform[10], transform[14] },
+    },
+    .id = tag == ~0u ? id : tag,
+    .mask = layers,
+    .tree = gpu_tree_get_address(tree)
+  };
 
   return id;
 }
 
-uint32_t lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16]) {
-  return lovrRaytracerAdd(raytracer, lovrMeshGetTree(mesh), transform);
+uint32_t lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16], uint32_t layers, uint32_t tag) {
+  return lovrRaytracerAdd(raytracer, lovrMeshGetTree(mesh), transform, layers, tag);
 }
 
-uint32_t lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16]) {
-  return lovrRaytracerAdd(raytracer, lovrModelGetTree(model), transform);
+uint32_t lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16], uint32_t layers, uint32_t tag) {
+  return lovrRaytracerAdd(raytracer, lovrModelGetTree(model), transform, layers, tag);
+}
+
+bool lovrRaytracerSet(Raytracer* raytracer, uint32_t id, float transform[16], uint32_t layers, uint32_t tag) {
+  lovrCheck(id < raytracer->count, "Invalid id %d", id);
+
+  if (transform) {
+    for (uint32_t row = 0; row < 3; row++) {
+      for (uint32_t col = 0; col < 4; col++) {
+        raytracer->instances[id].transform[row][col] = transform[4 * col + row];
+      }
+    }
+  }
+
+  if (layers != ~0u) {
+    raytracer->instances[id].mask = (uint8_t) layers;
+  }
+
+  if (tag != ~0u) {
+    raytracer->instances[id].id = tag;
+  }
+
+  return true;
 }
 
 // Readback

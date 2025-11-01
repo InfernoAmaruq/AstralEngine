@@ -223,6 +223,7 @@ typedef struct {
   bool bufferDeviceAddress;
   bool descriptorIndexing;
   bool deferredHostOperations;
+  bool shaderFloatControls;
   bool spirv14;
   bool rayQuery;
 } gpu_extensions;
@@ -495,7 +496,7 @@ gpu_address gpu_buffer_get_address(gpu_buffer* buffer, uint32_t offset) {
 
 // Tree
 
-bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info, gpu_address* address) {
+bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info) {
   VkAccelerationStructureGeometryKHR geometry;
 
   if (info->type == GPU_TREE_TOP) {
@@ -544,7 +545,7 @@ bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info, gpu_address* address) {
       ((info->flags & GPU_TREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
       ((info->flags & GPU_TREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
       ((info->flags & GPU_TREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0),
-    .geometryCount = info->capacity,
+    .geometryCount = info->type == GPU_TREE_TOP ? 1 : info->capacity,
     .pGeometries = info->type == GPU_TREE_TOP ? &geometry : tree->geometries
   };
 
@@ -613,7 +614,7 @@ void gpu_tree_destroy(gpu_tree* tree) {
 }
 
 gpu_address gpu_tree_get_address(gpu_tree* tree) {
-  return gpu_buffer_get_address(tree->buffer, 0);
+  return gpu_buffer_get_address(&tree->buffer, 0);
 }
 
 // Texture
@@ -2988,6 +2989,7 @@ bool gpu_init(gpu_config* config) {
       { "VK_KHR_depth_stencil_resolve", true, &state.extensions.depthResolve },
       { "VK_KHR_ray_query", true, &state.extensions.rayQuery },
       { "VK_KHR_shader_non_semantic_info", config->debug, &state.extensions.shaderDebug },
+      { "VK_KHR_shader_float_controls", true, &state.extensions.shaderFloatControls },
       { "VK_KHR_spirv_1_4", true, &state.extensions.spirv14 },
       { "VK_KHR_image_format_list", true, &state.extensions.formatList },
       { "VK_KHR_synchronization2", true, &state.extensions.synchronization2 },
@@ -3665,6 +3667,11 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     [GPU_MEMORY_TEXTURE_LAZY_D32FS8] = 1 << 26
   };
 
+  static const VkMemoryAllocateFlags flags[] = {
+    [GPU_MEMORY_BUFFER_STATIC] = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
+    [GPU_MEMORY_BUFFER_TREE] = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
+  };
+
   uint32_t blockSize = blockSizes[type];
   ASSERT(blockSize <= (GPU_MAX_PAGES * GPU_PAGE_SIZE), "Block size larger than allocator can handle") return NULL;
 
@@ -3714,8 +3721,14 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     if (!state.memory[i].handle) {
       gpu_memory* memory = &state.memory[i];
 
+      VkMemoryAllocateFlagsInfo flagInfo = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+        .flags = flags[type]
+      };
+
       VkMemoryAllocateInfo memoryInfo = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext = flags[type] ? &flagInfo : NULL,
         .allocationSize = MAX(blockSize, info.size),
         .memoryTypeIndex = allocator->memoryType
       };

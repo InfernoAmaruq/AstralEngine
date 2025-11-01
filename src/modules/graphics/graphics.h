@@ -521,8 +521,9 @@ void lovrRaytracerDestroy(void* ref);
 uint32_t lovrRaytracerGetCapacity(Raytracer* raytracer);
 uint32_t lovrRaytracerGetCount(Raytracer* raytracer);
 void lovrRaytracerClear(Raytracer* raytracer);
-uint32_t lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16]);
-uint32_t lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16]);
+uint32_t lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16], uint32_t layers, uint32_t tag);
+uint32_t lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16], uint32_t layers, uint32_t tag);
+bool lovrRaytracerSet(Raytracer* raytracer, uint32_t id, float transform[16], uint32_t layers, uint32_t tag);
 
 // Readback
 

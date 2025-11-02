@@ -304,7 +304,7 @@ struct Raytracer {
   gpu_tree* gpu;
   gpu_tree_instance* instances;
   uint32_t count;
-  bool dirty;
+  bool canUpdate;
 };
 
 typedef enum {
@@ -5665,6 +5665,11 @@ Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
 
   gpu_tree_info gpuinfo = {
     .type = GPU_TREE_TOP,
+    .flags =
+      (info->usage == RAYTRACER_TRACE ? GPU_TREE_FAST_TRACE : 0) |
+      (info->usage == RAYTRACER_BUILD ? GPU_TREE_FAST_BUILD : 0) |
+      (info->dynamic ? GPU_TREE_WILL_UPDATE : 0) |
+      (info->compact ? GPU_TREE_LOW_MEMORY : 0),
     .capacity = info->capacity
   };
 
@@ -5694,6 +5699,7 @@ uint32_t lovrRaytracerGetCount(Raytracer* raytracer) {
 
 void lovrRaytracerClear(Raytracer* raytracer) {
   raytracer->count = 0;
+  raytracer->canUpdate = false;
 }
 
 static uint32_t lovrRaytracerAdd(Raytracer* raytracer, gpu_tree* tree, float transform[16], uint32_t layers, uint32_t tag) {
@@ -5718,6 +5724,8 @@ static uint32_t lovrRaytracerAdd(Raytracer* raytracer, gpu_tree* tree, float tra
     .mask = layers,
     .tree = gpu_tree_get_address(tree)
   };
+
+  raytracer->canUpdate = false;
 
   return id;
 }
@@ -5750,6 +5758,21 @@ bool lovrRaytracerSet(Raytracer* raytracer, uint32_t id, float transform[16], ui
   }
 
   return true;
+}
+
+void lovrRaytracerBuild(Raytracer* raytracer) {
+  BufferView view = getBuffer(GPU_BUFFER_STREAM, raytracer->count * sizeof(gpu_tree_instance), 16);
+  memcpy(view.pointer, raytracer->instances, view.extent);
+
+  bool update = raytracer->info.dynamic && raytracer->canUpdate;
+  raytracer->canUpdate = true;
+
+  gpu_build_tree(state.stream, raytracer->gpu, &(gpu_build_info) {
+    .type = GPU_TREE_TOP,
+    .mode = update ? GPU_TREE_UPDATE : GPU_TREE_BUILD,
+    .count = raytracer->count,
+    .instances = gpu_buffer_get_address(view.buffer, view.offset)
+  });
 }
 
 // Readback

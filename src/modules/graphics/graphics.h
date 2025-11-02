@@ -512,8 +512,17 @@ Material* lovrModelGetMaterial(Model* model, uint32_t index);
 
 // Raytracer
 
+typedef enum {
+  RAYTRACER_DEFAULT,
+  RAYTRACER_TRACE,
+  RAYTRACER_BUILD
+} RaytracerUsage;
+
 typedef struct {
   uint32_t capacity;
+  RaytracerUsage usage;
+  bool dynamic;
+  bool compact;
 } RaytracerInfo;
 
 Raytracer* lovrRaytracerCreate(const RaytracerInfo* info);
@@ -524,6 +533,7 @@ void lovrRaytracerClear(Raytracer* raytracer);
 uint32_t lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16], uint32_t layers, uint32_t tag);
 uint32_t lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16], uint32_t layers, uint32_t tag);
 bool lovrRaytracerSet(Raytracer* raytracer, uint32_t id, float transform[16], uint32_t layers, uint32_t tag);
+void lovrRaytracerBuild(Raytracer* raytracer);
 
 // Readback
 

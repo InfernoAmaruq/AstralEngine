@@ -165,6 +165,13 @@ StringEntry lovrOriginType[] = {
   { 0 }
 };
 
+StringEntry lovrRaytracerUsage[] = {
+  [RAYTRACER_DEFAULT] = ENTRY("default"),
+  [RAYTRACER_TRACE] = ENTRY("trace"),
+  [RAYTRACER_BUILD] = ENTRY("build"),
+  { 0 }
+};
+
 StringEntry lovrShaderStage[] = {
   [STAGE_VERTEX] = ENTRY("vertex"),
   [STAGE_FRAGMENT] = ENTRY("pixel"),
@@ -1569,6 +1576,21 @@ static int l_lovrGraphicsNewModel(lua_State* L) {
 static int l_lovrGraphicsNewRaytracer(lua_State* L) {
   RaytracerInfo info = { 0 };
   info.capacity = luax_checku32(L, 1);
+
+  if (lua_istable(L, 2)) {
+    lua_getfield(L, 2, "usage");
+    info.usage = luax_checkenum(L, -1, RaytracerUsage, "default");
+    lua_pop(L, 1);
+
+    lua_getfield(L, 2, "dynamic");
+    info.dynamic = lua_isnil(L, -1) ? false : lua_toboolean(L, -1);
+    lua_pop(L, 1);
+
+    lua_getfield(L, 2, "compact");
+    info.compact = lua_isnil(L, -1) ? false : lua_toboolean(L, -1);
+    lua_pop(L, 1);
+  }
+
   Raytracer* raytracer = lovrRaytracerCreate(&info);
   luax_assert(L, raytracer);
   luax_pushtype(L, Raytracer, raytracer);

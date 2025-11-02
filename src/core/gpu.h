@@ -118,8 +118,8 @@ typedef enum {
 } gpu_tree_level;
 
 typedef enum {
-  GPU_BUILD_CREATE,
-  GPU_BUILD_UPDATE
+  GPU_TREE_BUILD,
+  GPU_TREE_UPDATE
 } gpu_build_mode;
 
 enum {
@@ -132,7 +132,6 @@ enum {
 typedef struct {
   gpu_tree_level type;
   gpu_build_mode mode;
-  uint32_t flags;
   uint32_t count;
   union {
     struct {

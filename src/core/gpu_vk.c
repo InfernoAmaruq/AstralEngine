@@ -40,6 +40,7 @@ struct gpu_tree {
   VkAccelerationStructureKHR handle;
   VkAccelerationStructureGeometryKHR* geometries;
   VkAccelerationStructureBuildRangeInfoKHR* ranges;
+  VkBuildAccelerationStructureFlagBitsKHR flags;
   gpu_buffer buffer;
   gpu_buffer scratch;
 };
@@ -535,16 +536,18 @@ bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info) {
     }
   }
 
+  tree->flags =
+    ((info->flags & GPU_TREE_WILL_UPDATE) ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0) |
+    ((info->flags & GPU_TREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
+    ((info->flags & GPU_TREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
+    ((info->flags & GPU_TREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0);
+
   VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {
     .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
     .type = info->type == GPU_TREE_TOP ?
       VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :
       VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
-    .flags =
-      ((info->flags & GPU_TREE_WILL_UPDATE) ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0) |
-      ((info->flags & GPU_TREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
-      ((info->flags & GPU_TREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
-      ((info->flags & GPU_TREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0),
+    .flags = tree->flags,
     .geometryCount = info->type == GPU_TREE_TOP ? 1 : info->capacity,
     .pGeometries = info->type == GPU_TREE_TOP ? &geometry : tree->geometries
   };
@@ -560,7 +563,6 @@ bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info) {
   } else {
     counts = state.config.fnAlloc(info->capacity * sizeof(uint32_t));
     ASSERT(counts, "Out of memory") return false;
-
     for (uint32_t i = 0; i < info->capacity; i++) {
       counts[i] = info->meshes[i].triangleCount;
     }
@@ -2745,12 +2747,8 @@ void gpu_build_tree(gpu_stream* stream, gpu_tree* tree, gpu_build_info* info) {
     .type = info->type == GPU_TREE_TOP ?
       VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :
       VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
-    .flags =
-      ((info->flags & GPU_TREE_WILL_UPDATE) ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0) |
-      ((info->flags & GPU_TREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
-      ((info->flags & GPU_TREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
-      ((info->flags & GPU_TREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0),
-    .mode = info->mode == GPU_BUILD_CREATE ?
+    .flags = tree->flags,
+    .mode = info->mode == GPU_TREE_BUILD ?
       VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR :
       VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR,
     .srcAccelerationStructure = tree->handle,

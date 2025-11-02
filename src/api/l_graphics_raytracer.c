@@ -72,10 +72,18 @@ static int l_lovrRaytracerSet(lua_State* L) {
   return 0;
 }
 
+static int l_lovrRaytracerBuild(lua_State* L) {
+  Raytracer* raytracer = luax_checktype(L, 1, Raytracer);
+  lovrRaytracerBuild(raytracer);
+  return 0;
+}
+
 const luaL_Reg lovrRaytracer[] = {
   { "getCapacity", l_lovrRaytracerGetCapacity },
   { "getCount", l_lovrRaytracerGetCount },
   { "clear", l_lovrRaytracerClear },
   { "add", l_lovrRaytracerAdd },
+  { "set", l_lovrRaytracerSet },
+  { "build", l_lovrRaytracerBuild },
   { NULL, NULL }
 };

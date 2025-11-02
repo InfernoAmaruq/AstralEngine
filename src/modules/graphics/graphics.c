@@ -151,6 +151,7 @@ struct Shader {
   uint32_t bufferMask;
   uint32_t textureMask;
   uint32_t samplerMask;
+  uint32_t raytracerMask;
   uint32_t storageMask;
   uint32_t pushConstantSize;
   uint32_t uniformSize;
@@ -300,10 +301,11 @@ struct Model {
 
 struct Raytracer {
   uint32_t ref;
+  uint32_t count;
   RaytracerInfo info;
+  Sync sync;
   gpu_tree* gpu;
   gpu_tree_instance* instances;
-  uint32_t count;
   bool canUpdate;
 };
 
@@ -415,8 +417,8 @@ typedef struct {
   void* next;
   uint64_t count;
   uint64_t textureMask;
-  uint64_t padding;
-  Access list[41];
+  uint64_t raytracerMask;
+  Access list[41]; // 1024 bytes total
 } AccessBlock;
 
 typedef struct {
@@ -623,10 +625,11 @@ static uint32_t measureTexture(TextureFormat format, uint32_t w, uint32_t h, uin
 static bool checkTextureBounds(const TextureInfo* info, uint32_t offset[4], uint32_t extent[3]);
 static void mipmapTexture(gpu_stream* stream, Texture* texture, uint32_t base, uint32_t count);
 static ShaderResource* findShaderResource(Shader* shader, const char* name, size_t length);
-static Access* getNextAccess(Pass* pass, int type, bool texture);
+static Access* getNextAccess(Pass* pass, int type, bool texture, bool raytracer);
 static void trackBuffer(Pass* pass, Buffer* buffer, gpu_phase phase, gpu_cache cache);
 static void trackTexture(Pass* pass, Texture* texture, gpu_phase phase, gpu_cache cache);
 static void trackMaterial(Pass* pass, Material* material);
+static void trackRaytracer(Pass* pass, Raytracer* raytracer, gpu_phase phase, gpu_cache cache);
 static bool syncResource(Access* access, gpu_barrier* barrier);
 static gpu_barrier syncTransfer(Sync* sync, gpu_phase phase, gpu_cache cache);
 static void updateModelTransforms(Model* model, uint32_t nodeIndex, float* parent);
@@ -952,6 +955,7 @@ void lovrGraphicsGetFeatures(GraphicsFeatures* features) {
   features->wireframe = state.features.wireframe;
   features->depthClamp = state.features.depthClamp;
   features->depthResolve = state.features.depthResolve;
+  features->raytracing = state.features.rayQuery;
   features->indirectDrawFirstInstance = state.features.indirectDrawFirstInstance;
   features->packedBuffers = state.features.packedBuffers;
   features->float64 = state.features.float64;
@@ -3559,11 +3563,13 @@ Shader* lovrShaderCreate(const ShaderInfo* info) {
       bool buffer = resource->type == SPV_UNIFORM_BUFFER || resource->type == SPV_STORAGE_BUFFER;
       bool texture = resource->type == SPV_SAMPLED_TEXTURE || resource->type == SPV_STORAGE_TEXTURE || resource->type == SPV_COMBINED_TEXTURE_SAMPLER;
       bool sampler = resource->type == SPV_SAMPLER;
+      bool raytracer = resource->type == SPV_ACCELERATION_STRUCTURE;
       bool storage = resource->type == SPV_STORAGE_BUFFER || resource->type == SPV_STORAGE_TEXTURE;
 
       shader->bufferMask |= (buffer << *binding);
       shader->textureMask |= (texture << *binding);
       shader->samplerMask |= (sampler << *binding);
+      shader->raytracerMask |= (raytracer << *binding);
       shader->storageMask |= (storage << *binding);
 
       gpu_cache cache;
@@ -5984,8 +5990,13 @@ static void lovrPassRelease(Pass* pass) {
   for (uint32_t i = 0; i < COUNTOF(pass->access); i++) {
     for (AccessBlock* block = pass->access[i]; block != NULL; block = block->next) {
       for (uint32_t j = 0; j < block->count; j++) {
-        bool texture = block->textureMask & (1ull << j);
-        lovrRelease(block->list[j].object, texture ? lovrTextureDestroy : lovrBufferDestroy);
+        if (block->textureMask & (1ull << j)) {
+          lovrRelease(block->list[j].object, lovrTextureDestroy);
+        } else if (block->raytracerMask & (1ull << j)) {
+          lovrRelease(block->list[j].object, lovrRaytracerDestroy);
+        } else {
+          lovrRelease(block->list[j].object, lovrBufferDestroy);
+        }
       }
     }
   }
@@ -6992,6 +7003,22 @@ bool lovrPassSendSampler(Pass* pass, const char* name, size_t length, Sampler* s
 
   pass->bindings[slot].texture.object = state.defaultTexture->gpu;
   pass->bindings[slot].texture.sampler = sampler->gpu;
+  pass->flags |= DIRTY_BINDINGS;
+  return true;
+}
+
+bool lovrPassSendRaytracer(Pass* pass, const char* name, size_t length, Raytracer* raytracer) {
+  Shader* shader = pass->pipeline->shader;
+  lovrCheck(shader, "A Shader must be active to send resources");
+
+  ShaderResource* resource = findShaderResource(shader, name, length);
+  lovrCheck(resource, "Shader has no variable named '%s'", name);
+  uint32_t slot = resource->binding;
+
+  lovrCheck(shader->raytracerMask & (1u << slot), "Trying to send a Raytracer to '%s', but the shader variable isn't a Raytracer", name);
+
+  trackRaytracer(pass, raytracer, resource->phase, resource->cache);
+  pass->bindings[slot].tree = raytracer->gpu;
   pass->flags |= DIRTY_BINDINGS;
   return true;
 }
@@ -9002,7 +9029,7 @@ static ShaderResource* findShaderResource(Shader* shader, const char* name, size
   return NULL;
 }
 
-static Access* getNextAccess(Pass* pass, int type, bool texture) {
+static Access* getNextAccess(Pass* pass, int type, bool texture, bool raytracer) {
   AccessBlock* block = pass->access[type];
 
   if (!block || block->count >= COUNTOF(block->list)) {
@@ -9011,16 +9038,18 @@ static Access* getNextAccess(Pass* pass, int type, bool texture) {
     new->next = block;
     new->count = 0;
     new->textureMask = 0;
+    new->raytracerMask = 0;
     block = new;
   }
 
   block->textureMask |= (uint64_t) texture << block->count;
+  block->raytracerMask |= (uint64_t) raytracer << block->count;
   return &block->list[block->count++];
 }
 
 static void trackBuffer(Pass* pass, Buffer* buffer, gpu_phase phase, gpu_cache cache) {
   if (!buffer) return;
-  Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, false);
+  Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, false, false);
   access->sync = buffer->sync;
   access->object = buffer;
   access->phase = phase;
@@ -9037,7 +9066,7 @@ static void trackTexture(Pass* pass, Texture* texture, gpu_phase phase, gpu_cach
     cache = 0;
   }
 
-  Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, true);
+  Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, true, false);
   access->sync = texture->sync;
   access->object = texture;
   access->phase = phase;
@@ -9060,6 +9089,15 @@ static void trackMaterial(Pass* pass, Material* material) {
   trackTexture(pass, material->info.clearcoatTexture, phase, cache);
   trackTexture(pass, material->info.occlusionTexture, phase, cache);
   trackTexture(pass, material->info.normalTexture, phase, cache);
+}
+
+static void trackRaytracer(Pass* pass, Raytracer* raytracer, gpu_phase phase, gpu_cache cache) {
+  Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, false, true);
+  access->sync = &raytracer->sync;
+  access->object = raytracer;
+  access->phase = phase;
+  access->cache = cache;
+  lovrRetain(raytracer);
 }
 
 static bool syncResource(Access* access, gpu_barrier* barrier) {

@@ -47,6 +47,7 @@ typedef struct {
   bool wireframe;
   bool depthClamp;
   bool depthResolve;
+  bool raytracing;
   bool indirectDrawFirstInstance;
   bool packedBuffers;
   bool float64;
@@ -709,6 +710,7 @@ void lovrPassSetWireframe(Pass* pass, bool wireframe);
 bool lovrPassSendBuffer(Pass* pass, const char* name, size_t length, Buffer* buffer, uint32_t offset, uint32_t extent);
 bool lovrPassSendTexture(Pass* pass, const char* name, size_t length, Texture* texture);
 bool lovrPassSendSampler(Pass* pass, const char* name, size_t length, Sampler* sampler);
+bool lovrPassSendRaytracer(Pass* pass, const char* name, size_t length, Raytracer* raytracer);
 bool lovrPassSendData(Pass* pass, const char* name, size_t length, void** data, DataField** format);
 
 bool lovrPassPoints(Pass* pass, uint32_t count, float** vertices);

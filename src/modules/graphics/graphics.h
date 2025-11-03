@@ -513,17 +513,12 @@ Material* lovrModelGetMaterial(Model* model, uint32_t index);
 
 // Raytracer
 
-typedef enum {
-  RAYTRACER_DEFAULT,
-  RAYTRACER_TRACE,
-  RAYTRACER_BUILD
-} RaytracerUsage;
-
 typedef struct {
   uint32_t capacity;
-  RaytracerUsage usage;
   bool dynamic;
-  bool compact;
+  bool fastTrace;
+  bool fastBuild;
+  bool compress;
 } RaytracerInfo;
 
 Raytracer* lovrRaytracerCreate(const RaytracerInfo* info);

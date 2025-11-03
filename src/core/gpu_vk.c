@@ -66,7 +66,7 @@ struct gpu_sampler {
 
 struct gpu_layout {
   VkDescriptorSetLayout handle;
-  uint32_t descriptorCounts[8];
+  uint32_t descriptorCounts[9];
 };
 
 struct gpu_shader {
@@ -529,7 +529,7 @@ bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info) {
 
       tree->ranges[i] = (VkAccelerationStructureBuildRangeInfoKHR) {
         .primitiveCount = mesh->triangleCount,
-        .primitiveOffset = mesh->indexOffset == ~0u ? mesh->indexOffset : mesh->vertexOffset,
+        .primitiveOffset = mesh->indexOffset == ~0u ? mesh->vertexOffset : mesh->indexOffset,
         .firstVertex = mesh->indexOffset == ~0u ? mesh->vertexOffset / mesh->vertexStride : 0,
         .transformOffset = mesh->transformOffset == ~0u ? 0 : mesh->transformOffset
       };
@@ -576,17 +576,21 @@ bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info) {
 
   gpu_buffer_info bufferInfo = {
     .type = GPU_BUFFER_TREE,
-    .size = sizes.accelerationStructureSize
+    .size = sizes.accelerationStructureSize,
+    .label = "Tree Buffer"
   };
 
   if (!gpu_buffer_init(&tree->buffer, &bufferInfo)) {
     return false;
   }
 
-  bufferInfo.type = GPU_BUFFER_STATIC;
-  bufferInfo.size = MAX(sizes.updateScratchSize, sizes.buildScratchSize);
+  gpu_buffer_info scratchInfo = {
+    .type = GPU_BUFFER_STATIC,
+    .size = MAX(sizes.updateScratchSize, sizes.buildScratchSize) + 256,
+    .label = "Scratch Buffer"
+  };
 
-  if (!gpu_buffer_init(&tree->scratch, &bufferInfo)) {
+  if (!gpu_buffer_init(&tree->scratch, &scratchInfo)) {
     gpu_buffer_destroy(&tree->buffer);
     return false;
   }
@@ -1337,7 +1341,8 @@ bool gpu_layout_init(gpu_layout* layout, gpu_layout_info* info) {
     [GPU_SLOT_TEXTURE_WITH_SAMPLER] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
     [GPU_SLOT_SAMPLED_TEXTURE] = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
     [GPU_SLOT_STORAGE_TEXTURE] = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER
+    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER,
+    [GPU_SLOT_TREE] = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
   };
 
   VkDescriptorSetLayoutBinding bindings[32];
@@ -2753,9 +2758,9 @@ void gpu_build_tree(gpu_stream* stream, gpu_tree* tree, gpu_build_info* info) {
       VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR,
     .srcAccelerationStructure = tree->handle,
     .dstAccelerationStructure = tree->handle,
-    .geometryCount = info->count,
+    .geometryCount = info->type == GPU_TREE_TOP ? 1 : info->count,
     .pGeometries = info->type == GPU_TREE_TOP ? &geometry : tree->geometries,
-    .scratchData = gpu_buffer_get_address(&tree->scratch, 0)
+    .scratchData = ALIGN(gpu_buffer_get_address(&tree->scratch, 0), 256)
   };
 
   VkAccelerationStructureBuildRangeInfoKHR range = { .primitiveCount = info->count };
@@ -3665,11 +3670,6 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     [GPU_MEMORY_TEXTURE_LAZY_D32FS8] = 1 << 26
   };
 
-  static const VkMemoryAllocateFlags flags[] = {
-    [GPU_MEMORY_BUFFER_STATIC] = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
-    [GPU_MEMORY_BUFFER_TREE] = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
-  };
-
   uint32_t blockSize = blockSizes[type];
   ASSERT(blockSize <= (GPU_MAX_PAGES * GPU_PAGE_SIZE), "Block size larger than allocator can handle") return NULL;
 
@@ -3714,6 +3714,11 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     }
   }
 
+  VkMemoryAllocateFlags flags = 0;
+  if (type == GPU_MEMORY_BUFFER_STATIC || type == GPU_MEMORY_BUFFER_STREAM || type == GPU_MEMORY_BUFFER_TREE) {
+    flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+  }
+
   // If there wasn't an active block or it overflowed, find an empty block to allocate
   for (uint32_t i = 0; i < COUNTOF(state.memory); i++) {
     if (!state.memory[i].handle) {
@@ -3721,12 +3726,12 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 
       VkMemoryAllocateFlagsInfo flagInfo = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
-        .flags = flags[type]
+        .flags = flags
       };
 
       VkMemoryAllocateInfo memoryInfo = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .pNext = flags[type] ? &flagInfo : NULL,
+        .pNext = flags ? &flagInfo : NULL,
         .allocationSize = MAX(blockSize, info.size),
         .memoryTypeIndex = allocator->memoryType
       };
@@ -3930,7 +3935,9 @@ static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type) {
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+        (state.extensions.bufferDeviceAddress ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : 0) |
+        (state.extensions.accelerationStructure ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0);
     case GPU_BUFFER_UPLOAD:
       return VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     case GPU_BUFFER_DOWNLOAD:

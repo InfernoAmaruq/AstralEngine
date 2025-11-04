@@ -4921,9 +4921,9 @@ bool lovrMeshBuildRaytracer(Mesh* mesh) {
   gpu_barrier barriers[3];
   uint32_t count = 0;
 
-  barriers[count++] = syncStream(mesh->vertexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_STORAGE_READ);
+  barriers[count++] = syncStream(mesh->vertexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_TREE_INPUT);
   if (mesh->indexCount > 0) {
-    barriers[count++] = syncStream(mesh->indexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_STORAGE_READ);
+    barriers[count++] = syncStream(mesh->indexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_TREE_INPUT);
   }
 
   if (mesh->lastBuild == state.tick) {
@@ -5778,9 +5778,9 @@ bool lovrModelBuildRaytracer(Model* model) {
   gpu_barrier barriers[3];
   uint32_t count = 0;
 
-  barriers[count++] = syncStream(model->vertexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_STORAGE_READ);
+  barriers[count++] = syncStream(model->vertexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_TREE_INPUT);
   if (model->indexBuffer) {
-    barriers[count++] = syncStream(model->indexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_STORAGE_READ);
+    barriers[count++] = syncStream(model->indexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_TREE_INPUT);
   }
 
   if (model->lastBuild == state.tick) {

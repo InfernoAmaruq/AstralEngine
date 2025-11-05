@@ -131,6 +131,7 @@ spv_result spv_parse(const void* source, size_t size, spv_info* info) {
       case 30: // OpTypeStruct
       case 31: // OpTypeOpaque
       case 32: // OpTypePointer
+      case 4472: // OpTypeRayQueryKHR
       case 5341: // OpTypeAccelerationStructureKHR
         result = spv_parse_type(&spv, op, info);
         break;

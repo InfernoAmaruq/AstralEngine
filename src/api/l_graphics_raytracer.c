@@ -24,33 +24,31 @@ static int l_lovrRaytracerClear(lua_State* L) {
 
 static int l_lovrRaytracerAdd(lua_State* L) {
   Raytracer* raytracer = luax_checktype(L, 1, Raytracer);
+
   float transform[16];
+  int index = luax_readmat4(L, 3, transform, 1);
+  uint32_t layers = (uint8_t) luax_optu32(L, index++, 0xff);
+  uint32_t tag = luax_optu32(L, index, ~0u);
 
-  Mesh* mesh = luax_totype(L, 2, Mesh);
+  Mesh* mesh;
+  Model* model;
+  uint32_t id;
 
-  if (mesh) {
-    int index = luax_readmat4(L, 3, transform, 1);
-    uint32_t layers = (uint8_t) luax_optu32(L, index++, 0xff);
-    uint32_t tag = luax_optu32(L, index, ~0u);
-    uint32_t id = lovrRaytracerAddMesh(raytracer, mesh, transform, layers, tag);
-    luax_assert(L, id != ~0u);
-    lua_pushinteger(L, id + 1);
-    return 1;
+  if ((mesh = luax_totype(L, 2, Mesh)) != NULL) {
+    luax_assert(L, lovrRaytracerAddMesh(raytracer, mesh, transform, layers, tag, &id));
+  } else if ((model = luax_totype(L, 2, Model)) != NULL) {
+    luax_assert(L, lovrRaytracerAddModel(raytracer, model, transform, layers, tag, &id));
+  } else {
+    return luax_typeerror(L, 2, "Model or Mesh");
   }
 
-  Model* model = luax_totype(L, 2, Model);
-
-  if (model) {
-    int index = luax_readmat4(L, 3, transform, 1);
-    uint32_t layers = (uint8_t) luax_optu32(L, index++, 0xff);
-    uint32_t tag = luax_optu32(L, index, ~0u);
-    uint32_t id = lovrRaytracerAddModel(raytracer, model, transform, layers, tag);
-    luax_assert(L, id != ~0u);
+  if (id == ~0u) {
+    lua_pushnil(L);
+  } else {
     lua_pushinteger(L, id + 1);
-    return 1;
   }
 
-  return luax_typeerror(L, 2, "Model or Mesh");
+  return 1;
 }
 
 static int l_lovrRaytracerSet(lua_State* L) {

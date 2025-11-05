@@ -5874,11 +5874,6 @@ void lovrRaytracerClear(Raytracer* raytracer) {
 }
 
 static uint32_t lovrRaytracerAdd(Raytracer* raytracer, gpu_tree* tree, float transform[16], uint32_t layers, uint32_t tag) {
-  if (raytracer->count >= raytracer->info.capacity) {
-    lovrSetError("Raytracer is full!");
-    return ~0u;
-  }
-
   uint32_t id = raytracer->count++;
 
   raytracer->instances[id] = (gpu_tree_instance) {
@@ -5897,34 +5892,36 @@ static uint32_t lovrRaytracerAdd(Raytracer* raytracer, gpu_tree* tree, float tra
   return id;
 }
 
-uint32_t lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16], uint32_t layers, uint32_t tag) {
+bool lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16], uint32_t layers, uint32_t tag, uint32_t* id) {
+  if (raytracer->count >= raytracer->info.capacity) {
+    *id = ~0u;
+    return true;
+  }
+
   if (!mesh->tree && !lovrMeshBuildRaytracer(mesh)) {
-    return ~0u;
+    return false;
   }
 
-  uint32_t id = lovrRaytracerAdd(raytracer, mesh->tree, transform, layers, tag);
-
-  if (id != ~0u) {
-    raytracer->refs[raytracer->meshCount++] = mesh;
-    lovrRetain(mesh);
-  }
-
-  return id;
+  *id = lovrRaytracerAdd(raytracer, mesh->tree, transform, layers, tag);
+  raytracer->refs[raytracer->meshCount++] = mesh;
+  lovrRetain(mesh);
+  return true;
 }
 
-uint32_t lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16], uint32_t layers, uint32_t tag) {
+bool lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16], uint32_t layers, uint32_t tag, uint32_t* id) {
+  if (raytracer->count >= raytracer->info.capacity) {
+    *id = ~0u;
+    return true;
+  }
+
   if (!model->tree && !lovrModelBuildRaytracer(model)) {
-    return ~0u;
+    return false;
   }
 
-  uint32_t id = lovrRaytracerAdd(raytracer, model->tree, transform, layers, tag);
-
-  if (id != ~0u) {
-    raytracer->refs[raytracer->info.capacity - ++raytracer->modelCount] = model;
-    lovrRetain(model);
-  }
-
-  return id;
+  *id = lovrRaytracerAdd(raytracer, model->tree, transform, layers, tag);
+  raytracer->refs[raytracer->info.capacity - ++raytracer->modelCount] = model;
+  lovrRetain(model);
+  return true;
 }
 
 bool lovrRaytracerSet(Raytracer* raytracer, uint32_t id, float transform[16], uint32_t layers, uint32_t tag) {

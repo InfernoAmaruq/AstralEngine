@@ -5838,6 +5838,8 @@ Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
     return NULL;
   }
 
+  raytracer->sync.barrier = &state.barrier;
+
   return raytracer;
 }
 

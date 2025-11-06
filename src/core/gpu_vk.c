@@ -1456,7 +1456,8 @@ bool gpu_bundle_pool_init(gpu_bundle_pool* pool, gpu_bundle_pool_info* info) {
     [GPU_SLOT_TEXTURE_WITH_SAMPLER] = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0 },
     [GPU_SLOT_SAMPLED_TEXTURE] = { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 0 },
     [GPU_SLOT_STORAGE_TEXTURE] = { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0 },
-    [GPU_SLOT_SAMPLER] = { VK_DESCRIPTOR_TYPE_SAMPLER, 0 }
+    [GPU_SLOT_SAMPLER] = { VK_DESCRIPTOR_TYPE_SAMPLER, 0 },
+    [GPU_SLOT_TREE] = { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 0 }
   };
 
   if (info->layout) {
@@ -1578,11 +1579,13 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
         };
 
         if (tree) {
-          treeInfo[treeCount++] = (VkWriteDescriptorSetAccelerationStructureKHR) {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
-            .accelerationStructureCount = 1,
-            .pAccelerationStructures = &binding->tree->handle
-          };
+          for (uint32_t n = 0; n < chunk; n++, index++) {
+            treeInfo[treeCount++] = (VkWriteDescriptorSetAccelerationStructureKHR) {
+              .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+              .accelerationStructureCount = 1,
+              .pAccelerationStructures = &binding->tree->handle
+            };
+          }
         } else if (image) {
           for (uint32_t n = 0; n < chunk; n++, index++) {
             imageInfo[imageCount++] = (VkDescriptorImageInfo) {

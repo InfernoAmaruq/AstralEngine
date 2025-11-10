@@ -232,6 +232,7 @@ struct Mesh {
   uint32_t baseVertex;
   Material* material;
   uint32_t lastBuild;
+  uint32_t treeFlags;
   gpu_tree* tree;
 };
 
@@ -298,6 +299,7 @@ struct Model {
   bool blendShapesDirty;
   uint32_t lastVertexAnimation;
   uint32_t lastBuild;
+  uint32_t treeFlags;
   gpu_tree* tree;
 };
 
@@ -4615,6 +4617,7 @@ Mesh* lovrMeshCreate(const MeshInfo* info, void** vertices) {
   mesh->ref = 1;
   mesh->storage = info->storage;
   mesh->mode = DRAW_TRIANGLES;
+  mesh->treeFlags = info->raytracerFlags;
 
   if (buffer) {
     mesh->vertexBuffer = buffer;
@@ -4898,6 +4901,7 @@ bool lovrMeshBuildRaytracer(Mesh* mesh) {
 
     gpu_tree_info info = {
       .type = GPU_TREE_BOTTOM,
+      .flags = mesh->treeFlags,
       .capacity = 1,
       .geometries = &(gpu_geometry_info) {
         .vertexCount = vertex->length,
@@ -5024,6 +5028,7 @@ Model* lovrModelCreate(const ModelInfo* info) {
   Model* model = lovrCalloc(sizeof(Model));
   model->ref = 1;
   model->meta = info->data->meta;
+  model->treeFlags = info->raytracerFlags;
   lovrRetain(model->meta.blob);
 
   ModelData* data = info->data;
@@ -5758,6 +5763,7 @@ bool lovrModelBuildRaytracer(Model* model) {
 
     gpu_tree_info info = {
       .type = GPU_TREE_BOTTOM,
+      .flags = model->treeFlags,
       .capacity = geometryCount,
       .geometries = geometries
     };
@@ -5850,11 +5856,7 @@ Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
 
   gpu_tree_info gpuinfo = {
     .type = GPU_TREE_TOP,
-    .flags =
-      (info->dynamic ? GPU_TREE_WILL_UPDATE : 0) |
-      (info->fastTrace && !info->fastBuild ? GPU_TREE_FAST_TRACE : 0) |
-      (info->fastBuild && !info->fastTrace ? GPU_TREE_FAST_BUILD : 0) |
-      (info->compress ? GPU_TREE_LOW_MEMORY : 0),
+    .flags = info->flags,
     .capacity = info->capacity
   };
 
@@ -5978,7 +5980,7 @@ void lovrRaytracerBuild(Raytracer* raytracer) {
   BufferView view = getBuffer(GPU_BUFFER_STREAM, raytracer->count * sizeof(gpu_tree_instance), 16);
   memcpy(view.pointer, raytracer->instances, view.extent);
 
-  bool update = raytracer->info.dynamic && raytracer->canUpdate;
+  bool update = (raytracer->info.flags & RAYTRACER_DYNAMIC) && raytracer->canUpdate;
   raytracer->canUpdate = true;
 
   gpu_barrier barriers[2];

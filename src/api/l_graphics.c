@@ -327,6 +327,34 @@ uint32_t luax_checkcomparemode(lua_State* L, int index) {
   return luax_checkenum(L, index, CompareMode, "none");
 }
 
+uint32_t luax_checkraytracerflags(lua_State* L, int index) {
+  uint32_t flags = RAYTRACER_FAST_TRACE;
+
+  if (lua_istable(L, index)) {
+    lua_getfield(L, index, "dynamic");
+    flags |= lua_toboolean(L, -1) ? RAYTRACER_DYNAMIC : 0;
+    lua_pop(L, 1);
+
+    lua_getfield(L, index, "fasttrace");
+    flags |= lua_isnil(L, -1) || lua_toboolean(L, -1) ? RAYTRACER_FAST_TRACE : 0;
+    lua_pop(L, 1);
+
+    lua_getfield(L, index, "fastbuild");
+    flags |= lua_toboolean(L, -1) ? RAYTRACER_FAST_BUILD : 0;
+    lua_pop(L, 1);
+
+    lua_getfield(L, index, "compress");
+    flags |= lua_toboolean(L, -1) ? RAYTRACER_COMPRESS : 0;
+    lua_pop(L, 1);
+
+    if ((flags & RAYTRACER_FAST_TRACE) && (flags & RAYTRACER_FAST_BUILD)) {
+      flags &= ~RAYTRACER_FAST_BUILD;
+    }
+  }
+
+  return flags;
+}
+
 static void luax_writeshadercache(void) {
   size_t size;
   lovrGraphicsGetShaderCache(NULL, &size);
@@ -1513,7 +1541,19 @@ static int l_lovrGraphicsNewMesh(lua_State* L) {
     default: return luax_typeerror(L, index, "number, table, Blob, or Buffer");
   }
 
-  if (info.vertexBuffer) {
+  if (lua_istable(L, index + 1)) {
+    if (info.vertexBuffer) {
+      info.storage = MESH_GPU;
+    } else {
+      lua_getfield(L, index + 1, "storage");
+      info.storage = luax_checkenum(L, -1, MeshStorage, "cpu");
+      lua_pop(L, 1);
+    }
+
+    lua_getfield(L, index + 1, "raytracer");
+    info.raytracerFlags = luax_checkraytracerflags(L, -1);
+    lua_pop(L, 1);
+  } else if (info.vertexBuffer) {
     info.storage = MESH_GPU;
   } else {
     info.storage = luax_checkenum(L, index + 1, MeshStorage, "cpu");
@@ -1557,6 +1597,10 @@ static int l_lovrGraphicsNewModel(lua_State* L) {
     lua_getfield(L, 2, "materials");
     info.materials = lua_isnil(L, -1) || lua_toboolean(L, -1);
     lua_pop(L, 1);
+
+    lua_getfield(L, 2, "raytracer");
+    info.raytracerFlags = luax_checkraytracerflags(L, -1);
+    lua_pop(L, 1);
   }
 
   Model* model = lovrModelCreate(&info);
@@ -1570,25 +1614,7 @@ static int l_lovrGraphicsNewModel(lua_State* L) {
 static int l_lovrGraphicsNewRaytracer(lua_State* L) {
   RaytracerInfo info = { 0 };
   info.capacity = luax_checku32(L, 1);
-
-  if (lua_istable(L, 2)) {
-    lua_getfield(L, 2, "dynamic");
-    info.dynamic = lua_isnil(L, -1) ? false : lua_toboolean(L, -1);
-    lua_pop(L, 1);
-
-    lua_getfield(L, 2, "fasttrace");
-    info.fastTrace = lua_isnil(L, -1) ? true : lua_toboolean(L, -1);
-    lua_pop(L, 1);
-
-    lua_getfield(L, 2, "fastbuild");
-    info.fastBuild = lua_isnil(L, -1) ? false : lua_toboolean(L, -1);
-    lua_pop(L, 1);
-
-    lua_getfield(L, 2, "compress");
-    info.compress = lua_isnil(L, -1) ? false : lua_toboolean(L, -1);
-    lua_pop(L, 1);
-  }
-
+  info.flags = luax_checkraytracerflags(L, 2);
   Raytracer* raytracer = lovrRaytracerCreate(&info);
   luax_assert(L, raytracer);
   luax_pushtype(L, Raytracer, raytracer);

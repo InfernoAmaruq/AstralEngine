@@ -441,6 +441,13 @@ bool lovrFontGetVertices(Font* font, ColoredString* strings, uint32_t count, flo
 
 // Mesh
 
+enum {
+  RAYTRACER_DYNAMIC = (1 << 0),
+  RAYTRACER_FAST_TRACE = (1 << 1),
+  RAYTRACER_FAST_BUILD = (1 << 2),
+  RAYTRACER_COMPRESS = (1 << 3)
+};
+
 typedef enum {
   MESH_CPU,
   MESH_GPU
@@ -456,6 +463,7 @@ typedef struct {
   Buffer* vertexBuffer;
   DataField* vertexFormat;
   MeshStorage storage;
+  uint32_t raytracerFlags;
 } MeshInfo;
 
 Mesh* lovrMeshCreate(const MeshInfo* info, void** data);
@@ -488,6 +496,7 @@ typedef struct {
   struct ModelData* data;
   bool materials;
   bool mipmaps;
+  uint32_t raytracerFlags;
 } ModelInfo;
 
 typedef enum {
@@ -517,10 +526,7 @@ bool lovrModelBuildRaytracer(Model* model);
 
 typedef struct {
   uint32_t capacity;
-  bool dynamic;
-  bool fastTrace;
-  bool fastBuild;
-  bool compress;
+  uint32_t flags;
 } RaytracerInfo;
 
 Raytracer* lovrRaytracerCreate(const RaytracerInfo* info);

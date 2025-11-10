@@ -102,7 +102,8 @@ typedef struct {
   uint32_t vertexOffset;
   uint32_t indexOffset;
   uint32_t transformOffset;
-} gpu_mesh_info;
+  uint32_t baseVertex;
+} gpu_geometry_info;
 
 typedef struct {
   float transform[3][4];
@@ -149,7 +150,7 @@ typedef struct {
   gpu_tree_level type;
   uint32_t flags;
   uint32_t capacity;
-  gpu_mesh_info* meshes;
+  gpu_geometry_info* geometries;
   const char* label;
 } gpu_tree_info;
 

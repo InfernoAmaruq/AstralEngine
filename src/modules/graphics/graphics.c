@@ -4899,7 +4899,7 @@ bool lovrMeshBuildRaytracer(Mesh* mesh) {
     gpu_tree_info info = {
       .type = GPU_TREE_BOTTOM,
       .capacity = 1,
-      .meshes = &(gpu_mesh_info) {
+      .geometries = &(gpu_geometry_info) {
         .vertexCount = vertex->length,
         .triangleCount = triangleCount,
         .vertexType = (gpu_attribute_type) positions->type,
@@ -5698,42 +5698,59 @@ static bool lovrModelAnimateVertices(Model* model) {
 bool lovrModelBuildRaytracer(Model* model) {
   ModelMetadata* meta = &model->meta;
 
-  uint32_t meshCount = 0;
+  // Count the number of transforms required (number of nodes with meshes)
+  // Also count the number of geometries needed (each part needs its own geometry due to baseVertex)
+  uint32_t transformCount = 0;
+  uint32_t geometryCount = 0;
   for (uint32_t i = 0; i < meta->nodeCount; i++) {
-    meshCount += meta->nodes[i].mesh != ~0u;
+    if (meta->nodes[i].mesh != ~0u) {
+      transformCount++;
+      for (uint32_t p = 0; p < meta->meshes[meta->nodes[i].mesh].partCount; p++) {
+        if (meta->meshes[meta->nodes[i].mesh].parts[p].mode == DRAW_TRIANGLE_LIST) {
+          geometryCount++;
+        }
+      }
+    }
   }
 
+  // Create tree if it doesn't exist
   if (!model->tree) {
-    lovrCheck(meshCount <= (1 << 24) - 1, "Model has too many meshes for raytracing");
+    lovrCheck(geometryCount <= (1 << 24) - 1, "Model has too many parts for raytracing");
+    gpu_geometry_info* geometries = lovrMalloc(geometryCount * sizeof(gpu_geometry_info));
 
-    gpu_mesh_info* meshes = lovrMalloc(meshCount * sizeof(gpu_mesh_info));
-
-    uint32_t index = 0;
+    uint32_t geometryIndex = 0;
+    uint32_t transformOffset = 0;
     uint32_t totalTriangleCount = 0;
-    for (uint32_t i = 0; i < meta->nodeCount; i++) {
+    for (uint32_t i = 0; i < meta->nodeCount && geometryIndex < geometryCount; i++) {
       if (meta->nodes[i].mesh == ~0u) continue;
 
       ModelMesh* mesh = &meta->meshes[meta->nodes[i].mesh];
-      uint32_t triangleCount = mesh->indexCount > 0 ? mesh->indexCount / 3 : mesh->vertexCount / 3;
-      totalTriangleCount += triangleCount;
+      ModelPart* part = mesh->parts;
 
-      meshes[index] = (gpu_mesh_info) {
-        .vertexCount = mesh->vertexCount,
-        .triangleCount = triangleCount,
-        .vertexType = GPU_TYPE_F32x3,
-        .indexType = meta->indexSize == 2 ? GPU_INDEX_U16 : GPU_INDEX_U32,
-        .vertexStride = sizeof(ModelVertex),
-        .vertexOffset = mesh->vertexOffset * sizeof(ModelVertex),
-        .indexOffset = mesh->indexCount > 0 ? mesh->indexOffset * meta->indexSize : ~0u,
-        .transformOffset = 48 * index
-      };
+      for (uint32_t p = 0; p < mesh->partCount; p++, part++) {
+        if (part->mode != DRAW_TRIANGLE_LIST) continue;
 
-      index++;
+        geometries[geometryIndex++] = (gpu_geometry_info) {
+          .vertexCount = part->count,
+          .triangleCount = part->count / 3,
+          .vertexType = GPU_TYPE_F32x3,
+          .indexType = meta->indexSize == 2 ? GPU_INDEX_U16 : GPU_INDEX_U32,
+          .vertexStride = sizeof(ModelVertex),
+          .vertexOffset = mesh->indexCount > 0 ? mesh->vertexOffset * sizeof(ModelVertex) : (mesh->vertexOffset + part->start) * sizeof(ModelVertex),
+          .indexOffset = mesh->indexCount > 0 ? (mesh->indexOffset + part->start) * meta->indexSize : ~0u,
+          .baseVertex = mesh->indexCount > 0 ? mesh->vertexOffset + part->baseVertex : 0,
+          .transformOffset = transformOffset
+        };
+
+        totalTriangleCount += part->count / 3;
+      }
+
+      transformOffset += 48;
     }
 
     if (totalTriangleCount > (1 << 29) - 1) {
-      lovrFree(meshes);
       lovrSetError("Model has too many triangles for raytracing");
+      lovrFree(geometries);
       return false;
     }
 
@@ -5741,26 +5758,32 @@ bool lovrModelBuildRaytracer(Model* model) {
 
     gpu_tree_info info = {
       .type = GPU_TREE_BOTTOM,
-      .capacity = meshCount,
-      .meshes = meshes
+      .capacity = geometryCount,
+      .geometries = geometries
     };
 
     if (!gpu_tree_init(model->tree, &info)) {
       lovrSetError("Could not create model raytracing data: %s", gpu_get_error());
       lovrFree(model->tree);
-      lovrFree(meshes);
+      lovrFree(geometries);
       return NULL;
     }
 
-    lovrFree(meshes);
+    lovrFree(geometries);
   }
 
+  // Make sure all the vertices and transforms are updated
   if (model->transformsDirty) {
     updateModelTransforms(model, meta->rootNode, (float[]) MAT4_IDENTITY);
     model->transformsDirty = false;
   }
 
-  BufferView transforms = getBuffer(GPU_BUFFER_STREAM, meshCount * 12 * sizeof(float), 16);
+  if (!lovrModelAnimateVertices(model)) {
+    return false;
+  }
+
+  // Write the transforms
+  BufferView transforms = getBuffer(GPU_BUFFER_STREAM, transformCount * 12 * sizeof(float), 16);
   if (!transforms.buffer) return false;
 
   float* dst = transforms.pointer;
@@ -5775,6 +5798,7 @@ bool lovrModelBuildRaytracer(Model* model) {
     }
   }
 
+  // Synchronization
   gpu_barrier barriers[3];
   uint32_t count = 0;
 
@@ -5794,10 +5818,11 @@ bool lovrModelBuildRaytracer(Model* model) {
 
   gpu_sync(state.stream, barriers, count);
 
+  // Build!
   gpu_build_tree(state.stream, model->tree, &(gpu_build_info) {
     .type = GPU_TREE_BOTTOM,
     .mode = GPU_TREE_BUILD,
-    .count = meshCount,
+    .count = geometryCount,
     .vertices = gpu_buffer_get_address(model->vertexBuffer->gpu, 0),
     .indices = model->indexBuffer ? gpu_buffer_get_address(model->indexBuffer->gpu, 0) : 0,
     .transforms = gpu_buffer_get_address(transforms.buffer, transforms.offset)

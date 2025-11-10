@@ -511,27 +511,27 @@ bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info) {
     tree->ranges = state.config.fnAlloc(info->capacity * sizeof(*tree->ranges));
     ASSERT(tree->geometries && tree->ranges, "Out of memory") return false;
 
-    gpu_mesh_info* mesh = info->meshes;
+    gpu_geometry_info* geometry = info->geometries;
 
-    for (uint32_t i = 0; i < info->capacity; i++, mesh++) {
+    for (uint32_t i = 0; i < info->capacity; i++, geometry++) {
       tree->geometries[i] = (VkAccelerationStructureGeometryKHR) {
         .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
         .geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR,
         .flags = VK_GEOMETRY_OPAQUE_BIT_KHR,
         .geometry.triangles = (VkAccelerationStructureGeometryTrianglesDataKHR) {
           .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
-          .vertexFormat = convertAttributeType(mesh->vertexType),
-          .vertexStride = mesh->vertexStride,
-          .maxVertex = mesh->vertexCount,
-          .indexType = mesh->indexOffset == ~0u ? VK_INDEX_TYPE_NONE_KHR : (VkIndexType) mesh->indexType
+          .vertexFormat = convertAttributeType(geometry->vertexType),
+          .vertexStride = geometry->vertexStride,
+          .maxVertex = geometry->vertexCount,
+          .indexType = geometry->indexOffset == ~0u ? VK_INDEX_TYPE_NONE_KHR : (VkIndexType) geometry->indexType
         }
       };
 
       tree->ranges[i] = (VkAccelerationStructureBuildRangeInfoKHR) {
-        .primitiveCount = mesh->triangleCount,
-        .primitiveOffset = mesh->indexOffset == ~0u ? mesh->vertexOffset : mesh->indexOffset,
-        .firstVertex = mesh->indexOffset == ~0u ? mesh->vertexOffset / mesh->vertexStride : 0,
-        .transformOffset = mesh->transformOffset == ~0u ? 0 : mesh->transformOffset
+        .primitiveCount = geometry->triangleCount,
+        .primitiveOffset = geometry->indexOffset == ~0u ? geometry->vertexOffset : geometry->indexOffset,
+        .firstVertex = geometry->baseVertex,
+        .transformOffset = geometry->transformOffset == ~0u ? 0 : geometry->transformOffset
       };
     }
   }
@@ -559,12 +559,12 @@ bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info) {
   if (info->type == GPU_TREE_TOP) {
     counts = &info->capacity;
   } else if (info->capacity == 1) {
-    counts = &info->meshes[0].triangleCount;
+    counts = &info->geometries[0].triangleCount;
   } else {
     counts = state.config.fnAlloc(info->capacity * sizeof(uint32_t));
     ASSERT(counts, "Out of memory") return false;
     for (uint32_t i = 0; i < info->capacity; i++) {
-      counts[i] = info->meshes[i].triangleCount;
+      counts[i] = info->geometries[i].triangleCount;
     }
   }
 

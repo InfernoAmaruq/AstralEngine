@@ -5773,13 +5773,13 @@ bool lovrModelBuildRaytracer(Model* model) {
   }
 
   // Make sure all the vertices and transforms are updated
+  if (!lovrModelAnimateVertices(model)) {
+    return false;
+  }
+
   if (model->transformsDirty) {
     updateModelTransforms(model, meta->rootNode, (float[]) MAT4_IDENTITY);
     model->transformsDirty = false;
-  }
-
-  if (!lovrModelAnimateVertices(model)) {
-    return false;
   }
 
   // Write the transforms
@@ -5789,10 +5789,11 @@ bool lovrModelBuildRaytracer(Model* model) {
   float* dst = transforms.pointer;
   for (uint32_t i = 0; i < meta->nodeCount; i++) {
     if (meta->nodes[i].mesh != ~0u) {
+      bool skinned = meta->nodes[i].skin != ~0u;
       float* src = model->globalTransforms + 16 * i;
       for (uint32_t row = 0; row < 3; row++) {
         for (uint32_t col = 0; col < 4; col++) {
-          *dst++ = src[col * 4 + row];
+          *dst++ = skinned ? (col == row ? 1.f : 0.f) : src[col * 4 + row];
         }
       }
     }

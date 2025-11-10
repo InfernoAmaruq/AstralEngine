@@ -237,6 +237,12 @@ static int l_lovrModelGetMaterial(lua_State* L) {
   return 1;
 }
 
+static int l_lovrModelBuildRaytracer(lua_State* L) {
+  Model* model = luax_checktype(L, 1, Model);
+  luax_assert(L, lovrModelBuildRaytracer(model));
+  return 0;
+}
+
 int luax_modelmeshiterator(lua_State* L) {
   Model* model = luax_checktype(L, 1, Model);
   ModelMetadata* meta = lovrModelGetMetadata(model);
@@ -368,6 +374,7 @@ const luaL_Reg lovrModel[] = {
   { "getMaterialCount", l_lovrModelMetaGetMaterialCount },
   { "getMaterialName", l_lovrModelMetaGetMaterialName },
   { "getMaterial", l_lovrModelGetMaterial },
+  { "buildRaytracer", l_lovrModelBuildRaytracer },
 
   { "getVertexBuffer", l_lovrModelGetVertexBuffer }, // Deprecated
   { "getIndexBuffer", l_lovrModelGetIndexBuffer }, // Deprecated

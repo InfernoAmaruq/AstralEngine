@@ -472,6 +472,7 @@ bool lovrMeshGetTriangles(Mesh* mesh, float** vertices, uint32_t** indices, uint
 bool lovrMeshGetBoundingBox(Mesh* mesh, float box[6]);
 void lovrMeshSetBoundingBox(Mesh* mesh, float box[6]);
 bool lovrMeshComputeBoundingBox(Mesh* mesh);
+bool lovrMeshBuildRaytracer(Mesh* mesh);
 DrawMode lovrMeshGetDrawMode(Mesh* mesh);
 void lovrMeshSetDrawMode(Mesh* mesh, DrawMode mode);
 void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count);
@@ -510,6 +511,7 @@ Buffer* lovrModelGetIndexBuffer(Model* model);
 Mesh* lovrModelGetMesh(Model* model, uint32_t index);
 Texture* lovrModelGetTexture(Model* model, uint32_t index);
 Material* lovrModelGetMaterial(Model* model, uint32_t index);
+bool lovrModelBuildRaytracer(Model* model);
 
 // Raytracer
 

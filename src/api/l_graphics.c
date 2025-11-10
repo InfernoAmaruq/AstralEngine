@@ -336,7 +336,7 @@ uint32_t luax_checkraytracerflags(lua_State* L, int index) {
     lua_pop(L, 1);
 
     lua_getfield(L, index, "fasttrace");
-    flags |= lua_isnil(L, -1) || lua_toboolean(L, -1) ? RAYTRACER_FAST_TRACE : 0;
+    flags |= lua_toboolean(L, -1) ? RAYTRACER_FAST_TRACE : 0;
     lua_pop(L, 1);
 
     lua_getfield(L, index, "fastbuild");

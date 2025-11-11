@@ -3983,6 +3983,15 @@ static bool loadControllerModels(void) {
     }
   }
 
+  if (count == 0) {
+    lovrFree(state.models);
+    lovrFree(state.modelKeys);
+    lovrFree(keys);
+    state.models = NULL;
+    state.modelKeys = NULL;
+    return true;
+  }
+
   state.models = lovrRealloc(state.models, count * sizeof(RenderModel));
   state.modelKeys = lovrRealloc(state.modelKeys, count * sizeof(XrRenderModelIdEXT));
 

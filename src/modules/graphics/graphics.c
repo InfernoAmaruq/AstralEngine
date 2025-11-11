@@ -4918,7 +4918,7 @@ bool lovrMeshBuildRaytracer(Mesh* mesh) {
     if (!gpu_tree_init(mesh->tree, &info)) {
       lovrSetError("Could not create mesh raytracing data: %s", gpu_get_error());
       lovrFree(mesh->tree);
-      return NULL;
+      return false;
     }
   }
 
@@ -5772,7 +5772,7 @@ bool lovrModelBuildRaytracer(Model* model) {
       lovrSetError("Could not create model raytracing data: %s", gpu_get_error());
       lovrFree(model->tree);
       lovrFree(geometries);
-      return NULL;
+      return false;
     }
 
     lovrFree(geometries);

@@ -8078,11 +8078,20 @@ static bool drawNode(Pass* pass, Model* model, uint32_t index, uint32_t instance
     ModelPart* part = mesh->parts;
 
     for (uint32_t i = 0; i < mesh->partCount; i++, part++) {
+      float bounds[6] = {
+        (part->bounds[0] + part->bounds[1]) / 2.f,
+        (part->bounds[2] + part->bounds[3]) / 2.f,
+        (part->bounds[4] + part->bounds[5]) / 2.f,
+        (part->bounds[1] - part->bounds[0]) / 2.f,
+        (part->bounds[3] - part->bounds[2]) / 2.f,
+        (part->bounds[5] - part->bounds[4]) / 2.f
+      };
+
       DrawInfo draw = {
         .mode = part->mode == DRAW_POINT_LIST ? DRAW_POINTS : part->mode == DRAW_LINE_LIST ? DRAW_LINES : DRAW_TRIANGLES,
         .material = model->materials && part->material != ~0u ? model->materials[part->material] : NULL,
         .transform = node->skin == ~0u ? globalTransform : NULL,
-        .bounds = part->bounds,
+        .bounds = bounds,
         .vertex.buffer = model->vertexBuffer,
         .index.buffer = mesh->indexCount > 0 ? model->indexBuffer : NULL,
         .start = (mesh->indexCount > 0 ? mesh->indexOffset : mesh->vertexOffset) + part->start,

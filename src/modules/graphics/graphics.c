@@ -1432,7 +1432,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
       };
 
       pass->tally.tempBuffer = lovrBufferCreate(&bufferInfo, NULL);
-      lovrAssert(pass->tally.buffer, "Failed to create tally buffer: %s", lovrGetError());
+      lovrAssert(pass->tally.tempBuffer, "Failed to create tally buffer: %s", lovrGetError());
     }
 
     gpu_clear_tally(stream, pass->tally.gpu, 0, pass->tally.count * pass->views);

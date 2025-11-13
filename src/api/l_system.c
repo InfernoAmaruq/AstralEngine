@@ -151,6 +151,10 @@ static int l_lovrSystemOpenWindow(lua_State* L) {
   window.height = luaL_optinteger(L, -1, 800);
   lua_pop(L, 1);
 
+  lua_getfield(L, 1, "centered");
+  window.centered = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+
   lua_getfield(L, 1, "fullscreen");
   window.fullscreen = lua_toboolean(L, -1);
   lua_pop(L, 1);

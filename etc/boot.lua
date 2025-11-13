@@ -52,6 +52,7 @@ local conf = {
   window = {
     width = 720,
     height = 800,
+    centered = true,
     fullscreen = false,
     resizable = false,
     title = 'LÖVR',

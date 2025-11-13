@@ -514,34 +514,48 @@ bool os_window_open(const os_window_config* config) {
   }
 
   DWORD style = WS_VISIBLE;
-  uint32_t width, height;
+  int x, y, w, h;
 
   if ((config->width == 0 && config->height == 0) || config->fullscreen) {
     style |= WS_POPUP;
-    width = GetSystemMetrics(SM_CXSCREEN);
-    height = GetSystemMetrics(SM_CYSCREEN);
+    x = CW_USEDEFAULT;
+    y = CW_USEDEFAULT;
+    w = state.width = GetSystemMetrics(SM_CXSCREEN);
+    h = state.height = GetSystemMetrics(SM_CYSCREEN);
   } else {
     style |= WS_OVERLAPPEDWINDOW;
-    width = config->width;
-    height = config->height;
 
     if (!config->resizable) {
       style &= ~WS_THICKFRAME;
     }
+
+    state.width = config->width;
+    state.height = config->height;
+
+    RECT rect = { 0, 0, config->width, config->height };
+    AdjustWindowRect(&rect, style, FALSE);
+
+    w = rect.right - rect.left;
+    h = rect.bottom - rect.top;
+
+    if (config->centered) {
+      POINT zero = { 0, 0 };
+      HMONITOR monitor = MonitorFromPoint(zero, MONITOR_DEFAULTTOPRIMARY);
+      MONITORINFO info = { .cbSize = sizeof(MONITORINFO) };
+      GetMonitorInfo(monitor, &info);
+      x = info.rcWork.left + (info.rcWork.right - info.rcWork.left - w) / 2;
+      y = info.rcWork.top + (info.rcWork.bottom - info.rcWork.top - h) / 2;
+    } else {
+      x = CW_USEDEFAULT;
+      y = CW_USEDEFAULT;
+    }
   }
 
-  RECT rect = { 0, 0, width, height };
-  AdjustWindowRect(&rect, style, FALSE);
-
-  state.window = CreateWindowW(wc.lpszClassName, wtitle, style,
-      CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top,
-      NULL, NULL, state.instance, NULL);
+  state.window = CreateWindowW(wc.lpszClassName, wtitle, style, x, y, w, h, NULL, NULL, state.instance, NULL);
 
   BOOL darkMode = true;
   DwmSetWindowAttribute(state.window, 20, &darkMode, sizeof(darkMode));
 
-  state.width = width;
-  state.height = height;
   state.cursor = LoadCursor(NULL, IDC_ARROW);
 
   return !!state.window;

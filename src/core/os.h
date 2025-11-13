@@ -7,6 +7,7 @@
 typedef struct os_window_config {
   uint32_t width;
   uint32_t height;
+  bool centered;
   bool fullscreen;
   bool resizable;
   const char* title;

@@ -381,6 +381,12 @@ bool os_window_open(const os_window_config* config) {
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
   }
 
+  bool center = config->centered && !config->fullscreen && config->width > 0 && config->height > 0;
+
+  if (center) {
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+  }
+
   GLFWmonitor* monitor = glfwGetPrimaryMonitor();
   const GLFWvidmode* mode = glfwGetVideoMode(monitor);
   uint32_t width = config->width ? config->width : (uint32_t) mode->width;
@@ -397,6 +403,13 @@ bool os_window_open(const os_window_config* config) {
 
   if (!glfwState.window) {
     return false;
+  }
+
+  if (center) {
+    int x, y, w, h;
+    glfwGetMonitorWorkarea(monitor, &x, &y, &w, &h);
+    glfwSetWindowPos(glfwState.window, x + (w - width) / 2, y + (h - height) / 2);
+    glfwShowWindow(glfwState.window);
   }
 
   if (config->icon.data) {

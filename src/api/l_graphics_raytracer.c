@@ -55,7 +55,7 @@ static int l_lovrRaytracerSet(lua_State* L) {
   Raytracer* raytracer = luax_checktype(L, 1, Raytracer);
   uint32_t id = luax_checku32(L, 2) - 1;
 
-  int index = 2;
+  int index = 3;
   float matrix[16];
   float* transform = NULL;
   if (!lua_isnoneornil(L, index)) {

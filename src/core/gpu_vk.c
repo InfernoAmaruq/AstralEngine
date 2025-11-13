@@ -523,7 +523,8 @@ bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info) {
           .vertexFormat = convertAttributeType(geometry->vertexType),
           .vertexStride = geometry->vertexStride,
           .maxVertex = geometry->vertexCount,
-          .indexType = geometry->indexOffset == ~0u ? VK_INDEX_TYPE_NONE_KHR : (VkIndexType) geometry->indexType
+          .indexType = geometry->indexOffset == ~0u ? VK_INDEX_TYPE_NONE_KHR : (VkIndexType) geometry->indexType,
+          .transformData.deviceAddress = geometry->transformOffset == ~0u ? 0 : 1
         }
       };
 

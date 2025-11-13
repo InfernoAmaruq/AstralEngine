@@ -6003,7 +6003,7 @@ void lovrRaytracerBuild(Raytracer* raytracer) {
   gpu_build_tree(state.stream, raytracer->gpu, &(gpu_build_info) {
     .type = GPU_TREE_TOP,
     .mode = update ? GPU_TREE_UPDATE : GPU_TREE_BUILD,
-    .count = 1,
+    .count = raytracer->count,
     .instances = gpu_buffer_get_address(view.buffer, view.offset)
   });
 }

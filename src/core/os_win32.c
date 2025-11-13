@@ -372,7 +372,7 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM param, LPAR
       if (key != OS_KEY_COUNT) {
         bool pressed = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
         os_button_action action = pressed ? BUTTON_PRESSED : BUTTON_RELEASED;
-        bool repeat = !!(HIWORD(lparam) & KF_REPEAT);
+        bool repeat = pressed && !!(HIWORD(lparam) & KF_REPEAT);
 
         if (state.onKey) state.onKey(action, key, scancode, repeat);
       }

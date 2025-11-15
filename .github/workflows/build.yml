@@ -34,7 +34,10 @@ jobs:
 
   linux:
     name: Linux
-    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        arch: [x86_64, aarch64]
+    runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-22.04' || 'ubuntu-22.04-arm' }}
     steps:
       - name: Update Packages
         run: sudo apt update
@@ -52,15 +55,15 @@ jobs:
         run: ./build/bin/lovr test --headless
       - name: AppImage
         run: >
-          curl -sOL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage &&
-          chmod +x ./appimagetool-x86_64.AppImage &&
-          ./appimagetool-x86_64.AppImage build/bin &&
-          mv LÖVR-x86_64.AppImage lovr-x86_64.AppImage
+          curl -sOL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.arch }}.AppImage &&
+          chmod +x ./appimagetool-${{ matrix.arch }}.AppImage &&
+          ./appimagetool-${{ matrix.arch }}.AppImage build/bin &&
+          mv LÖVR-${{ matrix.arch }}.AppImage lovr-${{ matrix.arch }}.AppImage
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: lovr.appimage
-          path: lovr-x86_64.AppImage
+          name: lovr-${{ matrix.arch }}.AppImage
+          path: lovr-${{ matrix.arch }}.AppImage
 
   android:
     name: Android

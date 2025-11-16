@@ -118,7 +118,11 @@ function lovr.boot()
   else
     lovr.filesystem.setSource(source)
     if source ~= bundle then lovr.filesystem.unmount(bundle) end
-    if lovr.filesystem.isFile('conf.lua') then ok, failure = pcall(require, 'conf') end
+    if _VERSION == "Luau" then
+      if lovr.filesystem.isFile('conf.lua') or lovr.filesystem.isFile('conf.luau') then ok, failure = pcall(require, 'conf') end
+    else
+      if lovr.filesystem.isFile('conf.lua') then ok, failure = pcall(require, 'conf') end
+    end
     if ok and lovr.conf then ok, failure = pcall(lovr.conf, conf) end
   end
 

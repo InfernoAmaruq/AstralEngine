@@ -982,12 +982,6 @@ static int l_lovrHeadsetGetHands(lua_State* L) {
   return 1;
 }
 
-static int l_lovrHeadsetGetHandles(lua_State* L) {
-  lua_pushlightuserdata(L, (void*) lovrHeadsetGetInstanceHandle());
-  lua_pushlightuserdata(L, (void*) lovrHeadsetGetSessionHandle());
-  return 2;
-}
-
 static const luaL_Reg lovrHeadset[] = {
   { "connect", l_lovrHeadsetConnect },
   { "getName", l_lovrHeadsetGetName },
@@ -1053,7 +1047,6 @@ static const luaL_Reg lovrHeadset[] = {
   { "setButton", l_lovrHeadsetSetButton },
   { "newLayer", l_lovrHeadsetNewLayer },
   { "getHands", l_lovrHeadsetGetHands },
-  { "getHandles", l_lovrHeadsetGetHandles },
   { NULL, NULL }
 };
 

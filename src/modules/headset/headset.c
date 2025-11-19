@@ -4168,3 +4168,21 @@ static bool loadVisibilityMask(void) {
 
   return true;
 }
+
+#ifdef _WIN32
+#define EXPORT __declspec(dllexport)
+#else
+#define EXPORT __attribute__((visibility("default")))
+#endif
+
+EXPORT uintptr_t xr_get_instance(void) {
+  return (uintptr_t) state.instance;
+}
+
+EXPORT uintptr_t xr_get_system(void) {
+  return (uintptr_t) state.system;
+}
+
+EXPORT uintptr_t xr_get_session(void) {
+  return (uintptr_t) state.session;
+}

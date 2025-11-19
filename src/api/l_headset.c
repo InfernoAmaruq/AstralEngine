@@ -1120,6 +1120,28 @@ int luaopen_lovr_headset(lua_State* L) {
       lua_getfield(L, -1, "controllerskeleton");
       if (!lua_isnil(L, -1)) config.controllerSkeleton = luax_checkenum(L, -1, ControllerSkeletonMode, NULL);
       lua_pop(L, 1);
+
+      lua_getfield(L, -1, "extensions");
+      if (lua_istable(L, -1)) {
+        int count = luax_len(L, -1);
+        if (count > 0) {
+          lua_getglobal(L, "table");
+          lua_getfield(L, -1, "concat");
+          if (lua_isfunction(L, -1)) {
+            lua_pushvalue(L, -3);
+            lua_pushliteral(L, "\0");
+            lua_call(L, 2, 1);
+            size_t length;
+            const char* string = lua_tolstring(L, -1, &length);
+            char* extensions = lovrMalloc(length);
+            memcpy(extensions, string, length);
+            config.extensionCount = count;
+            config.extensions = extensions;
+          }
+          lua_pop(L, 2);
+        }
+      }
+      lua_pop(L, 1);
     }
     lua_pop(L, 1);
   }

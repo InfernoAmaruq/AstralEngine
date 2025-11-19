@@ -31,6 +31,8 @@ typedef struct {
   bool overlay;
   uint32_t overlayOrder;
   ControllerSkeletonMode controllerSkeleton;
+  uint32_t extensionCount;
+  char* extensions;
 } HeadsetConfig;
 
 typedef struct {

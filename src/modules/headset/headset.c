@@ -368,7 +368,11 @@ static bool loadVisibilityMask(void);
 // Entry
 
 bool lovrHeadsetInit(HeadsetConfig* config) {
-  if (state.initialized) return true;
+  if (state.initialized) {
+    lovrFree(config->extensions);
+    return true;
+  }
+
   state.initialized = true;
   state.config = *config;
 
@@ -392,6 +396,7 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
 
 void lovrHeadsetDestroy(void) {
   disconnect();
+  lovrFree(state.config.extensions);
   Simulator simulator = state.simulator; // Keep simulator state between restarts, for convenience
   memset(&state, 0, sizeof(state));
   state.simulator = simulator;
@@ -500,13 +505,23 @@ bool lovrHeadsetConnect(void) {
   };
 
   uint32_t enabledExtensionCount = 0;
-  const char* enabledExtensionNames[COUNTOF(extensions)];
+  const char** enabledExtensionNames = lovrMalloc((COUNTOF(extensions) + state.config.extensionCount) * sizeof(char*));
+
   for (uint32_t i = 0; i < COUNTOF(extensions); i++) {
     if (!extensions[i].enable) continue;
     if (!extensions[i].feature || hasExtension(extensionProperties, extensionCount, extensions[i].name)) {
       enabledExtensionNames[enabledExtensionCount++] = extensions[i].name;
       if (extensions[i].feature) *extensions[i].feature = true;
     }
+  }
+
+  // Custom user-requested extensions
+  const char* extension = state.config.extensions;
+  for (uint32_t i = 0; i < state.config.extensionCount; i++) {
+    if (hasExtension(extensionProperties, extensionCount, extension)) {
+      enabledExtensionNames[enabledExtensionCount++] = extension;
+    }
+    extension += strlen(extension) + 1;
   }
 
   lovrFree(extensionProperties);
@@ -537,6 +552,8 @@ bool lovrHeadsetConnect(void) {
   };
 
   XR(xrCreateInstance(&instanceInfo, &state.instance), "xrCreateInstance");
+  lovrFree(enabledExtensionNames);
+
   XR_FOREACH(XR_LOAD)
   XR_FOREACH_PLATFORM(XR_LOAD)
 

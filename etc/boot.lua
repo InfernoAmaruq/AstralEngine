@@ -41,7 +41,8 @@ local conf = {
     supersample = false,
     submitdepth = true,
     overlay = false,
-    controllerskeleton = 'controller'
+    controllerskeleton = 'controller',
+    extensions = nil
   },
   math = {
     globals = true

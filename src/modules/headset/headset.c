@@ -619,7 +619,7 @@ bool lovrHeadsetConnect(void) {
   XrViewConfigurationType viewConfigurations[4];
   XRG(xrEnumerateViewConfigurations(state.instance, state.system, 4, &viewConfigurationCount, viewConfigurations), "xrEnumerateViewConfigurations", fail);
 
-  for (uint32_t i = 0; i < COUNTOF(supportedViewConfigurations); i++) {
+  for (uint32_t i = 0; !state.viewConfiguration && i < COUNTOF(supportedViewConfigurations); i++) {
     for (uint32_t j = 0; j < viewConfigurationCount; j++) {
       if (viewConfigurations[j] == supportedViewConfigurations[i]) {
         state.viewConfiguration = supportedViewConfigurations[i];

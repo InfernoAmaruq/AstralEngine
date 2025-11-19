@@ -154,11 +154,12 @@ enum {
 };
 
 enum {
-  STEREO = (1 << 0),
-  DEPTH = (1 << 1),
-  CUBE = (1 << 2),
-  STATIC = (1 << 3),
-  FOVEATED = (1 << 4)
+  VIEW = (1 << 0),
+  STEREO = (1 << 1),
+  DEPTH = (1 << 2),
+  CUBE = (1 << 3),
+  STATIC = (1 << 4),
+  FOVEATED = (1 << 5)
 };
 
 typedef struct {
@@ -249,6 +250,8 @@ static struct {
   Simulator simulator;
   XrInstance instance;
   XrSystemId system;
+  XrViewConfigurationType viewConfiguration;
+  uint32_t viewCount;
   XrSession session;
   XrSessionState sessionState;
   XrSpace referenceSpace;
@@ -262,8 +265,8 @@ static struct {
   Pass* pass;
   Swapchain swapchains[3];
   XrCompositionLayerProjection layer;
-  XrCompositionLayerProjectionView layerViews[2];
-  XrCompositionLayerDepthInfoKHR depthInfo[2];
+  XrCompositionLayerProjectionView layerViews[4];
+  XrCompositionLayerDepthInfoKHR depthInfo[4];
   XrCompositionLayerPassthroughFB passthroughLayer;
   union {
     XrCompositionLayerBaseHeader header;
@@ -302,6 +305,7 @@ static struct {
     bool controllerModel;
     bool debug;
     bool depth;
+    bool foveatedInset;
     bool foveation;
     bool foveationConfig;
     bool foveationVulkan;
@@ -490,6 +494,7 @@ bool lovrHeadsetConnect(void) {
     { "XR_ML_ml2_controller_interaction", &state.extensions.ml2Controller, true },
     { "XR_MND_headless", &state.extensions.headless, true },
     { "XR_ULTRALEAP_hand_tracking_forearm", &state.extensions.handTrackingElbow, true },
+    { "XR_VARJO_quad_views", &state.extensions.foveatedInset, true },
     { "XR_EXTX_overlay", &state.extensions.overlay, config->overlay },
     { "XR_HTCX_vive_tracker_interaction", &state.extensions.viveTrackers, true }
   };
@@ -604,32 +609,57 @@ bool lovrHeadsetConnect(void) {
 
   // View Configuration
 
+  XrViewConfigurationType supportedViewConfigurations[] = {
+    XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET,
+    XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
+    XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO
+  };
+
   uint32_t viewConfigurationCount;
-  XrViewConfigurationType viewConfigurations[2];
-  XRG(xrEnumerateViewConfigurations(state.instance, state.system, 2, &viewConfigurationCount, viewConfigurations), "xrEnumerateViewConfigurations", fail);
+  XrViewConfigurationType viewConfigurations[4];
+  XRG(xrEnumerateViewConfigurations(state.instance, state.system, 4, &viewConfigurationCount, viewConfigurations), "xrEnumerateViewConfigurations", fail);
 
-  uint32_t viewCount;
-  XrViewConfigurationView views[2] = { [0].type = XR_TYPE_VIEW_CONFIGURATION_VIEW, [1].type = XR_TYPE_VIEW_CONFIGURATION_VIEW };
-  XRG(xrEnumerateViewConfigurationViews(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0, &viewCount, NULL), "xrEnumerateViewConfigurationViews", fail);
-  XRG(xrEnumerateViewConfigurationViews(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 2, &viewCount, views), "xrEnumerateViewConfigurationViews", fail);
-
-  if (viewCount != 2) {
-    return lovrSetError("Headset view count must be 2");
+  for (uint32_t i = 0; !state.viewConfiguration && i < COUNTOF(supportedViewConfigurations); i++) {
+    for (uint32_t j = 0; j < viewConfigurationCount; j++) {
+      if (viewConfigurations[j] == supportedViewConfigurations[i]) {
+        state.viewConfiguration = supportedViewConfigurations[i];
+        break;
+      }
+    }
   }
 
-  uint32_t maxWidth = MIN(views[0].maxImageRectWidth, views[1].maxImageRectWidth);
-  uint32_t maxHeight = MIN(views[0].maxImageRectHeight, views[1].maxImageRectHeight);
-  uint32_t recommendedWidth = MIN(views[0].recommendedImageRectWidth, views[1].recommendedImageRectWidth);
-  uint32_t recommendedHeight = MIN(views[0].recommendedImageRectHeight, views[1].recommendedImageRectHeight);
+  lovrAssertGoto(fail, state.viewConfiguration, "No supported view configuration available");
+
+  XrViewConfigurationView views[4] = {
+    [0].type = XR_TYPE_VIEW_CONFIGURATION_VIEW,
+    [1].type = XR_TYPE_VIEW_CONFIGURATION_VIEW,
+    [2].type = XR_TYPE_VIEW_CONFIGURATION_VIEW,
+    [3].type = XR_TYPE_VIEW_CONFIGURATION_VIEW
+  };
+
+  XRG(xrEnumerateViewConfigurationViews(state.instance, state.system, state.viewConfiguration, 0, &state.viewCount, NULL), "xrEnumerateViewConfigurationViews", fail);
+  XRG(xrEnumerateViewConfigurationViews(state.instance, state.system, state.viewConfiguration, COUNTOF(views), &state.viewCount, views), "xrEnumerateViewConfigurationViews", fail);
+
+  uint32_t maxWidth = ~0u;
+  uint32_t maxHeight = ~0u;
+  uint32_t recommendedWidth = 0;
+  uint32_t recommendedHeight = 0;
+
+  for (uint32_t i = 0; i < state.viewCount; i++) {
+    maxWidth = MIN(maxWidth, views[i].maxImageRectWidth);
+    maxHeight = MIN(maxHeight, views[i].maxImageRectHeight);
+    recommendedWidth = MAX(recommendedWidth, views[i].recommendedImageRectWidth);
+    recommendedHeight = MAX(recommendedHeight, views[i].recommendedImageRectHeight);
+  }
 
   state.width = MIN(recommendedWidth * config->supersample, maxWidth);
   state.height = MIN(recommendedHeight * config->supersample, maxHeight);
 
   // Blend Modes
 
-  XRG(xrEnumerateEnvironmentBlendModes(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0, &state.blendModeCount, NULL), "xrEnumerateEnvironmentBlendModes", fail);
+  XRG(xrEnumerateEnvironmentBlendModes(state.instance, state.system, state.viewConfiguration, 0, &state.blendModeCount, NULL), "xrEnumerateEnvironmentBlendModes", fail);
   state.blendModes = lovrMalloc(state.blendModeCount * sizeof(XrEnvironmentBlendMode));
-  XRG(xrEnumerateEnvironmentBlendModes(state.instance, state.system, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, state.blendModeCount, &state.blendModeCount, state.blendModes), "xrEnumerateEnvironmentBlendModes", fail);
+  XRG(xrEnumerateEnvironmentBlendModes(state.instance, state.system, state.viewConfiguration, state.blendModeCount, &state.blendModeCount, state.blendModes), "xrEnumerateEnvironmentBlendModes", fail);
   state.blendMode = state.blendModes[0];
 
   // Actions
@@ -1511,17 +1541,15 @@ bool lovrHeadsetStart(void) {
       }
     }
 
-    uint32_t flags = STEREO | (state.extensions.foveation ? FOVEATED : 0);
-
     lovrAssertGoto(stop, supportsColor, "This VR runtime does not support sRGB rgba8 textures");
-    if (!lovrSwapchainInit(&state.swapchains[SWAPCHAIN_COLOR], state.width, state.height, flags)) {
+    if (!lovrSwapchainInit(&state.swapchains[SWAPCHAIN_COLOR], state.width, state.height, VIEW | FOVEATED)) {
       goto stop;
     }
 
     GraphicsFeatures features;
     lovrGraphicsGetFeatures(&features);
     if (state.extensions.depth && supportsDepth && features.depthResolve) {
-      if (!lovrSwapchainInit(&state.swapchains[SWAPCHAIN_DEPTH], state.width, state.height, STEREO | DEPTH)) {
+      if (!lovrSwapchainInit(&state.swapchains[SWAPCHAIN_DEPTH], state.width, state.height, VIEW | DEPTH)) {
         goto stop;
       }
     } else {
@@ -1531,23 +1559,20 @@ bool lovrHeadsetStart(void) {
     // Pre-init composition layer
     state.layer = (XrCompositionLayerProjection) {
       .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
-      .viewCount = 2,
+      .viewCount = state.viewCount,
       .views = state.layerViews
     };
 
     // Pre-init composition layer views
-    state.layerViews[0] = (XrCompositionLayerProjectionView) {
-      .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
-      .subImage = { state.swapchains[SWAPCHAIN_COLOR].handle, { { 0, 0 }, { state.width, state.height } }, 0 }
-    };
-
-    state.layerViews[1] = (XrCompositionLayerProjectionView) {
-      .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
-      .subImage = { state.swapchains[SWAPCHAIN_COLOR].handle, { { 0, 0 }, { state.width, state.height } }, 1 }
-    };
+    for (uint32_t i = 0; i < state.viewCount; i++) {
+      state.layerViews[i] = (XrCompositionLayerProjectionView) {
+        .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
+        .subImage = { state.swapchains[SWAPCHAIN_COLOR].handle, { { 0, 0 }, { state.width, state.height } }, i }
+      };
+    }
 
     if (state.extensions.depth) {
-      for (uint32_t i = 0; i < 2; i++) {
+      for (uint32_t i = 0; i < state.viewCount; i++) {
         state.layerViews[i].next = &state.depthInfo[i];
         state.depthInfo[i] = (XrCompositionLayerDepthInfoKHR) {
           .type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR,
@@ -1713,7 +1738,7 @@ bool lovrHeadsetPollEvents(void) {
           case XR_SESSION_STATE_READY:
             XR(xrBeginSession(state.session, &(XrSessionBeginInfo) {
               .type = XR_TYPE_SESSION_BEGIN_INFO,
-              .primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO
+              .primaryViewConfigurationType = state.viewConfiguration
             }), "xrBeginSession");
             break;
 
@@ -2071,25 +2096,25 @@ bool lovrHeadsetIsPassthroughSupported(PassthroughMode mode) {
   return false;
 }
 
-static XrViewStateFlags getViews(XrView views[2], uint32_t* count) {
+static XrViewStateFlags getViews(XrView views[4], uint32_t* count) {
   if (state.frameState.predictedDisplayTime <= 0) {
     return 0;
   }
 
   XrViewLocateInfo viewLocateInfo = {
     .type = XR_TYPE_VIEW_LOCATE_INFO,
-    .viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
+    .viewConfigurationType = state.viewConfiguration,
     .displayTime = state.frameState.predictedDisplayTime,
     .space = state.referenceSpace
   };
 
-  for (uint32_t i = 0; i < 2; i++) {
+  for (uint32_t i = 0; i < 4; i++) {
     views[i].type = XR_TYPE_VIEW;
     views[i].next = NULL;
   }
 
   XrViewState viewState = { .type = XR_TYPE_VIEW_STATE };
-  if (XR_FAILED(xrLocateViews(state.session, &viewLocateInfo, &viewState, 2, count, views))) {
+  if (XR_FAILED(xrLocateViews(state.session, &viewLocateInfo, &viewState, state.viewCount, count, views))) {
     return 0;
   }
 
@@ -2097,7 +2122,7 @@ static XrViewStateFlags getViews(XrView views[2], uint32_t* count) {
 }
 
 uint32_t lovrHeadsetGetViewCount(void) {
-  return state.session ? 2 : 1;
+  return state.session ? state.viewCount : 1;
 }
 
 bool lovrHeadsetGetViewPose(uint32_t view, float* position, float* orientation) {
@@ -2108,7 +2133,7 @@ bool lovrHeadsetGetViewPose(uint32_t view, float* position, float* orientation) 
   }
 
   uint32_t count;
-  XrView views[2];
+  XrView views[4];
   XrViewStateFlags flags = getViews(views, &count);
 
   if (view >= count || !flags) {
@@ -2144,7 +2169,7 @@ bool lovrHeadsetGetViewAngles(uint32_t view, float* left, float* right, float* u
   }
 
   uint32_t count;
-  XrView views[2];
+  XrView views[4];
   XrViewStateFlags flags = getViews(views, &count);
 
   if (view >= count || !flags) {
@@ -3158,7 +3183,7 @@ bool lovrHeadsetGetPass(Pass** pass) {
   lovrPassSetClear(state.pass, loads, background, LOAD_CLEAR, 0.f);
 
   uint32_t count;
-  XrView views[2];
+  XrView views[4];
   XrViewStateFlags flags = getViews(views, &count);
 
   for (uint32_t i = 0; i < count; i++) {
@@ -3263,12 +3288,14 @@ bool lovrHeadsetSubmit(void) {
       }
 
       if (state.extensions.depth) {
-        if (state.clipFar == 0.f) {
-          state.depthInfo[0].nearZ = state.depthInfo[1].nearZ = +INFINITY;
-          state.depthInfo[0].farZ = state.depthInfo[1].farZ = state.clipNear;
-        } else {
-          state.depthInfo[0].nearZ = state.depthInfo[1].nearZ = state.clipNear;
-          state.depthInfo[0].farZ = state.depthInfo[1].farZ = state.clipFar;
+        for (uint32_t i = 0; i < state.viewCount; i++) {
+          if (state.clipFar == 0.f) {
+            state.depthInfo[i].nearZ = +INFINITY;
+            state.depthInfo[i].farZ = state.clipNear;
+          } else {
+            state.depthInfo[i].nearZ = state.clipNear;
+            state.depthInfo[i].farZ = state.clipFar;
+          }
         }
       }
 
@@ -3619,11 +3646,12 @@ uintptr_t lovrHeadsetGetSessionHandle(void) {
 // Helpers
 
 static bool lovrSwapchainInit(Swapchain* swapchain, uint32_t width, uint32_t height, uint32_t flags) {
+  bool view = flags & VIEW;
   bool stereo = flags & STEREO;
   bool depth = flags & DEPTH;
   bool cube = flags & CUBE;
   bool immutable = flags & STATIC;
-  bool foveated = flags & FOVEATED;
+  bool foveated = flags & FOVEATED && state.extensions.foveation;
 
   XrSwapchainCreateInfo info = {
     .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
@@ -3632,7 +3660,7 @@ static bool lovrSwapchainInit(Swapchain* swapchain, uint32_t width, uint32_t hei
     .height = height,
     .sampleCount = 1,
     .faceCount = cube ? 6 : 1,
-    .arraySize = 1 << stereo,
+    .arraySize = view ? state.viewCount : 1 << stereo,
     .mipCount = 1
   };
 
@@ -3685,12 +3713,12 @@ static bool lovrSwapchainInit(Swapchain* swapchain, uint32_t width, uint32_t hei
 
   for (uint32_t i = 0; i < textureCount; i++, swapchain->textureCount++) {
     swapchain->textures[i] = lovrTextureCreate(&(TextureInfo) {
-      .type = cube ? TEXTURE_CUBE : (stereo ? TEXTURE_ARRAY : TEXTURE_2D),
+      .type = cube ? TEXTURE_CUBE : (stereo || view ? TEXTURE_ARRAY : TEXTURE_2D),
       .format = depth ? state.depthFormat : FORMAT_RGBA8,
       .srgb = !depth,
       .width = width,
       .height = height,
-      .layers = (cube ? 6 : 1) << stereo,
+      .layers = view ? state.viewCount : ((cube ? 6 : 1) << stereo),
       .usage = TEXTURE_RENDER | TEXTURE_TRANSFER | (depth ? 0 : TEXTURE_SAMPLE),
       .handle = (uintptr_t) images[i].image,
       .label = "OpenXR Swapchain",
@@ -3705,11 +3733,11 @@ static bool lovrSwapchainInit(Swapchain* swapchain, uint32_t width, uint32_t hei
 #ifdef LOVR_VK
     if (foveated) {
       swapchain->foveationTextures[i] = lovrTextureCreate(&(TextureInfo) {
-        .type = stereo ? TEXTURE_ARRAY : TEXTURE_2D,
+        .type = stereo || view ? TEXTURE_ARRAY : TEXTURE_2D,
         .format = FORMAT_RG8,
         .width = foveationImages[i].width,
         .height = foveationImages[i].height,
-        .layers = 1 << stereo,
+        .layers = state.viewCount,
         .usage = TEXTURE_FOVEATION,
         .handle = (uintptr_t) foveationImages[i].image,
         .label = "OpenXR Foveation Texture"
@@ -4044,14 +4072,14 @@ static bool loadControllerModels(void) {
 }
 
 static bool loadVisibilityMask(void) {
-  XrViewConfigurationType viewConfig = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+  XrViewConfigurationType viewConfig = state.viewConfiguration;
   XrVisibilityMaskTypeKHR type = XR_VISIBILITY_MASK_TYPE_HIDDEN_TRIANGLE_MESH_KHR;
   XrVisibilityMaskKHR info = { .type = XR_TYPE_VISIBILITY_MASK_KHR };
 
   uint32_t vertexCount = 0;
   uint32_t indexCount = 0;
 
-  for (uint32_t i = 0; i < 2; i++) {
+  for (uint32_t i = 0; i < state.viewCount; i++) {
     XR(xrGetVisibilityMaskKHR(state.session, viewConfig, i, type, &info), "xrGetVisibilityMask");
     lovrCheck(UINT32_MAX - vertexCount >= info.vertexCountOutput, "Too many mask vertices");
     lovrCheck(UINT32_MAX - indexCount >= info.indexCountOutput, "Too many mask indices");
@@ -4087,7 +4115,7 @@ static bool loadVisibilityMask(void) {
   }
 
   uint32_t baseVertex = 0;
-  for (uint32_t i = 0; i < 2; i++) {
+  for (uint32_t i = 0; i < state.viewCount; i++) {
     if (XR_FAILED(xrGetVisibilityMaskKHR(state.session, viewConfig, i, type, &info))) {
       lovrRelease(state.mask, lovrMeshDestroy);
       state.mask = NULL;

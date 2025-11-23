@@ -31,6 +31,11 @@ dev
 - Add support for compiling with Luau as the Lua implementation, instead of Lua/LuaJIT.
 - Add support for passing Luau `vector` and `quaternion` types to functions.
 - Add `vector` and `quaternion` modules.
+- Add `t.headset.extensions` to enable extra OpenXR extensions.
+- Add support for "foveated quad" and "mono" display configurations in `lovr.headset`.
+- Add `t.window.centered`.
+- Add `Mat4:setPosition/Orientation/Scale/Pose`.
+- Add `lovr.data.newBlobView`.
 
 ### Change
 
@@ -50,6 +55,7 @@ dev
 - Change `lovr.graphics.newBuffer` to also accept a Luau `vector` for the initial buffer data.
 - Change `Pass:transform` to also take a pose (7 numbers for the position and orientation).
 - Change `Mat4` to be a regular object instead of a vector type.
+- Change `lovr.graphics.submit` to have better performance when called multiple times per frame.
 
 ### Fix
 
@@ -62,6 +68,7 @@ dev
 - Fix crash in `Pass:send` when using tables to write nested structs to a uniform buffer.
 - Fix crash when drawing text on a pass without a canvas.
 - Fix crash when using a 3D texture as a canvas texture.
+- Fix validation message when clearing a 3D texture.
 - Fix issue where normalized buffer fields were rounded incorrectly.
 - Fix possible crash related to Thread:wait.
 - Fix possible crash in Model animation.
@@ -96,6 +103,7 @@ dev
 - Remove `Model:getVertexCount` (use `ModelData:getMeshVertexCount`).
 - Remove `Model:getData` (create and keep a `ModelData` around as needed).
 - Remove userdata vector types (use tables, and the `vector` and `quaternion` modules).
+- Remove `lovr.headset.getHandles` (use FFI).
 
 v0.18.0 - 2025-02-14
 ---

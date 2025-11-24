@@ -147,6 +147,8 @@ jobs:
           mkdir -p build/lovr.app/Contents/Resources/vulkan/icd.d &&
           cp $VULKAN_SDK/share/vulkan/icd.d/MoltenVK_icd.json build/lovr.app/Contents/Resources/vulkan/icd.d &&
           sed -i '' 's|../../../lib/libMoltenVK.dylib|../../../MacOS/libMoltenVK.dylib|' build/lovr.app/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json &&
+          codesign -f -s - --preserve-metadata=identifier,entitlements,flags,runtime build/lovr.app/Contents/MacOS/* &&
+          codesign -f -s - --preserve-metadata=identifier,entitlements,flags,runtime build/lovr.app &&
           ditto -c -k --keepParent build/lovr.app lovr.zip
       - name: Upload
         uses: actions/upload-artifact@v4

@@ -33,12 +33,14 @@ typedef struct gpu_memory gpu_memory;
 struct gpu_buffer {
   VkBuffer handle;
   gpu_memory* memory;
+  VkDeviceSize offset;
 };
 
 struct gpu_texture {
   VkImage handle;
   VkImageView view;
   gpu_memory* memory;
+  VkDeviceSize offset;
   VkImageAspectFlagBits aspect;
   VkImageLayout layout;
   uint32_t samples;
@@ -98,6 +100,14 @@ size_t gpu_sizeof_tally(void) { return sizeof(gpu_tally); }
 
 #define FRAME_DEPTH 2
 
+// GPU memory blocks are divided into 16 KB pages. Allocators have arrays with
+// an entry for every page, which they use to track regions of allocated and
+// free spaces.
+
+#define GPU_PAGE_BITS 14
+#define GPU_PAGE_SIZE (1 << (GPU_PAGE_BITS))
+#define GPU_ALLOC_PAGES_LENGTH ((1 << 28) / (GPU_PAGE_SIZE))
+
 struct gpu_memory {
   VkDeviceMemory handle;
   void* pointer;
@@ -125,8 +135,14 @@ typedef enum {
 } gpu_memory_type;
 
 typedef struct {
+  uint16_t allocated : 1;
+  uint16_t pageCount : 15;
+} gpu_alloc_entry;
+
+typedef struct {
   gpu_memory* block;
-  uint32_t cursor;
+  gpu_alloc_entry regions[GPU_ALLOC_PAGES_LENGTH];
+  uint32_t pageCount;
   uint16_t memoryType;
   uint16_t memoryFlags;
 } gpu_allocator;
@@ -241,7 +257,7 @@ enum { LINEAR, SRGB };
 #define MORGUE_MASK (COUNTOF(state.morgue.data) - 1)
 
 static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkDeviceSize* offset);
-static void release(gpu_memory* memory);
+static void release(gpu_memory* memory, VkDeviceSize offset);
 static void condemn(void* handle, VkObjectType type);
 static void expunge(uint64_t tick);
 static uint64_t getFinishedTick(void);
@@ -418,23 +434,22 @@ bool gpu_buffer_init(gpu_buffer* buffer, gpu_buffer_info* info) {
 
   nickname(buffer->handle, VK_OBJECT_TYPE_BUFFER, info->label);
 
-  VkDeviceSize offset;
   VkMemoryRequirements requirements;
   vkGetBufferMemoryRequirements(state.device, buffer->handle, &requirements);
 
-  if ((buffer->memory = allocate((gpu_memory_type) info->type, requirements, &offset)) == NULL) {
+  if ((buffer->memory = allocate((gpu_memory_type) info->type, requirements, &buffer->offset)) == NULL) {
     vkDestroyBuffer(state.device, buffer->handle, NULL);
     return false;
   }
 
-  VK(vkBindBufferMemory(state.device, buffer->handle, buffer->memory->handle, offset), "vkBindBufferMemory") {
+  VK(vkBindBufferMemory(state.device, buffer->handle, buffer->memory->handle, buffer->offset), "vkBindBufferMemory") {
     vkDestroyBuffer(state.device, buffer->handle, NULL);
-    release(buffer->memory);
+    release(buffer->memory, buffer->offset);
     return false;
   }
 
   if (info->pointer) {
-    *info->pointer = buffer->memory->pointer ? (char*) buffer->memory->pointer + offset : NULL;
+    *info->pointer = buffer->memory->pointer ? (char*) buffer->memory->pointer + buffer->offset : NULL;
   }
 
   return true;
@@ -443,7 +458,7 @@ bool gpu_buffer_init(gpu_buffer* buffer, gpu_buffer_info* info) {
 void gpu_buffer_destroy(gpu_buffer* buffer) {
   if (!buffer->memory) return;
   condemn(buffer->handle, VK_OBJECT_TYPE_BUFFER);
-  release(buffer->memory);
+  release(buffer->memory, buffer->offset);
 }
 
 // Texture
@@ -550,24 +565,23 @@ bool gpu_texture_init(gpu_texture* texture, gpu_texture_info* info) {
     default: memoryType = transient ? GPU_MEMORY_TEXTURE_LAZY_COLOR : GPU_MEMORY_TEXTURE_COLOR; break;
   }
 
-  VkDeviceSize offset;
   VkMemoryRequirements requirements;
   vkGetImageMemoryRequirements(state.device, texture->handle, &requirements);
 
-  if ((texture->memory = allocate(memoryType, requirements, &offset)) == NULL) {
+  if ((texture->memory = allocate(memoryType, requirements, &texture->offset)) == NULL) {
     vkDestroyImage(state.device, texture->handle, NULL);
     return false;
   }
 
-  VK(vkBindImageMemory(state.device, texture->handle, texture->memory->handle, offset), "vkBindImageMemory") {
+  VK(vkBindImageMemory(state.device, texture->handle, texture->memory->handle, texture->offset), "vkBindImageMemory") {
     vkDestroyImage(state.device, texture->handle, NULL);
-    release(texture->memory);
+    release(texture->memory, texture->offset);
     return false;
   }
 
   if (!gpu_texture_init_view(texture, &viewInfo)) {
     vkDestroyImage(state.device, texture->handle, NULL);
-    release(texture->memory);
+    release(texture->memory, texture->offset);
     return false;
   }
 
@@ -763,7 +777,7 @@ void gpu_texture_destroy(gpu_texture* texture) {
   if (texture->imported) return;
   if (!texture->memory) return;
   condemn(texture->handle, VK_OBJECT_TYPE_IMAGE);
-  release(texture->memory);
+  release(texture->memory, texture->offset);
 }
 
 // Surface
@@ -3381,13 +3395,31 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
   };
 
   uint32_t blockSize = blockSizes[type];
-  uint32_t cursor = ALIGN(allocator->cursor, info.alignment);
+  ASSERT(blockSize <= (GPU_ALLOC_PAGES_LENGTH * GPU_PAGE_SIZE), "Block size larger than allocator can handle") return NULL;
 
-  if (allocator->block && cursor + info.size <= blockSize) {
-    allocator->cursor = cursor + info.size;
-    allocator->block->refs++;
-    *offset = cursor;
-    return allocator->block;
+  uint32_t requiredPages = ALIGN(info.size, GPU_PAGE_SIZE) / GPU_PAGE_SIZE;
+
+  if (allocator->block) {
+    // Search through regions for a free region of sufficient size
+    for(uint32_t i = 0; i < allocator->pageCount; i += allocator->regions[i].pageCount) {
+      gpu_alloc_entry* region = &allocator->regions[i];
+      if (!region->allocated && requiredPages <= region->pageCount) {
+        region->allocated = true;
+
+        // If there's leftover room, mark the leftover free region, and shrink
+        // the current region
+        if (requiredPages < region->pageCount) {
+          gpu_alloc_entry* next = &allocator->regions[i + requiredPages];
+          next->allocated = false;
+          next->pageCount = region->pageCount - requiredPages;
+          region->pageCount = requiredPages;
+        }
+
+        allocator->block->refs++;
+        *offset = i * GPU_PAGE_SIZE;
+        return allocator->block;
+      }
+    }
   }
 
   // If there wasn't an active block or it overflowed, find an empty block to allocate
@@ -3417,7 +3449,17 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
       }
 
       allocator->block = memory;
-      allocator->cursor = info.size;
+
+      // Mark the initial region
+      allocator->pageCount = blockSize / GPU_PAGE_SIZE;
+      allocator->regions[0].allocated = true;
+      allocator->regions[0].pageCount = requiredPages;
+
+      // If there's additional room in the block, mark the free region
+      if (requiredPages < allocator->pageCount) {
+        allocator->regions[requiredPages].allocated = false;
+        allocator->regions[requiredPages].pageCount = allocator->pageCount - requiredPages;
+      }
       allocator->block->refs = 1;
       *offset = 0;
       return memory;
@@ -3428,15 +3470,52 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
   return NULL;
 }
 
-static void release(gpu_memory* memory) {
-  if (memory && --memory->refs == 0) {
-    condemn(memory->handle, VK_OBJECT_TYPE_DEVICE_MEMORY);
-    memory->handle = NULL;
+static void release(gpu_memory* memory, VkDeviceSize offset) {
+  if (memory) {
+    if (--memory->refs == 0) {
+      condemn(memory->handle, VK_OBJECT_TYPE_DEVICE_MEMORY);
+      memory->handle = NULL;
 
-    for (uint32_t i = 0; i < COUNTOF(state.allocators); i++) {
-      if (state.allocators[i].block == memory) {
-        state.allocators[i].block = NULL;
-        state.allocators[i].cursor = 0;
+      for (uint32_t i = 0; i < COUNTOF(state.allocators); i++) {
+        if (state.allocators[i].block == memory) {
+          state.allocators[i].block = NULL;
+        }
+      }
+    } else {
+      for (uint32_t i = 0; i < COUNTOF(state.allocators); i++) {
+        gpu_allocator* allocator = &state.allocators[i];
+        if (allocator->block == memory) {
+          // Mark the region for this allocation as free
+          uint32_t pageOffset = offset / GPU_PAGE_SIZE;
+          gpu_alloc_entry* region = &allocator->regions[pageOffset];
+          region->allocated = false;
+
+          // See if we can coalesce this region with the next region
+          uint32_t nextOffset = pageOffset + region->pageCount;
+          if (nextOffset < allocator->pageCount) {
+            gpu_alloc_entry* nextRegion = &allocator->regions[nextOffset];
+            if (!nextRegion->allocated) {
+              region->pageCount += nextRegion->pageCount;
+            }
+          }
+
+          // See if we can coalesce with the previous region. We have to loop
+          // through regions from the beginning because we don't know where the
+          // last region started
+          for(uint32_t j = 0; j < allocator->pageCount; j += allocator->regions[j].pageCount) {
+            gpu_alloc_entry* previousRegion = &allocator->regions[j];
+            if (pageOffset == j + previousRegion->pageCount) {
+              // We found the previous region, coalesce if it's free
+              if (!previousRegion->allocated) {
+                previousRegion->pageCount += region->pageCount;
+              }
+
+              // Since we found the previous region, we break no matter if we
+              // coalesced or not
+              break;
+            }
+          }
+        }
       }
     }
   }

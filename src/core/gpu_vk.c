@@ -3460,8 +3460,8 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
       memory->refs = 1;
 
       // Memory only receives an allocator if it can host multiple allocations
-      // (i.e. it has a fixed block size and this block is not oversized)
-      if(blockSize && info.size < blockSize) {
+      // (i.e. it has a fixed block size and this block is not full/oversized)
+      if(blockSize && (requiredPages * GPU_PAGE_SIZE) < blockSize) {
         allocator->block = memory;
   
         // Mark the initial region
@@ -3469,11 +3469,10 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
         allocator->regions[0].allocated = true;
         allocator->regions[0].pageCount = requiredPages;
   
-        // If there's additional room in the block, mark the free region
-        if (requiredPages < allocator->pageCount) {
-          allocator->regions[requiredPages].allocated = false;
-          allocator->regions[requiredPages].pageCount = allocator->pageCount - requiredPages;
-        }
+        // Mark the free region at the end. We know there's a free region
+        // because we don't let allocators manage full or oversized blocks
+        allocator->regions[requiredPages].allocated = false;
+        allocator->regions[requiredPages].pageCount = allocator->pageCount - requiredPages;
       }
       
       *offset = 0;

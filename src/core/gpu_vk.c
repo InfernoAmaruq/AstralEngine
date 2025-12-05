@@ -108,12 +108,6 @@ size_t gpu_sizeof_tally(void) { return sizeof(gpu_tally); }
 #define GPU_PAGE_SIZE (1 << (GPU_PAGE_BITS))
 #define GPU_ALLOC_PAGES_LENGTH ((1 << 28) / (GPU_PAGE_SIZE))
 
-struct gpu_memory {
-  VkDeviceMemory handle;
-  void* pointer;
-  uint32_t refs;
-};
-
 typedef enum {
   GPU_MEMORY_BUFFER_STATIC,
   GPU_MEMORY_BUFFER_STREAM,
@@ -133,6 +127,13 @@ typedef enum {
   GPU_MEMORY_TEXTURE_LAZY_D32FS8,
   GPU_MEMORY_COUNT
 } gpu_memory_type;
+
+struct gpu_memory {
+  VkDeviceMemory handle;
+  void* pointer;
+  uint32_t refs;
+  gpu_memory_type type;
+};
 
 typedef struct {
   uint16_t allocated : 1;
@@ -3457,6 +3458,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
         memory->pointer = NULL;
       }
 
+      memory->type = type;
       memory->refs = 1;
 
       // Memory only receives an allocator if it can host multiple allocations
@@ -3486,18 +3488,11 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 
 static void release(gpu_memory* memory, VkDeviceSize offset) {
   if (memory) {
-    gpu_allocator* allocator = NULL;
-
-    for (uint32_t i = 0; i < COUNTOF(state.allocators); i++) {
-      if (state.allocators[i].block == memory) {
-        allocator = &state.allocators[i];
-        break;
-      }
-    }
+    gpu_allocator* allocator = &state.allocators[state.allocatorLookup[memory->type]];
       
     if (--memory->refs == 0) {
-      // If the memory has an allocator, reset it, otherwise free the memory
-      if (allocator) {
+      // If the allocator manages this block, reset it, otherwise free the memory
+      if (allocator->block == memory) {
         gpu_alloc_entry* region = &allocator->regions[0];
         region->allocated = false;
         region->pageCount = allocator->pageCount;
@@ -3505,7 +3500,7 @@ static void release(gpu_memory* memory, VkDeviceSize offset) {
         condemn(memory->handle, VK_OBJECT_TYPE_DEVICE_MEMORY);
         memory->handle = NULL;
       }
-    } else {
+    } else if (allocator->block == memory) {
       // Mark the region for this allocation as free
       uint32_t pageOffset = offset / GPU_PAGE_SIZE;
       gpu_alloc_entry* region = &allocator->regions[pageOffset];

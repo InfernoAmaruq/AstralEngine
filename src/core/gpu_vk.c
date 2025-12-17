@@ -3402,7 +3402,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 
   if (allocator->block) {
     // Search through regions for a free region of sufficient size
-    for(uint32_t i = 0; i < allocator->pageCount; i += allocator->regions[i].pageCount) {
+    for (uint32_t i = 0; i < allocator->pageCount; i += allocator->regions[i].pageCount) {
       gpu_alloc_entry* region = &allocator->regions[i];
       if (!region->allocated && requiredPages <= region->pageCount) {
         region->allocated = true;
@@ -3465,18 +3465,18 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
       // (i.e. it has a fixed block size and this block is not full/oversized)
       if(blockSize && (requiredPages * GPU_PAGE_SIZE) < blockSize) {
         allocator->block = memory;
-  
+
         // Mark the initial region
         allocator->pageCount = blockSize / GPU_PAGE_SIZE;
         allocator->regions[0].allocated = true;
         allocator->regions[0].pageCount = requiredPages;
-  
+
         // Mark the free region at the end. We know there's a free region
         // because we don't let allocators manage full or oversized blocks
         allocator->regions[requiredPages].allocated = false;
         allocator->regions[requiredPages].pageCount = allocator->pageCount - requiredPages;
       }
-      
+
       *offset = 0;
       return memory;
     }
@@ -3489,7 +3489,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 static void release(gpu_memory* memory, VkDeviceSize offset) {
   if (memory) {
     gpu_allocator* allocator = &state.allocators[state.allocatorLookup[memory->type]];
-      
+
     if (--memory->refs == 0) {
       // If the allocator manages this block, reset it, otherwise free the memory
       if (allocator->block == memory) {
@@ -3518,7 +3518,7 @@ static void release(gpu_memory* memory, VkDeviceSize offset) {
       // See if we can coalesce with the previous region. We have to loop
       // through regions from the beginning because we don't know where the
       // last region started
-      for(uint32_t i = 0; i < pageOffset; i += allocator->regions[i].pageCount) {
+      for (uint32_t i = 0; i < pageOffset; i += allocator->regions[i].pageCount) {
         gpu_alloc_entry* previousRegion = &allocator->regions[i];
         if (i + previousRegion->pageCount == pageOffset) {
           // We found the previous region, coalesce if it's free

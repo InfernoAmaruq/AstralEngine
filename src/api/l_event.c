@@ -344,7 +344,6 @@ int luaopen_lovr_event(lua_State* L) {
   lua_newtable(L);
   luax_register(L, lovrEvent);
 
-  // Store nextEvent in the registry to avoid creating a closure every time we poll for events.
   lua_pushcfunction(L, nextEvent);
   lua_pushcclosure(L, l_lovrEventPoll, 1);
   lua_setfield(L, -2, "poll");

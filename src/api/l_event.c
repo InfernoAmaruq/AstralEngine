@@ -36,8 +36,6 @@ StringEntry lovrEventType[] = {
   { 0 }
 };
 
-static thread_local int pollRef;
-
 static void _luax_checkvariant(lua_State* L, int index, Variant* variant, int depth) {
   luax_check(L, depth <= 128, "Table contains cycles!");
 
@@ -304,7 +302,7 @@ static int l_lovrEventClear(lua_State* L) {
 }
 
 static int l_lovrEventPoll(lua_State* L) {
-  lua_rawgeti(L, LUA_REGISTRYINDEX, pollRef);
+  lua_pushvalue(L, lua_upvalueindex(1));
   return 1;
 }
 
@@ -336,7 +334,6 @@ static int l_lovrEventRestart(lua_State* L) {
 
 static const luaL_Reg lovrEvent[] = {
   { "clear", l_lovrEventClear },
-  { "poll", l_lovrEventPoll },
   { "push", l_lovrEventPush },
   { "quit", l_lovrEventQuit },
   { "restart", l_lovrEventRestart },
@@ -349,7 +346,8 @@ int luaopen_lovr_event(lua_State* L) {
 
   // Store nextEvent in the registry to avoid creating a closure every time we poll for events.
   lua_pushcfunction(L, nextEvent);
-  pollRef = luaL_ref(L, LUA_REGISTRYINDEX);
+  lua_pushcclosure(L, l_lovrEventPoll, 1);
+  lua_setfield(L, -2, "poll");
 
   luax_assert(L, lovrEventInit());
   luax_atexit(L, lovrEventDestroy);

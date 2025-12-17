@@ -104,9 +104,8 @@ size_t gpu_sizeof_tally(void) { return sizeof(gpu_tally); }
 // an entry for every page, which they use to track regions of allocated and
 // free spaces.
 
-#define GPU_PAGE_BITS 14
-#define GPU_PAGE_SIZE (1 << (GPU_PAGE_BITS))
-#define GPU_ALLOC_PAGES_LENGTH ((1 << 28) / (GPU_PAGE_SIZE))
+#define PAGE_SIZE (1 << 14)
+#define MAX_PAGES ((1 << 26) / PAGE_SIZE)
 
 typedef enum {
   GPU_MEMORY_BUFFER_STATIC,
@@ -142,10 +141,10 @@ typedef struct {
 
 typedef struct {
   gpu_memory* block;
-  gpu_alloc_entry regions[GPU_ALLOC_PAGES_LENGTH];
   uint32_t pageCount;
-  uint16_t memoryType;
-  uint16_t memoryFlags;
+  uint32_t memoryType;
+  VkMemoryPropertyFlags memoryFlags;
+  gpu_alloc_entry regions[MAX_PAGES];
 } gpu_allocator;
 
 typedef struct {
@@ -3381,24 +3380,24 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     [GPU_MEMORY_BUFFER_STREAM] = 0,
     [GPU_MEMORY_BUFFER_UPLOAD] = 0,
     [GPU_MEMORY_BUFFER_DOWNLOAD] = 0,
-    [GPU_MEMORY_TEXTURE_COLOR] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_D16] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_D24] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_D32F] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_D24S8] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_D32FS8] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_COLOR] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_D16] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_D24] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_D32F] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_D24S8] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_D32FS8] = 1 << 28
+    [GPU_MEMORY_TEXTURE_COLOR] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_D16] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_D24] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_D32F] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_D24S8] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_D32FS8] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_COLOR] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_D16] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_D24] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_D32F] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_D24S8] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_D32FS8] = 1 << 26
   };
 
   uint32_t blockSize = blockSizes[type];
-  ASSERT(blockSize <= (GPU_ALLOC_PAGES_LENGTH * GPU_PAGE_SIZE), "Block size larger than allocator can handle") return NULL;
+  ASSERT(blockSize <= (MAX_PAGES * PAGE_SIZE), "Block size larger than allocator can handle") return NULL;
 
-  uint32_t requiredPages = ALIGN(info.size, GPU_PAGE_SIZE) / GPU_PAGE_SIZE;
+  uint32_t requiredPages = ALIGN(info.size, PAGE_SIZE) / PAGE_SIZE;
 
   if (allocator->block) {
     // Search through regions for a free region of sufficient size
@@ -3426,7 +3425,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
         }
 
         allocator->block->refs++;
-        *offset = i * GPU_PAGE_SIZE;
+        *offset = i * PAGE_SIZE;
         return allocator->block;
       }
     }
@@ -3463,11 +3462,11 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 
       // Memory only receives an allocator if it can host multiple allocations
       // (i.e. it has a fixed block size and this block is not full/oversized)
-      if(blockSize && (requiredPages * GPU_PAGE_SIZE) < blockSize) {
+      if(blockSize && (requiredPages * PAGE_SIZE) < blockSize) {
         allocator->block = memory;
 
         // Mark the initial region
-        allocator->pageCount = blockSize / GPU_PAGE_SIZE;
+        allocator->pageCount = blockSize / PAGE_SIZE;
         allocator->regions[0].allocated = true;
         allocator->regions[0].pageCount = requiredPages;
 
@@ -3502,7 +3501,7 @@ static void release(gpu_memory* memory, VkDeviceSize offset) {
       }
     } else if (allocator->block == memory) {
       // Mark the region for this allocation as free
-      uint32_t pageOffset = offset / GPU_PAGE_SIZE;
+      uint32_t pageOffset = offset / PAGE_SIZE;
       gpu_alloc_entry* region = &allocator->regions[pageOffset];
       region->allocated = false;
 

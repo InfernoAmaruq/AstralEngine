@@ -143,6 +143,7 @@ typedef struct {
   gpu_memory* block;
   uint32_t pageCount;
   uint32_t memoryType;
+  uint32_t fallbackMemoryType;
   VkMemoryPropertyFlags memoryFlags;
   gpu_alloc_entry regions[MAX_PAGES];
 } gpu_allocator;
@@ -3098,20 +3099,26 @@ bool gpu_init(gpu_config* config) {
 
       VkMemoryPropertyFlags fallback = i == GPU_MEMORY_BUFFER_STATIC ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : hostVisible;
 
+      // Find fallback memory type
       for (uint32_t j = 0; j < memoryProperties.memoryTypeCount; j++) {
-        if (~requirements.memoryTypeBits & (1 << j)) {
-          continue;
+        if (requirements.memoryTypeBits & (1 << j)) {
+          if ((memoryTypes[j].propertyFlags & fallback) == fallback) {
+            allocator->memoryFlags = memoryTypes[j].propertyFlags;
+            allocator->fallbackMemoryType = j;
+            allocator->memoryType = j;
+            break;
+          }
         }
+      }
 
-        if ((memoryTypes[j].propertyFlags & bufferFlags[i]) == bufferFlags[i]) {
-          allocator->memoryFlags = memoryTypes[j].propertyFlags;
-          allocator->memoryType = j;
-          break;
-        }
-
-        if ((memoryTypes[j].propertyFlags & fallback) == fallback) {
-          allocator->memoryFlags = memoryTypes[j].propertyFlags;
-          allocator->memoryType = j;
+      // Find memory type
+      for (uint32_t j = 0; j < memoryProperties.memoryTypeCount; j++) {
+        if (requirements.memoryTypeBits & (1 << j)) {
+          if ((memoryTypes[j].propertyFlags & bufferFlags[i]) == bufferFlags[i]) {
+            allocator->memoryFlags = memoryTypes[j].propertyFlags;
+            allocator->memoryType = j;
+            break;
+          }
         }
       }
     }
@@ -3187,6 +3194,7 @@ bool gpu_init(gpu_config* config) {
       if (!merged) {
         uint32_t index = allocatorCount++;
         state.allocators[index].memoryFlags = memoryFlags;
+        state.allocators[index].fallbackMemoryType = memoryFlags;
         state.allocators[index].memoryType = memoryType;
         state.allocatorLookup[i] = index;
       }
@@ -3442,9 +3450,19 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
         .memoryTypeIndex = allocator->memoryType
       };
 
-      VK(vkAllocateMemory(state.device, &memoryInfo, NULL, &memory->handle), "vkAllocateMemory") {
-        allocator->block = NULL;
-        return NULL;
+      VkResult result = vkAllocateMemory(state.device, &memoryInfo, NULL, &memory->handle);
+
+      if (result < 0) {
+        // If memory allocation failed, try the fallback memory type, if one exists
+        if (allocator->fallbackMemoryType != allocator->memoryType) {
+          memoryInfo.memoryTypeIndex = allocator->fallbackMemoryType;
+          result = vkAllocateMemory(state.device, &memoryInfo, NULL, &memory->handle);
+        }
+
+        VK(result, "vkAllocateMemory") {
+          allocator->block = NULL;
+          return NULL;
+        }
       }
 
       if (allocator->memoryFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {

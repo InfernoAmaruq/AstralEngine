@@ -549,6 +549,22 @@ static int l_lovrGraphicsGetLimits(lua_State* L) {
   return 1;
 }
 
+static int l_lovrGraphicsGetStats(lua_State* L) {
+  GraphicsStats stats;
+  lovrGraphicsGetStats(&stats);
+
+  lua_newtable(L);
+  lua_pushnumber(L, (lua_Number) stats.bufferMemory), lua_setfield(L, -2, "bufferMemory");
+  lua_pushnumber(L, (lua_Number) stats.textureMemory), lua_setfield(L, -2, "textureMemory");
+
+  if (stats.memoryBudget != ~0ull && stats.memoryUsage != ~0ull) {
+    lua_pushnumber(L, (lua_Number) stats.memoryBudget), lua_setfield(L, -2, "memoryBudget");
+    lua_pushnumber(L, (lua_Number) stats.memoryUsage), lua_setfield(L, -2, "memoryUsage");
+  }
+
+  return 1;
+}
+
 static int l_lovrGraphicsIsFormatSupported(lua_State* L) {
   TextureFormat format = luax_checkenum(L, 1, TextureFormat, NULL);
   uint32_t features = 0;
@@ -1580,6 +1596,7 @@ static const luaL_Reg lovrGraphics[] = {
   { "getDevice", l_lovrGraphicsGetDevice },
   { "getFeatures", l_lovrGraphicsGetFeatures },
   { "getLimits", l_lovrGraphicsGetLimits },
+  { "getStats", l_lovrGraphicsGetStats },
   { "isFormatSupported", l_lovrGraphicsIsFormatSupported },
   { "isHDR", l_lovrGraphicsIsHDR },
   { "getBackgroundColor", l_lovrGraphicsGetBackgroundColor },

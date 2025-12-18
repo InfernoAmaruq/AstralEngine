@@ -87,6 +87,13 @@ typedef struct {
   float pointSize;
 } GraphicsLimits;
 
+typedef struct {
+  uint64_t bufferMemory;
+  uint64_t textureMemory;
+  uint64_t memoryBudget;
+  uint64_t memoryUsage;
+} GraphicsStats;
+
 enum {
   TEXTURE_FEATURE_SAMPLE  = (1 << 0),
   TEXTURE_FEATURE_RENDER  = (1 << 1),
@@ -102,6 +109,7 @@ bool lovrGraphicsIsInitialized(void);
 void lovrGraphicsGetDevice(GraphicsDevice* device);
 void lovrGraphicsGetFeatures(GraphicsFeatures* features);
 void lovrGraphicsGetLimits(GraphicsLimits* limits);
+void lovrGraphicsGetStats(GraphicsStats* stats);
 uint32_t lovrGraphicsGetFormatSupport(uint32_t format, uint32_t features);
 void lovrGraphicsGetShaderCache(void* data, size_t* size);
 

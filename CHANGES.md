@@ -36,6 +36,7 @@ dev
 - Add `t.window.centered`.
 - Add `Mat4:setPosition/Orientation/Scale/Pose`.
 - Add `lovr.data.newBlobView`.
+- Add `lovr.graphics.getStats`.
 
 ### Change
 
@@ -77,6 +78,7 @@ dev
 - Fix issue where buffer memory wasn't recycled effectively.
 - Fix thread stack traces to use the correct filename.
 - Fix `t.headset.seated`.
+- Fix multiple issues with GPU memory allocation.
 
 ### Deprecate
 

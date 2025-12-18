@@ -88,6 +88,7 @@ struct Texture {
   Texture* root;
   uint32_t baseLayer;
   uint32_t baseLevel;
+  uint64_t memorySize;
   TextureInfo info;
 };
 
@@ -556,6 +557,7 @@ static struct {
   gpu_device_info device;
   gpu_features features;
   gpu_limits limits;
+  GraphicsStats stats;
   gpu_stream* stream;
   gpu_barrier barrier;
   gpu_barrier transferBarrier;
@@ -980,6 +982,15 @@ void lovrGraphicsGetLimits(GraphicsLimits* limits) {
   limits->instances = state.limits.instances;
   limits->anisotropy = state.limits.anisotropy;
   limits->pointSize = state.limits.pointSize;
+}
+
+void lovrGraphicsGetStats(GraphicsStats* stats) {
+  if (!gpu_get_memory_info(&state.stats.memoryBudget, &state.stats.memoryUsage)) {
+    state.stats.memoryBudget = ~0ull;
+    state.stats.memoryUsage = ~0ull;
+  }
+
+  *stats = state.stats;
 }
 
 uint32_t lovrGraphicsGetFormatSupport(uint32_t format, uint32_t features) {
@@ -2181,7 +2192,7 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
   }
 
   buffer->sync->barrier = &state.barrier;
-
+  state.stats.bufferMemory += size;
   return buffer;
 }
 
@@ -2208,6 +2219,7 @@ Buffer* lovrBufferCreateView(Buffer* parent, uint32_t offset, uint32_t extent) {
 void lovrBufferDestroy(void* ref) {
   Buffer* buffer = ref;
   if (buffer->root == buffer) {
+    state.stats.bufferMemory -= MIN(state.stats.bufferMemory, buffer->info.size);
     if (buffer->sync->lastTransferRead == state.tick || buffer->sync->lastTransferWrite == state.tick) {
       lovrGraphicsSubmit(NULL, 0);
     }
@@ -2579,7 +2591,15 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
     texture->sync->lastTransferWrite = state.tick;
   }
 
+  for (uint32_t i = 0; i < mipmaps; i++) {
+    uint32_t width = MAX(info->width >> i, 1);
+    uint32_t height = MAX(info->height >> i, 1);
+    uint32_t depth = info->type == TEXTURE_3D ? MAX(info->layers >> i, 1) : info->layers;
+    texture->memorySize += measureTexture(info->format, width, height, depth) * samples;
+  }
+
   texture->sync->barrier = &state.barrier;
+  state.stats.textureMemory += texture->memorySize;
   return texture;
 }
 
@@ -2733,7 +2753,10 @@ void lovrTextureDestroy(void* ref) {
     if (texture->storageView && texture->storageView != texture->gpu) gpu_texture_destroy(texture->storageView), lovrFree(texture->storageView);
     if (texture->gpu) gpu_texture_destroy(texture->gpu);
   }
-  if (texture->root == texture) lovrFree(texture->sync);
+  if (texture->root == texture) {
+    state.stats.textureMemory -= texture->memorySize;
+    lovrFree(texture->sync);
+  }
   lovrFree(texture);
 }
 

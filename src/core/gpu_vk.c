@@ -142,6 +142,7 @@ typedef struct {
 typedef struct {
   gpu_memory* block;
   uint32_t pageCount;
+  uint32_t heapIndex;
   uint32_t memoryType;
   uint32_t fallbackMemoryType;
   VkMemoryPropertyFlags memoryFlags;
@@ -205,6 +206,7 @@ typedef struct {
   bool scalarBlockLayout;
   bool foveation;
   bool pipelineCacheControl;
+  bool memoryBudget;
   bool cubicFilter;
 } gpu_extensions;
 
@@ -293,7 +295,7 @@ static void error(const char* message);
   X(vkEnumeratePhysicalDevices)\
   X(vkGetPhysicalDeviceProperties2)\
   X(vkGetPhysicalDeviceFeatures2)\
-  X(vkGetPhysicalDeviceMemoryProperties)\
+  X(vkGetPhysicalDeviceMemoryProperties2)\
   X(vkGetPhysicalDeviceFormatProperties)\
   X(vkGetPhysicalDeviceQueueFamilyProperties)\
   X(vkGetPhysicalDeviceSurfaceSupportKHR)\
@@ -2800,6 +2802,7 @@ bool gpu_init(gpu_config* config) {
       { "VK_EXT_scalar_block_layout", true, &state.extensions.scalarBlockLayout },
       { "VK_EXT_fragment_density_map", true, &state.extensions.foveation },
       { "VK_EXT_pipeline_creation_cache_control", true, &state.extensions.pipelineCacheControl },
+      { "VK_EXT_memory_budget", true, &state.extensions.memoryBudget },
       { "VK_IMG_filter_cubic", true, &state.extensions.cubicFilter }
     };
 
@@ -3057,9 +3060,9 @@ bool gpu_init(gpu_config* config) {
   }
 
   { // Allocators (without VK_KHR_maintenance4, need to create objects to get memory requirements)
-    VkPhysicalDeviceMemoryProperties memoryProperties;
-    vkGetPhysicalDeviceMemoryProperties(state.adapter, &memoryProperties);
-    VkMemoryType* memoryTypes = memoryProperties.memoryTypes;
+    VkPhysicalDeviceMemoryProperties2 memory = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2 };
+    vkGetPhysicalDeviceMemoryProperties2(state.adapter, &memory);
+    VkMemoryType* memoryTypes = memory.memoryProperties.memoryTypes;
 
     VkMemoryPropertyFlags hostVisible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
@@ -3100,10 +3103,11 @@ bool gpu_init(gpu_config* config) {
       VkMemoryPropertyFlags fallback = i == GPU_MEMORY_BUFFER_STATIC ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : hostVisible;
 
       // Find fallback memory type
-      for (uint32_t j = 0; j < memoryProperties.memoryTypeCount; j++) {
+      for (uint32_t j = 0; j < memory.memoryProperties.memoryTypeCount; j++) {
         if (requirements.memoryTypeBits & (1 << j)) {
           if ((memoryTypes[j].propertyFlags & fallback) == fallback) {
             allocator->memoryFlags = memoryTypes[j].propertyFlags;
+            allocator->heapIndex = memoryTypes[j].heapIndex;
             allocator->fallbackMemoryType = j;
             allocator->memoryType = j;
             break;
@@ -3112,10 +3116,11 @@ bool gpu_init(gpu_config* config) {
       }
 
       // Find memory type
-      for (uint32_t j = 0; j < memoryProperties.memoryTypeCount; j++) {
+      for (uint32_t j = 0; j < memory.memoryProperties.memoryTypeCount; j++) {
         if (requirements.memoryTypeBits & (1 << j)) {
           if ((memoryTypes[j].propertyFlags & bufferFlags[i]) == bufferFlags[i]) {
             allocator->memoryFlags = memoryTypes[j].propertyFlags;
+            allocator->heapIndex = memoryTypes[j].heapIndex;
             allocator->memoryType = j;
             break;
           }
@@ -3170,7 +3175,7 @@ bool gpu_init(gpu_config* config) {
       vkDestroyImage(state.device, image, NULL);
 
       uint16_t memoryType, memoryFlags;
-      for (uint32_t j = 0; j < memoryProperties.memoryTypeCount; j++) {
+      for (uint32_t j = 0; j < memory.memoryProperties.memoryTypeCount; j++) {
         if ((requirements.memoryTypeBits & (1 << j)) && (memoryTypes[j].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
           memoryFlags = memoryTypes[j].propertyFlags;
           memoryType = j;
@@ -3194,7 +3199,8 @@ bool gpu_init(gpu_config* config) {
       if (!merged) {
         uint32_t index = allocatorCount++;
         state.allocators[index].memoryFlags = memoryFlags;
-        state.allocators[index].fallbackMemoryType = memoryFlags;
+        state.allocators[index].heapIndex = memoryTypes[memoryType].heapIndex;
+        state.allocators[index].fallbackMemoryType = memoryType;
         state.allocators[index].memoryType = memoryType;
         state.allocatorLookup[i] = index;
       }
@@ -3281,6 +3287,39 @@ void gpu_destroy(void) {
 
 char* gpu_get_error(void) {
   return thread.error;
+}
+
+bool gpu_get_memory_info(uint64_t* budget, uint64_t* usage) {
+  if (!state.extensions.memoryBudget) {
+    return false;
+  }
+
+  VkPhysicalDeviceMemoryBudgetPropertiesEXT budgetInfo = {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT
+  };
+
+  VkPhysicalDeviceMemoryProperties2 properties = {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,
+    .pNext = &budgetInfo
+  };
+
+  vkGetPhysicalDeviceMemoryProperties2(state.adapter, &properties);
+
+  // This currently only exposes the stats for the "primary" VRAM heap, which is the heap(s) used
+  // for STATIC buffers and COLOR textures.  Usually these use the same heap, but if they're
+  // different then we sum them together.  This isn't perfect, but is usually good enough.
+  uint32_t bufferHeap = state.allocators[state.allocatorLookup[GPU_MEMORY_BUFFER_STATIC]].heapIndex;
+  uint32_t textureHeap = state.allocators[state.allocatorLookup[GPU_MEMORY_TEXTURE_COLOR]].heapIndex;
+
+  *budget = budgetInfo.heapBudget[bufferHeap];
+  *usage = budgetInfo.heapUsage[bufferHeap];
+
+  if (textureHeap != bufferHeap) {
+    *budget += budgetInfo.heapUsage[textureHeap];
+    *usage += budgetInfo.heapUsage[textureHeap];
+  }
+
+  return true;
 }
 
 bool gpu_submit(gpu_stream** streams, uint32_t count, uint32_t tick) {

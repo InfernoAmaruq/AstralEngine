@@ -450,7 +450,11 @@ end
 
 setmetatable(quaternion, {
   __call = function(self, ...)
-    return quaternion.angleaxis(...)
+    if ... then
+      return quaternion.angleaxis(...)
+    else
+      return quaternion.pack(0, 0, 0, 1)
+    end
   end
 })
 

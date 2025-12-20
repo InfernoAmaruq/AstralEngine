@@ -413,9 +413,9 @@ static int l_lovrModelDataGetMeshIndex(lua_State* L) {
   }
 
   if (model->meta.indexSize == 4) {
-    lua_pushinteger(L, ((uint32_t*) model->indices)[mesh->indexOffset + index] + mesh->parts[part].baseVertex);
+    lua_pushinteger(L, ((uint32_t*) model->indices)[mesh->indexOffset + index] + mesh->parts[part].baseVertex + 1);
   } else {
-    lua_pushinteger(L, ((uint16_t*) model->indices)[mesh->indexOffset + index] + mesh->parts[part].baseVertex);
+    lua_pushinteger(L, ((uint16_t*) model->indices)[mesh->indexOffset + index] + mesh->parts[part].baseVertex + 1);
   }
 
   return 1;

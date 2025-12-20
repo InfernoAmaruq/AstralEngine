@@ -1370,6 +1370,10 @@ bool lovrHeadsetConnect(void) {
     bindingCount[PROFILE_TOUCH_PRO] = 0;
   }
 
+  if (!state.extensions.frameController) {
+    bindingCount[PROFILE_FRAME] = 0;
+  }
+
   // Remove bindings for unsupported extensions
 
   #define REMOVE_BINDINGS(bindings, length, index, count)\

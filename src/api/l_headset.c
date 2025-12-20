@@ -74,6 +74,11 @@ StringEntry lovrDeviceButton[] = {
   [BUTTON_B] = ENTRY("b"),
   [BUTTON_X] = ENTRY("x"),
   [BUTTON_Y] = ENTRY("y"),
+  [BUTTON_DPAD_UP] = ENTRY("dpup"),
+  [BUTTON_DPAD_DOWN] = ENTRY("dpdown"),
+  [BUTTON_DPAD_LEFT] = ENTRY("dpleft"),
+  [BUTTON_DPAD_RIGHT] = ENTRY("dpright"),
+  [BUTTON_BUMPER] = ENTRY("bumper"),
   [BUTTON_NIB] = ENTRY("nib"),
   { 0 }
 };

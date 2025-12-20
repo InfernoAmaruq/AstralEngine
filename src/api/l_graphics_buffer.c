@@ -361,7 +361,7 @@ static int luax_pushfieldn(lua_State* L, DataType type, char* data) {
     case TYPE_U8x4: for (int i = 0; i < 4; i++) lua_pushinteger(L, p.u8[i]); return 4;
     case TYPE_SN8x4: for (int i = 0; i < 4; i++) lua_pushnumber(L, MAX((float) p.i8[i] / 127, -1.f)); return 4;
     case TYPE_UN8x4: for (int i = 0; i < 4; i++) lua_pushnumber(L, (float) p.u8[i] / 255); return 4;
-    case TYPE_SN10x3: for (int i = 0; i < 3; i++) lua_pushnumber(L, (float) ((p.i32[0] >> (10 * i)) & 0x3ff) / 511.f); return 3;
+    case TYPE_SN10x3: for (int i = 0; i < 3; i++) lua_pushnumber(L, MAX(((int32_t) (p.i32[0] << (22 - 10 * i)) >> 22) / 511.f, -1.f)); return 3;
     case TYPE_UN10x3: for (int i = 0; i < 3; i++) lua_pushnumber(L, (float) ((p.u32[0] >> (10 * i)) & 0x3ff) / 1023.f); return 3;
     case TYPE_I16x2: for (int i = 0; i < 2; i++) lua_pushinteger(L, p.i16[i]); return 2;
     case TYPE_I16x4: for (int i = 0; i < 4; i++) lua_pushinteger(L, p.i16[i]); return 4;

@@ -382,18 +382,18 @@ static int l_lovrModelDataGetMeshVertex(lua_State* L) {
   lua_pushnumber(L, vertex->position.x);
   lua_pushnumber(L, vertex->position.y);
   lua_pushnumber(L, vertex->position.z);
-  lua_pushnumber(L, (float) ((vertex->normal >>  0) & 0x3ff) / 511.f);
-  lua_pushnumber(L, (float) ((vertex->normal >> 10) & 0x3ff) / 511.f);
-  lua_pushnumber(L, (float) ((vertex->normal >> 20) & 0x3ff) / 511.f);
+  lua_pushnumber(L, MAX(((int32_t) (vertex->normal << 22) >> 22) / 511.f, -1.f));
+  lua_pushnumber(L, MAX(((int32_t) (vertex->normal << 12) >> 22) / 511.f, -1.f));
+  lua_pushnumber(L, MAX(((int32_t) (vertex->normal <<  2) >> 22) / 511.f, -1.f));
   lua_pushnumber(L, vertex->uv.u);
   lua_pushnumber(L, vertex->uv.v);
   lua_pushinteger(L, vertex->color.r);
   lua_pushinteger(L, vertex->color.g);
   lua_pushinteger(L, vertex->color.b);
   lua_pushinteger(L, vertex->color.a);
-  lua_pushnumber(L, (float) ((vertex->tangent >>  0) & 0x3ff) / 511.f);
-  lua_pushnumber(L, (float) ((vertex->tangent >> 10) & 0x3ff) / 511.f);
-  lua_pushnumber(L, (float) ((vertex->tangent >> 20) & 0x3ff) / 511.f);
+  lua_pushnumber(L, MAX(((int32_t) (vertex->tangent << 22) >> 22) / 511.f, -1.f));
+  lua_pushnumber(L, MAX(((int32_t) (vertex->tangent << 12) >> 22) / 511.f, -1.f));
+  lua_pushnumber(L, MAX(((int32_t) (vertex->tangent <<  2) >> 22) / 511.f, -1.f));
   return 15;
 }
 

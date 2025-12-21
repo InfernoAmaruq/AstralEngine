@@ -1414,6 +1414,16 @@ bool lovrHeadsetConnect(void) {
     }
   }
 
+  if (!state.extensions.microgestures) {
+    for (uint32_t i = 0; i < bindingCount[PROFILE_HAND]; i++) {
+      if (bindings[PROFILE_HAND][i].action == ACTION_DPAD_UP_DOWN) {
+        REMOVE_BINDINGS(bindings[PROFILE_HAND], bindingCount[PROFILE_HAND], i, 8);
+        bindingCount[PROFILE_HAND] -= 8;
+        break;
+      }
+    }
+  }
+
   XrPath path;
   XrActionSuggestedBinding suggestedBindings[64];
   for (uint32_t i = 0; i < MAX_PROFILES; i++) {

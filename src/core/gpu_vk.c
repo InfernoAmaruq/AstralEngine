@@ -3444,7 +3444,8 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
   uint32_t blockSize = blockSizes[type];
   ASSERT(blockSize <= (MAX_PAGES * PAGE_SIZE), "Block size larger than allocator can handle") return NULL;
 
-  uint32_t requiredPages = ALIGN(info.size, PAGE_SIZE) / PAGE_SIZE;
+  uint32_t align = MAX(info.alignment, PAGE_SIZE);
+  uint32_t requiredPages = ALIGN(info.size, align) / PAGE_SIZE;
 
   if (allocator->block) {
     // Search through regions for a free region of sufficient size
@@ -3472,7 +3473,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
         }
 
         allocator->block->refs++;
-        *offset = i * PAGE_SIZE;
+        *offset = ALIGN(i * PAGE_SIZE, align);
         return allocator->block;
       }
     }

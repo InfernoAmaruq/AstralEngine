@@ -339,6 +339,7 @@ static struct {
     bool layerEquirect2;
     bool layerSettings;
     bool localFloor;
+    bool microgestures;
     bool ml2Controller;
     bool mxInk;
     bool overlay;
@@ -506,6 +507,7 @@ bool lovrHeadsetConnect(void) {
     { "XR_FB_touch_controller_pro", &state.extensions.touchPro, true },
     { "XR_LOGITECH_mx_ink_stylus_interaction", &state.extensions.mxInk, true },
     { "XR_META_automatic_layer_filter", &state.extensions.layerAutoFilter, true },
+    { "XR_META_hand_tracking_microgestures", &state.extensions.microgestures, true },
     { "XR_META_passthrough_preferences", &state.extensions.passthroughPreferences, true },
     { "XR_ML_ml2_controller_interaction", &state.extensions.ml2Controller, true },
     { "XR_MND_headless", &state.extensions.headless, true },
@@ -1271,6 +1273,14 @@ bool lovrHeadsetConnect(void) {
       { ACTION_GRIP_DOWN, "/user/hand/right/input/grasp_ext/value" },
       { ACTION_GRIP_AXIS, "/user/hand/left/input/grasp_ext/value" },
       { ACTION_GRIP_AXIS, "/user/hand/right/input/grasp_ext/value" },
+      { ACTION_DPAD_UP_DOWN, "/user/hand/left/input/swipe_forward_meta/click" },
+      { ACTION_DPAD_UP_DOWN, "/user/hand/right/input/swipe_forward_meta/click" },
+      { ACTION_DPAD_DOWN_DOWN, "/user/hand/left/input/swipe_backward_meta/click" },
+      { ACTION_DPAD_DOWN_DOWN, "/user/hand/right/input/swipe_backward_meta/click" },
+      { ACTION_DPAD_LEFT_DOWN, "/user/hand/left/input/swipe_left_meta/click" },
+      { ACTION_DPAD_LEFT_DOWN, "/user/hand/right/input/swipe_left_meta/click" },
+      { ACTION_DPAD_RIGHT_DOWN, "/user/hand/left/input/swipe_right_meta/click" },
+      { ACTION_DPAD_RIGHT_DOWN, "/user/hand/right/input/swipe_right_meta/click" },
       { 0, NULL }
     },
     [PROFILE_FRAME] = (Binding[]) {

@@ -3451,19 +3451,25 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     // Search through regions for a free region of sufficient size
     for (uint32_t i = 0; i < allocator->pageCount; i += allocator->regions[i].pageCount) {
       gpu_alloc_entry* region = &allocator->regions[i];
-      if (!region->allocated && requiredPages <= region->pageCount) {
+
+      // The alignment may require us to start the allocation later than the
+      // beginning of the region
+      uint32_t offsetPages = (ALIGN(i * PAGE_SIZE, align) / PAGE_SIZE) - i;
+      uint32_t totalPages = offsetPages + requiredPages;
+
+      if (!region->allocated && totalPages <= region->pageCount) {
         region->allocated = true;
 
         // If there's leftover room, mark the leftover free region, and shrink
         // the current region
-        if (requiredPages < region->pageCount) {
-          gpu_alloc_entry* freeRegion = &allocator->regions[i + requiredPages];
+        if (totalPages < region->pageCount) {
+          gpu_alloc_entry* freeRegion = &allocator->regions[i + totalPages];
           freeRegion->allocated = false;
-          freeRegion->pageCount = region->pageCount - requiredPages;
-          region->pageCount = requiredPages;
+          freeRegion->pageCount = region->pageCount - totalPages;
+          region->pageCount = totalPages;
 
           // Coalesce with the next region, if possible
-          uint32_t nextIndex = i + requiredPages + freeRegion->pageCount;
+          uint32_t nextIndex = i + totalPages + freeRegion->pageCount;
           if (nextIndex < allocator->pageCount) {
             gpu_alloc_entry* nextRegion = &allocator->regions[nextIndex];
             if (!nextRegion->allocated) {
@@ -3473,7 +3479,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
         }
 
         allocator->block->refs++;
-        *offset = ALIGN(i * PAGE_SIZE, align);
+        *offset = (i + offsetPages) * PAGE_SIZE;
         return allocator->block;
       }
     }

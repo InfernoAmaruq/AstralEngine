@@ -2220,9 +2220,6 @@ void lovrBufferDestroy(void* ref) {
   Buffer* buffer = ref;
   if (buffer->root == buffer) {
     state.stats.bufferMemory -= MIN(state.stats.bufferMemory, buffer->info.size);
-    if (buffer->sync->lastTransferRead == state.tick || buffer->sync->lastTransferWrite == state.tick) {
-      lovrGraphicsSubmit(NULL, 0);
-    }
     gpu_buffer_destroy(buffer->gpu);
     lovrFree(buffer->sync);
   } else {
@@ -2741,9 +2738,6 @@ void lovrTextureDestroy(void* ref) {
   if (texture != state.window) {
     if (texture->root == texture || texture->info.label != texture->root->info.label) {
       lovrFree((char*) texture->info.label);
-    }
-    if (texture->sync->lastTransferRead == state.tick || texture->sync->lastTransferWrite == state.tick) {
-      lovrGraphicsSubmit(NULL, 0);
     }
     lovrRelease(texture->sampler, lovrSamplerDestroy);
     lovrRelease(texture->material, lovrMaterialDestroy);

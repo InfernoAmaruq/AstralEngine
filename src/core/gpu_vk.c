@@ -149,16 +149,17 @@ typedef struct {
   gpu_alloc_entry regions[GPU_MAX_PAGES];
 } gpu_allocator;
 
-typedef struct {
-  void* handle;
+typedef struct gpu_victim {
+  struct gpu_victim* next;
   VkObjectType type;
   uint32_t tick;
+  void* handle;
 } gpu_victim;
 
 typedef struct {
-  uint32_t head;
-  uint32_t tail;
-  gpu_victim data[1024];
+  gpu_victim* head;
+  gpu_victim* tail;
+  gpu_victim* pool;
 } gpu_morgue;
 
 typedef struct {
@@ -257,7 +258,6 @@ enum { LINEAR, SRGB };
 #define VK(f, s) if (!vkcheck(f, s))
 #define ASSERT(c, s) if (!(c) && (error(s), true))
 #define FRAME_MASK (FRAME_DEPTH - 1)
-#define MORGUE_MASK (COUNTOF(state.morgue.data) - 1)
 
 static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkDeviceSize* offset);
 static void release(gpu_memory* memory, VkDeviceSize offset);
@@ -3260,6 +3260,10 @@ void gpu_destroy(void) {
     next = t->next;
     memset(t, 0, sizeof(*t));
   }
+  for (gpu_victim* victim = state.morgue.pool, *next; victim; victim = next) {
+    next = victim->next;
+    state.config.fnFree(victim);
+  }
   if (state.pipelineCache) vkDestroyPipelineCache(state.device, state.pipelineCache, NULL);
   if (state.semaphore) vkDestroySemaphore(state.device, state.semaphore, NULL);
   for (uint32_t i = 0; i < COUNTOF(state.memory); i++) {
@@ -3598,28 +3602,34 @@ static void condemn(void* handle, VkObjectType type) {
   if (!handle) return;
   gpu_morgue* morgue = &state.morgue;
 
-  // If the morgue is full, try expunging to reclaim some space
-  if (morgue->head - morgue->tail >= COUNTOF(morgue->data)) {
-    expunge(getFinishedTick());
+  gpu_victim* victim = morgue->pool;
 
-    // If that didn't work, wait for the GPU to be done with the oldest victim and retry
-    if (morgue->head - morgue->tail >= COUNTOF(morgue->data)) {
-      uint32_t tick = morgue->data[morgue->tail & MORGUE_MASK].tick;
-      gpu_wait_tick(tick);
-      expunge(tick);
-    }
-
-    // The following should be unreachable
-    ASSERT(morgue->head - morgue->tail < COUNTOF(morgue->data), "Morgue overflow!") return;
+  if (victim) {
+    morgue->pool = victim->next;
+  } else {
+    victim = state.config.fnAlloc(sizeof(*victim));
   }
 
-  morgue->data[morgue->head++ & MORGUE_MASK] = (gpu_victim) { handle, type, state.tick + 1 };
+  victim->next = NULL;
+  victim->type = type;
+  victim->tick = state.tick + 1;
+  victim->handle = handle;
+
+  if (morgue->tail) {
+    morgue->tail->next = victim;
+  } else {
+    morgue->head = victim;
+  }
+
+  morgue->tail = victim;
 }
 
 static void expunge(uint64_t tick) {
   gpu_morgue* morgue = &state.morgue;
-  while (morgue->tail != morgue->head && tick >= morgue->data[morgue->tail & MORGUE_MASK].tick) {
-    gpu_victim* victim = &morgue->data[morgue->tail++ & MORGUE_MASK];
+
+  while (morgue->head && tick >= morgue->head->tick) {
+    gpu_victim* victim = morgue->head;
+
     switch (victim->type) {
       case VK_OBJECT_TYPE_BUFFER: vkDestroyBuffer(state.device, victim->handle, NULL); break;
       case VK_OBJECT_TYPE_IMAGE: vkDestroyImage(state.device, victim->handle, NULL); break;
@@ -3635,6 +3645,14 @@ static void expunge(uint64_t tick) {
       case VK_OBJECT_TYPE_DEVICE_MEMORY: vkFreeMemory(state.device, victim->handle, NULL); break;
       default: LOG("Trying to destroy invalid Vulkan object type!"); break;
     }
+
+    morgue->head = victim->next;
+    if (!morgue->head) {
+      morgue->tail = NULL;
+    }
+
+    victim->next = morgue->pool;
+    morgue->pool = victim;
   }
 }
 

@@ -104,8 +104,8 @@ size_t gpu_sizeof_tally(void) { return sizeof(gpu_tally); }
 // an entry for every page, which they use to track regions of allocated and
 // free spaces.
 
-#define PAGE_SIZE (1 << 14)
-#define MAX_PAGES ((1 << 26) / PAGE_SIZE)
+#define GPU_PAGE_SIZE (1 << 14)
+#define GPU_MAX_PAGES ((1 << 26) / GPU_PAGE_SIZE)
 
 typedef enum {
   GPU_MEMORY_BUFFER_STATIC,
@@ -146,7 +146,7 @@ typedef struct {
   uint32_t memoryType;
   uint32_t fallbackMemoryType;
   VkMemoryPropertyFlags memoryFlags;
-  gpu_alloc_entry regions[MAX_PAGES];
+  gpu_alloc_entry regions[GPU_MAX_PAGES];
 } gpu_allocator;
 
 typedef struct {
@@ -3442,10 +3442,10 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
   };
 
   uint32_t blockSize = blockSizes[type];
-  ASSERT(blockSize <= (MAX_PAGES * PAGE_SIZE), "Block size larger than allocator can handle") return NULL;
+  ASSERT(blockSize <= (GPU_MAX_PAGES * GPU_PAGE_SIZE), "Block size larger than allocator can handle") return NULL;
 
-  uint32_t align = MAX(info.alignment, PAGE_SIZE);
-  uint32_t requiredPages = ALIGN(info.size, align) / PAGE_SIZE;
+  uint32_t align = MAX(info.alignment, GPU_PAGE_SIZE);
+  uint32_t requiredPages = ALIGN(info.size, align) / GPU_PAGE_SIZE;
 
   if (allocator->block) {
     // Search through regions for a free region of sufficient size
@@ -3454,7 +3454,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 
       // The alignment may require us to start the allocation later than the
       // beginning of the region
-      uint32_t offsetPages = (ALIGN(i * PAGE_SIZE, align) / PAGE_SIZE) - i;
+      uint32_t offsetPages = (ALIGN(i * GPU_PAGE_SIZE, align) / GPU_PAGE_SIZE) - i;
       uint32_t totalPages = offsetPages + requiredPages;
 
       if (!region->allocated && totalPages <= region->pageCount) {
@@ -3479,7 +3479,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
         }
 
         allocator->block->refs++;
-        *offset = (i + offsetPages) * PAGE_SIZE;
+        *offset = (i + offsetPages) * GPU_PAGE_SIZE;
         return allocator->block;
       }
     }
@@ -3526,11 +3526,11 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 
       // Memory only receives an allocator if it can host multiple allocations
       // (i.e. it has a fixed block size and this block is not full/oversized)
-      if(blockSize && (requiredPages * PAGE_SIZE) < blockSize) {
+      if(blockSize && (requiredPages * GPU_PAGE_SIZE) < blockSize) {
         allocator->block = memory;
 
         // Mark the initial region
-        allocator->pageCount = blockSize / PAGE_SIZE;
+        allocator->pageCount = blockSize / GPU_PAGE_SIZE;
         allocator->regions[0].allocated = true;
         allocator->regions[0].pageCount = requiredPages;
 
@@ -3565,7 +3565,7 @@ static void release(gpu_memory* memory, VkDeviceSize offset) {
       }
     } else if (allocator->block == memory) {
       // Mark the region for this allocation as free
-      uint32_t pageOffset = offset / PAGE_SIZE;
+      uint32_t pageOffset = offset / GPU_PAGE_SIZE;
       gpu_alloc_entry* region = &allocator->regions[pageOffset];
       region->allocated = false;
 

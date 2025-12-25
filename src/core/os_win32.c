@@ -195,6 +195,14 @@ void os_thread_detach(void) {
   }
 }
 
+void os_thread_set_name(const char* name) {
+  WCHAR wname[256];
+  if (!MultiByteToWideChar(CP_UTF8, 0, name, -1, wname, sizeof(wname) / sizeof(wname[0]))) {
+    return;
+  }
+  SetThreadDescription(GetCurrentThread(), wname);
+}
+
 #ifndef LOVR_USE_GLFW
 static os_key convertKey(uint16_t scancode) {
   switch (scancode) {

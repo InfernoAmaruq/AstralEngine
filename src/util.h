@@ -66,12 +66,14 @@ void lovrLog(int level, const char* tag, const char* format, ...);
 #ifdef LOVR_PROFILE
 #include <TracyC.h>
 #define lovrProfileMarkFrame() TracyCFrameMark
+#define lovrProfileSetThreadName(name) TracyCSetThreadName(name)
 #define lovrProfileStart(id, label) TracyCZoneN(id, label, true)
 #define lovrProfileEnd(id) TracyCZoneEnd(id)
 #define lovrProfileAlloc(p, size) TracyCAlloc(p, size)
 #define lovrProfileFree(p) TracyCFree(p)
 #else
 #define lovrProfileMarkFrame() ((void) 0)
+#define lovrProfileSetThreadName(name) ((void) 0)
 #define lovrProfileStart(id, label) ((void) 0)
 #define lovrProfileEnd(id) ((void) 0)
 #define lovrProfileAlloc(p, size) ((void) 0)

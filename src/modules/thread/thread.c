@@ -41,6 +41,11 @@ static struct {
   map_t channels;
 } state;
 
+static void setupWorker(uint32_t id) {
+  lovrProfileSetThreadName("Worker");
+  os_thread_set_name("Worker");
+}
+
 bool lovrThreadModuleInit(int32_t workers) {
   if (atomic_fetch_add(&state.ref, 1)) return false;
   mtx_init(&state.channelLock, mtx_plain);
@@ -49,7 +54,7 @@ bool lovrThreadModuleInit(int32_t workers) {
   uint32_t cores = os_get_core_count();
   if (workers < 0) workers += cores;
   state.workers = MAX(workers, 0);
-  job_init(state.workers);
+  job_init(state.workers, setupWorker);
 
   return true;
 }

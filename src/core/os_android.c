@@ -302,6 +302,10 @@ void os_thread_detach(void) {
   (*state.app->activity->vm)->DetachCurrentThread(state.app->activity->vm);
 }
 
+void os_thread_set_name(const char* name) {
+  //
+}
+
 void os_poll_events(void) {
   if (!state.app->destroyRequested) {
     struct android_poll_source* source;

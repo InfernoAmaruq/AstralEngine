@@ -15,6 +15,7 @@ struct job {
 
 static struct {
   job jobs[MAX_JOBS];
+  void (*setupWorker)(uint32_t id);
   thrd_t workers[MAX_WORKERS];
   uint32_t workerCount;
   job* head;
@@ -37,6 +38,10 @@ static void runJob(void) {
 }
 
 static int workerLoop(void* arg) {
+  if (state.setupWorker) {
+    state.setupWorker((uint32_t) (uintptr_t) arg);
+  }
+
   for (;;) {
     mtx_lock(&state.lock);
 
@@ -55,7 +60,7 @@ static int workerLoop(void* arg) {
   return 0;
 }
 
-bool job_init(uint32_t count) {
+bool job_init(uint32_t count, void (*setupWorker)(uint32_t id)) {
   mtx_init(&state.lock, mtx_plain);
   cnd_init(&state.hasJob);
 
@@ -64,6 +69,7 @@ bool job_init(uint32_t count) {
     state.jobs[i].next = &state.jobs[i + 1];
   }
 
+  state.setupWorker = setupWorker;
   if (count > MAX_WORKERS) count = MAX_WORKERS;
   for (uint32_t i = 0; i < count; i++, state.workerCount++) {
     if (thrd_create(&state.workers[i], workerLoop, (void*) (uintptr_t) i) != thrd_success) {

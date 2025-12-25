@@ -290,6 +290,10 @@ void os_thread_detach(void) {
   //
 }
 
+void os_thread_set_name(const char* name) {
+  //
+}
+
 void os_poll_events(void) {
   //
 }

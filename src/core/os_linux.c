@@ -1,6 +1,7 @@
 #include "os.h"
 #include <string.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include <unistd.h>
 #include <time.h>
 #include <pwd.h>
@@ -134,6 +135,12 @@ void os_thread_attach(void) {
 
 void os_thread_detach(void) {
   //
+}
+
+void os_thread_set_name(const char* name) {
+#if defined(__linux__) && defined(_GNU_SOURCE)
+  pthread_setname_np(pthread_self(), name);
+#endif
 }
 
 void os_on_permission(fn_permission* callback) {

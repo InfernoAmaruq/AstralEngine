@@ -131,6 +131,8 @@ spv_result spv_parse(const void* source, size_t size, spv_info* info) {
       case 30: // OpTypeStruct
       case 31: // OpTypeOpaque
       case 32: // OpTypePointer
+      case 4472: // OpTypeRayQueryKHR
+      case 5341: // OpTypeAccelerationStructureKHR
         result = spv_parse_type(&spv, op, info);
         break;
       case 48: // OpSpecConstantTrue
@@ -451,13 +453,18 @@ static spv_result spv_parse_variable(spv_context* spv, const uint32_t* op, spv_i
     resource->bufferFields = NULL;
   }
 
-  // Sampler and texture variables are named directly
+  // Sampler, texture, and acceleration structure variables are named directly
   if (spv->cache[variableId].variable.name != 0xffff) {
     resource->name = (char*) (spv->words + spv->cache[variableId].variable.name);
   }
 
   if (OP_CODE(type) == 26) { // OpTypeSampler
     resource->type = SPV_SAMPLER;
+    return SPV_OK;
+  }
+
+  if (OP_CODE(type) == 5341) { // OpTypeAccelerationStructureKHR
+    resource->type = SPV_ACCELERATION_STRUCTURE;
     return SPV_OK;
   }
 

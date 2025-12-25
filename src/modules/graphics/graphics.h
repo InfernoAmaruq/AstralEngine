@@ -18,6 +18,7 @@ typedef struct Material Material;
 typedef struct Font Font;
 typedef struct Mesh Mesh;
 typedef struct Model Model;
+typedef struct Raytracer Raytracer;
 typedef struct Readback Readback;
 typedef struct Pass Pass;
 
@@ -46,6 +47,7 @@ typedef struct {
   bool wireframe;
   bool depthClamp;
   bool depthResolve;
+  bool raytracing;
   bool indirectDrawFirstInstance;
   bool packedBuffers;
   bool float64;
@@ -439,6 +441,13 @@ bool lovrFontGetVertices(Font* font, ColoredString* strings, uint32_t count, flo
 
 // Mesh
 
+enum {
+  RAYTRACER_DYNAMIC = (1 << 0),
+  RAYTRACER_FAST_TRACE = (1 << 1),
+  RAYTRACER_FAST_BUILD = (1 << 2),
+  RAYTRACER_COMPRESS = (1 << 3)
+};
+
 typedef enum {
   MESH_CPU,
   MESH_GPU
@@ -454,6 +463,7 @@ typedef struct {
   Buffer* vertexBuffer;
   DataField* vertexFormat;
   MeshStorage storage;
+  uint32_t raytracerFlags;
 } MeshInfo;
 
 Mesh* lovrMeshCreate(const MeshInfo* info, void** data);
@@ -470,6 +480,7 @@ bool lovrMeshGetTriangles(Mesh* mesh, float** vertices, uint32_t** indices, uint
 bool lovrMeshGetBoundingBox(Mesh* mesh, float box[6]);
 void lovrMeshSetBoundingBox(Mesh* mesh, float box[6]);
 bool lovrMeshComputeBoundingBox(Mesh* mesh);
+bool lovrMeshBuildRaytracer(Mesh* mesh);
 DrawMode lovrMeshGetDrawMode(Mesh* mesh);
 void lovrMeshSetDrawMode(Mesh* mesh, DrawMode mode);
 void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count);
@@ -485,6 +496,7 @@ typedef struct {
   struct ModelData* data;
   bool materials;
   bool mipmaps;
+  uint32_t raytracerFlags;
 } ModelInfo;
 
 typedef enum {
@@ -508,6 +520,24 @@ Buffer* lovrModelGetIndexBuffer(Model* model);
 Mesh* lovrModelGetMesh(Model* model, uint32_t index);
 Texture* lovrModelGetTexture(Model* model, uint32_t index);
 Material* lovrModelGetMaterial(Model* model, uint32_t index);
+bool lovrModelBuildRaytracer(Model* model);
+
+// Raytracer
+
+typedef struct {
+  uint32_t capacity;
+  uint32_t flags;
+} RaytracerInfo;
+
+Raytracer* lovrRaytracerCreate(const RaytracerInfo* info);
+void lovrRaytracerDestroy(void* ref);
+uint32_t lovrRaytracerGetCapacity(Raytracer* raytracer);
+uint32_t lovrRaytracerGetCount(Raytracer* raytracer);
+void lovrRaytracerClear(Raytracer* raytracer);
+bool lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16], uint32_t layers, uint32_t tag, uint32_t* id);
+bool lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16], uint32_t layers, uint32_t tag, uint32_t* id);
+bool lovrRaytracerSet(Raytracer* raytracer, uint32_t id, float transform[16], uint32_t layers, uint32_t tag);
+void lovrRaytracerBuild(Raytracer* raytracer);
 
 // Readback
 
@@ -683,6 +713,7 @@ void lovrPassSetWireframe(Pass* pass, bool wireframe);
 bool lovrPassSendBuffer(Pass* pass, const char* name, size_t length, Buffer* buffer, uint32_t offset, uint32_t extent);
 bool lovrPassSendTexture(Pass* pass, const char* name, size_t length, Texture* texture);
 bool lovrPassSendSampler(Pass* pass, const char* name, size_t length, Sampler* sampler);
+bool lovrPassSendRaytracer(Pass* pass, const char* name, size_t length, Raytracer* raytracer);
 bool lovrPassSendData(Pass* pass, const char* name, size_t length, void** data, DataField** format);
 
 bool lovrPassPoints(Pass* pass, uint32_t count, float** vertices);

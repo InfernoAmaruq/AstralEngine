@@ -727,7 +727,7 @@ static int l_lovrPassSend(lua_State* L) {
   const char* name = luaL_checklstring(L, 2, &length);
 
   if (lua_isnoneornil(L, 3)) {
-    return luax_typeerror(L, 3, "Buffer, Texture, Sampler, number, vector, table, or boolean");
+    return luax_typeerror(L, 3, "Buffer, Texture, Sampler, Raytracer, number, vector, table, or boolean");
   }
 
   Buffer* buffer = luax_totype(L, 3, Buffer);
@@ -750,6 +750,13 @@ static int l_lovrPassSend(lua_State* L) {
 
   if (sampler) {
     luax_assert(L, lovrPassSendSampler(pass, name, length, sampler));
+    return 0;
+  }
+
+  Raytracer* raytracer = luax_totype(L, 3, Raytracer);
+
+  if (raytracer) {
+    luax_assert(L, lovrPassSendRaytracer(pass, name, length, raytracer));
     return 0;
   }
 

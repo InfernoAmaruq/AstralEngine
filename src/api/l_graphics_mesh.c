@@ -231,6 +231,12 @@ static int l_lovrMeshComputeBoundingBox(lua_State* L) {
   return 1;
 }
 
+static int l_lovrMeshBuildRaytracer(lua_State* L) {
+  Mesh* mesh = luax_checktype(L, 1, Mesh);
+  luax_assert(L, lovrMeshBuildRaytracer(mesh));
+  return 0;
+}
+
 static int l_lovrMeshGetDrawMode(lua_State* L) {
   Mesh* mesh = luax_checktype(L, 1, Mesh);
   DrawMode mode = lovrMeshGetDrawMode(mesh);
@@ -322,6 +328,7 @@ const luaL_Reg lovrMesh[] = {
   { "getBoundingBox", l_lovrMeshGetBoundingBox },
   { "setBoundingBox", l_lovrMeshSetBoundingBox },
   { "computeBoundingBox", l_lovrMeshComputeBoundingBox },
+  { "buildRaytracer", l_lovrMeshBuildRaytracer },
   { "getDrawMode", l_lovrMeshGetDrawMode },
   { "setDrawMode", l_lovrMeshSetDrawMode },
   { "getDrawRange", l_lovrMeshGetDrawRange },

@@ -36,6 +36,15 @@ struct gpu_buffer {
   VkDeviceSize offset;
 };
 
+struct gpu_tree {
+  VkAccelerationStructureKHR handle;
+  VkAccelerationStructureGeometryKHR* geometries;
+  VkAccelerationStructureBuildRangeInfoKHR* ranges;
+  VkBuildAccelerationStructureFlagBitsKHR flags;
+  gpu_buffer buffer;
+  gpu_buffer scratch;
+};
+
 struct gpu_texture {
   VkImage handle;
   VkImageView view;
@@ -57,7 +66,7 @@ struct gpu_sampler {
 
 struct gpu_layout {
   VkDescriptorSetLayout handle;
-  uint32_t descriptorCounts[8];
+  uint32_t descriptorCounts[9];
 };
 
 struct gpu_shader {
@@ -87,6 +96,7 @@ struct gpu_stream {
 };
 
 size_t gpu_sizeof_buffer(void) { return sizeof(gpu_buffer); }
+size_t gpu_sizeof_tree(void) { return sizeof(gpu_tree); }
 size_t gpu_sizeof_texture(void) { return sizeof(gpu_texture); }
 size_t gpu_sizeof_sampler(void) { return sizeof(gpu_sampler); }
 size_t gpu_sizeof_layout(void) { return sizeof(gpu_layout); }
@@ -112,6 +122,7 @@ typedef enum {
   GPU_MEMORY_BUFFER_STREAM,
   GPU_MEMORY_BUFFER_UPLOAD,
   GPU_MEMORY_BUFFER_DOWNLOAD,
+  GPU_MEMORY_BUFFER_TREE,
   GPU_MEMORY_TEXTURE_COLOR,
   GPU_MEMORY_TEXTURE_D16,
   GPU_MEMORY_TEXTURE_D24,
@@ -209,6 +220,13 @@ typedef struct {
   bool pipelineCacheControl;
   bool memoryBudget;
   bool cubicFilter;
+  bool accelerationStructure;
+  bool bufferDeviceAddress;
+  bool descriptorIndexing;
+  bool deferredHostOperations;
+  bool shaderFloatControls;
+  bool spirv14;
+  bool rayQuery;
 } gpu_extensions;
 
 // State
@@ -270,6 +288,7 @@ static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type);
 static bool transitionAttachment(gpu_texture* texture, bool begin, bool resolve, bool discard, VkImageMemoryBarrier2KHR* barrier);
 static VkImageLayout getNaturalLayout(uint32_t usage, VkImageAspectFlags aspect);
 static VkFormat convertFormat(gpu_texture_format format, int colorspace);
+static VkFormat convertAttributeType(gpu_attribute_type type);
 static VkPipelineStageFlags2 convertPhase(gpu_phase phase, bool dst);
 static VkAccessFlags2 convertCache(gpu_cache cache);
 static VkBool32 relay(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT flags, const VkDebugUtilsMessengerCallbackDataEXT* data, void* userdata);
@@ -345,6 +364,7 @@ static void error(const char* message);
   X(vkDestroyBuffer)\
   X(vkGetBufferMemoryRequirements)\
   X(vkBindBufferMemory)\
+  X(vkGetBufferDeviceAddressKHR)\
   X(vkCreateImage)\
   X(vkDestroyImage)\
   X(vkGetImageMemoryRequirements)\
@@ -401,7 +421,11 @@ static void error(const char* message);
   X(vkCmdDrawIndirect)\
   X(vkCmdDrawIndexedIndirect)\
   X(vkCmdDispatch)\
-  X(vkCmdDispatchIndirect)
+  X(vkCmdDispatchIndirect)\
+  X(vkGetAccelerationStructureBuildSizesKHR)\
+  X(vkCreateAccelerationStructureKHR)\
+  X(vkDestroyAccelerationStructureKHR)\
+  X(vkCmdBuildAccelerationStructuresKHR)
 
 // Used to load/declare Vulkan functions without lots of clutter
 #define GPU_LOAD_ANONYMOUS(fn) fn = (PFN_##fn) vkGetInstanceProcAddr(NULL, #fn);
@@ -462,6 +486,142 @@ void gpu_buffer_destroy(gpu_buffer* buffer) {
   if (!buffer->memory) return;
   condemn(buffer->handle, VK_OBJECT_TYPE_BUFFER);
   release(buffer->memory, buffer->offset);
+}
+
+gpu_address gpu_buffer_get_address(gpu_buffer* buffer, uint32_t offset) {
+  return vkGetBufferDeviceAddressKHR(state.device, &(VkBufferDeviceAddressInfoKHR) {
+    .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
+    .buffer = buffer->handle
+  }) + offset;
+}
+
+// Tree
+
+bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info) {
+  VkAccelerationStructureGeometryKHR geometry;
+
+  if (info->type == GPU_TREE_TOP) {
+    geometry = (VkAccelerationStructureGeometryKHR) {
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+      .geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR,
+      .geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR
+    };
+  } else {
+    tree->geometries = state.config.fnAlloc(info->capacity * sizeof(*tree->geometries));
+    tree->ranges = state.config.fnAlloc(info->capacity * sizeof(*tree->ranges));
+    ASSERT(tree->geometries && tree->ranges, "Out of memory") return false;
+
+    gpu_geometry_info* geometry = info->geometries;
+
+    for (uint32_t i = 0; i < info->capacity; i++, geometry++) {
+      tree->geometries[i] = (VkAccelerationStructureGeometryKHR) {
+        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+        .geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR,
+        .flags = VK_GEOMETRY_OPAQUE_BIT_KHR,
+        .geometry.triangles = (VkAccelerationStructureGeometryTrianglesDataKHR) {
+          .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+          .vertexFormat = convertAttributeType(geometry->vertexType),
+          .vertexStride = geometry->vertexStride,
+          .maxVertex = geometry->vertexCount,
+          .indexType = geometry->indexOffset == ~0u ? VK_INDEX_TYPE_NONE_KHR : (VkIndexType) geometry->indexType,
+          .transformData.deviceAddress = geometry->transformOffset == ~0u ? 0 : 1
+        }
+      };
+
+      tree->ranges[i] = (VkAccelerationStructureBuildRangeInfoKHR) {
+        .primitiveCount = geometry->triangleCount,
+        .primitiveOffset = geometry->indexOffset == ~0u ? geometry->vertexOffset : geometry->indexOffset,
+        .firstVertex = geometry->baseVertex,
+        .transformOffset = geometry->transformOffset == ~0u ? 0 : geometry->transformOffset
+      };
+    }
+  }
+
+  tree->flags =
+    ((info->flags & GPU_TREE_WILL_UPDATE) ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0) |
+    ((info->flags & GPU_TREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
+    ((info->flags & GPU_TREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
+    ((info->flags & GPU_TREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0);
+
+  VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {
+    .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+    .type = info->type == GPU_TREE_TOP ?
+      VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :
+      VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+    .flags = tree->flags,
+    .geometryCount = info->type == GPU_TREE_TOP ? 1 : info->capacity,
+    .pGeometries = info->type == GPU_TREE_TOP ? &geometry : tree->geometries
+  };
+
+  VkAccelerationStructureBuildSizesInfoKHR sizes = { .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
+  VkAccelerationStructureBuildTypeKHR buildType = VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR;
+
+  uint32_t* counts;
+  if (info->type == GPU_TREE_TOP) {
+    counts = &info->capacity;
+  } else if (info->capacity == 1) {
+    counts = &info->geometries[0].triangleCount;
+  } else {
+    counts = state.config.fnAlloc(info->capacity * sizeof(uint32_t));
+    ASSERT(counts, "Out of memory") return false;
+    for (uint32_t i = 0; i < info->capacity; i++) {
+      counts[i] = info->geometries[i].triangleCount;
+    }
+  }
+
+  vkGetAccelerationStructureBuildSizesKHR(state.device, buildType, &buildInfo, counts, &sizes);
+
+  if (info->type == GPU_TREE_BOTTOM && info->capacity > 1) {
+    state.config.fnFree(counts);
+  }
+
+  gpu_buffer_info bufferInfo = {
+    .type = GPU_BUFFER_TREE,
+    .size = sizes.accelerationStructureSize,
+    .label = "Tree Buffer"
+  };
+
+  if (!gpu_buffer_init(&tree->buffer, &bufferInfo)) {
+    return false;
+  }
+
+  gpu_buffer_info scratchInfo = {
+    .type = GPU_BUFFER_STATIC,
+    .size = MAX(sizes.updateScratchSize, sizes.buildScratchSize) + 256,
+    .label = "Scratch Buffer"
+  };
+
+  if (!gpu_buffer_init(&tree->scratch, &scratchInfo)) {
+    gpu_buffer_destroy(&tree->buffer);
+    return false;
+  }
+
+  VkAccelerationStructureCreateInfoKHR createInfo = {
+    .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
+    .buffer = tree->buffer.handle,
+    .size = sizes.accelerationStructureSize,
+    .type = buildInfo.type
+  };
+
+  VK(vkCreateAccelerationStructureKHR(state.device, &createInfo, NULL, &tree->handle), "vkCreateAccelerationStructureKHR") {
+    gpu_buffer_destroy(&tree->scratch);
+    gpu_buffer_destroy(&tree->buffer);
+    return false;
+  }
+
+  return true;
+}
+
+void gpu_tree_destroy(gpu_tree* tree) {
+  condemn(tree->handle, VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR);
+  state.config.fnFree(tree->geometries);
+  state.config.fnFree(tree->ranges);
+  gpu_buffer_destroy(&tree->buffer);
+  gpu_buffer_destroy(&tree->scratch);
+}
+
+gpu_address gpu_tree_get_address(gpu_tree* tree) {
+  return gpu_buffer_get_address(&tree->buffer, 0);
 }
 
 // Texture
@@ -1182,7 +1342,8 @@ bool gpu_layout_init(gpu_layout* layout, gpu_layout_info* info) {
     [GPU_SLOT_TEXTURE_WITH_SAMPLER] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
     [GPU_SLOT_SAMPLED_TEXTURE] = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
     [GPU_SLOT_STORAGE_TEXTURE] = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER
+    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER,
+    [GPU_SLOT_TREE] = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
   };
 
   VkDescriptorSetLayoutBinding bindings[32];
@@ -1296,7 +1457,8 @@ bool gpu_bundle_pool_init(gpu_bundle_pool* pool, gpu_bundle_pool_info* info) {
     [GPU_SLOT_TEXTURE_WITH_SAMPLER] = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0 },
     [GPU_SLOT_SAMPLED_TEXTURE] = { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 0 },
     [GPU_SLOT_STORAGE_TEXTURE] = { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0 },
-    [GPU_SLOT_SAMPLER] = { VK_DESCRIPTOR_TYPE_SAMPLER, 0 }
+    [GPU_SLOT_SAMPLER] = { VK_DESCRIPTOR_TYPE_SAMPLER, 0 },
+    [GPU_SLOT_TREE] = { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 0 }
   };
 
   if (info->layout) {
@@ -1365,9 +1527,11 @@ void gpu_bundle_pool_destroy(gpu_bundle_pool* pool) {
 void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t count) {
   VkDescriptorBufferInfo bufferInfo[256];
   VkDescriptorImageInfo imageInfo[256];
+  VkWriteDescriptorSetAccelerationStructureKHR treeInfo[256];
   VkWriteDescriptorSet writes[256];
   uint32_t bufferCount = 0;
   uint32_t imageCount = 0;
+  uint32_t treeCount = 0;
   uint32_t writeCount = 0;
 
   static const VkDescriptorType types[] = {
@@ -1378,7 +1542,8 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
     [GPU_SLOT_TEXTURE_WITH_SAMPLER] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
     [GPU_SLOT_SAMPLED_TEXTURE] = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
     [GPU_SLOT_STORAGE_TEXTURE] = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER
+    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER,
+    [GPU_SLOT_TREE] = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
   };
 
   for (uint32_t i = 0; i < count; i++) {
@@ -1389,16 +1554,22 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
       gpu_buffer_binding* buffers = binding->count > 0 ? binding->buffers : &binding->buffer;
       gpu_texture_binding* textures = binding->count > 0 ? binding->textures : &binding->texture;
       bool image = binding->type > GPU_SLOT_STORAGE_BUFFER_DYNAMIC;
+      bool tree = binding->type == GPU_SLOT_TREE;
 
       uint32_t index = 0;
       uint32_t descriptorCount = MAX(binding->count, 1);
 
       while (index < descriptorCount) {
-        uint32_t available = image ? COUNTOF(imageInfo) - imageCount : COUNTOF(bufferInfo) - bufferCount;
+        uint32_t available =
+          tree ? COUNTOF(treeInfo) - treeCount :
+          image ? COUNTOF(imageInfo) - imageCount :
+          COUNTOF(bufferInfo) - bufferCount;
+
         uint32_t chunk = MIN(descriptorCount - index, available);
 
         writes[writeCount++] = (VkWriteDescriptorSet) {
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .pNext = tree ? &treeInfo[treeCount] : NULL,
           .dstSet = bundles[i]->handle,
           .dstBinding = binding->number,
           .dstArrayElement = index,
@@ -1408,7 +1579,15 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
           .pImageInfo = &imageInfo[imageCount]
         };
 
-        if (image) {
+        if (tree) {
+          for (uint32_t n = 0; n < chunk; n++, index++) {
+            treeInfo[treeCount++] = (VkWriteDescriptorSetAccelerationStructureKHR) {
+              .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+              .accelerationStructureCount = 1,
+              .pAccelerationStructures = &binding->tree->handle
+            };
+          }
+        } else if (image) {
           for (uint32_t n = 0; n < chunk; n++, index++) {
             imageInfo[imageCount++] = (VkDescriptorImageInfo) {
               .imageView = textures[index].object ? textures[index].object->view : NULL,
@@ -1426,9 +1605,15 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
           }
         }
 
-        if ((image ? imageCount >= COUNTOF(imageInfo) : bufferCount >= COUNTOF(bufferInfo)) || writeCount >= COUNTOF(writes)) {
+        bool flush =
+          bufferCount == COUNTOF(bufferInfo) ||
+          imageCount == COUNTOF(imageInfo) ||
+          treeCount == COUNTOF(treeInfo) ||
+          writeCount == COUNTOF(writes);
+
+        if (flush) {
           vkUpdateDescriptorSets(state.device, writeCount, writes, 0, NULL);
-          bufferCount = imageCount = writeCount = 0;
+          bufferCount = imageCount = treeCount = writeCount = 0;
         }
       }
     }
@@ -1446,39 +1631,6 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info,
     [GPU_DRAW_POINTS] = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
     [GPU_DRAW_LINES] = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
     [GPU_DRAW_TRIANGLES] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-  };
-
-  static const VkFormat attributeTypes[] = {
-    [GPU_TYPE_I8x4] = VK_FORMAT_R8G8B8A8_SINT,
-    [GPU_TYPE_U8x4] = VK_FORMAT_R8G8B8A8_UINT,
-    [GPU_TYPE_SN8x4] = VK_FORMAT_R8G8B8A8_SNORM,
-    [GPU_TYPE_UN8x4] = VK_FORMAT_R8G8B8A8_UNORM,
-    [GPU_TYPE_SN10x3] = VK_FORMAT_A2B10G10R10_SNORM_PACK32,
-    [GPU_TYPE_UN10x3] = VK_FORMAT_A2B10G10R10_UNORM_PACK32,
-    [GPU_TYPE_I16] = VK_FORMAT_R16_SINT,
-    [GPU_TYPE_I16x2] = VK_FORMAT_R16G16_SINT,
-    [GPU_TYPE_I16x4] = VK_FORMAT_R16G16B16A16_SINT,
-    [GPU_TYPE_U16] = VK_FORMAT_R16_UINT,
-    [GPU_TYPE_U16x2] = VK_FORMAT_R16G16_UINT,
-    [GPU_TYPE_U16x4] = VK_FORMAT_R16G16B16A16_UINT,
-    [GPU_TYPE_SN16x2] = VK_FORMAT_R16G16_SNORM,
-    [GPU_TYPE_SN16x4] = VK_FORMAT_R16G16B16A16_SNORM,
-    [GPU_TYPE_UN16x2] = VK_FORMAT_R16G16_UNORM,
-    [GPU_TYPE_UN16x4] = VK_FORMAT_R16G16B16A16_UNORM,
-    [GPU_TYPE_I32] = VK_FORMAT_R32_SINT,
-    [GPU_TYPE_I32x2] = VK_FORMAT_R32G32_SINT,
-    [GPU_TYPE_I32x3] = VK_FORMAT_R32G32B32_SINT,
-    [GPU_TYPE_I32x4] = VK_FORMAT_R32G32B32A32_SINT,
-    [GPU_TYPE_U32] = VK_FORMAT_R32_UINT,
-    [GPU_TYPE_U32x2] = VK_FORMAT_R32G32_UINT,
-    [GPU_TYPE_U32x3] = VK_FORMAT_R32G32B32_UINT,
-    [GPU_TYPE_U32x4] = VK_FORMAT_R32G32B32A32_UINT,
-    [GPU_TYPE_F16x2] = VK_FORMAT_R16G16_SFLOAT,
-    [GPU_TYPE_F16x4] = VK_FORMAT_R16G16B16A16_SFLOAT,
-    [GPU_TYPE_F32] = VK_FORMAT_R32_SFLOAT,
-    [GPU_TYPE_F32x2] = VK_FORMAT_R32G32_SFLOAT,
-    [GPU_TYPE_F32x3] = VK_FORMAT_R32G32B32_SFLOAT,
-    [GPU_TYPE_F32x4] = VK_FORMAT_R32G32B32A32_SFLOAT
   };
 
   static const VkCullModeFlagBits cullModes[] = {
@@ -1549,7 +1701,7 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info,
     vertexAttributes[i] = (VkVertexInputAttributeDescription) {
       .location = info->vertex.attributes[i].location,
       .binding = info->vertex.attributes[i].buffer,
-      .format = attributeTypes[info->vertex.attributes[i].type],
+      .format = convertAttributeType(info->vertex.attributes[i].type),
       .offset = info->vertex.attributes[i].offset
     };
   }
@@ -2579,6 +2731,51 @@ void gpu_blit(gpu_stream* stream, gpu_texture* src, gpu_texture* dst, uint32_t s
   vkCmdBlitImage(stream->commands, src->handle, VK_IMAGE_LAYOUT_GENERAL, dst->handle, VK_IMAGE_LAYOUT_GENERAL, 1, &region, filters[filter]);
 }
 
+void gpu_build_tree(gpu_stream* stream, gpu_tree* tree, gpu_build_info* info) {
+  VkAccelerationStructureGeometryKHR geometry;
+
+  if (info->type == GPU_TREE_TOP) {
+    geometry = (VkAccelerationStructureGeometryKHR) {
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+      .geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR,
+      .geometry.instances = {
+        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR,
+        .data.deviceAddress = info->instances
+      }
+    };
+  } else {
+    for (uint32_t i = 0; i < info->count; i++) {
+      tree->geometries[i].geometry.triangles.vertexData.deviceAddress = info->vertices;
+      tree->geometries[i].geometry.triangles.indexData.deviceAddress = info->indices;
+      tree->geometries[i].geometry.triangles.transformData.deviceAddress = info->transforms;
+    }
+  }
+
+  VkAccelerationStructureBuildGeometryInfoKHR build = {
+    .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+    .type = info->type == GPU_TREE_TOP ?
+      VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :
+      VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+    .flags = tree->flags,
+    .mode = info->mode == GPU_TREE_BUILD ?
+      VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR :
+      VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR,
+    .srcAccelerationStructure = tree->handle,
+    .dstAccelerationStructure = tree->handle,
+    .geometryCount = info->type == GPU_TREE_TOP ? 1 : info->count,
+    .pGeometries = info->type == GPU_TREE_TOP ? &geometry : tree->geometries,
+    .scratchData = ALIGN(gpu_buffer_get_address(&tree->scratch, 0), 256)
+  };
+
+  VkAccelerationStructureBuildRangeInfoKHR range = { .primitiveCount = info->count };
+
+  const VkAccelerationStructureBuildRangeInfoKHR* ranges[1] = {
+    info->type == GPU_TREE_TOP ? &range : tree->ranges
+  };
+
+  vkCmdBuildAccelerationStructuresKHR(stream->commands, 1, &build, ranges);
+}
+
 void gpu_sync(gpu_stream* stream, gpu_barrier* barriers, uint32_t count) {
   VkMemoryBarrier2KHR memoryBarrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2_KHR };
 
@@ -2789,16 +2986,23 @@ bool gpu_init(gpu_config* config) {
     // Device Extensions
 
     struct { const char* name; bool shouldEnable; bool* flag; } extensions[] = {
+      { "VK_KHR_acceleration_structure", true, &state.extensions.accelerationStructure },
+      { "VK_KHR_buffer_device_address", true, &state.extensions.bufferDeviceAddress },
       { "VK_KHR_create_renderpass2", true, &state.extensions.renderPass2 },
+      { "VK_KHR_deferred_host_operations", true, &state.extensions.deferredHostOperations },
       { "VK_KHR_swapchain", true, &state.extensions.swapchain },
       { "VK_KHR_swapchain_maintenance1", true, &state.extensions.swapchainMaintenance },
       { "VK_KHR_portability_subset", true, &state.extensions.portability },
       { "VK_KHR_depth_stencil_resolve", true, &state.extensions.depthResolve },
+      { "VK_KHR_ray_query", true, &state.extensions.rayQuery },
       { "VK_KHR_shader_non_semantic_info", config->debug, &state.extensions.shaderDebug },
+      { "VK_KHR_shader_float_controls", true, &state.extensions.shaderFloatControls },
+      { "VK_KHR_spirv_1_4", true, &state.extensions.spirv14 },
       { "VK_KHR_image_format_list", true, &state.extensions.formatList },
       { "VK_KHR_synchronization2", true, &state.extensions.synchronization2 },
       { "VK_KHR_dynamic_rendering", true, &state.extensions.dynamicRendering },
       { "VK_KHR_timeline_semaphore", true, &state.extensions.timelineSemaphore },
+      { "VK_EXT_descriptor_indexing", true, &state.extensions.descriptorIndexing },
       { "VK_EXT_scalar_block_layout", true, &state.extensions.scalarBlockLayout },
       { "VK_EXT_fragment_density_map", true, &state.extensions.foveation },
       { "VK_EXT_pipeline_creation_cache_control", true, &state.extensions.pipelineCacheControl },
@@ -2899,6 +3103,9 @@ bool gpu_init(gpu_config* config) {
     VkPhysicalDevicePipelineCreationCacheControlFeaturesEXT pipelineCreationCacheControlFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES_EXT };
     VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timelineSemaphoreFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR };
     VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchainMaintenanceFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR };
+    VkPhysicalDeviceBufferDeviceAddressFeaturesKHR bufferDeviceAddressFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR };
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
+    VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
 
     vkGetPhysicalDeviceFeatures2(state.adapter, &supported);
 
@@ -2961,6 +3168,21 @@ bool gpu_init(gpu_config* config) {
       CHAIN(swapchainMaintenanceFeatures);
     }
 
+    if (state.extensions.bufferDeviceAddress) {
+      bufferDeviceAddressFeatures.bufferDeviceAddress = true;
+      CHAIN(bufferDeviceAddressFeatures);
+    }
+
+    if (state.extensions.accelerationStructure) {
+      accelerationStructureFeatures.accelerationStructure = true;
+      CHAIN(accelerationStructureFeatures);
+    }
+
+    if (state.extensions.rayQuery) {
+      rayQueryFeatures.rayQuery = true;
+      CHAIN(rayQueryFeatures);
+    }
+
     if (config->features) {
       config->features->textureBC = enabled.features.textureCompressionBC;
       config->features->textureASTC = enabled.features.textureCompressionASTC_LDR;
@@ -2968,6 +3190,7 @@ bool gpu_init(gpu_config* config) {
       config->features->depthClamp = enabled.features.depthClamp;
       config->features->depthResolve = state.extensions.depthResolve;
       config->features->foveation = state.extensions.foveation;
+      config->features->rayQuery = state.extensions.rayQuery && state.extensions.accelerationStructure;
       config->features->indirectDrawFirstInstance = enabled.features.drawIndirectFirstInstance;
       config->features->packedBuffers = state.extensions.scalarBlockLayout;
       config->features->shaderDebug = state.extensions.shaderDebug;
@@ -3081,12 +3304,17 @@ bool gpu_init(gpu_config* config) {
       [GPU_MEMORY_BUFFER_STATIC] = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
       [GPU_MEMORY_BUFFER_STREAM] = hostVisible | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
       [GPU_MEMORY_BUFFER_UPLOAD] = hostVisible,
-      [GPU_MEMORY_BUFFER_DOWNLOAD] = hostVisible | VK_MEMORY_PROPERTY_HOST_CACHED_BIT
+      [GPU_MEMORY_BUFFER_DOWNLOAD] = hostVisible | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+      [GPU_MEMORY_BUFFER_TREE] = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     };
 
     for (uint32_t i = 0; i < COUNTOF(bufferFlags); i++) {
       gpu_allocator* allocator = &state.allocators[i];
       state.allocatorLookup[i] = i;
+
+      if (i == GPU_MEMORY_BUFFER_TREE && !state.extensions.accelerationStructure) {
+        continue;
+      }
 
       VkBufferCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -3100,7 +3328,7 @@ bool gpu_init(gpu_config* config) {
       vkGetBufferMemoryRequirements(state.device, buffer, &requirements);
       vkDestroyBuffer(state.device, buffer, NULL);
 
-      VkMemoryPropertyFlags fallback = i == GPU_MEMORY_BUFFER_STATIC ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : hostVisible;
+      VkMemoryPropertyFlags fallback = (bufferFlags[i] & hostVisible) ? hostVisible : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
       // Find fallback memory type
       for (uint32_t j = 0; j < memory.memoryProperties.memoryTypeCount; j++) {
@@ -3431,6 +3659,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     [GPU_MEMORY_BUFFER_STREAM] = 0,
     [GPU_MEMORY_BUFFER_UPLOAD] = 0,
     [GPU_MEMORY_BUFFER_DOWNLOAD] = 0,
+    [GPU_MEMORY_BUFFER_TREE] = 1 << 24,
     [GPU_MEMORY_TEXTURE_COLOR] = 1 << 26,
     [GPU_MEMORY_TEXTURE_D16] = 1 << 26,
     [GPU_MEMORY_TEXTURE_D24] = 1 << 26,
@@ -3489,13 +3718,24 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     }
   }
 
+  VkMemoryAllocateFlags flags = 0;
+  if (type == GPU_MEMORY_BUFFER_STATIC || type == GPU_MEMORY_BUFFER_STREAM || type == GPU_MEMORY_BUFFER_TREE) {
+    flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+  }
+
   // If there wasn't an active block or it overflowed, find an empty block to allocate
   for (uint32_t i = 0; i < COUNTOF(state.memory); i++) {
     if (!state.memory[i].handle) {
       gpu_memory* memory = &state.memory[i];
 
+      VkMemoryAllocateFlagsInfo flagInfo = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+        .flags = flags
+      };
+
       VkMemoryAllocateInfo memoryInfo = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext = flags ? &flagInfo : NULL,
         .allocationSize = MAX(blockSize, info.size),
         .memoryTypeIndex = allocator->memoryType
       };
@@ -3642,6 +3882,7 @@ static void expunge(uint64_t tick) {
       case VK_OBJECT_TYPE_QUERY_POOL: vkDestroyQueryPool(state.device, victim->handle, NULL); break;
       case VK_OBJECT_TYPE_RENDER_PASS: vkDestroyRenderPass(state.device, victim->handle, NULL); break;
       case VK_OBJECT_TYPE_FRAMEBUFFER: vkDestroyFramebuffer(state.device, victim->handle, NULL); break;
+      case VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR: vkDestroyAccelerationStructureKHR(state.device, victim->handle, NULL); break;
       case VK_OBJECT_TYPE_DEVICE_MEMORY: vkFreeMemory(state.device, victim->handle, NULL); break;
       default: LOG("Trying to destroy invalid Vulkan object type!"); break;
     }
@@ -3690,17 +3931,23 @@ static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type) {
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
         VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+        (state.extensions.bufferDeviceAddress ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : 0) |
+        (state.extensions.accelerationStructure ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0);
     case GPU_BUFFER_STREAM:
       return
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+        (state.extensions.bufferDeviceAddress ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : 0) |
+        (state.extensions.accelerationStructure ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0);
     case GPU_BUFFER_UPLOAD:
       return VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     case GPU_BUFFER_DOWNLOAD:
       return VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    case GPU_BUFFER_TREE:
+      return VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     default: return 0;
   }
 }
@@ -3819,6 +4066,43 @@ static VkFormat convertFormat(gpu_texture_format format, int colorspace) {
   return formats[format][colorspace];
 }
 
+static VkFormat convertAttributeType(gpu_attribute_type type) {
+  static const VkFormat types[] = {
+    [GPU_TYPE_I8x4] = VK_FORMAT_R8G8B8A8_SINT,
+    [GPU_TYPE_U8x4] = VK_FORMAT_R8G8B8A8_UINT,
+    [GPU_TYPE_SN8x4] = VK_FORMAT_R8G8B8A8_SNORM,
+    [GPU_TYPE_UN8x4] = VK_FORMAT_R8G8B8A8_UNORM,
+    [GPU_TYPE_SN10x3] = VK_FORMAT_A2B10G10R10_SNORM_PACK32,
+    [GPU_TYPE_UN10x3] = VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+    [GPU_TYPE_I16] = VK_FORMAT_R16_SINT,
+    [GPU_TYPE_I16x2] = VK_FORMAT_R16G16_SINT,
+    [GPU_TYPE_I16x4] = VK_FORMAT_R16G16B16A16_SINT,
+    [GPU_TYPE_U16] = VK_FORMAT_R16_UINT,
+    [GPU_TYPE_U16x2] = VK_FORMAT_R16G16_UINT,
+    [GPU_TYPE_U16x4] = VK_FORMAT_R16G16B16A16_UINT,
+    [GPU_TYPE_SN16x2] = VK_FORMAT_R16G16_SNORM,
+    [GPU_TYPE_SN16x4] = VK_FORMAT_R16G16B16A16_SNORM,
+    [GPU_TYPE_UN16x2] = VK_FORMAT_R16G16_UNORM,
+    [GPU_TYPE_UN16x4] = VK_FORMAT_R16G16B16A16_UNORM,
+    [GPU_TYPE_I32] = VK_FORMAT_R32_SINT,
+    [GPU_TYPE_I32x2] = VK_FORMAT_R32G32_SINT,
+    [GPU_TYPE_I32x3] = VK_FORMAT_R32G32B32_SINT,
+    [GPU_TYPE_I32x4] = VK_FORMAT_R32G32B32A32_SINT,
+    [GPU_TYPE_U32] = VK_FORMAT_R32_UINT,
+    [GPU_TYPE_U32x2] = VK_FORMAT_R32G32_UINT,
+    [GPU_TYPE_U32x3] = VK_FORMAT_R32G32B32_UINT,
+    [GPU_TYPE_U32x4] = VK_FORMAT_R32G32B32A32_UINT,
+    [GPU_TYPE_F16x2] = VK_FORMAT_R16G16_SFLOAT,
+    [GPU_TYPE_F16x4] = VK_FORMAT_R16G16B16A16_SFLOAT,
+    [GPU_TYPE_F32] = VK_FORMAT_R32_SFLOAT,
+    [GPU_TYPE_F32x2] = VK_FORMAT_R32G32_SFLOAT,
+    [GPU_TYPE_F32x3] = VK_FORMAT_R32G32B32_SFLOAT,
+    [GPU_TYPE_F32x4] = VK_FORMAT_R32G32B32A32_SFLOAT
+  };
+
+  return types[type];
+}
+
 static VkPipelineStageFlags2 convertPhase(gpu_phase phase, bool dst) {
   VkPipelineStageFlags2 flags = 0;
   if (phase & GPU_PHASE_INDIRECT) flags |= VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT_KHR;
@@ -3833,6 +4117,7 @@ static VkPipelineStageFlags2 convertPhase(gpu_phase phase, bool dst) {
   if (phase & GPU_PHASE_COPY) flags |= VK_PIPELINE_STAGE_2_COPY_BIT_KHR;
   if (phase & GPU_PHASE_CLEAR) flags |= VK_PIPELINE_STAGE_2_CLEAR_BIT_KHR;
   if (phase & GPU_PHASE_BLIT) flags |= VK_PIPELINE_STAGE_2_BLIT_BIT_KHR;
+  if (phase & GPU_PHASE_TREE_BUILD) flags |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
   return flags;
 }
 
@@ -3851,6 +4136,9 @@ static VkAccessFlags2 convertCache(gpu_cache cache) {
   if (cache & GPU_CACHE_COLOR_WRITE) flags |= VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR;
   if (cache & GPU_CACHE_TRANSFER_READ) flags |= VK_ACCESS_2_TRANSFER_READ_BIT_KHR;
   if (cache & GPU_CACHE_TRANSFER_WRITE) flags |= VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
+  if (cache & GPU_CACHE_TREE_INPUT) flags |= VK_ACCESS_2_SHADER_READ_BIT_KHR;
+  if (cache & GPU_CACHE_TREE_READ) flags |= VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+  if (cache & GPU_CACHE_TREE_WRITE) flags |= VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
   return flags;
 }
 

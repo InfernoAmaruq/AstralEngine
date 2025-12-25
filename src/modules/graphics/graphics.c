@@ -60,8 +60,8 @@ typedef struct {
   gpu_phase writePhase;
   gpu_cache pendingReads;
   gpu_cache pendingWrite;
-  uint32_t lastTransferRead;
-  uint32_t lastTransferWrite;
+  uint32_t lastStreamRead;
+  uint32_t lastStreamWrite;
   gpu_barrier* barrier;
 } Sync;
 
@@ -151,6 +151,7 @@ struct Shader {
   uint32_t bufferMask;
   uint32_t textureMask;
   uint32_t samplerMask;
+  uint32_t raytracerMask;
   uint32_t storageMask;
   uint32_t pushConstantSize;
   uint32_t uniformSize;
@@ -230,6 +231,9 @@ struct Mesh {
   uint32_t drawCount;
   uint32_t baseVertex;
   Material* material;
+  uint32_t lastBuild;
+  uint32_t treeFlags;
+  gpu_tree* tree;
 };
 
 typedef struct {
@@ -294,6 +298,22 @@ struct Model {
   bool transformsDirty;
   bool blendShapesDirty;
   uint32_t lastVertexAnimation;
+  uint32_t lastBuild;
+  uint32_t treeFlags;
+  gpu_tree* tree;
+};
+
+struct Raytracer {
+  uint32_t ref;
+  uint32_t count;
+  uint32_t meshCount;
+  uint32_t modelCount;
+  RaytracerInfo info;
+  Sync sync;
+  gpu_tree* gpu;
+  gpu_tree_instance* instances;
+  void** refs;
+  bool canUpdate;
 };
 
 typedef enum {
@@ -404,8 +424,8 @@ typedef struct {
   void* next;
   uint64_t count;
   uint64_t textureMask;
-  uint64_t padding;
-  Access list[41];
+  uint64_t raytracerMask;
+  Access list[41]; // 1024 bytes total
 } AccessBlock;
 
 typedef struct {
@@ -553,6 +573,7 @@ static struct {
   bool resized;
   bool shouldPresent;
   bool timingEnabled;
+  bool pendingTreeBuild;
   GraphicsConfig config;
   gpu_device_info device;
   gpu_features features;
@@ -560,7 +581,7 @@ static struct {
   GraphicsStats stats;
   gpu_stream* stream;
   gpu_barrier barrier;
-  gpu_barrier transferBarrier;
+  gpu_barrier streamBarrier;
   gpu_tally* timestamps;
   uint32_t timestampCount;
   uint32_t tick;
@@ -612,12 +633,13 @@ static uint32_t measureTexture(TextureFormat format, uint32_t w, uint32_t h, uin
 static bool checkTextureBounds(const TextureInfo* info, uint32_t offset[4], uint32_t extent[3]);
 static void mipmapTexture(gpu_stream* stream, Texture* texture, uint32_t base, uint32_t count);
 static ShaderResource* findShaderResource(Shader* shader, const char* name, size_t length);
-static Access* getNextAccess(Pass* pass, int type, bool texture);
+static Access* getNextAccess(Pass* pass, int type, bool texture, bool raytracer);
 static void trackBuffer(Pass* pass, Buffer* buffer, gpu_phase phase, gpu_cache cache);
 static void trackTexture(Pass* pass, Texture* texture, gpu_phase phase, gpu_cache cache);
 static void trackMaterial(Pass* pass, Material* material);
+static void trackRaytracer(Pass* pass, Raytracer* raytracer, gpu_phase phase, gpu_cache cache);
 static bool syncResource(Access* access, gpu_barrier* barrier);
-static gpu_barrier syncTransfer(Sync* sync, gpu_phase phase, gpu_cache cache);
+static gpu_barrier syncStream(Sync* sync, gpu_phase phase, gpu_cache cache);
 static void updateModelTransforms(Model* model, uint32_t nodeIndex, float* parent);
 static bool checkShaderFeatures(uint32_t* features, uint32_t count);
 static void onResize(uint32_t width, uint32_t height);
@@ -885,6 +907,7 @@ void lovrGraphicsDestroy(void) {
     lovrFree(block->materials);
     lovrFree(block->bundlePool);
     lovrFree(block->bundles);
+    lovrFree(block->buffer);
     lovrFree(block);
     block = next;
   }
@@ -941,6 +964,7 @@ void lovrGraphicsGetFeatures(GraphicsFeatures* features) {
   features->wireframe = state.features.wireframe;
   features->depthClamp = state.features.depthClamp;
   features->depthResolve = state.features.depthResolve;
+  features->raytracing = state.features.rayQuery;
   features->indirectDrawFirstInstance = state.features.indirectDrawFirstInstance;
   features->packedBuffers = state.features.packedBuffers;
   features->float64 = state.features.float64;
@@ -1728,9 +1752,9 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
     memset(renderBarriers, 0, count * sizeof(gpu_barrier));
   }
 
-  if (state.transferBarrier.prev != 0 && state.transferBarrier.next != 0) {
+  if (state.streamBarrier.prev != 0 && state.streamBarrier.next != 0) {
     gpu_stream* stream = streams[streamCount++] = gpu_stream_begin(NULL);
-    gpu_sync(stream, &state.transferBarrier, 1);
+    gpu_sync(stream, &state.streamBarrier, 1);
     gpu_stream_end(stream);
   }
 
@@ -1968,7 +1992,7 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
   }
 
   memset(&state.barrier, 0, sizeof(gpu_barrier));
-  memset(&state.transferBarrier, 0, sizeof(gpu_barrier));
+  memset(&state.streamBarrier, 0, sizeof(gpu_barrier));
 
   stackPop(&thread.stack, stack);
   return true;
@@ -2187,7 +2211,7 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
     gpu_copy_buffers(state.stream, staging.buffer, buffer->gpu, staging.offset, 0, size);
     buffer->sync->writePhase = GPU_PHASE_COPY;
     buffer->sync->pendingWrite = GPU_CACHE_TRANSFER_WRITE;
-    buffer->sync->lastTransferWrite = state.tick;
+    buffer->sync->lastStreamWrite = state.tick;
     *data = staging.pointer;
   }
 
@@ -2236,7 +2260,7 @@ void* lovrBufferGetData(Buffer* buffer, uint32_t offset, uint32_t extent) {
   if (extent == ~0u) extent = buffer->info.size - offset;
   lovrCheck(offset + extent <= buffer->info.size, "Buffer read range goes past the end of the Buffer");
 
-  gpu_barrier barrier = syncTransfer(buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  gpu_barrier barrier = syncStream(buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
   gpu_sync(state.stream, &barrier, 1);
 
   BufferView view = getBuffer(GPU_BUFFER_DOWNLOAD, extent, 4);
@@ -2255,7 +2279,7 @@ void* lovrBufferSetData(Buffer* buffer, uint32_t offset, uint32_t extent) {
   if (extent == ~0u) extent = buffer->info.size - offset;
   lovrCheck(offset + extent <= buffer->info.size, "Attempt to write past the end of the Buffer");
 
-  gpu_barrier barrier = syncTransfer(buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
+  gpu_barrier barrier = syncStream(buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
 
   BufferView view = getBuffer(GPU_BUFFER_UPLOAD, extent, 4);
@@ -2271,8 +2295,8 @@ bool lovrBufferCopy(Buffer* src, Buffer* dst, uint32_t srcOffset, uint32_t dstOf
   lovrCheck(src != dst || (srcOffset >= dstOffset + extent || dstOffset >= srcOffset + extent), "Copying part of a Buffer to itself requires non-overlapping copy regions");
 
   gpu_barrier barriers[2];
-  barriers[0] = syncTransfer(src->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
-  barriers[1] = syncTransfer(dst->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
+  barriers[0] = syncStream(src->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  barriers[1] = syncStream(dst->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, barriers, 2);
 
   gpu_copy_buffers(state.stream, src->gpu, dst->gpu, src->base + srcOffset, dst->base + dstOffset, extent);
@@ -2286,7 +2310,7 @@ bool lovrBufferClear(Buffer* buffer, uint32_t offset, uint32_t extent, uint32_t 
   lovrCheck(extent % 4 == 0, "Buffer clear extent must be a multiple of 4");
   lovrCheck(offset + extent <= buffer->info.size, "Buffer clear range goes past the end of the Buffer");
 
-  gpu_barrier barrier = syncTransfer(buffer->sync, GPU_PHASE_CLEAR, GPU_CACHE_TRANSFER_WRITE);
+  gpu_barrier barrier = syncStream(buffer->sync, GPU_PHASE_CLEAR, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
 
   gpu_clear_buffer(state.stream, buffer->gpu, buffer->base + offset, extent, value);
@@ -2585,7 +2609,7 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
   } else if (levelCount > 0) {
     texture->sync->writePhase = GPU_PHASE_COPY | GPU_PHASE_BLIT;
     texture->sync->pendingWrite = GPU_CACHE_TRANSFER_WRITE;
-    texture->sync->lastTransferWrite = state.tick;
+    texture->sync->lastStreamWrite = state.tick;
   }
 
   for (uint32_t i = 0; i < mipmaps; i++) {
@@ -2766,7 +2790,7 @@ Image* lovrTextureGetPixels(Texture* texture, uint32_t offset[4], uint32_t exten
   lovrCheck(texture->info.samples == 1, "Can't get pixels of a multisampled texture");
   if (!checkTextureBounds(&texture->info, offset, extent)) return NULL;
 
-  gpu_barrier barrier = syncTransfer(texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  gpu_barrier barrier = syncStream(texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
   gpu_sync(state.stream, &barrier, 1);
 
   uint32_t rootOffset[4] = { offset[0], offset[1], offset[2] + texture->baseLayer, offset[3] + texture->baseLevel };
@@ -2822,7 +2846,7 @@ bool lovrTextureSetPixels(Texture* texture, Image* image, uint32_t dstOffset[4],
     }
   }
 
-  gpu_barrier barrier = syncTransfer(texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
+  gpu_barrier barrier = syncStream(texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
 
   uint32_t rootOffset[4] = { dstOffset[0], dstOffset[1], dstOffset[2] + texture->baseLayer, dstOffset[3] + texture->baseLevel };
@@ -2843,8 +2867,8 @@ bool lovrTextureCopy(Texture* src, Texture* dst, uint32_t srcOffset[4], uint32_t
   if (!checkTextureBounds(&dst->info, dstOffset, extent)) return false;
 
   gpu_barrier barriers[2];
-  barriers[0] = syncTransfer(src->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
-  barriers[1] = syncTransfer(dst->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
+  barriers[0] = syncStream(src->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  barriers[1] = syncStream(dst->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, barriers, 2);
 
   uint32_t srcRootOffset[4] = { srcOffset[0], srcOffset[1], srcOffset[2] + src->baseLayer, srcOffset[3] + src->baseLevel };
@@ -2877,8 +2901,8 @@ bool lovrTextureBlit(Texture* src, Texture* dst, uint32_t srcOffset[4], uint32_t
   if (!checkTextureBounds(&dst->info, dstOffset, dstExtent)) return false;
 
   gpu_barrier barriers[2];
-  barriers[0] = syncTransfer(src->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_READ);
-  barriers[1] = syncTransfer(dst->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_WRITE);
+  barriers[0] = syncStream(src->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_READ);
+  barriers[1] = syncStream(dst->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, barriers, 2);
 
   uint32_t srcRootOffset[4] = { srcOffset[0], srcOffset[1], srcOffset[2] + src->baseLayer, srcOffset[3] + src->baseLevel };
@@ -2894,7 +2918,7 @@ bool lovrTextureClear(Texture* texture, float value[4], uint32_t layer, uint32_t
   lovrCheck(texture->info.type == TEXTURE_3D || layer + layerCount <= texture->info.layers, "Texture clear range exceeds texture layer count");
   lovrCheck(level + levelCount <= texture->info.mipmaps, "Texture clear range exceeds texture mipmap count");
 
-  gpu_barrier barrier = syncTransfer(texture->sync, GPU_PHASE_CLEAR, GPU_CACHE_TRANSFER_WRITE);
+  gpu_barrier barrier = syncStream(texture->sync, GPU_PHASE_CLEAR, GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
 
   gpu_clear_texture(state.stream, texture->root->gpu, value, texture->baseLayer + layer, layerCount, texture->baseLevel + level, levelCount);
@@ -2909,7 +2933,7 @@ bool lovrTextureGenerateMipmaps(Texture* texture, uint32_t base, uint32_t count)
   lovrCheck(supports & GPU_FEATURE_BLIT, "This GPU does not support mipmapping this texture format/encoding");
   lovrCheck(base + count < texture->info.mipmaps, "Trying to generate too many mipmaps");
 
-  gpu_barrier barrier = syncTransfer(texture->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_READ | GPU_CACHE_TRANSFER_WRITE);
+  gpu_barrier barrier = syncStream(texture->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_READ | GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
 
   mipmapTexture(state.stream, texture, texture->baseLevel + base, count);
@@ -3034,6 +3058,7 @@ bool lovrGraphicsCompileShader(ShaderSource* stages, ShaderSource* outputs, uint
   const char* prefix = ""
     "#version 460\n"
     "#extension GL_EXT_multiview : require\n"
+    "#extension GL_EXT_ray_query : enable\n"
     "#extension GL_EXT_samplerless_texture_functions : require\n"
     "#extension GL_EXT_scalar_block_layout : enable\n"
     "#extension GL_GOOGLE_include_directive : require\n";
@@ -3498,7 +3523,8 @@ Shader* lovrShaderCreate(const ShaderInfo* info) {
         [SPV_COMBINED_TEXTURE_SAMPLER] = GPU_SLOT_TEXTURE_WITH_SAMPLER,
         [SPV_SAMPLED_TEXTURE] = GPU_SLOT_SAMPLED_TEXTURE,
         [SPV_STORAGE_TEXTURE] = GPU_SLOT_STORAGE_TEXTURE,
-        [SPV_SAMPLER] = GPU_SLOT_SAMPLER
+        [SPV_SAMPLER] = GPU_SLOT_SAMPLER,
+        [SPV_ACCELERATION_STRUCTURE] = GPU_SLOT_TREE
       };
 
       gpu_phase phases[] = {
@@ -3547,17 +3573,21 @@ Shader* lovrShaderCreate(const ShaderInfo* info) {
       bool buffer = resource->type == SPV_UNIFORM_BUFFER || resource->type == SPV_STORAGE_BUFFER;
       bool texture = resource->type == SPV_SAMPLED_TEXTURE || resource->type == SPV_STORAGE_TEXTURE || resource->type == SPV_COMBINED_TEXTURE_SAMPLER;
       bool sampler = resource->type == SPV_SAMPLER;
+      bool raytracer = resource->type == SPV_ACCELERATION_STRUCTURE;
       bool storage = resource->type == SPV_STORAGE_BUFFER || resource->type == SPV_STORAGE_TEXTURE;
 
       shader->bufferMask |= (buffer << *binding);
       shader->textureMask |= (texture << *binding);
       shader->samplerMask |= (sampler << *binding);
+      shader->raytracerMask |= (raytracer << *binding);
       shader->storageMask |= (storage << *binding);
 
       gpu_cache cache;
 
       if (storage) {
         cache = info->type == SHADER_COMPUTE ? GPU_CACHE_STORAGE_WRITE : GPU_CACHE_STORAGE_READ;
+      } else if (raytracer) {
+        cache = GPU_CACHE_TREE_READ;
       } else {
         cache = texture ? GPU_CACHE_TEXTURE : GPU_CACHE_UNIFORM;
       }
@@ -4587,6 +4617,7 @@ Mesh* lovrMeshCreate(const MeshInfo* info, void** vertices) {
   mesh->ref = 1;
   mesh->storage = info->storage;
   mesh->mode = DRAW_TRIANGLES;
+  mesh->treeFlags = info->raytracerFlags;
 
   if (buffer) {
     mesh->vertexBuffer = buffer;
@@ -4627,11 +4658,13 @@ Mesh* lovrMeshCreate(const MeshInfo* info, void** vertices) {
 
 void lovrMeshDestroy(void* ref) {
   Mesh* mesh = ref;
+  if (mesh->tree) gpu_tree_destroy(mesh->tree);
   lovrRelease(mesh->vertexBuffer, lovrBufferDestroy);
   lovrRelease(mesh->indexBuffer, lovrBufferDestroy);
   lovrRelease(mesh->material, lovrMaterialDestroy);
   lovrFree(mesh->vertices);
   lovrFree(mesh->indices);
+  lovrFree(mesh->tree);
   lovrFree(mesh);
 }
 
@@ -4753,26 +4786,27 @@ void* lovrMeshSetIndices(Mesh* mesh, uint32_t count, DataType type) {
   }
 }
 
-static float* lovrMeshGetPositions(Mesh* mesh) {
-  if (mesh->storage == MESH_GPU) return NULL;
+static const DataField* lovrMeshGetPositions(Mesh* mesh) {
   const DataField* format = lovrMeshGetVertexFormat(mesh);
   uint32_t positionHash = (uint32_t) hash64("VertexPosition", strlen("VertexPosition"));
   for (uint32_t i = 0; i < MAX(format->fieldCount, 1); i++) {
     const DataField* attribute = format->fieldCount > 0 ? &format->fields[i] : format;
     if (attribute->type == TYPE_F32x3 && attribute->hash == positionHash) {
-      return (float*) ((char*) mesh->vertices + attribute->offset);
+      return attribute;
     }
   }
   return NULL;
 }
 
 bool lovrMeshGetTriangles(Mesh* mesh, float** vertices, uint32_t** indices, uint32_t* vertexCount, uint32_t* indexCount) {
-  float* position = lovrMeshGetPositions(mesh);
   const DataField* format = lovrMeshGetVertexFormat(mesh);
   lovrCheck(mesh->storage == MESH_CPU, "Mesh storage mode must be 'cpu'");
   lovrCheck(mesh->mode == DRAW_TRIANGLES, "Mesh draw mode must be 'triangles'");
-  lovrCheck(position, "Mesh has no VertexPosition attribute with vec3 type");
   lovrCheck(mesh->indexCount > 0 || format->length % 3 == 0, "Mesh vertex count must be divisible by 3");
+
+  const DataField* attribute = lovrMeshGetPositions(mesh);
+  lovrCheck(attribute, "Mesh has no VertexPosition attribute with vec3 type");
+  float* position = (float*) ((char*) mesh->vertices + attribute->offset);
 
   *vertices = lovrMalloc(format->length * 3 * sizeof(float));
   *vertexCount = format->length;
@@ -4831,13 +4865,14 @@ void lovrMeshSetBoundingBox(Mesh* mesh, float box[6]) {
 
 bool lovrMeshComputeBoundingBox(Mesh* mesh) {
   const DataField* format = lovrMeshGetVertexFormat(mesh);
-  float* position = lovrMeshGetPositions(mesh);
+  const DataField* attribute = lovrMeshGetPositions(mesh);
 
-  if (!position) {
+  if (!attribute || mesh->storage == MESH_GPU) {
     return false;
   }
 
   float box[6] = { FLT_MAX, FLT_MIN, FLT_MAX, FLT_MIN, FLT_MAX, FLT_MIN };
+  float* position = (float*) ((char*) mesh->vertices + attribute->offset);
 
   for (uint32_t i = 0; i < format->length; i++, position = (float*) ((char*) position + format->stride)) {
     box[0] = MIN(box[0], position[0]);
@@ -4849,6 +4884,74 @@ bool lovrMeshComputeBoundingBox(Mesh* mesh) {
   }
 
   lovrMeshSetBoundingBox(mesh, box);
+  return true;
+}
+
+bool lovrMeshBuildRaytracer(Mesh* mesh) {
+  if (!mesh->tree) {
+    const DataField* vertex = mesh->vertexBuffer->info.format;
+    const DataField* index = mesh->indexCount > 0 ? mesh->indexBuffer->info.format : NULL;
+    const DataField* positions = lovrMeshGetPositions(mesh);
+    lovrCheck(positions, "Mesh has no VertexPosition attribute with vec3 type");
+
+    uint32_t triangleCount = index ? mesh->indexCount / 3 : vertex->length / 3;
+    lovrCheck(triangleCount <= (1 << 29) - 1, "Mesh has too many triangles for raytracing");
+
+    mesh->tree = lovrMalloc(gpu_sizeof_tree());
+
+    gpu_tree_info info = {
+      .type = GPU_TREE_BOTTOM,
+      .flags = mesh->treeFlags,
+      .capacity = 1,
+      .geometries = &(gpu_geometry_info) {
+        .vertexCount = vertex->length,
+        .triangleCount = triangleCount,
+        .vertexType = (gpu_attribute_type) positions->type,
+        .indexType = index && index->stride == 2 ? GPU_INDEX_U16 : GPU_INDEX_U32,
+        .vertexStride = vertex->stride,
+        .vertexOffset = 0,
+        .indexOffset = index ? 0 : ~0u,
+        .transformOffset = ~0u
+      }
+    };
+
+    if (!gpu_tree_init(mesh->tree, &info)) {
+      lovrSetError("Could not create mesh raytracing data: %s", gpu_get_error());
+      lovrFree(mesh->tree);
+      return false;
+    }
+  }
+
+  gpu_barrier barriers[3];
+  uint32_t count = 0;
+
+  barriers[count++] = syncStream(mesh->vertexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_TREE_INPUT);
+  if (mesh->indexCount > 0) {
+    barriers[count++] = syncStream(mesh->indexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_TREE_INPUT);
+  }
+
+  if (mesh->lastBuild == state.tick) {
+    barriers[count++] = (gpu_barrier) {
+      .prev = GPU_PHASE_TREE_BUILD,
+      .next = GPU_PHASE_TREE_BUILD,
+      .flush = GPU_CACHE_TREE_WRITE,
+      .clear = GPU_CACHE_TREE_WRITE
+    };
+  }
+
+  gpu_sync(state.stream, barriers, count);
+
+  gpu_build_tree(state.stream, mesh->tree, &(gpu_build_info) {
+    .type = GPU_TREE_BOTTOM,
+    .mode = GPU_TREE_BUILD,
+    .count = 1,
+    .vertices = gpu_buffer_get_address(mesh->vertexBuffer->gpu, 0),
+    .indices = mesh->indexCount > 0 ? gpu_buffer_get_address(mesh->indexBuffer->gpu, 0) : 0
+  });
+
+  mesh->lastBuild = state.tick;
+  state.pendingTreeBuild = true;
+
   return true;
 }
 
@@ -4925,6 +5028,7 @@ Model* lovrModelCreate(const ModelInfo* info) {
   Model* model = lovrCalloc(sizeof(Model));
   model->ref = 1;
   model->meta = info->data->meta;
+  model->treeFlags = info->raytracerFlags;
   lovrRetain(model->meta.blob);
 
   ModelData* data = info->data;
@@ -5109,7 +5213,7 @@ Model* lovrModelClone(Model* parent) {
       return NULL;
     }
 
-    gpu_barrier barrier = syncTransfer(parent->vertexBuffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+    gpu_barrier barrier = syncStream(parent->vertexBuffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
     gpu_sync(state.stream, &barrier, 1);
 
     Buffer* src = parent->vertexBuffer;
@@ -5162,6 +5266,7 @@ void lovrModelDestroy(void* ref) {
       lovrRelease(model->meshes[i], lovrMeshDestroy);
     }
   }
+  if (model->tree) gpu_tree_destroy(model->tree);
   lovrRelease(model->rawVertexBuffer, lovrBufferDestroy);
   lovrRelease(model->vertexBuffer, lovrBufferDestroy);
   lovrRelease(model->indexBuffer, lovrBufferDestroy);
@@ -5172,6 +5277,7 @@ void lovrModelDestroy(void* ref) {
   lovrFree(model->globalTransforms);
   lovrFree(model->blendShapeWeights);
   lovrFree(model->meshes);
+  lovrFree(model->tree);
   lovrFree(model);
 }
 
@@ -5594,6 +5700,314 @@ static bool lovrModelAnimateVertices(Model* model) {
   return true;
 }
 
+bool lovrModelBuildRaytracer(Model* model) {
+  ModelMetadata* meta = &model->meta;
+
+  // Count the number of transforms required (number of nodes with meshes)
+  // Also count the number of geometries needed (each part needs its own geometry due to baseVertex)
+  uint32_t transformCount = 0;
+  uint32_t geometryCount = 0;
+  for (uint32_t i = 0; i < meta->nodeCount; i++) {
+    if (meta->nodes[i].mesh != ~0u) {
+      transformCount++;
+      for (uint32_t p = 0; p < meta->meshes[meta->nodes[i].mesh].partCount; p++) {
+        if (meta->meshes[meta->nodes[i].mesh].parts[p].mode == DRAW_TRIANGLE_LIST) {
+          geometryCount++;
+        }
+      }
+    }
+  }
+
+  // Create tree if it doesn't exist
+  if (!model->tree) {
+    lovrCheck(geometryCount <= (1 << 24) - 1, "Model has too many parts for raytracing");
+    gpu_geometry_info* geometries = lovrMalloc(geometryCount * sizeof(gpu_geometry_info));
+
+    uint32_t geometryIndex = 0;
+    uint32_t transformOffset = 0;
+    uint32_t totalTriangleCount = 0;
+    for (uint32_t i = 0; i < meta->nodeCount && geometryIndex < geometryCount; i++) {
+      if (meta->nodes[i].mesh == ~0u) continue;
+
+      ModelMesh* mesh = &meta->meshes[meta->nodes[i].mesh];
+      ModelPart* part = mesh->parts;
+
+      for (uint32_t p = 0; p < mesh->partCount; p++, part++) {
+        if (part->mode != DRAW_TRIANGLE_LIST) continue;
+
+        geometries[geometryIndex++] = (gpu_geometry_info) {
+          .vertexCount = part->count,
+          .triangleCount = part->count / 3,
+          .vertexType = GPU_TYPE_F32x3,
+          .indexType = meta->indexSize == 2 ? GPU_INDEX_U16 : GPU_INDEX_U32,
+          .vertexStride = sizeof(ModelVertex),
+          .vertexOffset = mesh->indexCount > 0 ? mesh->vertexOffset * sizeof(ModelVertex) : (mesh->vertexOffset + part->start) * sizeof(ModelVertex),
+          .indexOffset = mesh->indexCount > 0 ? (mesh->indexOffset + part->start) * meta->indexSize : ~0u,
+          .baseVertex = mesh->indexCount > 0 ? mesh->vertexOffset + part->baseVertex : 0,
+          .transformOffset = transformOffset
+        };
+
+        totalTriangleCount += part->count / 3;
+      }
+
+      transformOffset += 48;
+    }
+
+    if (totalTriangleCount > (1 << 29) - 1) {
+      lovrSetError("Model has too many triangles for raytracing");
+      lovrFree(geometries);
+      return false;
+    }
+
+    model->tree = lovrMalloc(gpu_sizeof_tree());
+
+    gpu_tree_info info = {
+      .type = GPU_TREE_BOTTOM,
+      .flags = model->treeFlags,
+      .capacity = geometryCount,
+      .geometries = geometries
+    };
+
+    if (!gpu_tree_init(model->tree, &info)) {
+      lovrSetError("Could not create model raytracing data: %s", gpu_get_error());
+      lovrFree(model->tree);
+      lovrFree(geometries);
+      return false;
+    }
+
+    lovrFree(geometries);
+  }
+
+  // Make sure all the vertices and transforms are updated
+  if (!lovrModelAnimateVertices(model)) {
+    return false;
+  }
+
+  if (model->transformsDirty) {
+    updateModelTransforms(model, meta->rootNode, (float[]) MAT4_IDENTITY);
+    model->transformsDirty = false;
+  }
+
+  // Write the transforms
+  BufferView transforms = getBuffer(GPU_BUFFER_STREAM, transformCount * 12 * sizeof(float), 16);
+  if (!transforms.buffer) return false;
+
+  float* dst = transforms.pointer;
+  for (uint32_t i = 0; i < meta->nodeCount; i++) {
+    if (meta->nodes[i].mesh != ~0u) {
+      bool skinned = meta->nodes[i].skin != ~0u;
+      float* src = model->globalTransforms + 16 * i;
+      for (uint32_t row = 0; row < 3; row++) {
+        for (uint32_t col = 0; col < 4; col++) {
+          *dst++ = skinned ? (col == row ? 1.f : 0.f) : src[col * 4 + row];
+        }
+      }
+    }
+  }
+
+  // Synchronization
+  gpu_barrier barriers[3];
+  uint32_t count = 0;
+
+  barriers[count++] = syncStream(model->vertexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_TREE_INPUT);
+  if (model->indexBuffer) {
+    barriers[count++] = syncStream(model->indexBuffer->sync, GPU_PHASE_TREE_BUILD, GPU_CACHE_TREE_INPUT);
+  }
+
+  if (model->lastBuild == state.tick) {
+    barriers[count++] = (gpu_barrier) {
+      .prev = GPU_PHASE_TREE_BUILD,
+      .next = GPU_PHASE_TREE_BUILD,
+      .flush = GPU_CACHE_TREE_WRITE,
+      .clear = GPU_CACHE_TREE_WRITE
+    };
+  }
+
+  gpu_sync(state.stream, barriers, count);
+
+  // Build!
+  gpu_build_tree(state.stream, model->tree, &(gpu_build_info) {
+    .type = GPU_TREE_BOTTOM,
+    .mode = GPU_TREE_BUILD,
+    .count = geometryCount,
+    .vertices = gpu_buffer_get_address(model->vertexBuffer->gpu, 0),
+    .indices = model->indexBuffer ? gpu_buffer_get_address(model->indexBuffer->gpu, 0) : 0,
+    .transforms = gpu_buffer_get_address(transforms.buffer, transforms.offset)
+  });
+
+  model->lastBuild = state.tick;
+  state.pendingTreeBuild = true;
+
+  return true;
+}
+
+// Raytracer
+
+Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
+  lovrCheck(state.features.rayQuery, "This GPU does not support ray tracing");
+  lovrCheck(info->capacity <= (1 << 24) - 1, "Currently, the max raytracer capacity is %d", (1 << 24) - 1);
+
+  Raytracer* raytracer = lovrCalloc(sizeof(Raytracer) + gpu_sizeof_tree());
+  raytracer->ref = 1;
+  raytracer->info = *info;
+  raytracer->gpu = (gpu_tree*) (raytracer + 1);
+  raytracer->instances = lovrMalloc(info->capacity * sizeof(gpu_tree_instance));
+  raytracer->refs = lovrMalloc(info->capacity * sizeof(void*));
+
+  gpu_tree_info gpuinfo = {
+    .type = GPU_TREE_TOP,
+    .flags = info->flags,
+    .capacity = info->capacity
+  };
+
+  if (!gpu_tree_init(raytracer->gpu, &gpuinfo)) {
+    lovrSetError("Failed to create raytracer: %s", gpu_get_error());
+    lovrFree(raytracer);
+    return NULL;
+  }
+
+  raytracer->sync.barrier = &state.barrier;
+
+  return raytracer;
+}
+
+void lovrRaytracerDestroy(void* ref) {
+  Raytracer* raytracer = ref;
+  lovrRaytracerClear(raytracer);
+  gpu_tree_destroy(raytracer->gpu);
+  lovrFree(raytracer->instances);
+  lovrFree(raytracer->refs);
+  lovrFree(raytracer);
+}
+
+uint32_t lovrRaytracerGetCapacity(Raytracer* raytracer) {
+  return raytracer->info.capacity;
+}
+
+uint32_t lovrRaytracerGetCount(Raytracer* raytracer) {
+  return raytracer->count;
+}
+
+void lovrRaytracerClear(Raytracer* raytracer) {
+  for (uint32_t i = 0; i < raytracer->meshCount; i++) {
+    lovrRelease(raytracer->refs[i], lovrMeshDestroy);
+  }
+
+  for (uint32_t i = 0; i < raytracer->modelCount; i++) {
+    lovrRelease(raytracer->refs[raytracer->info.capacity - i - 1], lovrModelDestroy);
+  }
+
+  raytracer->count = 0;
+  raytracer->meshCount = 0;
+  raytracer->modelCount = 0;
+  raytracer->canUpdate = false;
+}
+
+static uint32_t lovrRaytracerAdd(Raytracer* raytracer, gpu_tree* tree, float transform[16], uint32_t layers, uint32_t tag) {
+  uint32_t id = raytracer->count++;
+
+  raytracer->instances[id] = (gpu_tree_instance) {
+    .transform = {
+      { transform[0], transform[4], transform[8], transform[12] },
+      { transform[1], transform[5], transform[9], transform[13] },
+      { transform[2], transform[6], transform[10], transform[14] },
+    },
+    .id = tag == ~0u ? id : tag,
+    .mask = layers,
+    .tree = gpu_tree_get_address(tree)
+  };
+
+  raytracer->canUpdate = false;
+
+  return id;
+}
+
+bool lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16], uint32_t layers, uint32_t tag, uint32_t* id) {
+  if (raytracer->count >= raytracer->info.capacity) {
+    *id = ~0u;
+    return true;
+  }
+
+  if (!mesh->tree && !lovrMeshBuildRaytracer(mesh)) {
+    return false;
+  }
+
+  *id = lovrRaytracerAdd(raytracer, mesh->tree, transform, layers, tag);
+  raytracer->refs[raytracer->meshCount++] = mesh;
+  lovrRetain(mesh);
+  return true;
+}
+
+bool lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16], uint32_t layers, uint32_t tag, uint32_t* id) {
+  if (raytracer->count >= raytracer->info.capacity) {
+    *id = ~0u;
+    return true;
+  }
+
+  if (!model->tree && !lovrModelBuildRaytracer(model)) {
+    return false;
+  }
+
+  *id = lovrRaytracerAdd(raytracer, model->tree, transform, layers, tag);
+  raytracer->refs[raytracer->info.capacity - ++raytracer->modelCount] = model;
+  lovrRetain(model);
+  return true;
+}
+
+bool lovrRaytracerSet(Raytracer* raytracer, uint32_t id, float transform[16], uint32_t layers, uint32_t tag) {
+  lovrCheck(id < raytracer->count, "Invalid id %d", id);
+
+  if (transform) {
+    for (uint32_t row = 0; row < 3; row++) {
+      for (uint32_t col = 0; col < 4; col++) {
+        raytracer->instances[id].transform[row][col] = transform[4 * col + row];
+      }
+    }
+  }
+
+  if (layers != ~0u) {
+    raytracer->instances[id].mask = (uint8_t) layers;
+  }
+
+  if (tag != ~0u) {
+    raytracer->instances[id].id = tag;
+  }
+
+  return true;
+}
+
+void lovrRaytracerBuild(Raytracer* raytracer) {
+  BufferView view = getBuffer(GPU_BUFFER_STREAM, raytracer->count * sizeof(gpu_tree_instance), 16);
+  memcpy(view.pointer, raytracer->instances, view.extent);
+
+  bool update = (raytracer->info.flags & RAYTRACER_DYNAMIC) && raytracer->canUpdate;
+  raytracer->canUpdate = true;
+
+  gpu_barrier barriers[2];
+  uint32_t count = 0;
+
+  barriers[count++] = syncStream(&raytracer->sync, GPU_PHASE_TREE_BUILD, update ? (GPU_CACHE_TREE_READ | GPU_CACHE_TREE_WRITE) : GPU_CACHE_TREE_WRITE);
+
+  if (state.pendingTreeBuild) {
+    barriers[count++] = (gpu_barrier) {
+      .prev = GPU_PHASE_TREE_BUILD,
+      .next = GPU_PHASE_TREE_BUILD,
+      .flush = GPU_CACHE_TREE_WRITE,
+      .clear = update ? (GPU_CACHE_TREE_READ | GPU_CACHE_TREE_WRITE) : GPU_CACHE_TREE_WRITE
+    };
+    state.pendingTreeBuild = false;
+  }
+
+  gpu_sync(state.stream, barriers, count);
+
+  gpu_build_tree(state.stream, raytracer->gpu, &(gpu_build_info) {
+    .type = GPU_TREE_TOP,
+    .mode = update ? GPU_TREE_UPDATE : GPU_TREE_BUILD,
+    .count = raytracer->count,
+    .instances = gpu_buffer_get_address(view.buffer, view.offset)
+  });
+}
+
 // Readback
 
 static Readback* lovrReadbackCreate(ReadbackType type) {
@@ -5621,7 +6035,7 @@ Readback* lovrReadbackCreateBuffer(Buffer* buffer, uint32_t offset, uint32_t ext
   readback->blob = lovrBlobCreate(data, extent, "Readback");
   readback->view = view;
   lovrRetain(buffer);
-  gpu_barrier barrier = syncTransfer(buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  gpu_barrier barrier = syncStream(buffer->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
   gpu_sync(state.stream, &barrier, 1);
   gpu_copy_buffers(state.stream, buffer->gpu, readback->view.buffer, buffer->base + offset, readback->view.offset, extent);
   return readback;
@@ -5642,7 +6056,7 @@ Readback* lovrReadbackCreateTexture(Texture* texture, uint32_t offset[4], uint32
   Readback* readback = lovrReadbackCreate(READBACK_TEXTURE);
   readback->image = image;
   readback->view = view;
-  gpu_barrier barrier = syncTransfer(texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
+  gpu_barrier barrier = syncStream(texture->sync, GPU_PHASE_COPY, GPU_CACHE_TRANSFER_READ);
   gpu_sync(state.stream, &barrier, 1);
   gpu_copy_texture_buffer(state.stream, texture->gpu, readback->view.buffer, offset, readback->view.offset, extent);
   return readback;
@@ -5788,8 +6202,13 @@ static void lovrPassRelease(Pass* pass) {
   for (uint32_t i = 0; i < COUNTOF(pass->access); i++) {
     for (AccessBlock* block = pass->access[i]; block != NULL; block = block->next) {
       for (uint32_t j = 0; j < block->count; j++) {
-        bool texture = block->textureMask & (1ull << j);
-        lovrRelease(block->list[j].object, texture ? lovrTextureDestroy : lovrBufferDestroy);
+        if (block->textureMask & (1ull << j)) {
+          lovrRelease(block->list[j].object, lovrTextureDestroy);
+        } else if (block->raytracerMask & (1ull << j)) {
+          lovrRelease(block->list[j].object, lovrRaytracerDestroy);
+        } else {
+          lovrRelease(block->list[j].object, lovrBufferDestroy);
+        }
       }
     }
   }
@@ -6796,6 +7215,22 @@ bool lovrPassSendSampler(Pass* pass, const char* name, size_t length, Sampler* s
 
   pass->bindings[slot].texture.object = state.defaultTexture->gpu;
   pass->bindings[slot].texture.sampler = sampler->gpu;
+  pass->flags |= DIRTY_BINDINGS;
+  return true;
+}
+
+bool lovrPassSendRaytracer(Pass* pass, const char* name, size_t length, Raytracer* raytracer) {
+  Shader* shader = pass->pipeline->shader;
+  lovrCheck(shader, "A Shader must be active to send resources");
+
+  ShaderResource* resource = findShaderResource(shader, name, length);
+  lovrCheck(resource, "Shader has no variable named '%s'", name);
+  uint32_t slot = resource->binding;
+
+  lovrCheck(shader->raytracerMask & (1u << slot), "Trying to send a Raytracer to '%s', but the shader variable isn't a Raytracer", name);
+
+  trackRaytracer(pass, raytracer, resource->phase, resource->cache);
+  pass->bindings[slot].tree = raytracer->gpu;
   pass->flags |= DIRTY_BINDINGS;
   return true;
 }
@@ -8806,7 +9241,7 @@ static ShaderResource* findShaderResource(Shader* shader, const char* name, size
   return NULL;
 }
 
-static Access* getNextAccess(Pass* pass, int type, bool texture) {
+static Access* getNextAccess(Pass* pass, int type, bool texture, bool raytracer) {
   AccessBlock* block = pass->access[type];
 
   if (!block || block->count >= COUNTOF(block->list)) {
@@ -8815,16 +9250,18 @@ static Access* getNextAccess(Pass* pass, int type, bool texture) {
     new->next = block;
     new->count = 0;
     new->textureMask = 0;
+    new->raytracerMask = 0;
     block = new;
   }
 
   block->textureMask |= (uint64_t) texture << block->count;
+  block->raytracerMask |= (uint64_t) raytracer << block->count;
   return &block->list[block->count++];
 }
 
 static void trackBuffer(Pass* pass, Buffer* buffer, gpu_phase phase, gpu_cache cache) {
   if (!buffer) return;
-  Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, false);
+  Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, false, false);
   access->sync = buffer->sync;
   access->object = buffer;
   access->phase = phase;
@@ -8841,7 +9278,7 @@ static void trackTexture(Pass* pass, Texture* texture, gpu_phase phase, gpu_cach
     cache = 0;
   }
 
-  Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, true);
+  Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, true, false);
   access->sync = texture->sync;
   access->object = texture;
   access->phase = phase;
@@ -8864,6 +9301,15 @@ static void trackMaterial(Pass* pass, Material* material) {
   trackTexture(pass, material->info.clearcoatTexture, phase, cache);
   trackTexture(pass, material->info.occlusionTexture, phase, cache);
   trackTexture(pass, material->info.normalTexture, phase, cache);
+}
+
+static void trackRaytracer(Pass* pass, Raytracer* raytracer, gpu_phase phase, gpu_cache cache) {
+  Access* access = getNextAccess(pass, phase == GPU_PHASE_SHADER_COMPUTE ? ACCESS_COMPUTE : ACCESS_RENDER, false, true);
+  access->sync = &raytracer->sync;
+  access->object = raytracer;
+  access->phase = phase;
+  access->cache = cache;
+  lovrRetain(raytracer);
 }
 
 static bool syncResource(Access* access, gpu_barrier* barrier) {
@@ -8926,22 +9372,22 @@ static bool syncResource(Access* access, gpu_barrier* barrier) {
   return write;
 }
 
-static gpu_barrier syncTransfer(Sync* sync, gpu_phase phase, gpu_cache cache) {
+static gpu_barrier syncStream(Sync* sync, gpu_phase phase, gpu_cache cache) {
   gpu_barrier localBarrier = { 0 };
   gpu_barrier* barrier = NULL;
 
-  // If there was already a transfer write to the resource this frame, a "just in time" barrier is required
-  // If this is a transfer write, a "just in time" barrier is only needed if there's been a transfer read this frame
+  // If there was already a stream write to the resource this frame, a "just in time" barrier is required
+  // If this is a stream write, a "just in time" barrier is only needed if there's been a stream read this frame
   // Otherwise, the barrier can go at the beginning of the frame and get batched with other barriers
-  if (sync->lastTransferWrite == state.tick || (sync->lastTransferRead == state.tick && (cache & GPU_CACHE_WRITE_MASK))) {
+  if (sync->lastStreamWrite == state.tick || (sync->lastStreamRead == state.tick && (cache & GPU_CACHE_WRITE_MASK))) {
     barrier = &localBarrier;
   } else {
-    barrier = &state.transferBarrier;
+    barrier = &state.streamBarrier;
   }
 
   syncResource(&(Access) { sync, NULL, phase, cache }, barrier);
-  if (cache & GPU_CACHE_READ_MASK) sync->lastTransferRead = state.tick;
-  if (cache & GPU_CACHE_WRITE_MASK) sync->lastTransferWrite = state.tick;
+  if (cache & GPU_CACHE_READ_MASK) sync->lastStreamRead = state.tick;
+  if (cache & GPU_CACHE_WRITE_MASK) sync->lastStreamWrite = state.tick;
 
   return localBarrier;
 }
@@ -9011,6 +9457,7 @@ static bool checkShaderFeatures(uint32_t* features, uint32_t count) {
       case 4427: break; // ShaderDrawParameters
       case 4437: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "multigpu");
       case 4439: lovrCheck(state.limits.renderSize[2] > 1, "GPU does not support shader feature #%d: %s", features[i], "multiview"); break;
+      case 4472: lovrCheck(state.features.rayQuery, "GPU does not support shader feature #%d: %s", features[i], "raytracing"); break;
       case 5301: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "non-uniform indexing");
       case 5306: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "non-uniform indexing");
       case 5307: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "non-uniform indexing");

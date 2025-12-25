@@ -327,6 +327,34 @@ uint32_t luax_checkcomparemode(lua_State* L, int index) {
   return luax_checkenum(L, index, CompareMode, "none");
 }
 
+uint32_t luax_checkraytracerflags(lua_State* L, int index) {
+  uint32_t flags = RAYTRACER_FAST_TRACE;
+
+  if (lua_istable(L, index)) {
+    lua_getfield(L, index, "dynamic");
+    flags |= lua_toboolean(L, -1) ? RAYTRACER_DYNAMIC : 0;
+    lua_pop(L, 1);
+
+    lua_getfield(L, index, "fasttrace");
+    flags |= lua_toboolean(L, -1) ? RAYTRACER_FAST_TRACE : 0;
+    lua_pop(L, 1);
+
+    lua_getfield(L, index, "fastbuild");
+    flags |= lua_toboolean(L, -1) ? RAYTRACER_FAST_BUILD : 0;
+    lua_pop(L, 1);
+
+    lua_getfield(L, index, "compress");
+    flags |= lua_toboolean(L, -1) ? RAYTRACER_COMPRESS : 0;
+    lua_pop(L, 1);
+
+    if ((flags & RAYTRACER_FAST_TRACE) && (flags & RAYTRACER_FAST_BUILD)) {
+      flags &= ~RAYTRACER_FAST_BUILD;
+    }
+  }
+
+  return flags;
+}
+
 static void luax_writeshadercache(void) {
   size_t size;
   lovrGraphicsGetShaderCache(NULL, &size);
@@ -482,6 +510,7 @@ static int l_lovrGraphicsGetFeatures(lua_State* L) {
   lua_pushboolean(L, features.wireframe), lua_setfield(L, -2, "wireframe");
   lua_pushboolean(L, features.depthClamp), lua_setfield(L, -2, "depthClamp");
   lua_pushboolean(L, features.depthResolve), lua_setfield(L, -2, "depthResolve");
+  lua_pushboolean(L, features.raytracing), lua_setfield(L, -2, "raytracing");
   lua_pushboolean(L, features.indirectDrawFirstInstance), lua_setfield(L, -2, "indirectDrawFirstInstance");
   lua_pushboolean(L, features.packedBuffers), lua_setfield(L, -2, "packedBuffers");
   lua_pushboolean(L, features.float64), lua_setfield(L, -2, "float64");
@@ -1512,7 +1541,19 @@ static int l_lovrGraphicsNewMesh(lua_State* L) {
     default: return luax_typeerror(L, index, "number, table, Blob, or Buffer");
   }
 
-  if (info.vertexBuffer) {
+  if (lua_istable(L, index + 1)) {
+    if (info.vertexBuffer) {
+      info.storage = MESH_GPU;
+    } else {
+      lua_getfield(L, index + 1, "storage");
+      info.storage = luax_checkenum(L, -1, MeshStorage, "cpu");
+      lua_pop(L, 1);
+    }
+
+    lua_getfield(L, index + 1, "raytracer");
+    info.raytracerFlags = luax_checkraytracerflags(L, -1);
+    lua_pop(L, 1);
+  } else if (info.vertexBuffer) {
     info.storage = MESH_GPU;
   } else {
     info.storage = luax_checkenum(L, index + 1, MeshStorage, "cpu");
@@ -1556,6 +1597,10 @@ static int l_lovrGraphicsNewModel(lua_State* L) {
     lua_getfield(L, 2, "materials");
     info.materials = lua_isnil(L, -1) || lua_toboolean(L, -1);
     lua_pop(L, 1);
+
+    lua_getfield(L, 2, "raytracer");
+    info.raytracerFlags = luax_checkraytracerflags(L, -1);
+    lua_pop(L, 1);
   }
 
   Model* model = lovrModelCreate(&info);
@@ -1563,6 +1608,17 @@ static int l_lovrGraphicsNewModel(lua_State* L) {
   luax_assert(L, model);
   luax_pushtype(L, Model, model);
   lovrRelease(model, lovrModelDestroy);
+  return 1;
+}
+
+static int l_lovrGraphicsNewRaytracer(lua_State* L) {
+  RaytracerInfo info = { 0 };
+  info.capacity = luax_checku32(L, 1);
+  info.flags = luax_checkraytracerflags(L, 2);
+  Raytracer* raytracer = lovrRaytracerCreate(&info);
+  luax_assert(L, raytracer);
+  luax_pushtype(L, Raytracer, raytracer);
+  lovrRelease(raytracer, lovrRaytracerDestroy);
   return 1;
 }
 
@@ -1613,6 +1669,7 @@ static const luaL_Reg lovrGraphics[] = {
   { "newFont", l_lovrGraphicsNewFont },
   { "newMesh", l_lovrGraphicsNewMesh },
   { "newModel", l_lovrGraphicsNewModel },
+  { "newRaytracer", l_lovrGraphicsNewRaytracer },
   { "newPass", l_lovrGraphicsNewPass },
   { NULL, NULL }
 };
@@ -1628,6 +1685,7 @@ extern const luaL_Reg lovrMaterial[];
 extern const luaL_Reg lovrFont[];
 extern const luaL_Reg lovrMesh[];
 extern const luaL_Reg lovrModel[];
+extern const luaL_Reg lovrRaytracer[];
 extern const luaL_Reg lovrReadback[];
 extern const luaL_Reg lovrPass[];
 
@@ -1642,6 +1700,7 @@ int luaopen_lovr_graphics(lua_State* L) {
   luax_registertype(L, Font);
   luax_registertype(L, Mesh);
   luax_registertype(L, Model);
+  luax_registertype(L, Raytracer);
   luax_registertype(L, Readback);
   luax_registertype(L, Pass);
 

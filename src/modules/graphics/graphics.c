@@ -292,6 +292,7 @@ struct Model {
   Mesh** meshes;
   Texture** textures;
   Material** materials;
+  bool* nodeVisibility;
   NodeTransform* localTransforms;
   float* globalTransforms;
   float* blendShapeWeights;
@@ -5177,6 +5178,10 @@ Model* lovrModelCreate(const ModelInfo* info) {
     lovrModelResetBlendShapes(model);
   }
 
+  // Visibility
+  model->nodeVisibility = lovrMalloc(meta->nodeCount * sizeof(bool));
+  memset(model->nodeVisibility, 0xff, meta->nodeCount * sizeof(bool));
+
   // Transforms
   model->localTransforms = lovrMalloc(sizeof(NodeTransform) * meta->nodeCount);
   model->globalTransforms = lovrMalloc(16 * sizeof(float) * meta->nodeCount);
@@ -5231,6 +5236,9 @@ Model* lovrModelClone(Model* parent) {
   model->blendShapeWeights = lovrMalloc(meta->blendShapeCount * sizeof(float));
   lovrModelResetBlendShapes(model);
 
+  model->nodeVisibility = lovrMalloc(meta->nodeCount * sizeof(bool));
+  memset(model->nodeVisibility, 0xff, meta->nodeCount * sizeof(bool));
+
   model->localTransforms = lovrMalloc(sizeof(NodeTransform) * meta->nodeCount);
   model->globalTransforms = lovrMalloc(16 * sizeof(float) * meta->nodeCount);
   lovrModelResetNodeTransforms(model);
@@ -5243,6 +5251,7 @@ void lovrModelDestroy(void* ref) {
   if (model->parent) {
     lovrRelease(model->parent, lovrModelDestroy);
     lovrRelease(model->vertexBuffer, lovrBufferDestroy);
+    lovrFree(model->nodeVisibility);
     lovrFree(model->localTransforms);
     lovrFree(model->globalTransforms);
     lovrFree(model->blendShapeWeights);
@@ -5273,6 +5282,7 @@ void lovrModelDestroy(void* ref) {
   lovrRelease(model->blendBuffer, lovrBufferDestroy);
   lovrRelease(model->skinBuffer, lovrBufferDestroy);
   lovrRelease(model->meta.blob, lovrBlobDestroy);
+  lovrFree(model->nodeVisibility);
   lovrFree(model->localTransforms);
   lovrFree(model->globalTransforms);
   lovrFree(model->blendShapeWeights);
@@ -5461,6 +5471,14 @@ void lovrModelSetNodeTransform(Model* model, uint32_t node, float position[3], f
   }
 
   model->transformsDirty = true;
+}
+
+bool lovrModelIsNodeVisible(Model* model, uint32_t node) {
+  return model->nodeVisibility[node];
+}
+
+void lovrModelSetNodeVisible(Model* model, uint32_t node, bool visible) {
+  model->nodeVisibility[node] = visible;
 }
 
 Buffer* lovrModelGetVertexBuffer(Model* model) {
@@ -8521,6 +8539,8 @@ bool lovrPassDrawMesh(Pass* pass, Mesh* mesh, float* transform, uint32_t instanc
 }
 
 static bool drawNode(Pass* pass, Model* model, uint32_t index, uint32_t instances) {
+  if (!model->nodeVisibility[index]) return true;
+
   ModelMetadata* meta = &model->meta;
   ModelNode* node = &meta->nodes[index];
   mat4 globalTransform = model->globalTransforms + 16 * index;

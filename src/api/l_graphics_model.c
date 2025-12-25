@@ -36,6 +36,22 @@ static int l_lovrModelClone(lua_State* L) {
   return 1;
 }
 
+static int l_lovrModelIsNodeVisible(lua_State* L) {
+  Model* model = luax_checktype(L, 1, Model);
+  uint32_t node = luax_checknodeindex(L, 2, lovrModelGetMetadata(model));
+  bool visible = lovrModelIsNodeVisible(model, node);
+  lua_pushboolean(L, visible);
+  return 1;
+}
+
+static int l_lovrModelSetNodeVisible(lua_State* L) {
+  Model* model = luax_checktype(L, 1, Model);
+  uint32_t node = luax_checknodeindex(L, 2, lovrModelGetMetadata(model));
+  bool visible = lua_toboolean(L, 3);
+  lovrModelSetNodeVisible(model, node, visible);
+  return 0;
+}
+
 static int l_lovrModelGetNodePosition(lua_State* L) {
   Model* model = luax_checktype(L, 1, Model);
   uint32_t node = luax_checknodeindex(L, 2, lovrModelGetMetadata(model));
@@ -335,6 +351,8 @@ const luaL_Reg lovrModel[] = {
   { "getNodeSibling", l_lovrModelMetaGetNodeSibling },
   { "getNodeParent", l_lovrModelMetaGetNodeParent },
   { "getNodeMesh", l_lovrModelMetaGetNodeMesh },
+  { "isNodeVisible", l_lovrModelIsNodeVisible },
+  { "setNodeVisible", l_lovrModelSetNodeVisible },
   { "getNodePosition", l_lovrModelGetNodePosition },
   { "setNodePosition", l_lovrModelSetNodePosition },
   { "getNodeOrientation", l_lovrModelGetNodeOrientation },

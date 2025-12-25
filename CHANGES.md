@@ -37,6 +37,7 @@ dev
 - Add `Mat4:setPosition/Orientation/Scale/Pose`.
 - Add `lovr.data.newBlobView`.
 - Add `lovr.graphics.getStats`.
+- Add `Model:is/setNodeVisible`.
 
 ### Change
 

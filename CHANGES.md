@@ -79,6 +79,7 @@ dev
 - Fix thread stack traces to use the correct filename.
 - Fix `t.headset.seated`.
 - Fix multiple issues with GPU memory allocation.
+- Fix `dt` to use delta time from `lovr.timer` when headset is idle.
 
 ### Deprecate
 

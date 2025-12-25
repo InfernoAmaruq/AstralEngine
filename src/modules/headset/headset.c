@@ -1978,7 +1978,7 @@ bool lovrHeadsetUpdate(double* dt) {
 }
 
 double lovrHeadsetGetDeltaTime(void) {
-  if (state.session) {
+  if (SESSION_RUNNING(state.sessionState)) {
     return (state.frameState.predictedDisplayTime - state.lastDisplayTime) / 1e9;
   } else {
     return lovrTimerGetDelta();
@@ -1986,7 +1986,7 @@ double lovrHeadsetGetDeltaTime(void) {
 }
 
 double lovrHeadsetGetDisplayTime(void) {
-  if (state.session) {
+  if (SESSION_RUNNING(state.sessionState)) {
     return (state.frameState.predictedDisplayTime - state.epoch) / 1e9;
   } else {
     return lovrTimerGetTime();

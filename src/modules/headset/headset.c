@@ -3038,11 +3038,8 @@ static bool animateEXT(Model* model) {
       float position[3], orientation[4];
       vec3_init(position, &nodeState.nodePose.position.x);
       quat_init(orientation, &nodeState.nodePose.orientation.x);
-
-      float zero[3] = { 0.f, 0.f, 0.f };
-      float* scale = nodeState.isVisible ? NULL : zero;
-
-      lovrModelSetNodeTransform(model, renderModel->nodes[n], position, scale, orientation, ORIGIN_PARENT);
+      lovrModelSetNodeTransform(model, renderModel->nodes[n], position, NULL, orientation, ORIGIN_PARENT);
+      lovrModelSetNodeVisible(model, renderModel->nodes[n], nodeState.isVisible);
     }
 
     return true;

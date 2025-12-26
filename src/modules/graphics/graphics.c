@@ -6,6 +6,7 @@
 #include "event/event.h"
 #include "headset/headset.h"
 #include "math/math.h"
+#include "timer/timer.h"
 #include "core/gpu.h"
 #include "core/job.h"
 #include "core/maf.h"
@@ -1380,9 +1381,9 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
   global->resolution[0] = pass->width;
   global->resolution[1] = pass->height;
 #ifdef LOVR_DISABLE_HEADSET
-  global->time = os_get_time();
+  global->time = lovrTimerGetTime();
 #else
-  global->time = lovrHeadsetIsActive() ? lovrHeadsetGetDisplayTime() : os_get_time();
+  global->time = lovrHeadsetIsActive() ? lovrHeadsetGetDisplayTime() : lovrTimerGetTime();
 #endif
 
   // Cameras

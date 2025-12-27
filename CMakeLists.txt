@@ -116,9 +116,7 @@ if(LOVR_USE_LUAU)
     Luau.CLI.lib
     Luau.CodeGen
     Luau.Config
-    Luau.EqSat
     Luau.Require
-    Luau.RequireNavigator
     PROPERTIES EXCLUDE_FROM_ALL 1
   )
   set(LOVR_LUA Luau.VM Luau.Compiler Luau.Ast)

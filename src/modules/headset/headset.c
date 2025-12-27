@@ -321,6 +321,7 @@ static struct {
     bool foveationVulkan;
     bool frameController;
     bool gaze;
+    bool genericController;
     bool handInteraction;
     bool handTracking;
     bool handTrackingDataSource;
@@ -474,6 +475,7 @@ bool lovrHeadsetConnect(void) {
 #ifndef _WIN32
     { "XR_KHR_convert_timespec_time", NULL, true },
 #endif
+    { "XR_KHR_generic_controller", &state.extensions.genericController, true },
     { "XR_KHR_visibility_mask", &state.extensions.visibilityMask, config->mask },
 #ifdef LOVR_VK
     { "XR_KHR_vulkan_enable2", NULL, true },
@@ -821,6 +823,7 @@ bool lovrHeadsetConnect(void) {
 
   enum {
     PROFILE_SIMPLE,
+    PROFILE_GENERIC,
     PROFILE_VIVE,
     PROFILE_TOUCH,
     PROFILE_TOUCH_PRO,
@@ -840,6 +843,7 @@ bool lovrHeadsetConnect(void) {
 
   const char* interactionProfilePaths[] = {
     [PROFILE_SIMPLE] = "/interaction_profiles/khr/simple_controller",
+    [PROFILE_GENERIC] = "/interaction_profiles/khr/generic_controller",
     [PROFILE_VIVE] = "/interaction_profiles/htc/vive_controller",
     [PROFILE_TOUCH] = "/interaction_profiles/oculus/touch_controller",
     [PROFILE_TOUCH_PRO] = "/interaction_profiles/facebook/touch_controller_pro",
@@ -877,6 +881,37 @@ bool lovrHeadsetConnect(void) {
       { ACTION_TRIGGER_DOWN, "/user/hand/right/input/select/click" },
       { ACTION_MENU_DOWN, "/user/hand/left/input/menu/click" },
       { ACTION_MENU_DOWN, "/user/hand/right/input/menu/click" },
+      { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
+      { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
+    },
+    [PROFILE_GENERIC] = (Binding[]) {
+      { ACTION_GRIP_POSE, "/user/hand/left/input/grip/pose" },
+      { ACTION_GRIP_POSE, "/user/hand/right/input/grip/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/left/input/aim/pose" },
+      { ACTION_POINTER_POSE, "/user/hand/right/input/aim/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/left/input/pinch_ext/pose" },
+      { ACTION_PINCH_POSE, "/user/hand/right/input/pinch_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/left/input/poke_ext/pose" },
+      { ACTION_POKE_POSE, "/user/hand/right/input/poke_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/left/input/palm_ext/pose" },
+      { ACTION_PALM_POSE, "/user/hand/right/input/palm_ext/pose" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_DOWN, "/user/hand/right/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/left/input/trigger/value" },
+      { ACTION_TRIGGER_AXIS, "/user/hand/right/input/trigger/value" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/left/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_DOWN, "/user/hand/right/input/thumbstick/click" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/left/input/thumbstick" },
+      { ACTION_THUMBSTICK_AXIS, "/user/hand/right/input/thumbstick" },
+      { ACTION_GRIP_DOWN, "/user/hand/left/input/squeeze/value" },
+      { ACTION_GRIP_DOWN, "/user/hand/right/input/squeeze/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/left/input/squeeze/value" },
+      { ACTION_GRIP_AXIS, "/user/hand/right/input/squeeze/value" },
+      { ACTION_A_DOWN, "/user/hand/left/input/primary/click" },
+      { ACTION_A_DOWN, "/user/hand/right/input/primary/click" },
+      { ACTION_B_DOWN, "/user/hand/left/input/secondary/click" },
+      { ACTION_B_DOWN, "/user/hand/right/input/secondary/click" },
       { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
       { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
       { 0, NULL }
@@ -1350,6 +1385,10 @@ bool lovrHeadsetConnect(void) {
   }
 
   // Don't suggest bindings for unsupported input profiles
+
+  if (!state.extensions.genericController) {
+    bindingCount[PROFILE_GENERIC] = 0;
+  }
 
   if (!state.extensions.ml2Controller) {
     bindingCount[PROFILE_ML2] = 0;

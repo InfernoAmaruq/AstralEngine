@@ -233,16 +233,17 @@ MAF quat quat_slerp(quat q, quat r, float t) {
 
   float halfTheta = acosf(dot);
   float sinHalfTheta = sqrtf(1.f - dot * dot);
+  float s = 1.f - t;
 
   if (fabsf(sinHalfTheta) < .001f) {
-    q[0] = q[0] * .5f + r[0] * .5f;
-    q[1] = q[1] * .5f + r[1] * .5f;
-    q[2] = q[2] * .5f + r[2] * .5f;
-    q[3] = q[3] * .5f + r[3] * .5f;
-    return q;
+    q[0] = q[0] * s + r[0] * t;
+    q[1] = q[1] * s + r[1] * t;
+    q[2] = q[2] * s + r[2] * t;
+    q[3] = q[3] * s + r[3] * t;
+    return quat_normalize(q);
   }
 
-  float a = sinf((1.f - t) * halfTheta) / sinHalfTheta;
+  float a = sinf(s * halfTheta) / sinHalfTheta;
   float b = sinf(t * halfTheta) / sinHalfTheta;
 
   q[0] = q[0] * a + r[0] * b;

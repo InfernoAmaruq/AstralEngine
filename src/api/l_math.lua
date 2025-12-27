@@ -387,20 +387,28 @@ function quaternion.slerp(q, r, t)
 
   local halfTheta = acos(dot)
   local sinHalfTheta = sqrt(1 - dot * dot)
+  local s = 1 - t
 
   if abs(sinHalfTheta) < .001 then
+    x = x * s + r.x * t,
+    y = y * s + r.y * t,
+    z = z * s + r.z * t,
+    w = w * s + r.w * t
+
+    local length = sqrt(x * x + y * y + z * z + w * w)
+
     local result = {
-      x = x * .5 + r.x * .5,
-      y = y * .5 + r.y * .5,
-      z = z * .5 + r.z * .5,
-      w = w * .5 + r.w * .5
+      x = x / length,
+      y = y / length,
+      z = z / length,
+      w = w / length
     }
 
     setmetatable(result, quaternion)
     return result
   end
 
-  local a = sin((1 - t) * halfTheta) / sinHalfTheta
+  local a = sin(s * halfTheta) / sinHalfTheta
   local b = sin(t * halfTheta) / sinHalfTheta
 
   local result = {

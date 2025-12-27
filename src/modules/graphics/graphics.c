@@ -4061,17 +4061,25 @@ const MaterialInfo* lovrMaterialGetInfo(Material* material) {
 // Font
 
 Font* lovrGraphicsGetDefaultFont(void) {
-  if (!state.defaultFont) {
+  Font* font = atomic_load(&state.defaultFont);
+
+  if (!font) {
     Rasterizer* rasterizer = lovrRasterizerCreate(NULL, 32, NULL);
     if (!rasterizer) return NULL;
-    state.defaultFont = lovrFontCreate(&(FontInfo) {
-      .rasterizer = rasterizer,
-      .spread = 4.
-    });
+
+    font = lovrFontCreate(&(FontInfo) { .rasterizer = rasterizer, .spread = 4 });
     lovrRelease(rasterizer, lovrRasterizerDestroy);
+
+    if (font) {
+      Font* expected = NULL;
+      if (!atomic_compare_exchange_strong(&state.defaultFont, &expected, font)) {
+        lovrFontDestroy(font);
+        font = expected;
+      }
+    }
   }
 
-  return state.defaultFont;
+  return font;
 }
 
 Font* lovrFontCreate(const FontInfo* info) {

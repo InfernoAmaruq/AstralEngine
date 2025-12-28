@@ -389,10 +389,10 @@ function quaternion.slerp(q, r, t)
   local sinHalfTheta = sqrt(1 - dot * dot)
   local s = 1 - t
 
-  if abs(sinHalfTheta) < .001 then
-    x = x * s + r.x * t,
-    y = y * s + r.y * t,
-    z = z * s + r.z * t,
+  if abs(sinHalfTheta) < .05 then
+    x = x * s + r.x * t
+    y = y * s + r.y * t
+    z = z * s + r.z * t
     w = w * s + r.w * t
 
     local length = sqrt(x * x + y * y + z * z + w * w)

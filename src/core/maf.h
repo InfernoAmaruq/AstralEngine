@@ -235,7 +235,7 @@ MAF quat quat_slerp(quat q, quat r, float t) {
   float sinHalfTheta = sqrtf(1.f - dot * dot);
   float s = 1.f - t;
 
-  if (fabsf(sinHalfTheta) < .001f) {
+  if (fabsf(sinHalfTheta) < .05f) {
     q[0] = q[0] * s + r[0] * t;
     q[1] = q[1] * s + r[1] * t;
     q[2] = q[2] * s + r[2] * t;

@@ -176,6 +176,7 @@ struct Layer {
   uint32_t ref;
   LayerInfo info;
   Swapchain swapchain;
+  Device origin;
   float curve;
   Pass* pass;
   union {
@@ -3492,7 +3493,7 @@ bool lovrHeadsetSubmit(void) {
       Layer* layer = state.layers[i];
 
       layers[info.layerCount++] = (const XrCompositionLayerBaseHeader*) &layer->header;
-      layer->header.space = state.referenceSpace;
+      layer->header.space = layer->origin >= MAX_DEVICES ? state.referenceSpace : state.spaces[layer->origin];
       lovrSwapchainRelease(&layer->swapchain);
 
       // Stereo layers require 2 composition layers (gr?).  We make a temporary copy of the layer's
@@ -3535,6 +3536,7 @@ Layer* lovrLayerCreate(const LayerInfo* info) {
   Layer* layer = lovrCalloc(sizeof(Layer));
   layer->ref = 1;
   layer->info = *info;
+  layer->origin = ~0u;
 
   uint32_t flags = (info->stereo ? STEREO : 0) | (info->immutable ? STATIC : 0);
 
@@ -3595,6 +3597,14 @@ void lovrLayerDestroy(void* ref) {
   lovrSwapchainDestroy(&layer->swapchain);
   lovrRelease(layer->pass, lovrPassDestroy);
   lovrFree(layer);
+}
+
+Device lovrLayerGetOrigin(Layer* layer) {
+  return layer->origin;
+}
+
+void lovrLayerSetOrigin(Layer* layer, Device device) {
+  layer->origin = device;
 }
 
 void lovrLayerGetPose(Layer* layer, float* position, float* orientation) {

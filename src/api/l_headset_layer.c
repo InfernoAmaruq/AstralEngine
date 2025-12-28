@@ -3,6 +3,28 @@
 #include "core/maf.h"
 #include "util.h"
 
+static int l_lovrLayerGetOrigin(lua_State* L) {
+  Layer* layer = luax_checktype(L, 1, Layer);
+  Device device = lovrLayerGetOrigin(layer);
+  if (device >= MAX_DEVICES) {
+    lua_pushnil(L);
+  } else {
+    luax_pushenum(L, Device, device);
+  }
+  return 1;
+}
+
+static int l_lovrLayerSetOrigin(lua_State* L) {
+  Layer* layer = luax_checktype(L, 1, Layer);
+  if (lua_isnoneornil(L, 2)) {
+    lovrLayerSetOrigin(layer, MAX_DEVICES);
+  } else {
+    Device device = luax_checkenum(L, 2, Device, NULL);
+    lovrLayerSetOrigin(layer, device);
+  }
+  return 0;
+}
+
 static int l_lovrLayerGetPosition(lua_State* L) {
   Layer* layer = luax_checktype(L, 1, Layer);
   float position[3], orientation[4];
@@ -157,6 +179,8 @@ static int l_lovrLayerGetPass(lua_State* L) {
 }
 
 const luaL_Reg lovrLayer[] = {
+  { "getOrigin", l_lovrLayerGetOrigin },
+  { "setOrigin", l_lovrLayerSetOrigin },
   { "getPosition", l_lovrLayerGetPosition },
   { "setPosition", l_lovrLayerSetPosition },
   { "getOrientation", l_lovrLayerGetOrientation },

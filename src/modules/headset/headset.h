@@ -238,6 +238,8 @@ typedef struct {
 
 Layer* lovrLayerCreate(const LayerInfo* info);
 void lovrLayerDestroy(void* ref);
+Device lovrLayerGetOrigin(Layer* layer);
+void lovrLayerSetOrigin(Layer* layer, Device device);
 void lovrLayerGetPose(Layer* layer, float* position, float* orientation);
 void lovrLayerSetPose(Layer* layer, float* position, float* orientation);
 void lovrLayerGetDimensions(Layer* layer, float* width, float* height);

@@ -38,6 +38,7 @@ dev
 - Add `lovr.data.newBlobView`.
 - Add `lovr.graphics.getStats`.
 - Add `Model:is/setNodeVisible`.
+- Add `Layer:get/setOrigin`.
 
 ### Change
 

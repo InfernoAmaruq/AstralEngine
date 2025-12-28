@@ -92,6 +92,7 @@ dev
 - Deprecate `lovr.math.vec2/vec3/vec4/quat/newVec2/newVec3/newVec4/newQuat` (use `vector` and `quaternion`).
 - Deprecate `lovr.math.mat4` (use `lovr.math.newMat4`).
 - Deprecate `t.math.globals` (use `vector` and `quaternion`).
+- Deprecate `Layer:getPass` (use your own `Pass`).
 
 ### Remove
 

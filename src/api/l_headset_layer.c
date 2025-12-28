@@ -147,6 +147,7 @@ static int l_lovrLayerGetTexture(lua_State* L) {
   return 1;
 }
 
+// Deprecated
 static int l_lovrLayerGetPass(lua_State* L) {
   Layer* layer = luax_checktype(L, 1, Layer);
   struct Pass* pass = lovrLayerGetPass(layer);
@@ -171,6 +172,6 @@ const luaL_Reg lovrLayer[] = {
   { "getViewport", l_lovrLayerGetViewport },
   { "setViewport", l_lovrLayerSetViewport },
   { "getTexture", l_lovrLayerGetTexture },
-  { "getPass", l_lovrLayerGetPass },
+  { "getPass", l_lovrLayerGetPass }, // Deprecated
   { NULL, NULL }
 };

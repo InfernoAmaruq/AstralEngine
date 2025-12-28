@@ -3581,15 +3581,6 @@ Layer* lovrLayerCreate(const LayerInfo* info) {
     layer->header.next = &layer->settings;
   }
 
-  if ((layer->pass = lovrPassCreate(NULL)) == NULL) {
-    lovrLayerDestroy(layer);
-    return NULL;
-  }
-
-  float background[4][4] = { 0 };
-  LoadAction loads[4] = { LOAD_CLEAR };
-  lovrPassSetClear(layer->pass, loads, background, LOAD_CLEAR, 0.f);
-
   // Avoid submission of un-acquired swapchain
   if (!lovrSwapchainAcquire(&layer->swapchain)) {
     lovrLayerDestroy(layer);
@@ -3737,6 +3728,16 @@ Texture* lovrLayerGetTexture(Layer* layer) {
 Pass* lovrLayerGetPass(Layer* layer) {
   Texture* texture = lovrLayerGetTexture(layer);
   if (!texture) return NULL;
+
+  if (!layer->pass) {
+    if ((layer->pass = lovrPassCreate(NULL)) == NULL) {
+      return NULL;
+    }
+
+    float background[4][4] = { 0 };
+    LoadAction loads[4] = { LOAD_CLEAR };
+    lovrPassSetClear(layer->pass, loads, background, LOAD_CLEAR, 0.f);
+  }
 
   Canvas canvas = {
     .color[0].texture = texture,

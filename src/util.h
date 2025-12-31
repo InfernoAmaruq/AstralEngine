@@ -136,56 +136,6 @@ void float16Init(void);
 float16 float32to16(float32 f);
 float32 float16to32(float16 f);
 
-// Variant
-typedef enum {
-  TYPE_NIL,
-  TYPE_BOOLEAN,
-  TYPE_NUMBER,
-  TYPE_STRING,
-  TYPE_MINISTRING,
-  TYPE_POINTER,
-  TYPE_OBJECT,
-  TYPE_VECTOR,
-  TYPE_QUATERNION,
-  TYPE_TABLE
-} VariantType;
-
-typedef union {
-  bool boolean;
-  double number;
-  void* pointer;
-  struct {
-    char* pointer;
-    size_t length;
-  } string;
-  struct {
-    uint8_t length;
-    char data[23];
-  } ministring;
-  struct {
-    int type;
-    void* pointer;
-  } object;
-  struct {
-    float data[3];
-  } vector;
-  struct {
-    int16_t data[4];
-  } quaternion;
-  struct {
-    struct Variant* keys;
-    struct Variant* vals;
-    size_t length;
-  } table;
-} VariantValue;
-
-typedef struct Variant {
-  VariantType type;
-  VariantValue value;
-} Variant;
-
-void lovrVariantDestroy(Variant* variant);
-
 // Types
 typedef enum {
   T_NONE,
@@ -238,3 +188,32 @@ typedef struct {
 } TypeInfo;
 
 extern TypeInfo lovrTypeInfo[T_COUNT];
+
+// Variant
+typedef enum {
+  TYPE_NIL,
+  TYPE_BOOLEAN,
+  TYPE_NUMBER,
+  TYPE_STRING,
+  TYPE_MINISTRING,
+  TYPE_POINTER,
+  TYPE_OBJECT,
+  TYPE_VECTOR,
+  TYPE_QUATERNION,
+  TYPE_TABLE
+} VariantType;
+
+typedef union Variant {
+  struct { VariantType type; };
+  struct { VariantType type; bool value; } boolean;
+  struct { VariantType type; double value; } number;
+  struct { VariantType type; void* value; } pointer;
+  struct { VariantType type; uint32_t length; char* pointer; } string;
+  struct { VariantType type; uint8_t length; char data[11]; } ministring;
+  struct { VariantType _type; ObjectType type; void* pointer; } object;
+  struct { VariantType type; float data[3]; } vector;
+  struct { VariantType type; int16_t data[4]; } quaternion;
+  struct { VariantType type; uint32_t count; union Variant* pairs; } table;
+} Variant;
+
+void lovrVariantDestroy(Variant* variant);

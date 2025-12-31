@@ -483,27 +483,27 @@ static void _luax_checkvariant(lua_State* L, int index, Variant* variant, int de
 
     case LUA_TBOOLEAN:
       variant->type = TYPE_BOOLEAN;
-      variant->value.boolean = lua_toboolean(L, index);
+      variant->boolean.value = lua_toboolean(L, index);
       break;
 
     case LUA_TNUMBER:
       variant->type = TYPE_NUMBER;
-      variant->value.number = lua_tonumber(L, index);
+      variant->number.value = lua_tonumber(L, index);
       break;
 
     case LUA_TSTRING: {
       size_t length;
       const char* string = lua_tolstring(L, index, &length);
-      if (length <= sizeof(variant->value.ministring.data)) {
+      if (length <= sizeof(variant->ministring.data)) {
         variant->type = TYPE_MINISTRING;
-        variant->value.ministring.length = (uint8_t) length;
-        memcpy(variant->value.ministring.data, string, length);
+        variant->ministring.length = (uint8_t) length;
+        memcpy(variant->ministring.data, string, length);
       } else {
         variant->type = TYPE_STRING;
-        variant->value.string.pointer = lovrMalloc(length + 1);
-        memcpy(variant->value.string.pointer, string, length);
-        variant->value.string.pointer[length] = '\0';
-        variant->value.string.length = length;
+        variant->string.pointer = lovrMalloc(length + 1);
+        memcpy(variant->string.pointer, string, length);
+        variant->string.pointer[length] = '\0';
+        variant->string.length = length;
       }
       break;
     }
@@ -511,14 +511,14 @@ static void _luax_checkvariant(lua_State* L, int index, Variant* variant, int de
     case LUA_TUSERDATA:
       variant->type = TYPE_OBJECT;
       Object* object = lua_touserdata(L, index);
-      variant->value.object.type = object->type;
-      variant->value.object.pointer = object->pointer;
+      variant->object.type = object->type;
+      variant->object.pointer = object->pointer;
       lovrRetain(object->pointer);
       break;
 
     case LUA_TLIGHTUSERDATA:
       variant->type = TYPE_POINTER;
-      variant->value.pointer = lua_touserdata(L, index);
+      variant->pointer.value = lua_touserdata(L, index);
       break;
 
     case LUA_TTABLE:
@@ -526,29 +526,27 @@ static void _luax_checkvariant(lua_State* L, int index, Variant* variant, int de
       luaL_checkstack(L, 2, "Lua stack overflow when serializing table (maybe it contains a cycle?)");
 
       lua_pushnil(L);
-      size_t length = 0;
+      size_t count = 0;
       while (lua_next(L, index) != 0) {
-        length++;
+        count++;
         lua_pop(L, 1);
       }
 
       variant->type = TYPE_TABLE;
-      variant->value.table.length = length;
+      variant->table.count = count;
 
-      if (length == 0) {
-        variant->value.table.keys = NULL;
-        variant->value.table.vals = NULL;
+      if (count == 0) {
+        variant->table.pairs = NULL;
         break;
       } else {
-        variant->value.table.keys = lovrMalloc(length * sizeof(Variant));
-        variant->value.table.vals = lovrMalloc(length * sizeof(Variant));
+        variant->table.pairs = lovrMalloc(count * 2 * sizeof(Variant));
 
         int i = 0;
         lua_pushnil(L);
         while (lua_next(L, index) != 0) {
-          _luax_checkvariant(L, -1, &variant->value.table.vals[i], depth + 1);
+          _luax_checkvariant(L, -1, &variant->table.pairs[2 * i + 1], depth + 1);
           lua_pop(L, 1);
-          _luax_checkvariant(L, -1, &variant->value.table.keys[i], depth + 1);
+          _luax_checkvariant(L, -1, &variant->table.pairs[2 * i + 0], depth + 1);
           i++;
         }
       }
@@ -558,14 +556,14 @@ static void _luax_checkvariant(lua_State* L, int index, Variant* variant, int de
     case LUA_TVECTOR: {
       const float* v = lua_tovector(L, index);
       variant->type = TYPE_VECTOR;
-      memcpy(variant->value.vector.data, v, 3 * sizeof(float));
+      memcpy(variant->vector.data, v, 3 * sizeof(float));
       break;
     }
 
     case LUA_TQUATERNION: {
       const short* q = lua_toquaternion(L, index);
       variant->type = TYPE_QUATERNION;
-      memcpy(variant->value.quaternion.data, q, 4 * sizeof(int16_t));
+      memcpy(variant->quaternion.data, q, 4 * sizeof(int16_t));
       break;
     }
 #endif
@@ -583,19 +581,19 @@ void luax_checkvariant(lua_State* L, int index, Variant* variant) {
 int luax_pushvariant(lua_State* L, Variant* variant) {
   switch (variant->type) {
     case TYPE_NIL: lua_pushnil(L); return 1;
-    case TYPE_BOOLEAN: lua_pushboolean(L, variant->value.boolean); return 1;
-    case TYPE_NUMBER: lua_pushnumber(L, variant->value.number); return 1;
-    case TYPE_STRING: lua_pushlstring(L, variant->value.string.pointer, variant->value.string.length); return 1;
-    case TYPE_MINISTRING: lua_pushlstring(L, variant->value.ministring.data, variant->value.ministring.length); return 1;
-    case TYPE_POINTER: lua_pushlightuserdata(L, variant->value.pointer); return 1;
-    case TYPE_OBJECT: _luax_pushtype(L, variant->value.object.type, variant->value.object.pointer); return 1;
-    case TYPE_VECTOR: for (uint32_t i = 0; i < 3; i++) lua_pushnumber(L, variant->value.vector.data[i]); return 3;
-    case TYPE_QUATERNION: for (uint32_t i = 0; i < 4; i++) lua_pushnumber(L, MAX(-1.f, variant->value.quaternion.data[i] / 32767.f)); return 4;
+    case TYPE_BOOLEAN: lua_pushboolean(L, variant->boolean.value); return 1;
+    case TYPE_NUMBER: lua_pushnumber(L, variant->number.value); return 1;
+    case TYPE_STRING: lua_pushlstring(L, variant->string.pointer, variant->string.length); return 1;
+    case TYPE_MINISTRING: lua_pushlstring(L, variant->ministring.data, variant->ministring.length); return 1;
+    case TYPE_POINTER: lua_pushlightuserdata(L, variant->pointer.value); return 1;
+    case TYPE_OBJECT: _luax_pushtype(L, variant->object.type, variant->object.pointer); return 1;
+    case TYPE_VECTOR: for (uint32_t i = 0; i < 3; i++) lua_pushnumber(L, variant->vector.data[i]); return 3;
+    case TYPE_QUATERNION: for (uint32_t i = 0; i < 4; i++) lua_pushnumber(L, MAX(-1.f, variant->quaternion.data[i] / 32767.f)); return 4;
     case TYPE_TABLE:
       lua_newtable(L);
-      for (size_t i = 0; i < variant->value.table.length; i++) {
-        luax_pushvariant(L, &variant->value.table.keys[i]);
-        luax_pushvariant(L, &variant->value.table.vals[i]);
+      for (size_t i = 0; i < variant->table.count; i++) {
+        luax_pushvariant(L, &variant->table.pairs[2 * i + 0]);
+        luax_pushvariant(L, &variant->table.pairs[2 * i + 1]);
         lua_settable(L, -3);
       }
       return 1;

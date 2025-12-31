@@ -9,7 +9,7 @@
 #define MAX_THREAD_ARGUMENTS 4
 
 struct Blob;
-struct Variant;
+union Variant;
 
 typedef struct Thread Thread;
 typedef struct Channel Channel;
@@ -21,11 +21,11 @@ struct Channel* lovrThreadGetChannel(const char* name);
 
 // Thread
 
-typedef char* ThreadFunction(Thread* thread, struct Blob* body, struct Variant* arguments, uint32_t argumentCount);
+typedef char* ThreadFunction(Thread* thread, struct Blob* body, union Variant* arguments, uint32_t argumentCount);
 
 Thread* lovrThreadCreate(ThreadFunction* function, struct Blob* body);
 void lovrThreadDestroy(void* ref);
-bool lovrThreadStart(Thread* thread, struct Variant* arguments, uint32_t argumentCount);
+bool lovrThreadStart(Thread* thread, union Variant* arguments, uint32_t argumentCount);
 void lovrThreadWait(Thread* thread);
 bool lovrThreadIsRunning(Thread* thread);
 const char* lovrThreadGetError(Thread* thread);
@@ -34,9 +34,9 @@ const char* lovrThreadGetError(Thread* thread);
 
 Channel* lovrChannelCreate(uint64_t hash);
 void lovrChannelDestroy(void* ref);
-bool lovrChannelPush(Channel* channel, struct Variant* variant, double timeout, uint64_t* id);
-bool lovrChannelPop(Channel* channel, struct Variant* variant, double timeout);
-bool lovrChannelPeek(Channel* channel, struct Variant* variant);
+bool lovrChannelPush(Channel* channel, union Variant* variant, double timeout, uint64_t* id);
+bool lovrChannelPop(Channel* channel, union Variant* variant, double timeout);
+bool lovrChannelPeek(Channel* channel, union Variant* variant);
 void lovrChannelClear(Channel* channel);
 uint64_t lovrChannelGetCount(Channel* channel);
 bool lovrChannelHasRead(Channel* channel, uint64_t id);

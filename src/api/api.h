@@ -7,7 +7,7 @@
 
 #pragma once
 
-struct Variant;
+union Variant;
 
 // Enums
 
@@ -135,8 +135,8 @@ void luax_setmainthread(lua_State* L);
 void luax_atexit(lua_State* L, void (*finalizer)(void));
 uint32_t _luax_checku32(lua_State* L, int index);
 uint32_t _luax_optu32(lua_State* L, int index, uint32_t fallback);
-void luax_checkvariant(lua_State* L, int index, struct Variant* variant);
-int luax_pushvariant(lua_State* L, struct Variant* variant);
+void luax_checkvariant(lua_State* L, int index, union Variant* variant);
+int luax_pushvariant(lua_State* L, union Variant* variant);
 void luax_readcolor(lua_State* L, int index, float color[4]);
 void luax_optcolor(lua_State* L, int index, float color[4]);
 int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCount, uint32_t** indices, uint32_t* indexCount);

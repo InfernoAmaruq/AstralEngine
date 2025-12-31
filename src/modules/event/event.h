@@ -7,7 +7,7 @@
 #define MAX_EVENT_NAME_LENGTH 32
 
 struct Thread;
-struct Variant;
+union Variant;
 
 typedef enum {
   DISPLAY_HEADSET,
@@ -103,7 +103,7 @@ typedef struct {
 
 typedef struct {
   char name[MAX_EVENT_NAME_LENGTH];
-  struct Variant* data;
+  union Variant* data;
   uint32_t count;
 } CustomEvent;
 

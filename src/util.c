@@ -319,15 +319,14 @@ TypeInfo lovrTypeInfo[T_COUNT];
 
 void lovrVariantDestroy(Variant* variant) {
   switch (variant->type) {
-    case TYPE_STRING: lovrFree(variant->value.string.pointer); return;
-    case TYPE_OBJECT: lovrRelease(variant->value.object.pointer, lovrTypeInfo[variant->value.object.type].destructor); return;
+    case TYPE_STRING: lovrFree(variant->string.pointer); return;
+    case TYPE_OBJECT: lovrRelease(variant->object.pointer, lovrTypeInfo[variant->object.type].destructor); return;
     case TYPE_TABLE:
-      for (size_t i = 0; i < variant->value.table.length; i++) {
-        lovrVariantDestroy(&variant->value.table.keys[i]);
-        lovrVariantDestroy(&variant->value.table.vals[i]);
+      for (size_t i = 0; i < variant->table.count; i++) {
+        lovrVariantDestroy(&variant->table.pairs[2 * i + 0]);
+        lovrVariantDestroy(&variant->table.pairs[2 * i + 1]);
       }
-      lovrFree(variant->value.table.keys);
-      lovrFree(variant->value.table.vals);
+      lovrFree(variant->table.pairs);
       return;
     default: return;
   }

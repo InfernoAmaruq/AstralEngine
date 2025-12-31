@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #pragma once
 
@@ -134,3 +135,106 @@ typedef uint16_t float16;
 void float16Init(void);
 float16 float32to16(float32 f);
 float32 float16to32(float16 f);
+
+// Variant
+typedef enum {
+  TYPE_NIL,
+  TYPE_BOOLEAN,
+  TYPE_NUMBER,
+  TYPE_STRING,
+  TYPE_MINISTRING,
+  TYPE_POINTER,
+  TYPE_OBJECT,
+  TYPE_VECTOR,
+  TYPE_QUATERNION,
+  TYPE_TABLE
+} VariantType;
+
+typedef union {
+  bool boolean;
+  double number;
+  void* pointer;
+  struct {
+    char* pointer;
+    size_t length;
+  } string;
+  struct {
+    uint8_t length;
+    char data[23];
+  } ministring;
+  struct {
+    int type;
+    void* pointer;
+  } object;
+  struct {
+    float data[3];
+  } vector;
+  struct {
+    int16_t data[4];
+  } quaternion;
+  struct {
+    struct Variant* keys;
+    struct Variant* vals;
+    size_t length;
+  } table;
+} VariantValue;
+
+typedef struct Variant {
+  VariantType type;
+  VariantValue value;
+} Variant;
+
+void lovrVariantDestroy(Variant* variant);
+
+// Types
+typedef enum {
+  T_NONE,
+  T_Source,
+  T_Blob,
+  T_Image,
+  T_ModelData,
+  T_Rasterizer,
+  T_Sound,
+  T_File,
+  T_Buffer,
+  T_Texture,
+  T_Sampler,
+  T_Shader,
+  T_Material,
+  T_Font,
+  T_Mesh,
+  T_Model,
+  T_Raytracer,
+  T_Readback,
+  T_Pass,
+  T_Layer,
+  T_Curve,
+  T_Mat4,
+  T_RandomGenerator,
+  T_World,
+  T_Collider,
+  T_Contact,
+  T_BoxShape,
+  T_SphereShape,
+  T_CapsuleShape,
+  T_CylinderShape,
+  T_ConvexShape,
+  T_MeshShape,
+  T_TerrainShape,
+  T_WeldJoint,
+  T_BallJoint,
+  T_ConeJoint,
+  T_DistanceJoint,
+  T_HingeJoint,
+  T_SliderJoint,
+  T_Thread,
+  T_Channel,
+  T_COUNT
+} ObjectType;
+
+typedef struct {
+  const char* name;
+  void (*destructor)(void*);
+} TypeInfo;
+
+extern TypeInfo lovrTypeInfo[T_COUNT];

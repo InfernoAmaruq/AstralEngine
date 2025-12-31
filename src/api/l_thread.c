@@ -1,6 +1,5 @@
 #include "api.h"
 #include "data/blob.h"
-#include "event/event.h"
 #include "thread/thread.h"
 #include "core/os.h"
 #include "util.h"

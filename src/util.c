@@ -313,3 +313,22 @@ float32 float16to32(float16 f) {
   uint32_t u = mantissa[offset[f >> 10] + (f & 0x3ff)] + exponent[f >> 10];
   return ((union { uint32_t u; float f; }) { u }).f;
 }
+
+// Types
+TypeInfo lovrTypeInfo[T_COUNT];
+
+void lovrVariantDestroy(Variant* variant) {
+  switch (variant->type) {
+    case TYPE_STRING: lovrFree(variant->value.string.pointer); return;
+    case TYPE_OBJECT: lovrRelease(variant->value.object.pointer, lovrTypeInfo[variant->value.object.type].destructor); return;
+    case TYPE_TABLE:
+      for (size_t i = 0; i < variant->value.table.length; i++) {
+        lovrVariantDestroy(&variant->value.table.keys[i]);
+        lovrVariantDestroy(&variant->value.table.vals[i]);
+      }
+      lovrFree(variant->value.table.keys);
+      lovrFree(variant->value.table.vals);
+      return;
+    default: return;
+  }
+}

@@ -15,7 +15,6 @@
 #endif
 
 typedef void voidFn(void);
-typedef void destructorFn(void*);
 
 #ifdef _WIN32
 #define LOVR_EXPORT __declspec(dllexport)
@@ -36,45 +35,36 @@ LOVR_EXPORT int luaopen_lovr_system(lua_State* L);
 LOVR_EXPORT int luaopen_lovr_thread(lua_State* L);
 LOVR_EXPORT int luaopen_lovr_timer(lua_State* L);
 
-// Object names are lightuserdata because Variants need a non-Lua string due to threads.
-static int luax_meta__tostring(lua_State* L) {
-  lua_getfield(L, 1, "__info");
-  TypeInfo* info = lua_touserdata(L, -1);
-  lua_pop(L, 1);
-  Proxy* p = lua_touserdata(L, 1);
-  lua_pushfstring(L, "%s: %p", info->name, p->object);
+static int luax_tostring(lua_State* L) {
+  Object* object = lua_touserdata(L, 1);
+  lua_pushfstring(L, "%s: %p", lovrTypeInfo[object->type].name, object->pointer);
   return 1;
 }
 
-// Currently the same as tostring
 static int luax_type(lua_State* L) {
-  lua_getfield(L, 1, "__info");
-  TypeInfo* info = lua_touserdata(L, -1);
-  lua_pushstring(L, info->name);
+  Object* object = lua_touserdata(L, -1);
+  lua_pushstring(L, lovrTypeInfo[object->type].name);
   return 1;
 }
 
-static int luax_meta__gc(lua_State* L) {
-  Proxy* p = lua_touserdata(L, 1);
-  if (p) {
-    // Remove from userdata cache
-    lua_getfield(L, LUA_REGISTRYINDEX, "_lovrobjects");
-    if (lua_istable(L, -1)) {
-      lua_pushlightuserdata(L, p->object);
-      lua_pushnil(L);
-      lua_rawset(L, -3);
-    }
-    lua_pop(L, 1);
+static int luax_release(lua_State* L) {
+  Object* object = lua_touserdata(L, 1);
 
-    // Release
-    lua_getmetatable(L, 1);
-    lua_getfield(L, -1, "__info");
-    TypeInfo* info = lua_touserdata(L, -1);
-    if (info->destructor) {
-      lovrRelease(p->object, info->destructor);
-      p->object = NULL;
-    }
+  if (!object) {
+    return 0;
   }
+
+  // Remove from userdata cache
+  lua_getfield(L, LUA_REGISTRYINDEX, "_lovrobjects");
+  lua_pushlightuserdata(L, object->pointer);
+  lua_pushnil(L);
+  lua_rawset(L, -3);
+  lua_pop(L, 1);
+
+  // Release
+  lovrRelease(object->pointer, lovrTypeInfo[object->type].destructor);
+  object->pointer = NULL;
+
   return 0;
 }
 
@@ -137,7 +127,8 @@ void luax_preload(lua_State* L) {
   lua_pop(L, 2);
 }
 
-void _luax_registertype(lua_State* L, const char* name, const luaL_Reg* functions, destructorFn* destructor) {
+void _luax_registertype(lua_State* L, int type, const char* name, void (*destructor)(void*), const luaL_Reg* functions) {
+  lovrTypeInfo[type] = (TypeInfo) { name, destructor };
 
   // Push metatable
   luaL_newmetatable(L, name);
@@ -147,31 +138,25 @@ void _luax_registertype(lua_State* L, const char* name, const luaL_Reg* function
   lua_pushvalue(L, -1);
   lua_setfield(L, -1, "__index");
 
-  // m.__info = info
-  TypeInfo* info = lua_newuserdata(L, sizeof(TypeInfo));
-  info->name = name;
-  info->destructor = destructor;
-  lua_setfield(L, -2, "__info");
-
-  // m.__gc = gc
-  lua_pushcfunction(L, luax_meta__gc);
+  // m.__gc = luax_release
+  lua_pushcfunction(L, luax_release);
   lua_setfield(L, -2, "__gc");
 
   // m.__close = gc
-  lua_pushcfunction(L, luax_meta__gc);
+  lua_pushcfunction(L, luax_release);
   lua_setfield(L, -2, "__close");
 
   // m.__tostring
-  lua_pushcfunction(L, luax_meta__tostring);
+  lua_pushcfunction(L, luax_tostring);
   lua_setfield(L, -2, "__tostring");
 
-  // Register class methods
+  // Register methods
   if (functions) {
     luax_register(L, functions);
   }
 
   // :release method
-  lua_pushcfunction(L, luax_meta__gc);
+  lua_pushcfunction(L, luax_release);
   lua_setfield(L, -2, "release");
 
   // :type method
@@ -182,21 +167,21 @@ void _luax_registertype(lua_State* L, const char* name, const luaL_Reg* function
   lua_pop(L, 1);
 }
 
-void* _luax_totype(lua_State* L, int index, uint64_t hash) {
-  Proxy* p = lua_touserdata(L, index);
+void* _luax_totype(lua_State* L, int index, int type) {
+  Object* object = lua_touserdata(L, index);
 
-  if (p && lua_type(L, index) != LUA_TLIGHTUSERDATA && p->hash == hash) {
-    return p->object;
+  if (object && lua_type(L, index) != LUA_TLIGHTUSERDATA && object->type == type) {
+    return object->pointer;
   }
 
   return NULL;
 }
 
-void* _luax_checktype(lua_State* L, int index, uint64_t hash, const char* debug) {
-  void* object = _luax_totype(L, index, hash);
+void* _luax_checktype(lua_State* L, int index, int type) {
+  void* object = _luax_totype(L, index, type);
 
   if (!object) {
-    luax_typeerror(L, index, debug);
+    luax_typeerror(L, index, lovrTypeInfo[type].name);
   }
 
   return object;
@@ -216,8 +201,8 @@ int luax_typeerror(lua_State* L, int index, const char* expected) {
 }
 
 // Registers the userdata on the top of the stack in the registry.
-void _luax_pushtype(lua_State* L, const char* type, uint64_t hash, void* object) {
-  if (!object) {
+void _luax_pushtype(lua_State* L, int type, void* pointer) {
+  if (!pointer) {
     lua_pushnil(L);
     return;
   }
@@ -244,7 +229,7 @@ void _luax_pushtype(lua_State* L, const char* type, uint64_t hash, void* object)
     lua_setfield(L, LUA_REGISTRYINDEX, "_lovrobjects");
   }
 
-  lua_pushlightuserdata(L, object);
+  lua_pushlightuserdata(L, pointer);
   lua_gettable(L, -2);
 
   if (lua_isnil(L, -1)) {
@@ -255,15 +240,15 @@ void _luax_pushtype(lua_State* L, const char* type, uint64_t hash, void* object)
   }
 
   // Allocate userdata
-  Proxy* p = (Proxy*) lua_newuserdata(L, sizeof(Proxy));
-  luaL_newmetatable(L, type);
+  Object* object = (Object*) lua_newuserdata(L, sizeof(Object));
+  luaL_newmetatable(L, lovrTypeInfo[type].name);
   lua_setmetatable(L, -2);
-  lovrRetain(object);
-  p->object = object;
-  p->hash = hash;
+  lovrRetain(pointer);
+  object->pointer = pointer;
+  object->type = type;
 
   // Write to registry and remove registry, leaving userdata on stack
-  lua_pushlightuserdata(L, object);
+  lua_pushlightuserdata(L, pointer);
   lua_pushvalue(L, -2);
   lua_settable(L, -4);
   lua_remove(L, -2);
@@ -484,6 +469,138 @@ uint32_t _luax_checku32(lua_State* L, int index) {
 
 uint32_t _luax_optu32(lua_State* L, int index, uint32_t fallback) {
   return luaL_opt(L, luax_checku32, index, fallback);
+}
+
+static void _luax_checkvariant(lua_State* L, int index, Variant* variant, int depth) {
+  luax_check(L, depth <= 128, "Table contains cycles!");
+
+  int type = lua_type(L, index);
+  switch (type) {
+    case LUA_TNIL:
+    case LUA_TNONE:
+      variant->type = TYPE_NIL;
+      break;
+
+    case LUA_TBOOLEAN:
+      variant->type = TYPE_BOOLEAN;
+      variant->value.boolean = lua_toboolean(L, index);
+      break;
+
+    case LUA_TNUMBER:
+      variant->type = TYPE_NUMBER;
+      variant->value.number = lua_tonumber(L, index);
+      break;
+
+    case LUA_TSTRING: {
+      size_t length;
+      const char* string = lua_tolstring(L, index, &length);
+      if (length <= sizeof(variant->value.ministring.data)) {
+        variant->type = TYPE_MINISTRING;
+        variant->value.ministring.length = (uint8_t) length;
+        memcpy(variant->value.ministring.data, string, length);
+      } else {
+        variant->type = TYPE_STRING;
+        variant->value.string.pointer = lovrMalloc(length + 1);
+        memcpy(variant->value.string.pointer, string, length);
+        variant->value.string.pointer[length] = '\0';
+        variant->value.string.length = length;
+      }
+      break;
+    }
+
+    case LUA_TUSERDATA:
+      variant->type = TYPE_OBJECT;
+      Object* object = lua_touserdata(L, index);
+      variant->value.object.type = object->type;
+      variant->value.object.pointer = object->pointer;
+      lovrRetain(object->pointer);
+      break;
+
+    case LUA_TLIGHTUSERDATA:
+      variant->type = TYPE_POINTER;
+      variant->value.pointer = lua_touserdata(L, index);
+      break;
+
+    case LUA_TTABLE:
+      if (index < 0) { index += lua_gettop(L) + 1; }
+      luaL_checkstack(L, 2, "Lua stack overflow when serializing table (maybe it contains a cycle?)");
+
+      lua_pushnil(L);
+      size_t length = 0;
+      while (lua_next(L, index) != 0) {
+        length++;
+        lua_pop(L, 1);
+      }
+
+      variant->type = TYPE_TABLE;
+      variant->value.table.length = length;
+
+      if (length == 0) {
+        variant->value.table.keys = NULL;
+        variant->value.table.vals = NULL;
+        break;
+      } else {
+        variant->value.table.keys = lovrMalloc(length * sizeof(Variant));
+        variant->value.table.vals = lovrMalloc(length * sizeof(Variant));
+
+        int i = 0;
+        lua_pushnil(L);
+        while (lua_next(L, index) != 0) {
+          _luax_checkvariant(L, -1, &variant->value.table.vals[i], depth + 1);
+          lua_pop(L, 1);
+          _luax_checkvariant(L, -1, &variant->value.table.keys[i], depth + 1);
+          i++;
+        }
+      }
+      break;
+
+#ifdef LOVR_USE_LUAU
+    case LUA_TVECTOR: {
+      const float* v = lua_tovector(L, index);
+      variant->type = TYPE_VECTOR;
+      memcpy(variant->value.vector.data, v, 3 * sizeof(float));
+      break;
+    }
+
+    case LUA_TQUATERNION: {
+      const short* q = lua_toquaternion(L, index);
+      variant->type = TYPE_QUATERNION;
+      memcpy(variant->value.quaternion.data, q, 4 * sizeof(int16_t));
+      break;
+    }
+#endif
+
+    default:
+      luaL_error(L, "Bad variant type for argument %d: %s", index, lua_typename(L, type));
+      return;
+  }
+}
+
+void luax_checkvariant(lua_State* L, int index, Variant* variant) {
+  _luax_checkvariant(L, index, variant, 0);
+}
+
+int luax_pushvariant(lua_State* L, Variant* variant) {
+  switch (variant->type) {
+    case TYPE_NIL: lua_pushnil(L); return 1;
+    case TYPE_BOOLEAN: lua_pushboolean(L, variant->value.boolean); return 1;
+    case TYPE_NUMBER: lua_pushnumber(L, variant->value.number); return 1;
+    case TYPE_STRING: lua_pushlstring(L, variant->value.string.pointer, variant->value.string.length); return 1;
+    case TYPE_MINISTRING: lua_pushlstring(L, variant->value.ministring.data, variant->value.ministring.length); return 1;
+    case TYPE_POINTER: lua_pushlightuserdata(L, variant->value.pointer); return 1;
+    case TYPE_OBJECT: _luax_pushtype(L, variant->value.object.type, variant->value.object.pointer); return 1;
+    case TYPE_VECTOR: for (uint32_t i = 0; i < 3; i++) lua_pushnumber(L, variant->value.vector.data[i]); return 3;
+    case TYPE_QUATERNION: for (uint32_t i = 0; i < 4; i++) lua_pushnumber(L, MAX(-1.f, variant->value.quaternion.data[i] / 32767.f)); return 4;
+    case TYPE_TABLE:
+      lua_newtable(L);
+      for (size_t i = 0; i < variant->value.table.length; i++) {
+        luax_pushvariant(L, &variant->value.table.keys[i]);
+        luax_pushvariant(L, &variant->value.table.vals[i]);
+        lua_settable(L, -3);
+      }
+      return 1;
+    default: return 0;
+  }
 }
 
 void luax_readcolor(lua_State* L, int index, float color[4]) {

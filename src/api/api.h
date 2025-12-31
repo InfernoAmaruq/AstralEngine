@@ -7,7 +7,10 @@
 
 #pragma once
 
+struct Variant;
+
 // Enums
+
 typedef struct {
   uint8_t length;
   char string[31];
@@ -72,17 +75,12 @@ extern StringEntry lovrVolumeUnit[];
 extern StringEntry lovrWinding[];
 extern StringEntry lovrWrapMode[];
 
-// General helpers
+// Runtime
 
 typedef struct {
-  const char* name;
-  void (*destructor)(void*);
-} TypeInfo;
-
-typedef struct {
-  uint64_t hash;
-  void* object;
-} Proxy;
+  void* pointer;
+  int type;
+} Object;
 
 #if LUA_VERSION_NUM > 501
 #define luax_len(L, i) (int) lua_rawlen(L, i)
@@ -103,10 +101,10 @@ typedef struct {
 #define luax_optu32(L, i, x) _luax_optu32(L, i, x)
 #endif
 
-#define luax_registertype(L, T) _luax_registertype(L, #T, lovr ## T, lovr ## T ## Destroy)
-#define luax_totype(L, i, T) (T*) _luax_totype(L, i, hash64(#T, sizeof(#T) - 1))
-#define luax_checktype(L, i, T) (T*) _luax_checktype(L, i, hash64(#T, sizeof(#T) - 1), #T)
-#define luax_pushtype(L, T, o) _luax_pushtype(L, #T, hash64(#T, sizeof(#T) - 1), o)
+#define luax_registertype(L, T) _luax_registertype(L, T_ ## T, #T, lovr ## T ## Destroy, lovr ## T)
+#define luax_totype(L, i, T) (T*) _luax_totype(L, i, T_ ## T)
+#define luax_checktype(L, i, T) (T*) _luax_checktype(L, i, T_ ## T)
+#define luax_pushtype(L, T, o) _luax_pushtype(L, T_ ## T, o)
 #define luax_checkenum(L, i, T, x) _luax_checkenum(L, i, lovr ## T, x, #T)
 #define luax_pushenum(L, T, x) lua_pushlstring(L, (lovr ## T)[x].string, (lovr ## T)[x].length)
 #define luax_checkfloat(L, i) (float) luaL_checknumber(L, i)
@@ -116,11 +114,11 @@ typedef struct {
 #define luax_pushnilerror(L) lua_pushnil(L), lua_pushstring(L, lovrGetError()), 2
 
 void luax_preload(lua_State* L);
-void _luax_registertype(lua_State* L, const char* name, const luaL_Reg* functions, void (*destructor)(void*));
-void* _luax_totype(lua_State* L, int index, uint64_t hash);
-void* _luax_checktype(lua_State* L, int index, uint64_t hash, const char* debug);
+void _luax_registertype(lua_State* L, int type, const char* name, void (*destructor)(void*), const luaL_Reg* functions);
+void* _luax_totype(lua_State* L, int index, int type);
+void* _luax_checktype(lua_State* L, int index, int type);
 int luax_typeerror(lua_State* L, int index, const char* expected);
-void _luax_pushtype(lua_State* L, const char* name, uint64_t hash, void* object);
+void _luax_pushtype(lua_State* L, int type, void* object);
 int _luax_checkenum(lua_State* L, int index, const StringEntry* map, const char* fallback, const char* label);
 void luax_registerloader(lua_State* L, int (*loader)(lua_State* L), int index);
 int luax_resume(lua_State* T, int n);
@@ -137,6 +135,8 @@ void luax_setmainthread(lua_State* L);
 void luax_atexit(lua_State* L, void (*finalizer)(void));
 uint32_t _luax_checku32(lua_State* L, int index);
 uint32_t _luax_optu32(lua_State* L, int index, uint32_t fallback);
+void luax_checkvariant(lua_State* L, int index, struct Variant* variant);
+int luax_pushvariant(lua_State* L, struct Variant* variant);
 void luax_readcolor(lua_State* L, int index, float color[4]);
 void luax_optcolor(lua_State* L, int index, float color[4]);
 int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCount, uint32_t** indices, uint32_t* indexCount);
@@ -159,12 +159,6 @@ uint32_t luax_checkcodepoint(lua_State* L, int index);
 uint32_t luax_checkanimationindex(lua_State* L, int index, struct ModelMetadata* model);
 uint32_t luax_checkmaterialindex(lua_State* L, int index, struct ModelMetadata* model);
 uint32_t luax_checknodeindex(lua_State* L, int index, struct ModelMetadata* model);
-#endif
-
-#ifndef LOVR_DISABLE_EVENT
-struct Variant;
-void luax_checkvariant(lua_State* L, int index, struct Variant* variant);
-int luax_pushvariant(lua_State* L, struct Variant* variant);
 #endif
 
 #ifndef LOVR_DISABLE_FILESYSTEM

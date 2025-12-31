@@ -38,54 +38,6 @@ typedef enum {
   EVENT_CUSTOM
 } EventType;
 
-typedef enum {
-  TYPE_NIL,
-  TYPE_BOOLEAN,
-  TYPE_NUMBER,
-  TYPE_STRING,
-  TYPE_MINISTRING,
-  TYPE_POINTER,
-  TYPE_OBJECT,
-  TYPE_VECTOR,
-  TYPE_QUATERNION,
-  TYPE_TABLE
-} VariantType;
-
-typedef union {
-  bool boolean;
-  double number;
-  void* pointer;
-  struct {
-    char* pointer;
-    size_t length;
-  } string;
-  struct {
-    uint8_t length;
-    char data[23];
-  } ministring;
-  struct {
-    void* pointer;
-    const char* type;
-    void (*destructor)(void*);
-  } object;
-  struct {
-    float data[3];
-  } vector;
-  struct {
-    int16_t data[4];
-  } quaternion;
-  struct {
-    struct Variant* keys;
-    struct Variant* vals;
-    size_t length;
-  } table;
-} VariantValue;
-
-typedef struct Variant {
-  VariantType type;
-  VariantValue value;
-} Variant;
-
 typedef struct {
   int exitCode;
 } QuitEvent;
@@ -151,7 +103,7 @@ typedef struct {
 
 typedef struct {
   char name[MAX_EVENT_NAME_LENGTH];
-  Variant data[4];
+  struct Variant* data;
   uint32_t count;
 } CustomEvent;
 
@@ -175,8 +127,6 @@ typedef struct {
   EventType type;
   EventData data;
 } Event;
-
-void lovrVariantDestroy(Variant* variant);
 
 bool lovrEventInit(void);
 void lovrEventDestroy(void);

@@ -18,26 +18,21 @@ void luax_pushjoint(lua_State* L, Joint* joint) {
 }
 
 static Joint* luax_tojoint(lua_State* L, int index) {
-  Proxy* p = lua_touserdata(L, index);
+  Object* object = lua_touserdata(L, index);
 
-  if (p) {
-    const uint64_t hashes[] = {
-      hash64("WeldJoint", strlen("WeldJoint")),
-      hash64("BallJoint", strlen("BallJoint")),
-      hash64("ConeJoint", strlen("ConeJoint")),
-      hash64("DistanceJoint", strlen("DistanceJoint")),
-      hash64("HingeJoint", strlen("HingeJoint")),
-      hash64("SliderJoint", strlen("SliderJoint"))
-    };
-
-    for (size_t i = 0; i < COUNTOF(hashes); i++) {
-      if (p->hash == hashes[i]) {
-        return p->object;
-      }
-    }
+  if (!object) {
+    return NULL;
   }
 
-  return NULL;
+  switch (object->type) {
+    case T_WeldJoint: return object->pointer;
+    case T_BallJoint: return object->pointer;
+    case T_ConeJoint: return object->pointer;
+    case T_DistanceJoint: return object->pointer;
+    case T_HingeJoint: return object->pointer;
+    case T_SliderJoint: return object->pointer;
+    default: return NULL;
+  }
 }
 
 Joint* luax_checkjoint(lua_State* L, int index) {

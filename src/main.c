@@ -1,5 +1,4 @@
 #include "api/api.h"
-#include "event/event.h"
 #include "core/os.h"
 #include "util.h"
 #include "boot.lua.h"

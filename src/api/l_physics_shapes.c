@@ -20,27 +20,22 @@ void luax_pushshape(lua_State* L, Shape* shape) {
 }
 
 static Shape* luax_toshape(lua_State* L, int index) {
-  Proxy* p = lua_touserdata(L, index);
+  Object* object = lua_touserdata(L, index);
 
-  if (p) {
-    const uint64_t hashes[] = {
-      hash64("BoxShape", strlen("BoxShape")),
-      hash64("SphereShape", strlen("SphereShape")),
-      hash64("CapsuleShape", strlen("CapsuleShape")),
-      hash64("CylinderShape", strlen("CylinderShape")),
-      hash64("ConvexShape", strlen("ConvexShape")),
-      hash64("MeshShape", strlen("MeshShape")),
-      hash64("TerrainShape", strlen("TerrainShape"))
-    };
-
-    for (size_t i = 0; i < COUNTOF(hashes); i++) {
-      if (p->hash == hashes[i]) {
-        return p->object;
-      }
-    }
+  if (!object) {
+    return NULL;
   }
 
-  return NULL;
+  switch (object->type) {
+    case T_BoxShape: return object->pointer;
+    case T_SphereShape: return object->pointer;
+    case T_CapsuleShape: return object->pointer;
+    case T_CylinderShape: return object->pointer;
+    case T_ConvexShape: return object->pointer;
+    case T_MeshShape: return object->pointer;
+    case T_TerrainShape: return object->pointer;
+    default: return NULL;
+  }
 }
 
 Shape* luax_checkshape(lua_State* L, int index) {

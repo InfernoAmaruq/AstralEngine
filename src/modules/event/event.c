@@ -13,22 +13,6 @@ static struct {
   mtx_t lock;
 } state;
 
-void lovrVariantDestroy(Variant* variant) {
-  switch (variant->type) {
-    case TYPE_STRING: lovrFree(variant->value.string.pointer); return;
-    case TYPE_OBJECT: lovrRelease(variant->value.object.pointer, variant->value.object.destructor); return;
-    case TYPE_TABLE:
-      for (size_t i = 0; i < variant->value.table.length; i++) {
-        lovrVariantDestroy(&variant->value.table.keys[i]);
-        lovrVariantDestroy(&variant->value.table.vals[i]);
-      }
-      lovrFree(variant->value.table.keys);
-      lovrFree(variant->value.table.vals);
-      return;
-    default: return;
-  }
-}
-
 bool lovrEventInit(void) {
   if (atomic_fetch_add(&state.ref, 1)) return true;
   arr_init(&state.events);

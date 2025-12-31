@@ -4,8 +4,6 @@
 
 #pragma once
 
-#define MAX_EVENT_NAME_LENGTH 32
-
 struct Thread;
 union Variant;
 
@@ -102,7 +100,7 @@ typedef struct {
 } PermissionEvent;
 
 typedef struct {
-  char name[MAX_EVENT_NAME_LENGTH];
+  char name[32];
   union Variant* data;
   uint32_t count;
 } CustomEvent;

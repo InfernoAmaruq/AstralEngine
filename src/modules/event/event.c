@@ -33,6 +33,7 @@ void lovrEventDestroy(void) {
         for (uint32_t j = 0; j < event->data.custom.count; j++) {
           lovrVariantDestroy(&event->data.custom.data[j]);
         }
+        lovrFree(event->data.custom.data);
         break;
       default: break;
     }

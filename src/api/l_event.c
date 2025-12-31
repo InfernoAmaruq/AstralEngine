@@ -160,15 +160,20 @@ static int l_lovrEventPoll(lua_State* L) {
 }
 
 static int l_lovrEventPush(lua_State* L) {
-  CustomEvent eventData;
-  const char* name = luaL_checkstring(L, 1);
-  strncpy(eventData.name, name, MAX_EVENT_NAME_LENGTH - 1);
-  eventData.count = MIN(lua_gettop(L) - 1, 4);
-  for (uint32_t i = 0; i < eventData.count; i++) {
-    luax_checkvariant(L, 2 + i, &eventData.data[i]);
+  CustomEvent event;
+
+  size_t length;
+  const char* name = luaL_checklstring(L, 1, &length);
+  luax_check(L, length < sizeof(event.name), "Custom event name is too long");
+  memcpy(event.name, name, length + 1);
+
+  event.count = lua_gettop(L) - 1;
+  event.data = lovrMalloc(event.count * sizeof(Variant));
+  for (uint32_t i = 0; i < event.count; i++) {
+    luax_checkvariant(L, 2 + i, &event.data[i]);
   }
 
-  lovrEventPush((Event) { .type = EVENT_CUSTOM, .data.custom = eventData });
+  lovrEventPush((Event) { .type = EVENT_CUSTOM, .data.custom = event });
   return 0;
 }
 

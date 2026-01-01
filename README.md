@@ -12,4 +12,6 @@ Features:
 - LBMF (Lua-Based Markdown File) a JSON-like format used for data by the engine, utilising the shape of Lua tables and optional `@CODE` blocks for logic. Supports comments!
 The Aspera compiler does a quick parse over files as they are loaded, checking for macro symbols or '@'. The compilers effect on boot time is minimal
 
+A lightweight GLSL shader pipeline is also included that makes compiling shaders easier
+
 Haxe and Teal supports are planned within the future!

@@ -1,4 +1,4 @@
-# Astral Engine
+# Astral Engine - IN PROGRESS
 Astral Engine is an open-source extensible Lua-based game engine built from a modified fork of LOVR, the goal of which is to provide its users with mechanisms, not policies
 ## Philosophy
 The engine is designed around easy extensibility, most engine systems (renderer, ECS, scheduler) being scripted in performance-oriented Lua

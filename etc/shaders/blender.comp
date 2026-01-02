@@ -1,0 +1,71 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+#include "lovr.glsl"
+
+layout(local_size_x = 32, local_size_x_id = 0) in;
+
+layout(push_constant) uniform PushConstants {
+  uint baseVertex;
+  uint vertexCount;
+  uint blendShapeCount;
+  uint baseBlendVertex;
+  bool inplace;
+};
+
+struct ModelVertex {
+  float px, py, pz;
+  uint normal;
+  float u, v;
+  uint color;
+  uint tangent;
+};
+
+struct BlendVertex {
+  float px, py, pz;
+  float nx, ny, nz;
+  float tx, ty, tz;
+};
+
+layout(set = 0, binding = 0) buffer restrict readonly RawVertices { ModelVertex rawVertices[]; };
+layout(set = 0, binding = 1) buffer restrict Vertices { ModelVertex vertices[]; };
+layout(set = 0, binding = 2) buffer restrict readonly BlendVertices { BlendVertex blendVertex[]; };
+layout(set = 0, binding = 3) uniform Weights { vec4 weights[16]; };
+
+void lovrmain() {
+  if (GlobalThreadID.x >= vertexCount) return;
+  uint vertexIndex = baseVertex + GlobalThreadID.x;
+  uint blendVertexIndex = baseBlendVertex + GlobalThreadID.x;
+
+  ModelVertex vertex = inplace ? vertices[vertexIndex] : rawVertices[vertexIndex];
+
+  vec4 normal = unpackSnorm10x3(vertex.normal);
+  vec4 tangent = unpackSnorm10x3(vertex.tangent);
+
+  for (uint i = 0; i < blendShapeCount; i++, blendVertexIndex += vertexCount) {
+    float weight = weights[i / 4][i % 4];
+
+    if (weight == 0.) {
+      continue;
+    }
+
+    BlendVertex blendShape = blendVertex[blendVertexIndex];
+
+    vertex.px += blendShape.px * weight;
+    vertex.py += blendShape.py * weight;
+    vertex.pz += blendShape.pz * weight;
+
+    normal.x += blendShape.nx * weight;
+    normal.y += blendShape.ny * weight;
+    normal.z += blendShape.nz * weight;
+
+    tangent.x += blendShape.tx * weight;
+    tangent.y += blendShape.ty * weight;
+    tangent.z += blendShape.tz * weight;
+  }
+
+  vertex.normal = packSnorm10x3(normal);
+  vertex.tangent = packSnorm10x3(tangent);
+
+  vertices[vertexIndex] = vertex;
+}

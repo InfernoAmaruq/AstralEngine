@@ -1,0 +1,63 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+#include "lovr.glsl"
+
+layout(local_size_x = 32, local_size_x_id = 0) in;
+
+layout(push_constant) uniform PushConstants {
+  uint baseVertex;
+  uint vertexCount;
+  bool inplace;
+};
+
+struct ModelVertex {
+  float x, y, z;
+  uint normal;
+  float u, v;
+  uint color;
+  uint tangent;
+};
+
+struct SkinVertex {
+  uint indices;
+  uint weights;
+};
+
+layout(set = 0, binding = 0) buffer restrict readonly VertexIn { ModelVertex vertexIn[]; };
+layout(set = 0, binding = 1) buffer restrict VertexOut { ModelVertex vertexOut[]; };
+layout(set = 0, binding = 2) buffer restrict readonly VertexWeights { SkinVertex skin[]; };
+layout(set = 0, binding = 3) uniform JointTransforms { mat4 joints[256]; };
+
+void lovrmain() {
+  if (GlobalThreadID.x >= vertexCount) return;
+  uint vertexIndex = baseVertex + GlobalThreadID.x;
+
+  uint indices = skin[vertexIndex].indices;
+  uint i0 = (indices >> 0) & 0xff;
+  uint i1 = (indices >> 8) & 0xff;
+  uint i2 = (indices >> 16) & 0xff;
+  uint i3 = (indices >> 24) & 0xff;
+  vec4 weights = unpackUnorm4x8(skin[vertexIndex].weights);
+
+  // Model loader does not currently renormalize weights post-quantization
+  weights /= weights[0] + weights[1] + weights[2] + weights[3];
+
+  mat4 matrix = mat4(0);
+  matrix += joints[i0] * weights[0];
+  matrix += joints[i1] * weights[1];
+  matrix += joints[i2] * weights[2];
+  matrix += joints[i3] * weights[3];
+
+  ModelVertex vertex = inplace ? vertexOut[vertexIndex] : vertexIn[vertexIndex];
+  vec4 position = vec4(vertex.x, vertex.y, vertex.z, 1.);
+  vec3 normal = normalize(unpackSnorm10x3(vertex.normal).xyz);
+
+  vec3 skinnedPosition = (matrix * position).xyz;
+  vec3 skinnedNormal = mat3(matrix) * normal;
+
+  vertexOut[vertexIndex].x = skinnedPosition.x;
+  vertexOut[vertexIndex].y = skinnedPosition.y;
+  vertexOut[vertexIndex].z = skinnedPosition.z;
+  vertexOut[vertexIndex].normal = packSnorm10x3(vec4(skinnedNormal, 0.));
+}

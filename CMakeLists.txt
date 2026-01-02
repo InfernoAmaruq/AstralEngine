@@ -5,6 +5,12 @@ cmake_policy(SET CMP0091 NEW)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment version")
 project(astral)
 
+enable_language(C)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+
+set(ASTRAL_RUNTIME_DIR "${CMAKE_BINARY_DIR}/bin")
+
 # Options
 option(LOVR_ENABLE_AUDIO "Enable the audio module" ON)
 option(LOVR_ENABLE_DATA "Enable the data module" ON)
@@ -692,7 +698,12 @@ elseif(APPLE)
     )
   else()
     set(EXE_DIR ${PROJECT_BINARY_DIR}/bin)
-    set_target_properties(${ASTRAL_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+    set_target_properties(${ASTRAL_TARGET} PROPERTIES
+	RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+	RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"
+	RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
+	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/bin"
+	RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_BINARY_DIR}/bin")
   endif()
   function(move_lib)
     if(TARGET ${ARGV0})
@@ -891,7 +902,7 @@ function(build_lua_module SRC)
     get_filename_component(REL_DIR "${REL_PATH}" DIRECTORY)
     get_filename_component(MODULE_NAME "${SRC_ABS}" NAME_WE)
 
-    set(OUT_DIR "${CMAKE_BINARY_DIR}/bin/Engine/${REL_DIR}")
+    set(OUT_DIR "${ASTRAL_RUNTIME_DIR}/bin/Engine/${REL_DIR}")
     file(MAKE_DIRECTORY "${OUT_DIR}")
 
     add_library(${MODULE_NAME} SHARED "${SRC_ABS}")
@@ -901,11 +912,23 @@ function(build_lua_module SRC)
         ${CMAKE_SOURCE_DIR}/engine
     )
 
+    target_link_libraries(${MODULE_NAME} PRIVATE lua)
+
     set_target_properties(${MODULE_NAME} PROPERTIES
         PREFIX ""
         LIBRARY_OUTPUT_DIRECTORY ${OUT_DIR}
         RUNTIME_OUTPUT_DIRECTORY ${OUT_DIR}
         ARCHIVE_OUTPUT_DIRECTORY ${OUT_DIR}
+
+RUNTIME_OUTPUT_DIRECTORY_DEBUG ${OUT_DIR}
+RUNTIME_OUTPUT_DIRECTORY_RELEASE ${OUT_DIR}
+RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${OUT_DIR}
+RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${OUT_DIR}
+
+LIBRARY_OUTPUT_DIRECTORY_DEBUG ${OUT_DIR}
+LIBRARY_OUTPUT_DIRECTORY_RELEASE ${OUT_DIR}
+LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO ${OUT_DIR}
+LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL ${OUT_DIR}
     )
 endfunction()
 
@@ -917,8 +940,8 @@ set(BIN_DIR ${CMAKE_BINARY_DIR}/bin)
 add_custom_command(
 	TARGET astral
 	POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E make_directory ${BIN_DIR}/Engine
+	COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:astral>/Engine
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 	${CMAKE_SOURCE_DIR}/engine
-	${BIN_DIR}/Engine
+	$<TARGET_FILE_DIR:astral>/Engine
 )

@@ -1,0 +1,127 @@
+local Component = GetService("Component","Component")
+local Physics = GetService("Physics","Physics")
+local Transform = {}
+
+Transform.Name = "Transform"
+Transform.Pattern = {
+    Position = Vec3,
+    Orientation = Quat,
+    RelativeToParent = true,
+    Rotation = Vec3,
+    Matrix = Mat4,
+    FromPose = 0,
+}
+Transform.Metadata = {}
+
+local FIELDS = {
+    Position = 1,
+    Orientation = 2,
+    Matrix = 3,
+    Rotation = 4,
+    RelativeToParent = 5,
+}
+
+local function GetOrientation(Comp)
+    Comp[2]:setEuler(Comp[4].yxz:unpack())
+    return Comp[2]
+end
+
+local function GetMatrix(Comp)
+    Comp[3]:set(Comp[1], Comp[2])
+    return Comp[3]
+end
+
+local function FromPose(T, x, y, z, a, ax, ay, az)
+    local P, O, M, R = T[1], T[2], T[3], T[4]
+    P:set(x, y, z)
+    O:set(a, ax, ay, az)
+    M:set(P, O)
+    local ex, ey, ez = O:getEuler()
+    R:set(ex, ey, ez)
+end
+
+local BaseMethods = {
+    FromPose = FromPose,
+    GetOrientation = GetOrientation,
+    GetMatrix = GetMatrix,
+}
+
+local function __INDEX(T, k)
+    local KEY = FIELDS[k]
+    if KEY then
+        return T[KEY]
+    else
+        return BaseMethods[k] or T[6][k]
+    end
+end
+
+@macro<L>:HasCollider(&E) = Component.HasComponent(&E,"Collider")
+
+Transform.Metadata.__create = function(DATA, Entity)
+    local Proxy = {}
+    local Ret = {
+        [6] = Proxy,
+    }
+
+    if DATA then
+        for i, v in pairs(DATA) do
+            if not Transform.Pattern[i] then
+                continue
+            end
+            if FIELDS[i] then
+                Ret[FIELDS[i]] = v
+            else
+                Proxy[i] = v
+            end
+        end
+    end
+
+    for i, v in pairs(Transform.Pattern) do
+        if Proxy[i] or (FIELDS[i] and Ret[FIELDS[i]]) then
+            continue
+        end
+        if FIELDS[i] then
+            Ret[FIELDS[i]] = type(v) == "function" and v() or v
+        else
+            Proxy[i] = type(v) == "function" and v() or v
+        end
+    end
+
+    GetMatrix(Ret)
+    GetOrientation(Ret)
+
+    return setmetatable(Ret, {
+        __index = __INDEX,
+        __newindex = function(_, k, v)
+            if rtype(v) == "userdata" and v.type and v.type() then
+                local F = FIELDS[k]
+                if not F then
+                    return
+                end
+                Ret[F]:set(v:unpack())
+            else
+                Proxy[k] = v
+                if not FIELDS[k] then
+                    return
+                end
+                rawset(Ret, FIELDS[k], v)
+            end
+
+            if k == "Rotation" then
+                GetOrientation(Ret)
+            end
+            if k ~= "Matrix" then
+                GetMatrix(Ret)
+            end
+
+            local Col = HasCollider(Entity)
+            if Col then
+                Physics.QueueToSyncLTJ(Col.WId,Col.ColRef,Ret)
+            end
+        end,
+    })
+end
+
+Transform.Serializer = SERIALIZE.BASICMETHOD
+
+return Transform

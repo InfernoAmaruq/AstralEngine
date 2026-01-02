@@ -1,0 +1,34 @@
+local Skybox = {}
+
+local Component = GetService("Component")
+local Renderer = GetService("Renderer")
+
+Skybox.Name = "Skybox"
+Skybox.Pattern = { Texture = 0, Visible = true }
+
+ENUM.RenderType.__Append("Skybox", 1)
+
+local SHADERRESETFLAG = Renderer.Flags.SHADER_RESET
+
+Renderer.AppendRenderTTP(ENUM.RenderType.Skybox, function(pass, _, comp, solid)
+    if comp.Skybox.Visible == false then
+        return
+    end
+    pass:setShader(nil)
+    pass:setColor(0xffffff)
+    pass:skybox(comp.Skybox.Texture[1])
+    return SHADERRESETFLAG
+end)
+
+Skybox.Metadata = {}
+Skybox.Metadata.__create = function(DATA, e)
+    Component.AddComponent(e, "RenderTarget", { Solid = true, Value = ENUM.RenderType.Skybox.Value })
+
+    if DATA.Visible == nil then
+        DATA.Visible = true
+    end
+
+    return DATA
+end
+
+return Skybox

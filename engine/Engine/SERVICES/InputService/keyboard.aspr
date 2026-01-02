@@ -1,0 +1,18 @@
+return function(D, SIGNAL)
+    local UserKB = {}
+
+    UserKB.IsKeyDown = D.ISDOWN
+
+    local KBProxy = setmetatable({}, { __index = UserKB, __newindex = function() end, __metatable = false })
+
+    local DATA = {}
+
+    DATA.GetKeyboard = function()
+        return KBProxy
+    end
+
+    UserKB.KeyPressed = SIGNAL.new(true, 0.05)
+    UserKB.KeyReleased = SIGNAL.new(true, 0.05)
+
+    return DATA
+end

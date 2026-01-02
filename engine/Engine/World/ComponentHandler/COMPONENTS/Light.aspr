@@ -1,0 +1,6 @@
+local Light = {}
+
+Light.Name = "Light"
+Light.Pattern = {}
+
+return Light

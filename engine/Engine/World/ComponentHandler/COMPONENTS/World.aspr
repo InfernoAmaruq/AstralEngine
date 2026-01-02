@@ -1,0 +1,59 @@
+local Component = GetService("Component", "Component")
+local Physics = GetService("Physics", "Physics")
+
+local World = {}
+
+local CAPTUREFUNC = function(t, ...)
+    local s = t
+    if typeof(t) == "Entity" then
+        s = t:GetComponent("World")
+    end
+    local FUNC, WORLD = rawget(s, ".NEXTCALL"), rawget(s, "World")
+    return FUNC(WORLD, ...)
+end
+
+local AliasMap = {
+    Update = "update",
+    Interpolate = "interpolate",
+}
+
+local WORLDINHERITANCE = {
+    __index = function(t, k)
+        k = rtype(k) == "string" and AliasMap[k] or k
+        local W = rawget(t, "World")
+        local v = W and W[k]
+        if rtype(v) == "function" then
+            rawset(t, ".NEXTCALL", v)
+            return CAPTUREFUNC
+        else
+            return v or rawget(t, k)
+        end
+    end,
+    __newindex = function()
+        error("CANNOT WRITE TO WORLD", 2)
+    end,
+}
+
+World.Name = "World"
+World.Pattern = { update = 0, World = 0, WorldId = 0 }
+World.Metadata = {}
+
+local function HasTag(World, Name)
+    local t = World.Tags[Name]
+    return t ~= nil, t
+end
+
+World.Metadata.__create = function(DATA)
+    local T = {}
+    T.World = DATA.W
+    T.DefaultTag = DATA.D
+    T.WorldId = DATA.N
+    T.Tags = DATA.ALLTAGS
+
+    T.HasTag = HasTag
+
+    setmetatable(T, WORLDINHERITANCE)
+    return T
+end
+
+return World

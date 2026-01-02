@@ -1,0 +1,18 @@
+local M = require("mouse")
+local K = require("keyboard")
+
+return function(D)
+    local SIGNALLIB = D.SIGNAL
+
+    local DATA = {}
+
+    -- KB
+    local KB = K(D.KEYBOARD, SIGNALLIB)
+    DATA.GetKeyboard = KB.GetKeyboard
+
+    -- MOUSE
+    local MOUSE = M(D.MOUSE, SIGNALLIB)
+    DATA.GetMouse = MOUSE.GetMouse
+
+    return DATA
+end

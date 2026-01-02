@@ -1,0 +1,87 @@
+local Ancestry = {}
+
+local Component = GetService("Component")
+local World = GetService("World")
+
+Ancestry.Name = "Ancestry"
+Ancestry.Pattern = { Parent = 0 }
+Ancestry.Metadata = {}
+
+@macro<L,!USEBRACK>{VALIDATE(&OBJ,&OUT,&REF) = 
+    local PT = typeof(&OBJ)
+    if PT == "Entity" then
+        &OUT = rawget(&OBJ, "__id")
+        &REF = &OBJ
+    elseif PT == "number" then
+        &REF = World.GetEntityFromId(&OBJ)
+        &OUT = &REF and &OBJ or error("[ANCESTRY]: NO VALID ENTITY ID FOR PARENT/CHILD!")
+    else
+        error("CANNOT SET TYPE OF `" .. PT .. "` AS PARENT/CHILD IN ANCESTRY GRAPH")
+    end
+}
+
+local FUNC = {
+    -- CORE
+    SetParent = function(self, Parent)
+        local Val
+        local Reference
+        VALIDATE(Parent,Val,Reference)
+
+        self.__Private.Parent = Val
+    end,
+    AddChild = function(self, Child)
+        local PT = typeof(Child)
+    end,
+    GetChildren = function(self, Child) end,
+
+    -- QUERRY
+    IsChildOf = function(self, Entity) end,
+    FindFirstChildOfType = function(self, Type) end,
+    FindFirstChild = function(self, Child) end,
+    FindFirstAncestor = function(self, Ancestor) end,
+    FindFirstAncestorOfType = function(self, Type) end,
+
+    -- DBG
+    TestCyclic = function() end,
+}
+
+local MT = {
+    __index = function(self, k)
+        if k == "Parent" then
+            return self.__Private.Parent
+        end
+        local CACHE = FUNC[k]
+        if CACHE then
+            return CACHE
+        else
+            return FUNC.FindFirstChild(self, k)
+        end
+    end,
+    __newindex = function(self, k, v)
+        if k == "Parent" then
+            FUNC.SetParent(self, v)
+        else
+            return
+        end
+    end,
+}
+
+Ancestry.Metadata.__create = function(DATA, e)
+    local Proxy = {}
+    Proxy.Children = {}
+    local m = {}
+    m.__Private = Proxy
+
+    setmetatable(m, MT)
+
+    if DATA.Parent then
+        -- set parent
+    end
+    if DATA.Children then
+        -- set children
+    end
+
+    return m
+end
+
+return Ancestry

@@ -1,0 +1,56 @@
+local RendTarget = {}
+
+local Renderer = GetService("Renderer")
+
+RendTarget.Name = "RenderTarget"
+RendTarget.Pattern = {}
+RendTarget.Metadata = {}
+
+local FIELDS = {
+    __RenderType = 1,
+    __RenderMask = 2,
+}
+
+local mt = {
+    __index = function(self, k)
+        return self.__PROXY[k]
+    end,
+    __newindex = function(self, k, v)
+        self.__PROXY[k] = v
+        if FIELDS[k] then
+            rawset(self, FIELDS[k], v)
+        end
+    end,
+}
+
+local function SwapStacks(self, bool)
+    Renderer.RemoveFromStack(self.__E)
+    Renderer.AddToStack(bool, self.__E)
+end
+
+RendTarget.Metadata.__create = function(Type, Entity)
+    Renderer.AddToStack(Type.Solid == nil and true or Type.Solid, Entity)
+
+    local Proxy = {
+        __RenderType = (type(Type) == "number" and Type or Type.Value),
+        __RenderMask = type(Type) ~= "number" and Type.Layer or math.rmap,
+    }
+
+    local Data = setmetatable({
+        __PROXY = Proxy,
+        __E = Entity,
+        [".SwapStacks"] = SwapStacks,
+    }, mt)
+
+    for i, v in pairs(Proxy) do
+        rawset(Data, FIELDS[i], v)
+    end
+
+    return Data
+end
+
+RendTarget.Metadata.__remove = function(Entity)
+    Renderer.RemoveFromStack(Entity)
+end
+
+return RendTarget

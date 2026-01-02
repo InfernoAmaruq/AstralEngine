@@ -1,0 +1,81 @@
+local Shared = require("../ServiceShared.aspr")
+
+return function(D)
+    local DATA = {}
+
+    DATA.__BOUND = {}
+    DATA.__USEDNAMES = {}
+    DATA.__SORTEDARRAY = {}
+
+    local function SORT()
+        local SortedArray = DATA.__SORTEDARRAY
+        for i in pairs(SortedArray) do
+            SortedArray[i] = nil
+        end
+
+        for _, PRIGROUP in rpairs(DATA.__BOUND) do
+            for _, BIND in rpairs(PRIGROUP) do
+                if #BIND.C == 1 then
+                    local Key = BIND.C[1]
+                    SortedArray[Key] = SortedArray[Key] or {}
+                    SortedArray[Key][#SortedArray[Key] + 1] = BIND.F
+                else
+                    for _, Key in rpairs(BIND.C) do
+                        SortedArray[Key] = SortedArray[Key] or {}
+                        SortedArray[Key][#SortedArray[Key] + 1] = BIND.F
+                    end
+                end
+            end
+        end
+    end
+
+    function DATA.Bind(NAME, PRIORITY, FUNC, Raw, ...)
+        if DATA.__USEDNAMES[NAME] then
+            return
+        end
+
+        local IsBool = type(Raw) == "boolean"
+        if not IsBool or Raw == false then
+            FUNC = Shared.AllocRoutine(FUNC)
+        end
+
+        DATA.__USEDNAMES[NAME] = PRIORITY
+
+        local TABLE = {
+            N = NAME,
+            P = PRIORITY,
+            F = FUNC,
+            C = { not IsBool and Raw or nil, ... },
+        }
+
+        DATA.__BOUND[PRIORITY] = DATA.__BOUND[PRIORITY] or {}
+        DATA.__BOUND[PRIORITY][NAME] = TABLE
+
+        SORT()
+    end
+
+    function DATA.Unbind(NAME)
+        if not DATA.__USEDNAMES[NAME] then
+            return
+        end
+        DATA.__BOUND[DATA.__USEDNAMES[NAME]][NAME] = nil
+        DATA.__USEDNAMES[NAME] = nil
+
+        SORT()
+    end
+
+    local KEYMAP = {}
+
+    for i, KEY in ipairs(D.KEYS) do
+        KEYMAP[KEY] = i
+    end
+
+    local NATIVE = require("CASNATIVE")
+    NATIVE.Init(DATA.__SORTEDARRAY)
+
+    DATA.__CALL = NATIVE.Call
+
+    DATA.__KEYMAP = KEYMAP
+
+    return DATA
+end

@@ -1,0 +1,132 @@
+local Component = GetService "Component"
+local Render = GetService "Renderer"
+
+local Shape = {}
+
+local E = ENUM({
+    Box = 1,
+    Capsule = 2,
+    Cylinder = 3,
+    Sphere = 4,
+    Plane = 5
+}, "ShapeType")
+
+local P_SetColor, P_Box, P_Sphere, P_Capsule, P_Plane, P_Cylinder
+do
+    local TMPPASS = AstralEngine.Graphics.NewRawPass() -- inside a DO block for GC
+    P_SetColor = TMPPASS.setColor
+    P_Box = TMPPASS.box
+    P_Sphere = TMPPASS.sphere
+    P_Capsule = TMPPASS.capsule
+    P_Plane = TMPPASS.plane
+    P_Cylinder = TMPPASS.cylinder
+end
+
+local Processors = {
+    [E.Box.Value] = function(p, _, c)
+        local comp = c.Shape
+        P_SetColor(p,comp[5],comp[6],comp[7],comp[8])
+        local t = c.Transform
+        P_Box(p,t[1], comp[9], t[2])
+    end,
+    [E.Sphere.Value] = function(p, _, c)
+        local comp = c.Shape
+        P_SetColor(p,comp[5],comp[6],comp[7],comp[8])
+        local t = c.Transform
+        P_Sphere(p,t[1], comp[9] ,t[2])
+    end,
+    [E.Capsule.Value] = function(p, _, c)
+        local comp = c.Shape
+        P_SetColor(p,comp[5],comp[6],comp[7],comp[8])
+        local t = c.Transform
+        P_Capsule(p,t[1],comp[9].x,comp[9].y,t[2])
+    end,
+    [E.Plane.Value] = function(p, _, c)
+        local comp = c.Shape
+        P_SetColor(p,comp[5],comp[6],comp[7],comp[8])
+        local t = c.Transform
+        P_Plane(p,t[1],comp[9].xy,t[2])
+    end,
+    [E.Cylinder.Value] = function(p,_,c)
+        local comp = c.Shape
+        P_SetColor(p,comp[5],comp[6],comp[7],comp[8])
+        local t = c.Transform
+        P_Cylinder(p,t[1],comp[9].x,comp[9].y,t[2])
+    end
+}
+
+Shape.Name = "Shape"
+Shape.Pattern = { Shape = 0, Color = 0xffffffff, Size = Vec3 }
+
+local OFFSET = 1
+
+local REnum = ENUM.RenderType
+for i, v in pairs(E) do
+    local V = ENUM.GetValue(v.Value)
+    local Val = V + OFFSET
+    REnum.__Append(i, Val)
+    Render.AppendRenderTTP(REnum[i], Processors[v.Value])
+end
+
+@macro<L,!USEBRACK>:WRITECOLOR(&C) = Comp[5], Comp[6], Comp[7], Comp[8] = color.unpack(&C);
+
+Shape.Metadata = {}
+Shape.Metadata.__create = function(DATA, e)
+    local Proxy = {}
+
+    local Size = DATA.Size or Vec3(1)
+
+    local ShapeEnum = (DATA.Shape or E.Box)
+    local S = ENUM.GetValue(ShapeEnum.Value)
+
+    local FRESHV = ENUM.Splice(REnum.__HEADER,ENUM.GetValue(S+OFFSET))
+
+    local Color = DATA.Color or 0xffffffff
+
+    Proxy.Shape = ShapeEnum
+
+    Proxy.Color = Color
+    Proxy.Size = Size
+
+    local Alpha = select(4,color.unpack(Color))
+
+    local RT = Component.AddComponent(e, "RenderTarget", {Value = FRESHV, Solid = Alpha == 1})
+    if not Component.HasComponent(e, "Transform") then
+        Component.AddComponent(e, "Transform")
+    end
+
+    local Comp = {
+        __PROXY = Proxy,
+        [9] = Size
+    }
+
+    WRITECOLOR(Color)
+
+    return setmetatable(Comp, {
+        __index = Proxy,
+        __pairs = function() return next, Proxy, nil end,
+        __newindex = function(_, k, v)
+            if k == "Shape" then
+                assert(typeof(v) == "__ENUM_ShapeType",
+                    "Attempt to set 'Shape' field of component " .. tostring(Comp) .. ": " .. debug.getaddress(Comp) .. " to non-enum")
+                Proxy.Shape = v
+                RT.__RenderType = v.Value + OFFSET
+            elseif k == "Color" then
+                assert(color.validate(v), v .. " IS NOT A VALID COLOR")
+                rawset(Proxy, "Color", v)
+                local OldAlpha = Comp[8]
+                WRITECOLOR(v)
+                local nc = Comp[8]
+                if OldAlpha ~= nc then
+                    RT[".SwapStacks"](RT,nc == 1)
+                end
+            end
+        end
+    })
+end
+
+Shape.FinalProcessing = function()
+    GetService"Physics".BindSizeComponent("Shape","Size")
+end
+
+return Shape

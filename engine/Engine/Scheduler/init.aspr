@@ -1,0 +1,217 @@
+local RESUME, STATUS, CREATE = coroutine.resume, coroutine.status, coroutine.create
+local ALLOCATE = table.alloc
+
+local Scheduler = {}
+
+Scheduler.__index = Scheduler
+
+local NativeUpdate = require("libNativeSched")
+
+@macro<L,!USEBRACK>:ERROR_ROUTINE(&Err,&Co) = print("[Scheduler] Error:",debug.traceback(&Co,&Err),"On routine:",debug.getaddress(&Co));
+
+function Scheduler.New(Clock, budget)
+    @ifdef<Sched.UseNative || Sched.UseAuto>{
+        Clock = NativeUpdate.Clock
+    }
+    @ifdef<Sched.UseLua>{
+        if not Clock and not Scheduler.Clock then return end
+    }
+
+    return setmetatable({
+        Budget   = budget or 0.01,
+        Routines = ALLOCATE(200,0),
+        ResumeAt = ALLOCATE(200,0),
+        Queue    = ALLOCATE(200,0),
+        __TEMP   = {},
+        Clock    = Clock,
+        ExternQueued = {}
+    }, Scheduler)
+end
+
+@macro<L,!USEBRACK>{SafeRemove(&O,&T) = 
+    local __MAXN = #&T
+    local __CURIDX = table.find(&T,&O)
+
+    if __CURIDX and __MAXN then
+        &T[__CURIDX] = &T[__MAXN]
+        &T[__MAXN] = nil
+    end
+}
+
+@macro<L,!USEBRACK>{VERF(&P) = if not &P then return end}
+
+local RS = GetService("RunService","RS")
+local GetAddress = debug.getaddress
+
+function Scheduler:WaitFor(Priority)
+    VERF(Priority)
+    local C = coroutine.running()
+    RS.__TEMPBIND("TEMP_"..GetAddress(C),Priority,C)
+    self.ExternQueued[C] = true
+    local CAPTURE = {coroutine.yield(-1)}
+    self.ExternQueued[C] = nil
+    return unpack(CAPTURE)
+end
+
+function Scheduler:SpawnAt(Priority,Task)
+    VERF(Priority)
+
+    local COR = coroutine.create(Task)
+    RS.__TEMPBIND("TEMP_"..GetAddress(COR),Priority,COR)
+end
+
+function Scheduler:Wait(s)
+    local co = coroutine.running()
+    if not co then return end
+
+    local Exists = false
+    for _, v in rpairs(self.Routines) do
+        if v == co then
+            Exists = true
+            break
+        end
+    end
+
+    if not Exists then
+        self.Routines[#self.Routines + 1] = co
+    end
+
+    self.ResumeAt[co] = self.Clock() + (s or 0)
+    coroutine.yield()
+    return true
+end
+
+function Scheduler:Spawn(f, ...)
+    local co = CREATE(f)
+    local Ok, Err = RESUME(co,...)
+    if not Ok then
+        ERROR_ROUTINE(Err,co)
+    end
+    local Status = STATUS(co)
+    if Status ~= "dead" then
+        self.Routines[#self.Routines + 1] = co
+    end
+    return co, Status
+end
+
+function Scheduler:Escape(co)
+    co = co or coroutine.running()
+    local t = self.Routines
+    SafeRemove(co,t)
+    self.ExternQueued[co] = nil
+end
+
+function Scheduler:Defer(f, ...)
+    self.Queue[#self.Queue + 1] = { F = f, P = { ... } }
+end
+
+function Scheduler:Delay(s, f)
+    local co = coroutine.create(f)
+    self.ResumeAt[co] = self.Clock() + s
+    self.Routines[#self.Routines + 1] = co
+end
+
+@ifdef<Sched.UseNative & !Sched.UseAuto & !Sched.UseLua>{
+Scheduler.Update = NativeUpdate.Update
+Scheduler.Clock = NativeUpdate.Clock
+}
+@ifdef<!Sched.UseNative & Sched.UseLua|Sched.UseAuto>{
+function Scheduler:Update()
+    local C = self.Clock
+    local Now = C()
+
+    @ifdef<Sched.UseAuto>{
+    local Count = 0
+    for _ in rpairs(self.Routines) do
+        Count = Count + 1
+    end
+    if Count > 30 then
+        NativeUpdate.Update(self)
+        return
+    end
+    }
+
+    --[[for i,Co in rpairs(self.Routines) do
+        if self.Clock() - Now > self.Budget then return end
+        if self.ExternQueued[Co] then continue end
+        local Wake = self.ResumeAt[Co]
+        if Wake and Wake > Now then continue end
+
+        if coroutine.status(Co) == "dead" then
+            table.remove(self.Routines, i)
+            continue
+        end
+
+        local Ok, Err = RESUME(Co,nil)
+        if not Ok then print("[Scheduler] Error: ", debug.traceback(Co,Err)) end
+    end]]
+
+    local r = self.Routines
+    local ResAt = self.ResumeAt
+    local n = #r
+    local Budget = self.Budget
+    local EQ = self.ExternQueued
+    for i = n, 1, -1 do
+        local Routine = r[i]
+
+        local t = C()
+        
+        if t - Now > Budget then return end
+        if EQ[Routine] then continue end
+        local Wake = ResAt[Routine]
+        if Wake and Wake > Now then continue end
+
+        local Ok, Err = RESUME(Routine)
+
+        if STATUS(Routine) == "dead" then
+            local _I = #r
+            r[i] = r[_I]
+            r[_I] = nil
+            EQ[Routine] = nil; ResAt[Routine] = nil
+            continue
+        end
+
+        if not Ok then
+            ERROR_ROUTINE(Err,Routine)
+        end
+    end
+
+    local Upd = false
+
+    for i, q in ipairs(self.Queue) do
+        if self.Clock() - Now > Budget then break end
+        local co = CREATE(q.F)
+        self.Queue[i] = nil
+        local ok, err = RESUME(co, unpack(q.P))
+        Upd = true
+        if not ok then
+            print("[Scheduler] Error: ", debug.traceback(co,err))
+            continue
+        end
+        local Status = STATUS(co)
+        if Status == "dead" then continue end
+        self.Routines[#self.Routines + 1] = co
+    end
+
+    if not Upd then return end
+
+    local TEMP = self.__TEMP
+    local j = 0
+    for i = 1, #self.Queue do
+        local v = self.Queue[i]
+        if v == nil then continue end
+        j++
+        TEMP[j] = v
+        self.Queue[i] = nil
+    end
+
+    for i, v in rpairs(self.__TEMP) do
+        self.__TEMP[i] = nil
+        self.Queue[i] = v
+    end
+end
+}
+
+GetService.AddService("Scheduler",Scheduler)
+
+return Scheduler

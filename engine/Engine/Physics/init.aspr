@@ -1,0 +1,232 @@
+local Entity = GetService("Entity", "Entity")
+local Component = GetService("Component")
+local NewWorld = lovr.physics.newWorld
+
+local Physics = {}
+
+local N = 1
+Physics.Worlds = {}
+Physics.RawWorlds = {}
+
+local DefaultParameters = { ThreadSafe = false, RestitutionThreshold = 1, Stabilization = .7, MixedTags = {"DEFAULT"}, DefaultTag = "DEFAULT"}
+
+local function GetTags(Tags,Static,Mixed)
+    local T, S, ALL = table.alloc(32,0), table.alloc(32,0), table.alloc(0,32)
+
+    local SCRATCH = table.alloc(32,0)
+
+    if Tags then
+        for _,v in pairs(Tags) do
+            table.insert(T,v)
+            SCRATCH[v] = true
+        end
+    end
+
+    if Static then
+        for _,v in pairs(Static) do
+            table.insert(S,v)
+            if not SCRATCH[v] then
+                table.insert(T,v)
+            else
+                SCRATCH[v] = nil
+            end
+        end
+    end
+
+    if Mixed then
+        for _,v in pairs(Mixed) do
+            table.insert(T,v)
+            local STAT = "."..v..".STATIC"
+            table.insert(S,STAT)
+            table.insert(T,STAT)
+        end
+    end
+
+    for _,v in pairs(T) do
+        local Exists = table.find(S,v)
+        ALL[v] = Exists and true or false
+    end
+
+    return T,S,ALL
+end
+
+local WorldColliders = table.alloc(5, 0)
+local LuaToJoltToSync = table.alloc(5, 0)
+
+@flag:F_Col = 1;
+@flag:F_Trans = 2;
+@flag:F_Flags = 3;
+
+@flag:S_Static = 0b101100000001;
+@flag:S_Kinematic = 0b101100000010;
+
+@flag:SHOULD_MOVE = 0b101100000011;
+
+function Physics.NewWorld(Parameters)
+    Parameters = Parameters or DefaultParameters
+
+    local Tags, StaticTags, All = GetTags(Parameters.Tags,Parameters.StaticTags,Parameters.MixedTags)
+
+    local W = NewWorld{
+        tags = Tags,
+        staticTags = StaticTags,
+        maxColliders = Parameters.MaxColliders,
+        threadSafe = Parameters.ThreadSafe or DefaultParameters.ThreadSafe,
+        allowSleep = Parameters.AllowSleep,
+        stabilization = Parameters.Stabilization or DefaultParameters.Stabilization,
+        maxPenetration = Parameters.MaxPenetration,
+        restitutionThreshold = Parameters.RestitutionThreshold or DefaultParameters.RestitutionThreshold,
+        velocitySteps = Parameters.VelocitySteps,
+        positionSteps = Parameters.PositionSteps,
+    }
+
+    assert(W, "Failed to create world!")
+
+    local T = Entity.New("WORLD_" .. N)
+    T:AddComponent("World", { W = W, N = N, D = Parameters.DefaultTag or Tags[1] or "DEFAULT", ALLTAGS = All })
+
+    Physics.Worlds[N] = T
+    Physics.RawWorlds[N] = W
+
+    WorldColliders[N] = { [&F_Col] = table.alloc(250,0), [&F_Trans] = table.alloc(250,0), [&F_Flags] = table.alloc(250,0) }
+    LuaToJoltToSync[N] = { [&F_Col] = table.alloc(70,0), [&F_Trans] = table.alloc(70,0) }
+
+    N = N + 1
+    return T
+end
+
+local StoredComponents = {
+    --[COMPONENTNAME] = SIZEFIELD
+}
+
+function Physics.BindSizeComponent(ComponentName, Field)
+    StoredComponents[ComponentName] = Field
+end
+
+function Physics.GetObjSize(e)
+    for i, v in pairs(Component.SetComponents[e]) do
+        if StoredComponents[i] then
+            return v[StoredComponents[i]]
+        end
+    end
+    return nil
+end
+
+local FF_GetPose, FF_FromPose, CC_SetPose, CC_SetVel, CC_SetAngVel
+
+local FieldToFlag = {
+    Anchored = &S_Kinematic,
+    Static = &S_Static
+}
+
+local function ProcessFlags(ColRef)
+    local Flags = 0
+    for i,v in pairs(FieldToFlag) do
+        local FIELD = ColRef[i]
+        if FIELD then
+            Flags |= v
+        end
+    end
+    return Flags
+end
+
+function Physics.BindCollider(WId, ColRef, Transform)
+    local Col = ColRef.ColRef
+    if not FF_GetPose or not FF_FromPose then
+        FF_GetPose = Col.getPose
+        FF_FromPose = Transform.FromPose
+        CC_SetPose = Col.setPose
+        CC_SetVel = Col.setLinearVelocity
+        CC_SetAngVel = Col.setAngularVelocity
+    end
+
+    local Flags = ProcessFlags(ColRef)
+
+    table.insert(WorldColliders[WId][&F_Col], Col)
+    table.insert(WorldColliders[WId][&F_Trans], Transform)
+    table.insert(WorldColliders[WId][&F_Flags],Flags)
+end
+
+function Physics.UpdateSyncField(WId, ColliderRef, Field, Value)
+    local FlagVal = FieldToFlag[Field]
+    if not FlagVal then return end
+
+    local Id
+    for i,v in pairs(WorldColliders[WId][&F_Col]) do
+        if v == ColliderRef then Id = i break end
+    end
+
+    if not Id then return end
+    local t = WorldColliders[WId][&F_Flags]
+
+    if Value then
+        t[Id] |= FlagVal
+    else
+        t[Id] &= !FlagVal
+    end
+end
+
+function Physics.UnbindCollider(WId, v)
+    local Index = table.find(WorldColliders[WId][&F_Col],v) or table.find(WorldColliders[WId][&F_Trans],v)
+    if not Index then return end
+    local Max = #WorldColliders[WId][&F_Col]
+    WorldColliders[WId][&F_Col][Index] = WorldColliders[WId][&F_Col][Max]
+    WorldColliders[WId][&F_Trans][Index] = WorldColliders[WId][&F_Trans][Max]
+    WorldColliders[WId][&F_Flags][Index] = WorldColliders[WId][&F_Flags][Max]
+    WorldColliders[WId][&F_Col][Max] = nil
+    WorldColliders[WId][&F_Trans][Max] = nil
+    WorldColliders[WId][&F_Flags][Max] = nil
+end
+
+local MainWorld, MainWorldId
+
+function Physics.SetMainWorld(W)
+    MainWorld = W.World
+    MainWorldId = W.WorldId
+    if Physics.__OnWorldReset then
+        Physics.__OnWorldReset(MainWorld, MainWorldId)
+    end
+end
+
+function Physics.GetMainWorld(b)
+    return b and Physics.Worlds[MainWorldId] or MainWorld, MainWorldId
+end
+
+function Physics.UpdateTransforms(World)
+    local Entry = WorldColliders[World]
+    local Colls, Trans, Flags = Entry[&F_Col], Entry[&F_Trans], Entry[&F_Flags]
+    local n = #Colls
+    local FromPose, GetPose = FF_FromPose, FF_GetPose
+    for i = 1, n do
+        if (Flags[i] & &SHOULD_MOVE) ~= 0 then continue end
+        FromPose(Trans[i],GetPose(Colls[i]))
+    end
+end
+
+function Physics.QueueToSyncLTJ(W,Col,Transform)
+    local t = LuaToJoltToSync[W]
+
+    local a = t[&F_Col]
+    for i = 1, #a do
+        if a[i] == Col then return end
+    end
+
+    table.insert(t[&F_Col],Col)
+    table.insert(t[&F_Trans],Transform)
+end
+
+function Physics.LuaToJolt(World)
+    local Entry = LuaToJoltToSync[World]
+
+    local ColT, TransT = Entry[&F_Col], Entry[&F_Trans]
+
+    local n = #ColT
+
+    for i = n, 1, -1 do
+        CC_SetPose(ColT[i], TransT[i][1], TransT[i][2])
+        ColT[i] = nil; TransT[i] = nil
+    end
+end
+
+GetService.AddService("Physics", Physics)
+return Physics

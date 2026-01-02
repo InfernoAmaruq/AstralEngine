@@ -1,0 +1,85 @@
+local n = 0
+math.rmap = ! n
+
+local Component = GetService("Component", "Component")
+
+local ShaderService = require("ShaderService")
+
+local Renderer = {}
+local Stack = {}
+local Cams = {}
+local PassTable = {}
+
+-- PASS STORAGE
+@execute<UNSAFE>{if lovr.headset then return "local CONSTOFFSET = 2" else return "local CONSTOFFSET = 1" end}
+
+Renderer.PassStorage = {
+    __CORE = {},
+    PassTable = PassTable,
+    PreTable = {},
+    PostTable = {},
+    ToggleTable = {} -- post array has an offset of (#Pre + i+1)
+}
+
+function Renderer.PassStorage.AddPass(P, Pass, Id, Enabled)
+    Enabled = Enabled ~= nil and Enabled or Enabled
+
+    local T = Renderer.PassStorage[P and "PostTable" or "PreTable"]
+    if T[Id] then error("PASS ALREADY EXISTS AT TABLE SLOT: "..Id) end
+    T[Id] = Pass
+
+    Renderer.PassStorage.RebuildPassTable()
+end
+
+function Renderer.PassStorage.RemovePass(P, Id)
+    Renderer.PassStorage.RebuildPassTable()
+end
+
+function Renderer.PassStorage.SetEnabled(P, Id, S)
+    Renderer.PassStorage.RebuildPassTable()
+end
+
+function Renderer.PassStorage.RebuildPassTable()
+    for i in pairs(PassTable) do
+        PassTable[i] = nil
+    end
+
+    local Top = 0
+    for i,v in pairs(Renderer.PassStorage.PreTable) do
+        Top = Top + 1
+        PassTable[Top] = v[1] or v
+    end
+    Top = Top + CONSTOFFSET
+    for i,v in pairs(Renderer.PassStorage.PostTable) do
+        Top = Top + 1
+        PassTable[Top + i] = v[1] or v
+    end
+end
+
+function Renderer.GetPassTable() return PassTable end
+
+-- ASSET HANDLING
+
+Renderer.Assets = {}
+Renderer.Assets.Meshes = {}
+Renderer.Assets.Textures = {}
+Renderer.Assets.Shaders = {}
+
+-- RENDERING DATA
+
+local Component = GetService("Component", "Component")
+
+local LT = ENUM({
+    Cel = 1,
+    Shadowmap = 2
+}, "LightingTechnology", { CanAppend = true, Strict = true })
+
+local RT = ENUM({}, "RenderType", { CanAppend = true, Strict = true })
+
+processchildfiles("Engine/Render/RenderCalls",function(f)
+    loadfile(f)(Renderer)
+end,true)
+
+GetService.AddService("Renderer", Renderer)
+
+return Renderer

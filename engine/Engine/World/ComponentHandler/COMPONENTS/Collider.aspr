@@ -1,0 +1,230 @@
+local Physics = GetService("Physics", "Physics")
+local Component = GetService("Component", "Component")
+
+local mt = {}
+
+local Collider = {
+    Name = "Collider",
+    Pattern = {},
+    Metadata = mt,
+}
+
+local CT = ENUM({
+    Box = 1,
+    Sphere = 2,
+}, "ColliderType")
+
+-- FLAGS
+@macro<L>:ToStatic(&T) = "."..&T..".STATIC"
+
+@macro<L>:FromStatic(&T) = &T:sub(2,-7)
+
+@macro<L>:IsStatic(&T) = &T and &T:sub(-7) or false
+
+@macro<L,!USEBRACK>{GetStaticTag(&TAG,&W,&COLL,&STATE) =
+        local CURTAG = &COLL:getTag()
+        local NEWTAG = &STATE and ToStatic(CURTAG) or FromStatic(CURTAG)
+        &TAG = NEWTAG
+};
+
+@flag:IDX_ANCHORED = 1;
+@flag:IDX_STATIC = 2;
+@flag:IDX_T_DOF = 3;
+@flag:IDX_R_DOF = 4;
+@flag:IDX_TRIGGER = 5;
+@flag:VEL_ANG = 6;
+@flag:VEL_MOV = 7;
+@flag:TAG = 8;
+@flag:MASS = 9;
+@flag:FRICTION = 10;
+@flag:RESTITUTION = 11;
+@flag:INERTIA = 12;
+@flag:GRAV_SCALE = 13;
+@flag:CAN_SLEEP = 14;
+@flag:ASLEEP = 15;
+@flag:DAMP_L = 16;
+@flag:DAMP_A = 17;
+@flag:CENTER_OF_MASS = 18;
+
+@macro<L,!USEBRACK>{VALIDATEDOF(&OBJ) = local RDOF, TDOF = &OBJ[&IDX_R_DOF], &OBJ[&IDX_T_DOF]; if (RDOF == nil or RDOF == "") and (TDOF == nil or TDOF == "") then error("CANNOT SET ALL DEGREES OF FREEDOM TO NIL. USE STATIC OR ANCHORED COLLIDER") end}
+
+local SHAREDT = {
+    SetStatic = function(self, State)
+        if self[&IDX_STATIC] == State then return end
+        local ColRef = self.ColRef
+        local w = self.World
+        local Tag
+        GetStaticTag(Tag,w,ColRef,State)
+
+        if (w:HasTag(Tag)) then
+            ColRef:setTag(Tag)
+        else
+            error("NO STATIC TAG FOR OBJECT",self)
+        end
+        self[&IDX_STATIC] = State
+        self[&TAG] = Tag
+
+        Physics.UpdateSyncField(w.WorldId,self.ColRef,"Static", State)
+    end,
+    Anchor = function(self, State)
+        if self[&IDX_ANCHORED] == State then return end
+
+        self.ColRef:setKinematic(State)
+
+        self[&IDX_ANCHORED] = State
+
+        Physics.UpdateSyncField(self.World.WorldId,self.ColRef,"Anchored", State)
+    end,
+    SetTranslationDOF = function(self, v)
+        VALIDATEDOF(self)
+        self.ColRef:setDegreesOfFreedom(v,self[&IDX_R_DOF])
+        self[&IDX_T_DOF] = v
+    end,
+    SetRotationDOF = function(self, v)
+        VALIDATEDOF(self)
+        self.ColRef:setDegreesOfFreedom(self[&IDX_T_DOF],v)
+        self[&IDX_R_DOF] = v
+    end,
+    SetTrigger = function(self, v)
+        local ColRef = self.ColRef
+        ColRef:setSensor(v)
+        self[&IDX_TRIGGER] = ColRef:isSensor()
+    end,
+    SetTag = function(self, v)
+        self.ColRef:setTag(v)
+        self[&TAG] = v
+    end,
+    SetAngularVelocity = function(self, v)
+    end,
+    SetVelocity = function(self, v) end,
+    ApplyForce = function(self, v) end,
+    ApplyAngularForce = function(self, v) end,
+    ApplyImpulse = function(self, v) end,
+    ApplyAngularImpulse = function(self, v) end
+}
+
+local function CALLFUNC(self, ...)
+    return self[".NEXTCALL"](self.ColRef, ...)
+end
+
+local LIST = {
+    Anchored = &IDX_ANCHORED, Static = &IDX_STATIC, RotationDOF = &IDX_R_DOF, TranslationDOF = &IDX_T_DOF, IsTrigger = &IDX_TRIGGER, Tag = &TAG
+}
+
+local FIELDTOFUNC = {
+    Anchored = SHAREDT.Anchor,
+    Static = SHAREDT.SetStatic,
+    RotationDOF = SHAREDT.SetRotationDOF,
+    TranslationDOF = SHAREDT.SetTranslationDOF,
+    IsTrigger = SHAREDT.SetTrigger,
+    Tag = SHAREDT.SetTag
+}
+
+do -- connecting stuffs so you can index
+    local TABLE = Collider.Pattern
+
+    for i in pairs(FIELDTOFUNC) do
+        TABLE[i] = 0
+    end
+    for i in pairs(LIST) do
+        TABLE[i] = 0
+    end
+    for i in pairs(SHAREDT) do
+        TABLE[i] = 0
+    end
+end
+
+local METATAB = {
+    __index = function(self, k)
+        local Col = self.ColRef
+        local a = SHAREDT[k]
+        if a then
+            return a
+        end
+        local v = Col[k]
+        if rtype(v) == "function" then
+            rawset(self, ".NEXTCALL", v)
+            return CALLFUNC
+        end
+        return v or (LIST[k] and rawget(self,LIST[k])) or rawget(self, k)
+    end,
+    __newindex = function(self, k, v)
+        if rtype(k) == "string" and k:lower() == "position" then
+            error("CANNOT SET POSITION OF COMPONENT THROUGH <Component>.Position = <Val> -- USE TRANSFORM INSTEAD",2)
+        end
+        local Func = FIELDTOFUNC[k]
+        if rtype(k) == "string" and Func then
+            Func(self,v)
+        else
+            rawset(self,k,v)
+        end
+    end
+}
+
+local SphereVal = CT.Sphere.Value
+
+function mt.__create(DATA, e)
+    local Transform = assert(Component.HasComponent(e, "Transform"), "NO COMPONENT TYPE OF 'Transform' PRESENT, CANNOT ADD COLLIDER!")
+
+    local World = DATA.World
+    local WId
+
+    if not World then
+        WId = DATA.WorldId or 1
+        World = assert(Physics.Worlds[WId], "NO WORLD WITH ID OF [" .. tostring(WId) .. "] PRESENT!")
+    else
+        WId = World.WorldId
+    end
+
+    local RawWorld = World:GetComponent("World").World
+
+    local ColliderType = DATA.ColliderType or CT.Box
+    local Size = DATA.Size or Physics.GetObjSize(e)
+
+    assert(Size, "NO SIZE VALUE PROVIDED!")
+
+    local FUNCNAME = "new" .. ColliderType.Name .. "Collider"
+
+    local ColliderVal = ColliderType.Value
+
+    local ConvertedSize = Size
+    if ColliderVal == SphereVal then
+        ConvertedSize = math.max(Size:unpack())
+    end
+
+    local COLLIDER = RawWorld[FUNCNAME](RawWorld, vec3(0,0,0), ConvertedSize)
+    COLLIDER:setPose(Transform.Position,Transform.Orientation)
+    COLLIDER:setTag(DATA.Tag or World.DefaultTag)
+
+    local Tab = {
+        World = World,
+        WId = World.WorldId,
+        ColliderType = ColliderType,
+        ColRef = COLLIDER,
+        Tags = 0,
+        [&IDX_T_DOF] = DATA.TranslationDOF or "xyz",
+        [&IDX_R_DOF] = DATA.RotationDOF or "xyz",
+        [&TAG] = COLLIDER:getTag()
+    }
+
+    COLLIDER:setDegreesOfFreedom(Tab[&IDX_T_DOF],Tab[&IDX_R_DOF])
+
+    local T = setmetatable(Tab,METATAB)
+
+    COLLIDER:setUserData(T)
+
+    Physics.BindCollider(WId, T, Transform)
+
+    if DATA.Anchored then
+        SHAREDT.Anchor(T,true)
+    end
+    if DATA.Static then
+        SHAREDT.SetStatic(T,true)
+    end
+
+    return T
+end
+
+function mt.__remove(DATA, e) end
+
+return Collider

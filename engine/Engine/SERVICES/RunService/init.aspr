@@ -1,0 +1,74 @@
+local Shared = require("../ServiceShared.aspr")
+
+return function(D)
+    local SIGNALLIB = D.SIGNAL
+
+    local DATA = {}
+
+    DATA.RenderStepped = SIGNALLIB.new(true, 0.1)
+
+    DATA.__BOUNDTOSTEP = {}
+    DATA.__USEDNAMES = {}
+
+    DATA.UnbindFromStep = function(NAME)
+        if not DATA.__USEDNAMES[NAME] then
+            return
+        end
+
+        DATA.__BOUNDTOSTEP[DATA.__USEDNAMES[NAME]][NAME] = nil
+    end
+
+    local ENUMNAME = "StepPriority"
+    local E
+    local Processor
+    if _G["ENUM"] then
+        E = _G["ENUM"]({
+            CPUUpdate = 250,
+            Render = 750,
+            Physics = 1250,
+        }, ENUMNAME, { CanAppend = true })
+        Processor = _G["ENUM"].__GETPROCESSOR(ENUMNAME, "RawValue")
+    else
+        Processor = function(_) end
+    end
+
+    DATA.__TEMPBIND = function(n, PRIORITY, F)
+        PRIORITY = Processor(PRIORITY) or PRIORITY
+        assert(math.mathtype(PRIORITY) == "Integer", PRIORITY .. " NOT AN INT")
+        DATA.__BOUNDTOSTEP[PRIORITY] = DATA.__BOUNDTOSTEP[PRIORITY] or {}
+        DATA.__BOUNDTOSTEP[PRIORITY][n] = F
+    end
+
+    DATA.BindToStep = function(NAME, PRIORITY, F, BindRaw)
+        PRIORITY = Processor(PRIORITY) or PRIORITY
+        assert(math.mathtype(PRIORITY) == "Integer", PRIORITY .. " NOT AN INT")
+
+        if rtype(F) == "function" and not BindRaw then
+            F = Shared.AllocRoutine(F)
+        end
+
+        local IsUsed = DATA.__USEDNAMES[NAME]
+        if IsUsed then
+            error("RS bind of " .. NAME .. " already in use")
+        end
+
+        DATA.__BOUNDTOSTEP[PRIORITY] = DATA.__BOUNDTOSTEP[PRIORITY] or {}
+
+        local T = DATA.__BOUNDTOSTEP[PRIORITY]
+
+        DATA.__USEDNAMES[NAME] = PRIORITY
+
+        T[NAME] = F
+    end
+
+    local Native = require("RunServiceNative") -- calling the so/dll
+
+    Native.Init(DATA)
+    DATA.__TICK = Native.Tick
+
+    DATA.BindToStep("__CORE_UPD", E and E.CPUUpdate and E.CPUUpdate.RawValue or 250, function(dt)
+        DATA.RenderStepped:Fire(dt)
+    end)
+
+    return DATA
+end

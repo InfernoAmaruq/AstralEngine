@@ -1,0 +1,158 @@
+local Component = require("ComponentHandler")
+local InstMeta = require("Instance")(Component)
+local World = {}
+
+World.Component = Component
+
+local PREALLOCSIZE = 65
+local SHIFT = 24
+local RESIZEAT = 2 / 3
+local RESIZESTEP = 1.25
+
+World.Alive = {}
+World.Capacity = 0 -- points to highest id
+World.TopPtr = 0   -- points at highest alive object
+
+function World.GetEntityFromId(Id)
+    local E = World.Alive[Id]
+    if not E then
+        return nil
+    else
+        return not E.IsNull and E
+    end
+end
+
+local Entity = {}
+
+local SERIALIZER = require("Lib.Serialize")
+
+local function ALLOC(Use)
+    World.Capacity = World.Capacity + 1
+    local ID = World.Capacity
+    local Gen = Use and 1 or 0
+
+    local t = setmetatable({ __id = ID, __gen = Gen, UniqueId = Gen << SHIFT | ID, IsNull = true }, InstMeta)
+
+    World.Alive[World.Capacity] = t
+
+    return t
+end
+
+local function ADD()
+    local ResizeTo = World.Capacity * RESIZESTEP
+
+    while World.Capacity <= ResizeTo do
+        ALLOC()
+    end
+end
+
+for _ = 1, PREALLOCSIZE do
+    ALLOC()
+end
+
+local function GetEntity()
+    local n = World.Capacity
+    for i = 1, n do
+        local Ent = World.Alive[i]
+        if Ent.IsNull then
+            Ent.__gen = Ent.__gen + 1
+            local k = Ent.__gen << SHIFT | Ent.__id
+            Ent.UniqueId = k
+            if i >= RESIZEAT * n then
+                ADD()
+            end
+            return Ent
+        end
+    end
+
+    return ALLOC(true)
+end
+
+function Entity.New(Name, ...)
+    assert(type(Name) == "string", "Entity name not a string!")
+    local NewEntity = GetEntity()
+
+    rawset(NewEntity, "Name", Name)
+    if NewEntity.__id > World.TopPtr then
+        World.TopPtr = NewEntity.__id
+        -- similar thing on memory freeing to move down ptr
+    end
+
+    for i = 1, select("#", ...), 2 do
+        local v, Data = select(i, ...)
+        Component.AddComponent(NewEntity.__id, v, Data)
+    end
+
+    NewEntity.IsNull = false
+
+    return NewEntity
+end
+
+GetService.AddService("Component", Component)
+GetService.AddService("Entity", Entity)
+
+-- SERIALIZER
+
+SERIALIZER.AddSerializeMethod("Entity", function(T, I, V)
+    local Parts = {}
+
+    local NI = I .. SERIALIZER.Indent
+    table.insert(Parts, NI .. "Name = " .. T.Name)
+
+    local Components = {}
+
+    for k, val in pairs(T:GetComponents()) do
+        if SERIALIZER.IgnoreKey(k) then
+            continue
+        end
+
+        local Key = SERIALIZER.GetKey(k, I, V)
+
+        local StrVal = SERIALIZER.SerializeValue(val, NI, V)
+
+        if StrVal then
+            table.insert(Components, NI .. SERIALIZER.Indent .. Key .. " = " .. StrVal)
+        end
+    end
+
+    local Ancestry = T:GetComponent("Ancestry")
+    if Ancestry then
+        local Anc = {}
+
+        if Ancestry.__RAWPARENT then
+            table.insert(Anc, NI .. SERIALIZER.Indent .. "Parent = " .. tostring(Ancestry.__RAWPARENT))
+        end
+        if Ancestry.__CHILDTABLE then
+            local HasChild
+            local Children = {}
+            for i in pairs(Ancestry.__CHILDTABLE) do
+                HasChild = true
+                table.insert(Children, NI .. SERIALIZER.Indent .. SERIALIZER.Indent .. i)
+            end
+            if HasChild then
+                table.insert(
+                    Anc,
+                    NI
+                    .. SERIALIZER.Indent
+                    .. "Children = {\n"
+                    .. table.concat(Children, ",\n")
+                    .. "\n"
+                    .. NI
+                    .. SERIALIZER.Indent
+                    .. "}"
+                )
+            end
+        end
+
+        table.insert(Parts, NI .. "Ancestry = {\n" .. table.concat(Anc, ",\n") .. "\n" .. NI .. "}")
+    end
+
+    local CompString = table.concat(Components, ",\n")
+    table.insert(Parts, NI .. "Components = {\n" .. CompString .. "\n" .. NI .. "}")
+
+    return "{\n" .. table.concat(Parts, ",\n") .. "\n" .. I .. "}"
+end)
+
+GetService.AddService("World", World)
+
+return World

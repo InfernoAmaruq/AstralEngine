@@ -1,0 +1,74 @@
+local MARK, DEF, TERM = "@", ":", ";"
+
+@flag:P_Code = 1;
+@flag:P_Comment = 2;
+@flag:P_Pragma = 3;
+@flag:P_LongComment = 4;
+
+return function(Str)
+    local Scope = &P_Code
+
+        local Len = #Str
+        local Pragmas = {}
+        local OutputT = {}
+
+        local i = 0
+        while i <= Len do
+            local c = Str:sub(i,i)
+
+            if Scope == &P_Code then
+                local Cache = false
+
+                if c == "/" and Str:sub(i,i+1) == "//" then
+                    Scope = &P_Comment
+                elseif c == "/" and Str:sub(i,i+1) == "/*" then
+                    Scope = &P_LongComment
+                elseif c == MARK then
+                    Scope = &P_Pragma
+                else
+                    Cache = true
+                end
+
+                if Cache then
+                    OutputT[#OutputT+1] = c
+                end
+            elseif Scope == &P_Comment then
+                if c == "\n" then
+                    Scope = &P_Code
+                end
+            elseif Scope == &P_Pragma then
+                local Start = i
+                local End = i
+                local DefPos = nil
+
+                local NAME
+                local VALUE
+
+                for j = Start, Len do
+                    local Char = Str:sub(j,j)
+                    End = j
+
+                    if Char == DEF then DefPos = j
+                    elseif Char == TERM then break end
+                end
+
+                NAME = Str:sub(Start,DefPos-1)
+                VALUE = Str:sub(DefPos+1,End-1)
+
+                Pragmas[NAME] = tonumber(VALUE) or VALUE
+
+                i = End
+                Scope = &P_Code
+            elseif Scope == &P_LongComment then
+                if Str:sub(i,i+1) == "*/" then
+                    Scope = &P_Code
+                end
+            end
+            i = i + 1
+        end
+
+        local Out = table.concat(OutputT, "")
+
+        return Out, Pragmas
+
+end

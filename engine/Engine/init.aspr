@@ -1,0 +1,72 @@
+local Services = {}
+
+local Index = {
+    AddService = function(Name, Val)
+        Services[Name] = Val
+    end,
+}
+
+-- fuckass metatable and debug wizardry!!!!
+-- basically self-repairing upvalue requires
+-- USER CODE DOES NOT CONCERN ITSELF WITH THIS, ALL SERVICES EXIST IN USER CODE AT RUN TIME
+-- mainly to allow async loading for engine internals
+local f = setmetatable({}, {
+    __call = function(_, n, repair)
+        local s = Services[n]
+        if not s then
+            local mt = {
+                __index = function(_, v)
+                    if Services[n] then
+                        return Services[n][v]
+                    end
+                end,
+                __newindex = function(_, k, v)
+                    if Services[n] then
+                        Services[n][k] = v
+                    end
+                end,
+                __pairs = function()
+                    return next, Services[n] or s, nil
+                end,
+            }
+
+            if repair then
+                for i, v in pairs(mt) do
+                    mt[i] = function(...)
+                        local Grab = { v(...) }
+
+                        if Services[n] then
+                            local INFO = debug.getinfo(2)
+                            local f = INFO.func
+                            local j = 1
+                            while true do
+                                local k = debug.getupvalue(f, j)
+                                if not k or k == repair then
+                                    if k == repair then
+                                        debug.setupvalue(f, j, Services[n])
+                                        sprint("REQUIRE REPAIR SUCCESSFUL FOR:", k)
+                                    end
+                                    break
+                                end
+                                j = j + 1
+                            end
+                        end
+
+                        return unpack(Grab)
+                    end
+                end
+            end
+
+            s = setmetatable({}, mt)
+        end
+        return s
+    end,
+    __index = Index,
+    __newindex = function()
+        error("CANNOT WRITE MANUALLY TO SERVICE MANAGER")
+    end,
+})
+
+_G.GetService = f
+
+return nil

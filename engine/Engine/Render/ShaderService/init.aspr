@@ -1,0 +1,273 @@
+local Def = require("Def")
+local TYPE = _G.rtype or _G.type
+local ShaderService = {}
+
+local FileSystem = lovr.filesystem
+
+local Mangler = require("Mangler")
+local ParsePragma = require("Pragmas")
+
+-- MAKING SHADERS
+
+@flag:ST_Compute = 0xA0;
+@flag:ST_Graphics = 0xF0;
+@flag:ST_Vertex = 0xF1;
+@flag:ST_Fragment = 0xF2;
+
+local SHADERTYPE = ENUM({
+    Compute = &ST_Compute,
+    Graphics = &ST_Graphics,
+    Vertex = &ST_Vertex,
+    Fragment = &ST_Fragment,
+}, "ShaderType")
+
+function ShaderService.FromFile(S1, S2, Data, Type)
+    if Type == SHADERTYPE.Compute then
+        -- COMPUTE SHADER
+    elseif Type == SHADERTYPE.Graphics then
+        -- GRAPHICS SHADER
+    else
+        local T1, T2, T3 = TYPE(S1), TYPE(S2), TYPE(S3)
+
+        if T1 == "string" and T3 == "nil" then
+            -- COMPUTE SHADER?
+        end
+    end
+end
+
+function ShaderService.FromString(S1, S2, Data, Type) end
+
+-- GETTING SHADERS
+
+@macro<L,!USEBRACK>{NAME_TO_ENUM(&N) = &N and &N:sub(1,1):upper()..&N:sub(2):lower() or nil}
+
+@macro<L,!USEBRACK>{RETURN_DEFAULT(&T,&DEF) = 
+    if #&T == 0 then
+        return &DEF
+    end
+}
+
+local DEFAULTS = {
+    [&ST_Vertex] = [[
+vec4 lovrmain() {
+    return DefaultPosition;
+}
+    ]],
+    [&ST_Fragment] = [[
+vec4 lovrmain() {
+  return DefaultColor;
+}
+    ]]
+}
+
+local BODIES = {
+    [&ST_Vertex] = {[[
+vec4 lovrmain(){
+    vec4 ASTR_OUT_POS = DefaultPosition;
+]],[[
+    return ASTR_OUT_POS;
+}
+    ]]},
+    [&ST_Fragment] = {[[
+vec4 lovrmain(){
+    vec4 ASTR_OUT_CLR = DefaultColor;
+]],[[
+    return ASTR_OUT_CLR;
+}
+    ]]}
+}
+
+local function ITERBUCKET(t)
+    local i = 0
+    local n = #t
+
+    return function()
+        i = i + 2
+        if i > n then return end
+        return i, t[i - 1], t[i]
+    end
+end
+
+local function ProcessFlags(Text,CurIdx)
+    local I = CurIdx
+
+    Text = Text:gsub(Def.SYMBOLS.FLAG,function(_)
+        I = I + 1
+        return "layout(constant_id = "..(I-1)..") const"
+    end)
+
+    return Text, I
+end
+
+local LinkerName = Def.LINKER.LinkerName
+local LinkerOuts = {
+    [&ST_Fragment] = "ASTR_OUT_CLR",
+    [&ST_Vertex] = "ASTR_OUT_POS"
+}
+
+local LinkerKeys = {
+    [&ST_Vertex] = "CurrentPosition",
+    [&ST_Fragment] = "CurrentColor"
+}
+
+local function Link(Current,Text,Pattern)
+    local T = {Text:find(LinkerName)}
+    local Pos = T[#T]
+    if not Pos then error("LINKER COULDN'T FIND ENTRY POINT: "..LinkerName) end
+
+    local Insides = {}
+
+    local ClearedText
+    local nend
+
+    local Depth = 0
+    for i = Pos, #Text do
+        nend = i
+        local c = Text:sub(i,i)
+        if c == "{" then
+            if Depth ~= 0 then
+                Insides[#Insides+1] = c
+            end
+            Depth = Depth + 1
+        elseif c == "}" then
+            Depth = Depth - 1
+            if Depth ~= 0 then
+                Insides[#Insides+1] = c
+            end
+            if Depth == 0 then break end
+        elseif Depth > 0 then
+            Insides[#Insides+1] = c
+        end
+    end
+
+    ClearedText = Text:sub(1,T[1]-1)..Text:sub(nend+1,#Text)
+
+    local Out = table.concat(Insides,"")
+
+    Out = Out:gsub("return", LinkerOuts[Pattern].." =")
+    Out = Out:gsub(LinkerKeys[Pattern],LinkerOuts[Pattern])
+    Out = Out:gsub("terminate","return")
+
+    return ClearedText, Out
+end
+
+local function SortByPriority(Input)
+    local Output = {}
+    local PriorityList = {}
+
+    local HighestPriority = 0
+    local LowestPriority = 0
+
+    for _, Text, Pragma in ITERBUCKET(Input) do
+        local Priority = Pragma.PRIORITY or 0
+        PriorityList[Priority] = PriorityList[Priority] or {}
+
+        if Priority > HighestPriority then
+            HighestPriority = Priority
+        end
+
+        if Priority < LowestPriority then
+            LowestPriority = Priority
+        end
+
+        table.insert(PriorityList[Priority],Text)
+        table.insert(PriorityList[Priority],Pragma)
+    end
+
+    for i = LowestPriority, HighestPriority do
+        local t = PriorityList[i]
+        if t then
+
+            for _, Text, Pragma in ITERBUCKET(t) do
+                table.insert(Output,Text)
+                table.insert(Output,Pragma)
+            end
+
+        end
+    end
+
+    return Output
+end
+
+local function Compile(Tab,Tag)
+    RETURN_DEFAULT(Tab,DEFAULTS[Tag])
+
+    Tab = SortByPriority(Tab)
+
+    local Body = BODIES[Tag]
+
+    local BodyStart = Body[1]
+    local BodyEnd = Body[2]
+    local LinkedBody = ""
+    local Out = ""
+
+    local FlagIndex = 0
+    for i, Text, Pragmas in ITERBUCKET(Tab) do
+
+        local str = Pragmas.IDENTIFIER or ("UNIDx"..i)
+
+        Text = Mangler(Text,"ASTRMNGL_"..str)
+        Text, FlagIndex = ProcessFlags(Text,FlagIndex)
+        local Linked
+        Text, Linked = Link(LinkedBody,Text,Tag)
+        LinkedBody = LinkedBody..Linked
+        Out = Out..Text
+    end
+
+    return Out.."\n//LINKED\n"..BodyStart..LinkedBody..BodyEnd
+end
+
+local function CompileGraphics(GraphicsBucket)
+    return Compile(GraphicsBucket[&ST_Vertex],&ST_Vertex), Compile(GraphicsBucket[&ST_Fragment],&ST_Fragment)
+end
+
+function ShaderService.ComposeShader(Type,Search,Params)
+    Type = rtype(Type) == "number" and Type or Type.RawValue
+
+    Search = Search or ""
+
+    local Buckets = {
+        [&ST_Vertex] = {},
+        [&ST_Fragment] = {},
+        [&ST_Compute] = {}
+    }
+
+    processchildfiles("GAMEFILE/Assets/Shaders/"..Search, function(a)
+        if FileSystem.isFile(a) then
+            local F = a:match("([^/\\]+)$")
+            local _, ShaderType, FileType = F:match("([^.]+)%.?([^.]*)%.?([^.]*)")
+
+            FileType = FileType ~= "" and FileType or ShaderType
+            if FileType ~= "glsl" then return end
+
+            local Pragmas
+            local TEXT = FileSystem.read(a)
+            TEXT, Pragmas = ParsePragma(TEXT)
+
+            if ShaderType ~= "" and (ShaderType == "vertex" or ShaderType == "fragment") then
+                Pragmas.TYPE = ShaderType:upper()
+            end
+
+            local ShaderName = NAME_TO_ENUM(Pragmas.TYPE)
+            local Key = ShaderName and SHADERTYPE[ShaderName].RawValue or SHADERTYPE.Compute.RawValue
+
+            Buckets[Key][#Buckets[Key]+1] = TEXT
+            Buckets[Key][#Buckets[Key]+1] = Pragmas
+
+        end
+    end)
+
+    for i in pairs(Buckets) do
+        if i & Type ~= Type then Buckets[i] = nil continue end
+    end
+
+    if Type == &ST_Graphics then
+        return CompileGraphics(Buckets)
+    else
+        return CompileCompute(unpack(Buckets))
+    end
+
+end
+
+GetService.AddService("ShaderService", ShaderService)
+return ShaderService

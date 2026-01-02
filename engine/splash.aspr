@@ -1,0 +1,37 @@
+local Splash = {}
+
+Splash.COMPLETED = nil
+
+local TotalDuration = 4
+T = 0
+function Splash.UPDATE(dt)
+    T = T + dt
+    if T >= TotalDuration then
+        Splash.FINISH()
+        AstralEngine.SplashPlaying = nil
+        AstralEngine.Signals.SplashEnded:Fire()
+    end
+end
+
+local Logo = AstralEngine.Graphics.NewRawTexture("AstralText.png")
+
+local View2D = Mat4():identity()
+function Splash.DRAW(pass)
+    local W, H = AstralEngine.Window.W, AstralEngine.Window.H
+
+    local Projection2D = mat4():orthographic(0, W, H, 0, -10, 10)
+
+    pass:setProjection(1, Projection2D)
+    pass:setViewPose(1, View2D)
+
+    local a = math.min((3 * -math.abs((T - 1) / (TotalDuration - 1) - 0.5)) + 1.5, 0.8)
+    pass:setColor(1, 1, 1, a)
+    pass:setMaterial(Logo)
+    local S = math.min(W, H) * 0.7
+    pass:plane(W / 2, H / 2, -9, S, S)
+end
+
+AstralEngine.Signals.SplashEnded = require("Lib.Signal").new()
+AstralEngine.SplashPlaying = true
+
+return Splash

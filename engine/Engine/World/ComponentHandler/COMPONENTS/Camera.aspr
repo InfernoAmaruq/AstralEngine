@@ -1,0 +1,145 @@
+local Camera = {}
+
+local Renderer = GetService("Renderer")
+local Component = GetService("Component")
+
+local TextureConfig = { samples = 1, usage = { "render", "sample" }, mipmaps = false }
+local TexConf2 = { samples = 1, usage = { "render", "sample" }, mipmaps = false, format = "rgba16f" }
+
+Camera.Name = "Camera"
+Camera.Pattern = {
+    FOV = math.rad(70),
+    Far = 0,
+    Near = 0.05,
+    Orthographic = false,
+    Aspect = function()
+        return AstralEngine.Window.W / AstralEngine.Window.H
+    end,
+    W = 100,
+    H = 100,
+    CameraMask = math.rmap,
+    Lighting = ENUM.LightingTechnology.Cel,
+    DrawToScreen = false,
+    CameraPass = nil,
+    CameraTex = nil,
+    SolidTex = nil,
+    OITTex = nil,
+    ViewCull = true,
+    BackfaceCulling = true,
+    NearestSampler = false,
+    Enabled = true,
+    QueueUpd = false,
+    RenderCallback = nil,
+    OITPass = nil,
+    SolidPass = nil,
+
+    --METHODS
+    SetResolution = nil,
+}
+Camera.Metadata = {}
+
+local FIELDS = {
+    CameraMask = 1,
+    Orthographic = 2,
+    Aspect = 3,
+    Far = 4,
+    Near = 5,
+    FOV = 6,
+    W = 7,
+    H = 8,
+    Lighting = 9,
+    DrawToScreen = 10,
+    CameraPass = 11,
+    CameraTex = 12,
+    OITTex = 13,
+    ViewCull = 14,
+    BackfaceCulling = 15,
+    NearestSampler = 16,
+    Enabled = 17,
+    QueueUpd = 18,
+    RenderCallback = 19,
+    SolidTex = 20,
+    OITPass = 21,
+    SolidPass = 22,
+    OITDepth = 23,
+    DepthTexture = 24,
+}
+
+local mt = {
+    __index = function(self, k)
+        return self.__PROXY[k]
+    end,
+    __newindex = function(self, k, v)
+        self.__PROXY[k] = v
+        rawset(self, FIELDS[k] or k, v)
+    end,
+}
+
+local BasePriority = 42069
+local BoundCameras = 0
+
+Camera.Metadata.__create = function(Data, Entity)
+    local Comps = Component.GetComponents(Entity)
+
+    if not Comps.Transform then
+        Component.AddComponent(Entity, "Transform", { Position = Vec3(0), Orientation = Quat(), Size = Vec3(1) })
+    end
+
+    local W, H = (Data.Resolution or vec2(AstralEngine.Window.W, AstralEngine.Window.H)):unpack()
+    local Texture = AstralEngine.Graphics.NewTexture(W, H, TextureConfig)
+    local OITTex = AstralEngine.Graphics.NewTexture(W, H, TexConf2)
+    local OITDepth = AstralEngine.Graphics.NewTexture(
+        W,
+        H,
+        { format = "r16f", samples = 1, usage = { "render", "sample" }, mipmaps = false }
+    )
+    local SolidTex = AstralEngine.Graphics.NewTexture(W, H, TextureConfig)
+    local DepthTexture = AstralEngine.Graphics.NewTexture(
+        W,
+        H,
+        { format = "d32f", samples = 1, usage = { "render", "sample" }, mipmaps = false, linear = true }
+    )
+
+    Data.CameraPass = AstralEngine.Graphics.NewPass({ Texture[1] })
+    Data.CameraTex = Texture
+    Data.OITTex = OITTex
+    Data.OITDepth = OITDepth
+    Data.SolidTex = SolidTex
+    Data.OITPass =
+        AstralEngine.Graphics.NewPass({ OITTex[1], OITDepth[1], depth = { texture = DepthTexture[1] }, samples = 1 })
+    Data.SolidPass = AstralEngine.Graphics.NewPass({ SolidTex[1], depth = { texture = DepthTexture[1] }, samples = 1 })
+
+    Data.OITPass:setClear({ { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, depth = false })
+
+    Renderer.AddCamera(Entity)
+    Renderer.PassStorage.AddPass(false, Data.SolidPass, BasePriority + BoundCameras, true)
+    Renderer.PassStorage.AddPass(false, Data.OITPass, BasePriority + BoundCameras + 1, true)
+    Renderer.PassStorage.AddPass(false, Data.CameraPass, BasePriority + BoundCameras + 2, true)
+
+    for i, v in pairs(Camera.Pattern) do
+        if not Data[i] then
+            Data[i] = rtype(v) == "function" and v() or v
+        end
+    end
+
+    local D = setmetatable({
+        __PROXY = Data,
+    }, mt)
+
+    for i, v in pairs(Data) do
+        if not FIELDS[i] then
+            continue
+        end
+        rawset(D, FIELDS[i], v)
+    end
+
+    BoundCameras = BoundCameras + 3
+
+    return D
+end
+
+Camera.Metadata.__remove = function(Entity)
+    Renderer.RemoveCamera(Entity)
+end
+
+return Camera

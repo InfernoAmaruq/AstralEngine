@@ -1,0 +1,50 @@
+return {
+    Define = {
+        Sched = {
+            "UseLua", -- "UseLua" | "UseAuto" | "UseNative"
+            -- UseNative - C code, UseLua - Lua code, UseAuto - based on size of list
+            -- For tiny games with very few routines, UseLua may be fastest. UseNative is fastest for large lists
+            -- UseAuto is fast but less predicable
+        },
+        GC = {
+            "UseAstr", -- or nil for Lua GC
+        },
+        Render = {
+            "LoadShadowmap",
+            "LoadCel",
+        },
+        Physics = {
+            "BindMainWorld", -- should the central Runtime loop process physics? If disabled. Tick.PhysicsRate will be ignored
+            "Interpolate", -- interpolate automatically or not? Requires BindMainWorld
+            "InterpolAtRender", -- "InterpolAtCPU" | "InterpolAtRender". Interpolating at the Render Step or CPU step. Both CAN be used but it carries increased costs
+        },
+    },
+    Astral = {
+        Debug = true,
+        Splash = false,
+        Modules = {
+            Headset = false,
+        },
+        Tick = {
+            PhysicsRate = 50,
+            FrameRate = 165,
+            CPU = 240,
+            EventRate = 240,
+            GC = 3,
+            GCCollect = 20,
+        },
+    },
+    Enums = {
+        StepPriority = {},
+    },
+    Game = {
+        Identity = "Astral_Default",
+        Window = {
+            Vsync = false, -- vsync via Tick.FrameRate caps is advised, but not forced
+            Fullscreen = false, -- may be fucky on linux, would not recommend!
+            Width = 1700, -- or 0 for borderless fullscreen
+            Height = 900,
+            Name = "Astral Engine Demo 0.0.1",
+        },
+    },
+}

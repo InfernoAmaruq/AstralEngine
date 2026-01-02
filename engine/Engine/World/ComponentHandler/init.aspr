@@ -1,0 +1,160 @@
+local Component = {}
+
+Component.Components = {}
+Component.SetComponents = {}
+
+local DEADMT = {
+    __index = function(_,k)
+        return k == "IsDead" or error("ILLEGAL ACCESS: ATTEMPT TO ACCESS DEAD COMPONENT")
+    end
+}
+
+function Component.NewComponent(Name, Pattern, Metadata)
+    assert(not Component.Components[Name], "Component already exists: " .. Name)
+    Component.Components[Name] = setmetatable(
+        { Storage = {}, Name = Name, Pattern = Pattern, Metadata = Metadata },
+        { __type = "ComponentPrefab" }
+    )
+end
+
+@execute<UNSAFE>{
+    print"EXECUTING"
+    local NAME = type.EngineObj
+    print("USING:",NAME)
+    return "@flag:TYPE='"..NAME.."';"
+}
+
+function Component.GetComponents(e)
+    if type(e) == &TYPE then
+        e = e.__id
+    end
+
+    return Component.SetComponents[e] or {}
+end
+
+function Component.HasComponent(e, ...)
+    local S = select("#", ...)
+    local Comp = Component.SetComponents[type(e) == &TYPE and e.__id or e]
+    if S == 1 then
+        return Comp[(select(1, ...))]
+    else
+        local VAL = { ... }
+        for i in pairs(Comp) do
+            if table.find(VAL, i) then
+                return true
+            end
+        end
+    end
+end
+
+local function ToString(c)
+    return debug.getmetatable(c).__CName
+end
+
+function Component.AddComponent(e, id, DATA)
+    if type(e) == &TYPE then
+        e = e.__id
+    end
+    Component.SetComponents[e] = Component.SetComponents[e] or {}
+
+    local D
+    local t = Component.Components[id]
+
+    if t.Metadata and t.Metadata.__mt then
+        setmetatable(D, t.Metadata.__mt)
+    end
+
+    if t.Metadata and t.Metadata.__create then
+        D = t.Metadata.__create(DATA or {}, e)
+    elseif DATA then
+        D = {}
+        for i, v in pairs(DATA) do
+            if not t.Pattern[i] then
+                continue
+            end
+            D[i] = v
+        end
+    end
+
+    local MT = getmetatable(D)
+    if MT then
+        MT.__type = "Component"
+        MT.__tostring = ToString
+        MT.__CName = id
+        setmetatable(D, MT)
+    else
+        setmetatable(D, { __type = "Component", __tostring = ToString, __CName = id })
+    end
+
+    Component.Components[id].Storage[e] = D
+    Component.SetComponents[e][id] = D
+    return D
+end
+
+function Component.RemoveComponent(e, id)
+    if type(e) == &TYPE then
+        e = e.__id
+    end
+    if not Component.SetComponents[e] then
+        return
+    end
+
+    local Comp = Component.Components[e]
+    if Comp.Metadata and Comp.Metadata.__remove then
+        Comp.Metadata.__remove(e, Component.SetComponents[e][id])
+    end
+
+    setmetatable(Component.SetComponents[e][id], nil)
+    Component.Components[id].Storage[e] = nil
+    Component.SetComponents[e][id] = nil
+end
+
+local SERIALIZE = require("Lib.Serialize")
+
+local SerializerFenv = setmetatable({ SERIALIZE = SERIALIZE, __InjectedEnv = "CMPH" }, { __index = _G })
+
+local FinalProcessing = {}
+
+function Component.__RunPostPass()
+    Component.__RunPostPass = nil
+    for _, v in pairs(FinalProcessing) do
+        v()
+    end
+end
+
+function Component.LoadComponents(FileSystem)
+    local Files = FileSystem.GetDir("GAMEFILE/Assets/Components")
+
+    local AttemptedToLoad = {}
+
+    for _, f in pairs(Files) do
+        if f:match("%.lua$") or f:match("%.aspr$") then
+            local File = loadfile("GAMEFILE/Assets/Components/" .. f)
+
+            AttemptedToLoad["GAMEFILE/Assets/Components/" .. f] = true
+
+            if File then
+                setfenv(File, SerializerFenv)
+                File = File()
+                if File.Serializer then
+                    SERIALIZE.AddSerializeMethod(File.Name, File.Serializer)
+                end
+                Component.NewComponent(File.Name, File.Pattern, File.Metadata)
+                table.insert(FinalProcessing, File.FinalProcessing)
+            end
+        end
+    end
+
+    if AstralEngine._CONFIG.Astral.Debug then
+        print("DEBUG: -- COMPONENT MOUNTING")
+        for i, v in pairs(Component.Components) do
+            print("LOADED COMP:", i, v)
+        end
+        for i in pairs(AttemptedToLoad) do
+            print("ATTEMPTED TO LOAD:", i)
+        end
+        print("COMPONENTS MOUNTED")
+    end
+end
+
+return Component

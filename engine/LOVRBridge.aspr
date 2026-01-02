@@ -1,0 +1,192 @@
+local LVRB = {}
+
+-- GLOBALS
+
+LVRB.LoadGlobals = function(LIBS)
+    debug.cpuclock = os.clock
+    os.clock = lovr.timer.getTime
+
+    local SIGNAL = LIBS.SIGNAL
+    local ROOT = LIBS.ROOT
+
+    require("g")({
+        SCHEDULER = ROOT.SCHEDULERS.MAIN,
+        TICK = { SIGNAL = SIGNAL, SCHEDULER = ROOT.SCHEDULERS.MAIN, SCHEDTASKS = ROOT.SCHEDULERS.MAIN.Routines },
+        INPUT = {
+            SIGNAL = SIGNAL,
+            KEYBOARD = {
+                ISDOWN = lovr.system.isKeyDown,
+            },
+            MOUSE = {
+                MOUSEDOWN = lovr.system.isMouseDown,
+                MOUSEPOS = lovr.system.getMousePosition,
+                VECTOR2 = lovr.math.newVec2,
+            },
+        },
+        CONTEXTACT = { SCHEDTABLE = ROOT.SCHEDULERS.MAIN.Routines, KEYS = LIBS.ALLKEYS }
+    })
+end
+
+-- INPUT SYSTEM
+
+LVRB.ConnectDevices = function()
+    local InputService = GetService "InputService"
+
+    local Mouse = InputService.GetMouse()
+    local KB = InputService.GetKeyboard()
+    local CAS = GetService "ContextActionService"
+
+    local PoolSize = 60
+    local Top = PoolSize
+    local DATAPOOL = table.array(PoolSize)
+
+    local MKeys = {}
+    local MouseLookUp = {}
+    local KBKeys = {}
+
+    local KMP = CAS.__KEYMAP
+    local Size = 0
+    for i, v in pairs(KMP) do
+        if type(i) == "number" then
+            local n = "MouseButton" .. i
+            MKeys[n] = v
+            MouseLookUp[i] = n
+        else
+            KBKeys[i] = v
+        end
+        Size = Size + 1
+    end
+
+    local KeyArray = table.array(Size)
+    for _, v in pairs(KMP) do
+        KeyArray[v] = false
+    end
+    InputService.__GetKeyArr = function()
+        return KeyArray
+    end
+    InputService.IsDown = function(e)
+        return KeyArray[e.Value]
+    end
+
+    local KBE = ENUM(KBKeys, "KeyCode")
+    local ME = ENUM(MKeys, "UserInputType")
+
+    local function INPTOSTR(t)
+        local s = [[Input: {
+            KeyCode = %s,
+            UserInputType = %s,
+            State = %s,
+            Mouse = %s
+        }]]
+        return s:format(tostring(t.KeyCode) or "NIL", tostring(t.UserInputType) or "NIL", tostring(t.State),
+            tostring(t.Mouse) or "NIL")
+    end
+
+    local function MakeT(i)
+        return setmetatable(
+            { __INUSE = false, __index = i, KeyCode = nil, UserInputType = nil, State = nil, Mouse = nil },
+            { __tostring = INPTOSTR })
+    end
+
+    for i = 1, PoolSize do
+        DATAPOOL[i] = MakeT(i)
+    end
+
+    local function GetEmptyPoolObj()
+        if Top > 0 then
+            local Obj = DATAPOOL[Top]
+            Top -= 1
+            return Obj
+        end
+        return MakeT(-1)
+    end
+
+    local function ReleasePoolObj(t)
+        if t.__index == -1 then return end
+        Top += 1
+        DATAPOOL[Top] = t
+        t.__INUSE = false
+    end
+
+    CAS.__RAWBIND = CAS.Bind
+
+    @macro<L,!USEBRACK>{MAKEINPUTDATA(TERM,IsKB,CODE,ST,mx,my) = 
+        --MACRO BEGIN
+        local DATA = GetEmptyPoolObj()
+        DATA.__INUSE = true
+
+        local ID = CAS.__KEYMAP[CODE]
+
+        DATA.State = ST
+        DATA.UserInputType = not IsKB and ME[MouseLookUp[CODE]]
+        DATA.Mouse = not IsKB and vec2(mx, my)
+        DATA.KeyCode = IsKB and KBE[CODE]
+
+        TERM = CAS.__CALL(ID, DATA)
+
+        ReleasePoolObj(DATA)
+        --MACRO END
+    }
+
+    local OGBIND = CAS.Bind
+
+    @macro<L>:TRANSLATE_ENUM(K) = K and K.RawValue;
+
+    CAS.Bind = function(N, P, F, ...)
+        if select('#', ...) > 3 then
+            local t = { ... }
+            for i, KEY in ipairs(t) do
+                t[i] = TRANSLATE_ENUM(KEY)
+            end
+            return OGBIND(N, P, F, unpack(t))
+        else
+            local K1, K2, K3 = select(1, ...)
+            K1, K2, K3 = TRANSLATE_ENUM(K1), TRANSLATE_ENUM(K2), TRANSLATE_ENUM(K3)
+            return OGBIND(N, P, F, K1, K2, K3)
+        end
+    end
+
+    -- MOUSE
+
+    function lovr.wheelmoved(...)
+        Mouse.WheelMoved:Fire(...)
+    end
+
+    function lovr.mousemoved(x,y,...)
+        Mouse.Position:set(x,y)
+        Mouse.MouseMoved:Fire(x,y,...)
+    end
+
+    function lovr.mousepressed(x, y, c)
+        KeyArray[KMP[c]] = true
+        local Terminated
+        MAKEINPUTDATA(Terminated, false, c, true, x, y)
+        Mouse.MouseButtonDown:Fire(c, x, y, Terminated)
+    end
+
+    function lovr.mousereleased(x, y, c)
+        KeyArray[KMP[c]] = false
+        local Terminated
+        MAKEINPUTDATA(Terminated, false, c, false, x, y)
+        Mouse.MouseButtonUp:Fire(c, x, y, Terminated)
+    end
+
+    -- KB
+
+    function lovr.keypressed(k, c, r)
+        if r then return end
+        KeyArray[KMP[k]] = true
+        local Terminated
+        MAKEINPUTDATA(Terminated, true, k, true,nil,nil)
+        KB.KeyPressed:Fire(k, c, Terminated)
+    end
+
+    function lovr.keyreleased(k, c)
+        KeyArray[KMP[k]] = false
+        local Terminated
+        MAKEINPUTDATA(Terminated, true, k, false,nil,nil)
+        KB.KeyReleased:Fire(k, c, Terminated)
+    end
+end
+
+return LVRB

@@ -467,7 +467,7 @@ void os_window_setfullscreen(bool FS)
             0,0,
             mode->width,
             mode->height,
-            move->refreshRate
+            mode->refreshRate
                 );
 
         #else

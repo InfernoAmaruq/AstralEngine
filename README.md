@@ -15,3 +15,18 @@ The Aspera compiler does a quick parse over files as they are loaded, checking f
 A lightweight GLSL shader pipeline is also included that makes compiling shaders easier
 
 Haxe and Teal supports are planned within the future!
+## Building
+You need CMake to build the engine, the command flow would be something like:
+```bash
+git clone https://github.com/InfernoAmaruq/AstralEngine TARGET_PATH
+cd TARGET_PATH
+git submodule update --init --recursive
+mkdir build
+cd build
+cmake ..
+cmake --build .
+
+#finally, run it when its done compiling
+bin/astral PATH/TO/GAME/FOLDER
+```
+You do not need to recompile/shift folders manually at every minor change to the lua engine code, just add an argument like `astral -eTARGET_PATH/engine` to override engine path. -h is also available for help

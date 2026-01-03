@@ -225,24 +225,10 @@ function lovr.boot()
         end
     end
 
-    if lovr.graphics then
-        lovr.graphics.initialize()
-    end
-
-    if lovr.system and conf.window then
-        lovr.system.openWindow(conf.window)
-    end
-
-    if lovr.headset and conf.headset.start then
-        lovr.headset.start()
-    end
-
-    if not ok and failure then
-        error(failure)
-    end
-
     if lovr.filesystem then
         local Os = lovr.system and lovr.system.getOS() or lovr.getOS()
+
+        print("OS:",Os)
 
         if Os == "Windows" then
             -- set paths
@@ -258,6 +244,22 @@ function lovr.boot()
                 return OgUMount(Path:gsub(From, To))
             end
         end
+    end
+
+    if lovr.graphics then
+        lovr.graphics.initialize()
+    end
+
+    if lovr.system and conf.window then
+        lovr.system.openWindow(conf.window)
+    end
+
+    if lovr.headset and conf.headset.start then
+        lovr.headset.start()
+    end
+
+    if not ok and failure then
+        error(failure)
     end
 
     require(main:sub(1, -5))

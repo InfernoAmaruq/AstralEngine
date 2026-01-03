@@ -874,7 +874,7 @@ function(build_lua_module SRC)
     set(OUT_DIR "${ASTRAL_RUNTIME_DIR}/Engine/${REL_DIR}")
     file(MAKE_DIRECTORY "${OUT_DIR}")
 
-    add_library(${MODULE_NAME} SHARED "${SRC_ABS}")
+    add_library(${MODULE_NAME} MODULE "${SRC_ABS}")
 
     target_include_directories(${MODULE_NAME} PRIVATE
         ${LUA_INCLUDE_DIR}
@@ -914,3 +914,4 @@ add_custom_command(
 	${CMAKE_SOURCE_DIR}/engine
 	$<TARGET_FILE_DIR:astral>/Engine
 )
+

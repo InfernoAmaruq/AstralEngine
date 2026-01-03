@@ -75,11 +75,11 @@ local function COMPILE_LOADSTRING(c, NAME)
         until not Dirs or #Dirs == 0 or Passes > Recompiler.MaxPasses
         local n = 0
         Free(N)
-        --[[c = c:gsub("\n", function(a)
+        local t = c:gsub("\n", function(a)
             n = n + 1
             return "-- LINE: " .. n .. "\n"
-        end)]]
-        --print("EMITTED CODE:", "\n" .. c)
+        end)
+        print("EMITTED CODE:", "\n" .. t)
         COUNTER = COUNTER - 1
     end
     local f, err = loadstring(c, NAME)

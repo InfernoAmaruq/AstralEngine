@@ -5,7 +5,9 @@ local Scheduler = {}
 
 Scheduler.__index = Scheduler
 
-local NativeUpdate = require("libNativeSched")
+@ifdef<Sched.UseNative || Sched.UseAuto>{
+local NativeUpdate = require("NativeSched")
+}
 
 @macro<L,!USEBRACK>:ERROR_ROUTINE(&Err,&Co) = print("[Scheduler] Error:",debug.traceback(&Co,&Err),"On routine:",debug.getaddress(&Co));
 

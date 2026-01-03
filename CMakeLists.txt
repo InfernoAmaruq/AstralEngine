@@ -9,7 +9,7 @@ enable_language(C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-set(ASTRAL_RUNTIME_DIR "${CMAKE_BINARY_DIR}/bin")
+set(ASTRAL_RUNTIME_DIR "${CMAKE_BINARY_DIR}/$<CONFIG>")
 
 # Options
 option(LOVR_ENABLE_AUDIO "Enable the audio module" ON)
@@ -871,8 +871,13 @@ function(build_lua_module SRC)
     get_filename_component(REL_DIR "${REL_PATH}" DIRECTORY)
     get_filename_component(MODULE_NAME "${SRC_ABS}" NAME_WE)
 
-    set(OUT_DIR "${ASTRAL_RUNTIME_DIR}/Engine/${REL_DIR}")
-    file(MAKE_DIRECTORY "${OUT_DIR}")
+    if (WIN32)
+        set(OUT_DIR "${ASTRAL_RUNTIME_DIR}/Engine/${REL_DIR}")
+        file(MAKE_DIRECTORY "${OUT_DIR}")
+    else()
+      set(OUT_DIR "${CMAKE_BINARY_DIR}/bin/Engine/${REL_DIR}")
+      file(MAKE_DIRECTORY "${OUT_DIR}")
+    endif()
 
     add_library(${MODULE_NAME} MODULE "${SRC_ABS}")
 

@@ -67,7 +67,9 @@ AstralEngine._MOUNT(PATH, "GAMEFILE", "GAMEFILE", true, function(Name)
 end)
 
 -- parse config
-local ConfigFile = require("config")
+local _, ConfigFile = pcall(require,"config")
+
+ConfigFile = ConfigFile or {}
 
 local ConfigTable
 local CoreConfig = require("coreconf")

@@ -115,9 +115,9 @@ function lovr.boot()
     local PossiblePaths = {
         "./Engine/",
         "./ENGINE/",
-        "./",
         "../Engine/",
         "../ENGINE/",
+        "./"
     }
 
     local game = arg.game
@@ -127,9 +127,8 @@ function lovr.boot()
 
     local PATTERN = "[^/]+$"
 
-    local EXE = lovr.filesystem.getExecutablePath()
+    local EXE = (lovr.filesystem.getExecutablePath() or root or bundle):gsub("\\","/")
     local EXEFOLD = EXE:gsub(PATTERN, "")
-    local ROOT = lovr.filesystem.getWorkingDirectory()
 
     if not game and (cli or not fused) and arg[0] then
         if arg[0]:match("[^/\\]+%.lua$") then
@@ -145,13 +144,17 @@ function lovr.boot()
         Mounted, Failed = lovr.filesystem.mount(path)
     else
         for _, v in ipairs(PossiblePaths) do
-            local p = Normalize(EXEFOLD .. v, true)
+            local p = Normalize(EXEFOLD .. v)
 
+            print("MOUNTING:",p)
             Mounted, Failed = lovr.filesystem.mount(p)
 
             if Mounted then
                 path = p
+                print("USING PATH:",path)
                 break
+            else
+                print("MOUNT FAILED:",Failed)
             end
         end
     end
@@ -163,11 +166,14 @@ function lovr.boot()
             local NormalizedPaths = {}
 
             for _, v in pairs(PossiblePaths) do
-                table.insert(NormalizedPaths, Normalize(EXEFOLD .. v, true))
+                table.insert(NormalizedPaths, Normalize(EXEFOLD .. v))
             end
 
             error(("Failed to mount engine path, searched:\n%s"):format(table.concat(NormalizedPaths, "\n")))
         end
+    end
+    if not lovr.filesystem.isFile("main.lua") then
+        error("COULD NOT FIND main.lua")
     end
 
     if path:sub(-1, -1) ~= "/" then
@@ -177,7 +183,6 @@ function lovr.boot()
     -- Mount source archive, make sure it's got the main file, and load pre.lua
 
     lovr.filesystem.setSource(path)
-    print(lovr.filesystem.getRequirePath())
     print("SET SRC:", path)
     if path ~= bundle then
         lovr.filesystem.unmount(bundle)
@@ -229,20 +234,21 @@ function lovr.boot()
         local Os = lovr.system and lovr.system.getOS() or lovr.getOS()
 
         print("OS:",Os)
+        local Unix, Win = "%/", "\\"
 
         if Os == "Windows" then
             -- set paths
-            local OgMount = lovr.filesystem.mount
-            local OgUMount = lovr.filesystem.unmount
 
-            local From, To = "%/", "\\"
-
-            lovr.filesystem.mount = function(Path, ...)
-                return OgMount(Path:gsub(From, To), ...)
+            local GetRealDir = lovr.filesystem.getRealDirectory
+            lovr.filesystem.getRealDirectory = function(Path)
+                return GetRealDir(Path:gsub(Win,Unix))
             end
-            lovr.filesystem.unmount = function(Path)
-                return OgUMount(Path:gsub(From, To))
-            end
+        end
+        lovr.filesystem.toWindows = function(Path)
+            return Path:gsub(Unix,Win)
+        end
+        lovr.filesystem.fromWindows = function(Path)
+            return Path:gsub(Win,Unix)
         end
     end
 

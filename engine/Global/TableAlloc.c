@@ -1,6 +1,12 @@
 #include "lua.h"
 #include "lauxlib.h"
 
+#ifdef _WIN32
+#define LUA_API __declspec(dllexport)
+#else
+#define LUA_API
+#endif
+
 int l_AllocTable(lua_State* L)
 {
     double Pull = lua_tointeger(L,-1);
@@ -18,7 +24,7 @@ int l_GetPointer(lua_State* L)
     return 1;
 }
 
-int luaopen_TableAlloc(lua_State* L){
+LUA_API int luaopen_TableAlloc(lua_State* L){
     lua_newtable(L);
     lua_pushcfunction(L,l_AllocTable);
     lua_setfield(L,-2,"Alloc");

@@ -9,7 +9,7 @@ enable_language(C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-set(ASTRAL_RUNTIME_DIR "${CMAKE_BINARY_DIR}/$<CONFIG>")
+set(ASTRAL_RUNTIME_DIR "${CMAKE_BINARY_DIR}")
 
 # Options
 option(LOVR_ENABLE_AUDIO "Enable the audio module" ON)
@@ -872,10 +872,10 @@ function(build_lua_module SRC)
     get_filename_component(MODULE_NAME "${SRC_ABS}" NAME_WE)
 
     if (WIN32)
-        set(OUT_DIR "${ASTRAL_RUNTIME_DIR}/Engine/${REL_DIR}")
+        set(OUT_DIR "${ASTRAL_RUNTIME_DIR}/TEMP_BIN/Engine/${REL_DIR}")
         file(MAKE_DIRECTORY "${OUT_DIR}")
     else()
-      set(OUT_DIR "${CMAKE_BINARY_DIR}/bin/Engine/${REL_DIR}")
+      set(OUT_DIR "${ASTRAL_RUNTIME_DIR}/Engine/${REL_DIR}")
       file(MAKE_DIRECTORY "${OUT_DIR}")
     endif()
 
@@ -888,29 +888,27 @@ function(build_lua_module SRC)
 
     target_link_libraries(${MODULE_NAME} PRIVATE lua)
 
+    if (WIN32)
+    set_target_properties(${MODULE_NAME} PROPERTIES
+        PREFIX ""
+        LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
+        RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
+        ARCHIVE_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
+    )
+    else()
     set_target_properties(${MODULE_NAME} PROPERTIES
         PREFIX ""
         LIBRARY_OUTPUT_DIRECTORY ${OUT_DIR}
         RUNTIME_OUTPUT_DIRECTORY ${OUT_DIR}
         ARCHIVE_OUTPUT_DIRECTORY ${OUT_DIR}
-
-RUNTIME_OUTPUT_DIRECTORY_DEBUG ${OUT_DIR}
-RUNTIME_OUTPUT_DIRECTORY_RELEASE ${OUT_DIR}
-RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${OUT_DIR}
-RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${OUT_DIR}
-
-LIBRARY_OUTPUT_DIRECTORY_DEBUG ${OUT_DIR}
-LIBRARY_OUTPUT_DIRECTORY_RELEASE ${OUT_DIR}
-LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO ${OUT_DIR}
-LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL ${OUT_DIR}
     )
+    endif()
 endfunction()
 
 foreach(SRC ${ENGINE_C_FILES})
     build_lua_module(${SRC})
 endforeach()
 
-set(BIN_DIR ${CMAKE_BINARY_DIR}/bin)
 add_custom_command(
 	TARGET astral
 	POST_BUILD
@@ -919,4 +917,3 @@ add_custom_command(
 	${CMAKE_SOURCE_DIR}/engine
 	$<TARGET_FILE_DIR:astral>/Engine
 )
-

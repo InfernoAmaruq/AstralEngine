@@ -3,7 +3,7 @@ lovr.filesystem.setRequirePath(package.path)
 local OgRequire = require
 local OgLoadfile = function(Path, Env)
     local Raw = lovr.filesystem.read(Path)
-    local f = Raw and loadstring(Raw, Path) or nil
+    local f = Raw and loadstring(Raw, "@"..Path) or nil
     return (f and Env) and setfenv(f, Env) or f
 end
 local Match = "^(.*)/[^/]+$"
@@ -59,14 +59,23 @@ local function Normalize(Path)
 end
 
 local function LoadFile(Path, Env, STACK)
+    local UseGlobalPath = false
+    if Path:sub(1,1) == "-" then
+        Path = Path:sub(2)
+        UseGlobalPath = true
+    end
     Path = DotFix(Path)
-    local Info = debug.getinfo(STACK or 2, "S")
-    local CurPath = Info.source:sub(1, 1) == "@" and Info.source:sub(2) or Info.source
-    local CurDir = CurPath:match(Match)
+
+    local Info, CurPath, CurDir
+    if not UseGlobalPath then
+        Info = debug.getinfo(STACK or 2, "S")
+        CurPath = Info.source:sub(1, 1) == "@" and Info.source:sub(2) or Info.source
+        CurDir = CurPath:match(Match)
+    end
 
     local PathsToTry = {
         Path,
-        "GAMEFILE/" .. Path,
+        not UseGlobalPath and "GAMEFILE/" .. Path or nil,
         CurDir and CurDir .. "/" .. Path or nil,
     }
 

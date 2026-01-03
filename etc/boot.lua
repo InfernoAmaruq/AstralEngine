@@ -78,11 +78,27 @@ local function Normalize(path, full)
         end
     end
 
-    return (full and "/" or "") .. table.concat(Parts, "/")
+    return (full == true and "/" or "") .. table.concat(Parts, "/")
 end
 
 function lovr.boot()
     lovr.filesystem = require("lovr.filesystem")
+
+    -- adding FS helpers
+    lovr.filesystem.normalize = Normalize
+
+    local PATTERN = "[^/\\]+$"
+
+    local Unix, Win = "%/", "\\"
+    lovr.filesystem.getExecutableFolder = function()
+        return lovr.filesystem.getExecutablePath():gsub(PATTERN,"")
+    end
+    lovr.filesystem.toWindows = function(Path)
+         return Path:gsub(Unix,Win)
+    end
+    lovr.filesystem.toUnix = function(Path)
+           return Path:gsub(Win,Unix)
+    end
 
     -- See if there's a ZIP archive fused to the executable, and set up the fused CLI if it exists
 
@@ -124,8 +140,6 @@ function lovr.boot()
     local path = arg.engine
 
     local main = "main.lua"
-
-    local PATTERN = "[^/]+$"
 
     local EXE = (lovr.filesystem.getExecutablePath() or root or bundle):gsub("\\","/")
     local EXEFOLD = EXE:gsub(PATTERN, "")
@@ -234,21 +248,23 @@ function lovr.boot()
         local Os = lovr.system and lovr.system.getOS() or lovr.getOS()
 
         print("OS:",Os)
-        local Unix, Win = "%/", "\\"
 
         if Os == "Windows" then
             -- set paths
 
             local GetRealDir = lovr.filesystem.getRealDirectory
             lovr.filesystem.getRealDirectory = function(Path)
-                return GetRealDir(Path:gsub(Win,Unix))
+                local Ret = GetRealDir(Path)
+                if not Ret then
+                    Ret = GetRealDir(Path,lovr.filesystem.toWindows(Path))
+                end
+                return Ret and Ret:gsub(Win,Unix)
             end
-        end
-        lovr.filesystem.toWindows = function(Path)
-            return Path:gsub(Unix,Win)
-        end
-        lovr.filesystem.fromWindows = function(Path)
-            return Path:gsub(Win,Unix)
+            
+            local GetExe = lovr.filesystem.getExecutablePath
+            lovr.filesystem.getExecutablePath = function()
+                return GetExe():gsub(Win,Unix)
+            end
         end
     end
 

@@ -241,6 +241,25 @@ function lovr.boot()
         error(failure)
     end
 
+    if lovr.filesystem then
+        local Os = lovr.system and lovr.system.getOS() or lovr.getOS()
+
+        if Os == "Windows" then
+            -- set paths
+            local OgMount = lovr.filesystem.mount
+            local OgUMount = lovr.filesystem.unmount
+
+            local From, To = "%/", "\\"
+
+            lovr.filesystem.mount = function(Path, ...)
+                return OgMount(Path:gsub(From, To), ...)
+            end
+            lovr.filesystem.unmount = function(Path)
+                return OgUMount(Path:gsub(From, To))
+            end
+        end
+    end
+
     require(main:sub(1, -5))
 
     return lovr.run()

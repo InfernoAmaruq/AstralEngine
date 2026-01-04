@@ -1100,10 +1100,7 @@ File* lovrFileCreate(const char* p, OpenMode mode) {
 
   if (mode == OPEN_READ) {
     FOREACH_ARCHIVE(a) {
-      if (archiveContains(a, path, length)) {
-        if (!a->open(a, path, &handle)) {
-          return NULL;
-        }
+      if (archiveContains(a, path, length) && a->open(a, path, &handle)) {
         archive = a;
         break;
       }

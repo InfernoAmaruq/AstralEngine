@@ -1,5 +1,7 @@
 group('filesystem', function()
   test('File', function()
+    assert(lovr.filesystem.newFile('main.lua', 'r'))
+
     local long = string.rep('a', 2000) .. '.txt'
     local file, err = lovr.filesystem.newFile(long, 'r')
     assert(not file and err)

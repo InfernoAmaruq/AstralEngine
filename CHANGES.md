@@ -14,6 +14,7 @@ dev
 - Fix possible crash related to Thread:wait.
 - Fix possible crash in Model animation.
 - Fix `t.headset.seated`.
+- Fix `lovr.filesystem.newFile` to search all mounted archives properly.
 
 v0.18.0 - 2025-02-14
 ---

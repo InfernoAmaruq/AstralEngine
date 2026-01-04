@@ -9,6 +9,7 @@ enable_language(C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+set(ASTRAL_BUILD_DLL ON)
 set(ASTRAL_RUNTIME_DIR "${CMAKE_BINARY_DIR}")
 
 # Options
@@ -880,6 +881,10 @@ function(build_lua_module SRC)
     endif()
 
     add_library(${MODULE_NAME} MODULE "${SRC_ABS}")
+    target_compile_definitions(${MODULE_NAME} PRIVATE ASTRAL_BUILD_DLL)
+    target_compile_options(${MODULE_NAME} PRIVATE
+        -include ${CMAKE_SOURCE_DIR}/etc/astral_api.h
+    )
 
     target_include_directories(${MODULE_NAME} PRIVATE
         ${LUA_INCLUDE_DIR}

@@ -95,7 +95,7 @@ static int l_RunService_Tick(lua_State* L){
     return 0;
 }
 
-int luaopen_RunServiceNative(lua_State* L){
+ASTRAL_API int luaopen_RunServiceNative(lua_State* L){
     lua_newtable(L);
 
     lua_pushcfunction(L,l_RunService_Init);

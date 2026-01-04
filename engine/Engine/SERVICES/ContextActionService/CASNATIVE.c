@@ -69,7 +69,7 @@ static int l_CAS_Call(lua_State* L){
 	return 0;
 }
 
-int luaopen_CASNATIVE(lua_State* L){
+ASTRAL_API int luaopen_CASNATIVE(lua_State* L){
 	lua_newtable(L);
 
 	lua_pushcfunction(L,l_CAS_Init);

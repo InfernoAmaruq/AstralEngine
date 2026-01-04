@@ -91,11 +91,12 @@ end
 
 _G.comp_loadstring = COMPILE_LOADSTRING
 
-Recompiler.Loadfile = function(path)
+Recompiler.Loadfile = function(path,fenv)
     if lovr.filesystem.isFile(path) then
         local c = lovr.filesystem.read(path, -1)
         if c then
-            return COMPILE_LOADSTRING(c, path)
+            local DATA = COMPILE_LOADSTRING(c, path)
+            return fenv and setfenv(DATA,fenv) or DATA
         end
     end
 end

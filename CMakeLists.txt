@@ -898,9 +898,9 @@ function(build_lua_module SRC)
     else()
     set_target_properties(${MODULE_NAME} PROPERTIES
         PREFIX ""
-        LIBRARY_OUTPUT_DIRECTORY ${OUT_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${OUT_DIR}
-        ARCHIVE_OUTPUT_DIRECTORY ${OUT_DIR}
+        LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>
+        RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>
+        ARCHIVE_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>
     )
     endif()
 endfunction()

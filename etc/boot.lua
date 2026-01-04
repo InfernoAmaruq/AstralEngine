@@ -67,6 +67,8 @@ local ListOfParams = table.concat({
     .. "-F<Identifier>=<Value> -> Define runtime/compile-time flag. Can be used for interpreting by the Aspera compiler",
 }, "\n")
 
+local OsType = nil
+
 local function Normalize(path, full)
     local Parts = {}
 
@@ -78,11 +80,20 @@ local function Normalize(path, full)
         end
     end
 
-    return (full == true and "/" or "") .. table.concat(Parts, "/")
+    if OsType == "Win" then
+        return table.concat(Parts, "/")
+    else
+        return (full == true and "/" or "") .. table.concat(Parts, "/")
+    end
 end
 
 function lovr.boot()
     lovr.filesystem = require("lovr.filesystem")
+
+    local FSType = package.config:sub(1, 1)
+    FSType = FSType == "\\" and "Win" or "Unix"
+    lovr.filesystem.filesystemType = FSType
+    OsType = FSType
 
     -- adding FS helpers
     lovr.filesystem.normalize = Normalize
@@ -91,13 +102,13 @@ function lovr.boot()
 
     local Unix, Win = "%/", "\\"
     lovr.filesystem.getExecutableFolder = function()
-        return lovr.filesystem.getExecutablePath():gsub(PATTERN,"")
+        return lovr.filesystem.getExecutablePath():gsub(PATTERN, "")
     end
     lovr.filesystem.toWindows = function(Path)
-         return Path:gsub(Unix,Win)
+        return Path:gsub(Unix, Win)
     end
     lovr.filesystem.toUnix = function(Path)
-           return Path:gsub(Win,Unix)
+        return Path:gsub(Win, Unix)
     end
 
     -- See if there's a ZIP archive fused to the executable, and set up the fused CLI if it exists
@@ -133,7 +144,7 @@ function lovr.boot()
         "./ENGINE/",
         "../Engine/",
         "../ENGINE/",
-        "./"
+        "./",
     }
 
     local game = arg.game
@@ -141,7 +152,7 @@ function lovr.boot()
 
     local main = "main.lua"
 
-    local EXE = (lovr.filesystem.getExecutablePath() or root or bundle):gsub("\\","/")
+    local EXE = (lovr.filesystem.getExecutablePath() or root or bundle):gsub("\\", "/")
     local EXEFOLD = EXE:gsub(PATTERN, "")
 
     if not game and (cli or not fused) and arg[0] then
@@ -158,17 +169,17 @@ function lovr.boot()
         Mounted, Failed = lovr.filesystem.mount(path)
     else
         for _, v in ipairs(PossiblePaths) do
-            local p = Normalize(EXEFOLD .. v)
+            local p = Normalize(EXEFOLD .. v, FSType == "Unix")
 
-            print("MOUNTING:",p)
+            print("MOUNTING:", p)
             Mounted, Failed = lovr.filesystem.mount(p)
 
             if Mounted then
                 path = p
-                print("USING PATH:",path)
+                print("USING PATH:", path)
                 break
             else
-                print("MOUNT FAILED:",Failed)
+                print("MOUNT FAILED:", Failed)
             end
         end
     end
@@ -180,7 +191,7 @@ function lovr.boot()
             local NormalizedPaths = {}
 
             for _, v in pairs(PossiblePaths) do
-                table.insert(NormalizedPaths, Normalize(EXEFOLD .. v))
+                table.insert(NormalizedPaths, Normalize(EXEFOLD .. v, FSType == "Unix"))
             end
 
             error(("Failed to mount engine path, searched:\n%s"):format(table.concat(NormalizedPaths, "\n")))
@@ -247,7 +258,7 @@ function lovr.boot()
     if lovr.filesystem then
         local Os = lovr.system and lovr.system.getOS() or lovr.getOS()
 
-        print("OS:",Os)
+        print("OS:", Os)
 
         if Os == "Windows" then
             -- set paths
@@ -256,14 +267,14 @@ function lovr.boot()
             lovr.filesystem.getRealDirectory = function(Path)
                 local Ret = GetRealDir(Path)
                 if not Ret then
-                    Ret = GetRealDir(Path,lovr.filesystem.toWindows(Path))
+                    Ret = GetRealDir(Path, lovr.filesystem.toWindows(Path))
                 end
-                return Ret and Ret:gsub(Win,Unix)
+                return Ret and Ret:gsub(Win, Unix)
             end
-            
+
             local GetExe = lovr.filesystem.getExecutablePath
             lovr.filesystem.getExecutablePath = function()
-                return GetExe():gsub(Win,Unix)
+                return GetExe():gsub(Win, Unix)
             end
         end
     end

@@ -6,7 +6,7 @@ end
 
 local ExeFold = lovr.filesystem.getExecutableFolder()
 
-PATH = lovr.filesystem.normalize(lovr.filesystem.toUnix(ExeFold..PATH))
+PATH = lovr.filesystem.normalize(lovr.filesystem.toUnix(ExeFold .. PATH), true)
 
 print(PATH)
 
@@ -19,7 +19,7 @@ loadfile, require = unpack(require("Lib.Require"))
 
 local mnt, err = lovr.filesystem.mount(PATH, "GAMEFILE", true)
 if not mnt then
-    print("FAILED TO MOUNT GAME PATH:",err)
+    print("FAILED TO MOUNT GAME PATH <" .. PATH .. ">:", err)
     return -1
 end
 
@@ -74,7 +74,7 @@ AstralEngine._MOUNT(PATH, "GAMEFILE", "GAMEFILE", true, function(Name)
 end)
 
 -- parse config
-local ok, ConfigFile = pcall(require,"config")
+local ok, ConfigFile = pcall(require, "config")
 
 if ok then
     ConfigFile = ConfigFile or {}

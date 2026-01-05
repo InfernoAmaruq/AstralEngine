@@ -79,7 +79,9 @@ local function COMPILE_LOADSTRING(c, NAME)
             n = n + 1
             return "-- LINE: " .. n .. "\n"
         end)
-        print("EMITTED CODE:", "\n" .. t)
+        if NAME:find("main") then
+            print("EMITTED CODE:", "\n" .. c)
+        end
         COUNTER = COUNTER - 1
     end
     local f, err = loadstring(c, NAME)

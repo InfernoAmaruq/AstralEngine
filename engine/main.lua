@@ -163,6 +163,7 @@ function lovr.run()
                 MainPhysWorld:update(PhysicsRate)
                 UpdTrans(MainPhysWorldID)
                 LastPhysTime = &TIMER
+                POLLPHYS = POLLPHYS + 1
             end
         }
 
@@ -176,10 +177,11 @@ function lovr.run()
         @ifdef<Physics.Interpolate>{
             @macro<L,!USEBRACK>{PHYSICS_INTERPOLATE() = 
                 -- get alpha, world and whatnot, interpolate
-                local Alpha = TIME - LastPhysTime
-                if Alpha >= 0 and Alpha <= 1 and MainPhysWorld then
+                if MainPhysWorld then
+                    local Alpha = math.min(PhysicsRate > 0 and (PhysTime / PhysicsRate) or 1,1)
                     MainPhysWorld:interpolate(Alpha)
                     UpdTrans(MainPhysWorldID)
+                    POLLINTERPOL = POLLINTERPOL + 1
                 end
             }
         }
@@ -213,24 +215,16 @@ function lovr.run()
     @macro<L,!USEBRACK>{GETTICK(&DT,&CT,&Time,&Tickrate,&CALL,&CV1)=
         &Time = &Time + &DT
 
-        if &Time >= &Tickrate or &Tickrate <= 0 then
+        if &Tickrate <= 0 then
+            &CALL(&CV1)
+        else
+            while &Time >= &Tickrate do
             &Time = &Time - &Tickrate
             -- MACRO CALL
             &CALL(&CV1)
+            end
         end
-    }
 
-    @macro<L,!USEBRACK>{GETCPUTICK(&DT,&CT,&Time,&Tickrate,&LastTime,&CALL) =
-        &Time = &Time + &DT
-
-        --&CALL
-        if &Time >= &Tickrate or &Tickrate <= 0 then
-            &Time = &Time - &Tickrate
-            local CPUDT = &CT - &LastTime
-            &LastTime = &CT
-            -- CALLING THE INTERNAL MACRO
-            &CALL(CPUDT)
-        end
     }
 
     @execute<UNSAFE>{
@@ -248,6 +242,7 @@ function lovr.run()
                 elseif Handlers[Name] then if Name == "resize" then lovr.graphics.wait() lovr.graphics.submit(lovr.graphics.getWindowPass()) lovr.graphics.wait() end Handlers[Name](A,B,C,D) end
             end
             Clear()
+            POLLEVENT = POLLEVENT + 1
         }
         ]===]
     }
@@ -256,17 +251,10 @@ function lovr.run()
         @ifdef<Physics.Interpolate & Physics.InterpolAtCPU>{
             PHYSICS_INTERPOLATE()
         }
-                            TICK = TICK + DT
-        COUNTER = COUNTER + 1
-        if TICK > 1 then
-        print("POLL AT:",CONFIG.CONFIG.CPURATE)
-            print("TPS:",COUNTER)
-            TICK = 0
-            COUNTER = 0
-        end
-        CURRENT_CPUTICK++
+        CURRENT_CPUTICK++;
+        POLLCPU = POLLCPU + 1
         Drain()
-        lovr.update(&DT)
+        lovr.update(CpuTickrate)
     }
 
     local Graph = lovr.graphics
@@ -296,20 +284,18 @@ function lovr.run()
                 end
                 RETURNFIELD = RETURNFIELD..[[
                     local Window = WGetPass()
-                    RunService.__TICK(501,1000,Headset or Window)
+                    RunService.__TICK(501,1000,Headset or Window); POLLGPU = POLLGPU + 1
                    ]]..CONCAT.."Present()"
 
             end
             if HASHEADSET then
                 RETURNFIELD = RETURNFIELD.."lovr.headset.submit()"
             end
-
             @ifdef<Physics.Interpolate & Physics.InterpolAtRender>{
                 RETURNFIELD = [[
                     PHYSICS_INTERPOLATE()
                 ]]..RETURNFIELD
             }
-
             return RETURNFIELD
         }
     }
@@ -333,10 +319,32 @@ function lovr.run()
 
     local COUNTER = 0
     local TICK = 0
+
+    local SLEEP = lovr.timer.sleep
+    local POLLCPU = 0
+    local POLLGPU = 0
+    local POLLPHYS = 0
+    local POLLEVENT = 0
+    local POLLINTERPOL = 0
+
     return function()
         local TIME = lovr.timer.getTime()
         local DT = TIME - LastTime
         LastTime = TIME
+
+        TICK = TICK + DT
+        COUNTER = COUNTER + 1
+        if TICK > 1 then
+        print("POLL AT:",CONFIG.CONFIG.CPURATE)
+            print("TPS:",COUNTER, "CPU:",POLLCPU, "GPU:",POLLGPU,"PHYS:",POLLPHYS,"EVENT:",POLLEVENT,"INTERPOL",POLLINTERPOL)
+            TICK = 0
+            COUNTER = 0
+            POLLCPU = 0
+            POLLGPU = 0
+            POLLPHYS = 0
+            POLLEVENT = 0
+            POLLINTERPOL = 0
+        end
 
         -- EVENT
         @execute<UNSAFE>{
@@ -344,7 +352,7 @@ function lovr.run()
         }
 
         -- CPU TICK
-        GETCPUTICK(DT,TIME,CPUTime,CpuTickrate,LastCPUTime,M_CPUTick)
+        GETTICK(DT,TIME,CPUTime,CpuTickrate,M_CPUTick,CpuTickrate)
 
         -- GPU TICK
         GETTICK(DT,TIME,RenderTime,RenderTickrate,M_GPUTick,nil)
@@ -358,5 +366,7 @@ function lovr.run()
         -- GC TICK
         GETTICK(DT,TIME,GCTime,GCRate,M_GCTick,nil)
         }
+
+        SLEEP(0)
     end
 end

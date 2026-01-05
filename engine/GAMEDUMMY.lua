@@ -113,8 +113,8 @@ if PHYSTEST and not TEST_TERRAIN then
 
     local SP = Sphere:AddComponent("Collider", { ColliderType = ENUM.ColliderType.Sphere })
 
-    Camera:AddComponent("Collider", { ColliderType = ENUM.ColliderType.Sphere, Size = Vec3(2, 2, 2) })
-    Camera.Anchored = true
+    --[[Camera:AddComponent("Collider", { ColliderType = ENUM.ColliderType.Sphere, Size = Vec3(2, 2, 2) })
+    Camera.Anchored = true]]
 
     Wall:AddComponent("Collider", { ColliderType = ENUM.ColliderType.Box })
 

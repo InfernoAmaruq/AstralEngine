@@ -120,7 +120,7 @@ function lovr.run()
         width = W,
         height = H,
         fullscreen = AstralEngine._CONFIG.Game.Window.Fullscreen,
-        resizable = true,
+        resizable = AstralEngine._CONFIG.Game.Window.Resizable,
         title = AstralEngine._CONFIG.Game.Window.Name,
         icon = AstralEngine._CONFIG.Game.Window.Icon,
     })
@@ -239,7 +239,7 @@ function lovr.run()
             for Name, A, B, C, D in Poll() do
                 if Name == 'restart' then return name, lovr.restart and lovr.restart()
                 elseif Name == 'quit' and (not lovr.quit or lovr.quit(A)) then return A or 0
-                elseif Handlers[Name] then if Name == "resize" then lovr.graphics.wait() lovr.graphics.submit(lovr.graphics.getWindowPass()) lovr.graphics.wait() end Handlers[Name](A,B,C,D) end
+                elseif Handlers[Name] then Handlers[Name](A,B,C,D) end
             end
             Clear()
             POLLEVENT = POLLEVENT + 1

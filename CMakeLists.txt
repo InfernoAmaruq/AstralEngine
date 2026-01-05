@@ -882,9 +882,15 @@ function(build_lua_module SRC)
 
     add_library(${MODULE_NAME} MODULE "${SRC_ABS}")
     target_compile_definitions(${MODULE_NAME} PRIVATE ASTRAL_BUILD_DLL)
-    target_compile_options(${MODULE_NAME} PRIVATE
-        -include ${CMAKE_SOURCE_DIR}/etc/astral_api.h
-    )
+    if (MSVC)
+        target_compile_options(${MODULE_NAME} PRIVATE
+          /FI"${CMAKE_SOURCE_DIR}/etc/astral_api.h"
+      )
+    else()
+      target_compile_options(${MODULE_NAME} PRIVATE
+          -include ${CMAKE_SOURCE_DIR}/etc/astral_api.h
+      )
+    endif()
 
     target_include_directories(${MODULE_NAME} PRIVATE
         ${LUA_INCLUDE_DIR}

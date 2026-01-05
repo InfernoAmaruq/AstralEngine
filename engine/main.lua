@@ -256,6 +256,14 @@ function lovr.run()
         @ifdef<Physics.Interpolate & Physics.InterpolAtCPU>{
             PHYSICS_INTERPOLATE()
         }
+                            TICK = TICK + DT
+        COUNTER = COUNTER + 1
+        if TICK > 1 then
+        print("POLL AT:",CONFIG.CONFIG.CPURATE)
+            print("TPS:",COUNTER)
+            TICK = 0
+            COUNTER = 0
+        end
         CURRENT_CPUTICK++
         Drain()
         lovr.update(&DT)
@@ -329,14 +337,6 @@ function lovr.run()
         local TIME = lovr.timer.getTime()
         local DT = TIME - LastTime
         LastTime = TIME
-
-        TICK = TICK + DT
-        COUNTER = COUNTER + 1
-        if TICK > 1 then
-            print("TPS:",COUNTER)
-            TICK = 0
-            COUNTER = 0
-        end
 
         -- EVENT
         @execute<UNSAFE>{

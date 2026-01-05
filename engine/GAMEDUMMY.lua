@@ -180,4 +180,3 @@ print("\n>FOLDER TEST SUCCESS:",pcall(function()
 
     Obj1.Parent = FOLDER.__id
 end))
-QUIT()

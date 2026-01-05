@@ -9,7 +9,9 @@ function Flags.PARSE(Blk, _, Id)
     local C = Cache[Id]
     for _, v in pairs(Blk.Body) do
         local Key, Value = unpack(v:split("="))
-        C[Key] = Value
+        if Key and Value then
+            C[Key] = Value
+        end
     end
     return "--[[FLAGS:" .. Blk.Raw .. "]]"
 end

@@ -44,7 +44,7 @@ local f = setmetatable({}, {
                                 if not k or k == repair then
                                     if k == repair then
                                         debug.setupvalue(f, j, Services[n])
-                                        sprint("REQUIRE REPAIR SUCCESSFUL FOR:", k)
+                                        AstralEngine.Log("REQUIRE REPAIR SUCCESSFUL FOR: "..k,"info","INTERNAL")
                                     end
                                     break
                                 end

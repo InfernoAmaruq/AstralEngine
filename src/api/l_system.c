@@ -179,26 +179,6 @@ static int l_lovrSystemOpenWindow(lua_State* L) {
   return 0;
 }
 
-static int l_lovrSystemSetWindowSize(lua_State* L)
-{
-  uint32_t Width = lua_tointeger(L,-1);
-  uint32_t Height = lua_tointeger(L,-2);
-  lovrSystemSetWindowSize(Width,Height);
-  return 0;
-}
-
-static int l_lovrSystemSetWindowFS(lua_State *L)
-{
-    lovrSystemSetWindowFullscreen(lua_toboolean(L,-1));
-    return 0;
-}
-
-static int l_lovrSystemIsWindowFS(lua_State *L)
-{
-    lua_pushboolean(L,lovrSystemIsWindowFullscreen());
-    return 1;
-}
-
 static int l_lovrSystemIsWindowOpen(lua_State* L) {
   bool open = lovrSystemIsWindowOpen();
   lua_pushboolean(L, open);
@@ -370,17 +350,6 @@ static int l_lovrSystemGetScrollDelta(lua_State* L) {
   return lua_pushnumber(L, lovrSystemGetScrollDelta()), 1;
 }
 
-static int l_lovrSystemSetCursorInputMode(lua_State* L){
-    lovrSystemSetCursorInputMode(lua_toboolean(L,1));
-    return 0;
-}
-
-static int l_lovrSystemGetCursorInputMode(lua_State* L)
-{
-    lua_pushinteger(L,lovrSystemGetCursorInputMode());
-    return 1;
-}
-
 static const luaL_Reg lovrSystem[] = {
   { "getOS", l_lovrSystemGetOS },
   { "getCoreCount", l_lovrSystemGetCoreCount },
@@ -411,9 +380,6 @@ static const luaL_Reg lovrSystem[] = {
   { "getClipboardText", l_lovrSystemGetClipboardText },
   { "setClipboardText", l_lovrSystemSetClipboardText },
   { "_getScrollDelta", l_lovrSystemGetScrollDelta },
-  { "setWindowSize", l_lovrSystemSetWindowSize },
-  {"setWindowFullscreen", l_lovrSystemSetWindowFS},
-  {"isWindowFullscreen",l_lovrSystemIsWindowFS},
   { NULL, NULL }
 };
 

@@ -16,7 +16,7 @@ static char* threadRunner(Thread* thread, Blob* body, Variant* arguments, uint32
   lua_pushcfunction(L, luax_getstack);
   int errhandler = lua_gettop(L);
 
-  if (!luaL_loadbuffer(L, body->data, body->size, body->name)) {
+  if (!luaL_loadbuffer(L, body->data, body->size, "thread")) {
     for (uint32_t i = 0; i < argumentCount; i++) {
       luax_pushvariant(L, &arguments[i]);
     }
@@ -28,9 +28,12 @@ static char* threadRunner(Thread* thread, Blob* body, Variant* arguments, uint32
   }
 
   // Error handling
-  if (lua_type(L, -1) == LUA_TSTRING) {
-    const char* message = lua_tostring(L, -1);
-    char* error = lovrStrdup(message);
+  size_t length;
+  const char* message = lua_tolstring(L, -1, &length);
+
+  if (message) {
+    char* error = lovrMalloc(length + 1);
+    memcpy(error, message, length + 1);
     lua_close(L);
     return error;
   }

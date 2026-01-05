@@ -1,6 +1,7 @@
 #include "audio.h"
 
 // Private Source functions for spatializer use
+intptr_t* lovrSourceGetSpatializerMemoField(Source* source);
 uint32_t lovrSourceGetIndex(Source* source);
 
 typedef struct {
@@ -23,5 +24,8 @@ typedef struct {
 
 #ifdef LOVR_ENABLE_PHONON_SPATIALIZER
 extern Spatializer phononSpatializer;
+#endif
+#ifdef LOVR_ENABLE_OCULUS_SPATIALIZER
+extern Spatializer oculusSpatializer;
 #endif
 extern Spatializer simpleSpatializer;

@@ -25,6 +25,7 @@ struct Source {
   Sound* sound;
   // Note: Converter is written once in lovrSourceCreate and can never be changed.
   ma_data_converter* converter;
+  intptr_t spatializerMemo;
   uint32_t offset;
   float pitch;
   float volume;
@@ -186,6 +187,9 @@ static const ma_device_data_proc callbacks[] = { onPlayback, onCapture };
 static Spatializer* spatializers[] = {
 #ifdef LOVR_ENABLE_PHONON_SPATIALIZER
   &phononSpatializer,
+#endif
+#ifdef LOVR_ENABLE_OCULUS_SPATIALIZER
+  &oculusSpatializer,
 #endif
   &simpleSpatializer
 };
@@ -648,6 +652,10 @@ bool lovrSourceSetEffectEnabled(Source* source, Effect effect, bool enabled) {
   }
 
   return true;
+}
+
+intptr_t* lovrSourceGetSpatializerMemoField(Source* source) {
+  return &source->spatializerMemo;
 }
 
 uint32_t lovrSourceGetIndex(Source* source) {

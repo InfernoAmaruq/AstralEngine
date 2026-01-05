@@ -17,7 +17,7 @@ _G.CAM = Camera
 local CACHE = InputService.__GetKeyArr()
 local MoveSpeed = 10
 
-AstralEngine.Window.GrabMouse(true)
+--AstralEngine.Window.GrabMouse(true)
 
 local E = ENUM.KeyCode
 local WK = E.w.RawValue

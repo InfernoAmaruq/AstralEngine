@@ -78,12 +78,13 @@ void lovrModelDataAllocate(ModelData* model) {
   totalSize += sizes[9] = ALIGN(model->nodeCount * sizeof(ModelNode), alignment);
   totalSize += sizes[10] = ALIGN(model->channelCount * sizeof(ModelAnimationChannel), alignment);
   totalSize += sizes[11] = ALIGN(model->blendDataCount * sizeof(ModelBlendData), alignment);
-  totalSize += sizes[12] = ALIGN(model->jointCount * sizeof(uint32_t), alignment);
-  totalSize += sizes[13] = ALIGN(model->charCount * sizeof(char), alignment);
-  totalSize += sizes[14] = ALIGN(sizeof(map_t), alignment);
+  totalSize += sizes[12] = ALIGN(model->childCount * sizeof(uint32_t), alignment);
+  totalSize += sizes[13] = ALIGN(model->jointCount * sizeof(uint32_t), alignment);
+  totalSize += sizes[14] = ALIGN(model->charCount * sizeof(char), alignment);
   totalSize += sizes[15] = ALIGN(sizeof(map_t), alignment);
   totalSize += sizes[16] = ALIGN(sizeof(map_t), alignment);
   totalSize += sizes[17] = ALIGN(sizeof(map_t), alignment);
+  totalSize += sizes[18] = ALIGN(sizeof(map_t), alignment);
 
   size_t offset = 0;
   char* p = model->data = lovrCalloc(totalSize);
@@ -99,12 +100,13 @@ void lovrModelDataAllocate(ModelData* model) {
   model->nodes = (ModelNode*) (p + offset), offset += sizes[9];
   model->channels = (ModelAnimationChannel*) (p + offset), offset += sizes[10];
   model->blendData = (ModelBlendData*) (p + offset), offset += sizes[11];
-  model->joints = (uint32_t*) (p + offset), offset += sizes[12];
-  model->chars = (char*) (p + offset), offset += sizes[13];
-  model->blendShapeMap = (map_t*) (p + offset), offset += sizes[14];
-  model->animationMap = (map_t*) (p + offset), offset += sizes[15];
-  model->materialMap = (map_t*) (p + offset), offset += sizes[16];
-  model->nodeMap = (map_t*) (p + offset), offset += sizes[17];
+  model->children = (uint32_t*) (p + offset), offset += sizes[12];
+  model->joints = (uint32_t*) (p + offset), offset += sizes[13];
+  model->chars = (char*) (p + offset), offset += sizes[14];
+  model->blendShapeMap = (map_t*) (p + offset), offset += sizes[15];
+  model->animationMap = (map_t*) (p + offset), offset += sizes[16];
+  model->materialMap = (map_t*) (p + offset), offset += sizes[17];
+  model->nodeMap = (map_t*) (p + offset), offset += sizes[18];
 
   map_init(model->blendShapeMap, model->blendShapeCount);
   map_init(model->animationMap, model->animationCount);
@@ -175,6 +177,17 @@ bool lovrModelDataFinalize(ModelData* model) {
   }
 
   model->indexType = maxIndexSize >= 4 ? U32 : U16;
+
+  for (uint32_t i = 0; i < model->nodeCount; i++) {
+    model->nodes[i].parent = ~0u;
+  }
+
+  for (uint32_t i = 0; i < model->nodeCount; i++) {
+    ModelNode* node = &model->nodes[i];
+    for (uint32_t j = 0; j < node->childCount; j++) {
+      model->nodes[node->children[j]].parent = i;
+    }
+  }
 
   return true;
 }
@@ -337,8 +350,8 @@ static void boundingBoxHelper(ModelData* model, uint32_t nodeIndex, float* paren
     model->boundingBox[5] = MAX(model->boundingBox[5], max[2]);
   }
 
-  for (uint32_t i = node->child; i != ~0u; i = model->nodes[i].sibling) {
-    boundingBoxHelper(model, i, m);
+  for (uint32_t i = 0; i < node->childCount; i++) {
+    boundingBoxHelper(model, node->children[i], m);
   }
 }
 
@@ -394,8 +407,8 @@ static void boundingSphereHelper(ModelData* model, uint32_t nodeIndex, uint32_t*
     }
   }
 
-  for (uint32_t i = node->child; i != ~0u; i = model->nodes[i].sibling) {
-    boundingSphereHelper(model, i, pointIndex, points, m);
+  for (uint32_t i = 0; i < node->childCount; i++) {
+    boundingSphereHelper(model, node->children[i], pointIndex, points, m);
   }
 }
 
@@ -491,8 +504,8 @@ static void countVertices(ModelData* model, uint32_t nodeIndex, uint32_t* vertex
     *indexCount += indices ? indices->count : count;
   }
 
-  for (uint32_t i = node->child; i != ~0u; i = model->nodes[i].sibling) {
-    countVertices(model, i, vertexCount, indexCount);
+  for (uint32_t i = 0; i < node->childCount; i++) {
+    countVertices(model, node->children[i], vertexCount, indexCount);
   }
 }
 
@@ -581,8 +594,8 @@ static void collectVertices(ModelData* model, uint32_t nodeIndex, float** vertic
     }
   }
 
-  for (uint32_t i = node->child; i != ~0u; i = model->nodes[i].sibling) {
-    collectVertices(model, i, vertices, indices, baseIndex, m);
+  for (uint32_t i = 0; i < node->childCount; i++) {
+    collectVertices(model, node->children[i], vertices, indices, baseIndex, m);
   }
 }
 

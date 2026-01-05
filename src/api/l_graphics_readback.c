@@ -6,15 +6,17 @@
 
 static int l_lovrReadbackIsComplete(lua_State* L) {
   Readback* readback = luax_checktype(L, 1, Readback);
-  bool complete = lovrReadbackPoll(readback);
+  bool complete = lovrReadbackIsComplete(readback);
   lua_pushboolean(L, complete);
   return 1;
 }
 
 static int l_lovrReadbackWait(lua_State* L) {
   Readback* readback = luax_checktype(L, 1, Readback);
-  luax_assert(L, lovrReadbackWait(readback));
-  return 0;
+  bool waited;
+  luax_assert(L, lovrReadbackWait(readback, &waited));
+  lua_pushboolean(L, waited);
+  return 1;
 }
 
 static int l_lovrReadbackGetData(lua_State* L) {

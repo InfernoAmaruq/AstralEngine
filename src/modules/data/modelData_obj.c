@@ -54,7 +54,7 @@ static bool parseMtl(char* path, char* base, ModelDataIO* io, arr_image_t* image
         .color = { 1.f, 1.f, 1.f, 1.f },
         .glow = { 0.f, 0.f, 0.f, 1.f },
         .uvShift = { 0.f, 1.f },
-        .uvScale = { 1.f, 1.f },
+        .uvScale = { 1.f, -1.f },
         .metalness = 1.f,
         .roughness = 1.f,
         .clearcoat = 0.f,
@@ -207,7 +207,7 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
       float vt[2];
       char* s = line + 3;
       vt[0] = strtof(s, &s);
-      vt[1] = 1.0f - strtof(s, &s);
+      vt[1] = strtof(s, &s);
       arr_append(&uvs, vt, 2);
     } else if (line[0] == 'f' && line[1] == ' ') {
       char* s = line + 2;
@@ -412,9 +412,6 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
     .transform.matrix = MAT4_IDENTITY,
     .primitiveIndex = 0,
     .primitiveCount = (uint32_t) groups.length,
-    .child = ~0u,
-    .sibling = ~0u,
-    .parent = ~0u,
     .skin = ~0u,
     .hasMatrix = true
   };

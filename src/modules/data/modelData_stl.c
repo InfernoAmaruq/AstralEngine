@@ -44,9 +44,6 @@ static bool lovrModelDataInitStlBinary(ModelData** result, Blob* source, ModelDa
     .hasMatrix = true,
     .transform.matrix = MAT4_IDENTITY,
     .primitiveCount = 1,
-    .child = ~0u,
-    .sibling = ~0u,
-    .parent = ~0u,
     .skin = ~0u
   };
 

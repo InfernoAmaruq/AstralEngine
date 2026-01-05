@@ -166,12 +166,6 @@ typedef volatile long atomic_uint;
 #define atomic_fetch_and(p, x) InterlockedAnd(p, x)
 #define atomic_fetch_and_explicit(p, x, o) atomic_fetch_and(p, x)
 
-static inline bool atomic_compare_exchange_strong(void** p, void** x, void* y) {
-  void* old = *x;
-  *x = _InterlockedCompareExchangePointer(p, y, old);
-  return *x == old;
-}
-
 #define ATOMIC_INT_LOCK_FREE 2
 
 #endif

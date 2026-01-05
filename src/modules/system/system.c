@@ -136,21 +136,6 @@ void lovrSystemRequestPermission(Permission permission) {
   os_request_permission((os_permission) permission);
 }
 
-void lovrSystemSetWindowSize(uint32_t w, uint32_t h)
-{
-  os_window_set_size(w,h);
-}
-
-void lovrSystemSetWindowFullscreen(bool fs)
-{
-    os_window_setfullscreen(fs);
-}
-
-bool lovrSystemIsWindowFullscreen(void)
-{
-    return os_window_is_fullscreen();
-}
-
 bool lovrSystemOpenWindow(os_window_config* window) {
   lovrAssert(os_window_open(window), "Could not open window");
   os_on_quit(onQuit);
@@ -249,14 +234,4 @@ const char* lovrSystemGetClipboardText(void) {
 
 void lovrSystemSetClipboardText(const char* text) {
   os_set_clipboard_text(text);
-}
-
-// FLAME APPENDS
-
-void lovrSystemSetCursorInputMode(int Mode){
-    os_cursor_setinputmode(Mode);
-}
-
-uint32_t lovrSystemGetCursorInputMode(){
-    return os_cursor_getinputmode();
 }

@@ -1,4 +1,3 @@
-#include "gpu.h"
 #ifndef LOVR_USE_GLFW
 
 const char* os_get_clipboard_text(void) {
@@ -75,7 +74,7 @@ void os_get_mouse_position(double* x, double* y) {
 }
 
 os_mouse_mode os_get_mouse_mode(void) {
-  return MOUSE_MODE_NORMAL;
+    return MOUSE_MODE_NORMAL;
 }
 
 void os_set_mouse_mode(os_mouse_mode mode) {
@@ -146,11 +145,6 @@ static struct {
   fn_mousewheel_move* onMouseWheelMove;
   uint32_t width;
   uint32_t height;
-  int windowX;
-  int windowY;
-  int windowW;
-  int windowH;
-  bool fullscreen;
 } glfwState;
 
 static void onError(int code, const char* description) {
@@ -381,19 +375,12 @@ bool os_window_open(const os_window_config* config) {
 #ifdef __APPLE__
   glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
 #endif
-#ifdef __linux__
-  glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
-#endif
   if (!glfwInit()) {
     return false;
   }
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, config->resizable);
-
-  if (config->width == 0 && config->height == 0) {
-    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-  }
 
   GLFWmonitor* monitor = glfwGetPrimaryMonitor();
   const GLFWvidmode* mode = glfwGetVideoMode(monitor);
@@ -433,72 +420,6 @@ bool os_window_open(const os_window_config* config) {
   glfwState.width = width;
   glfwState.height = height;
   return true;
-}
-
-void os_window_set_size(uint32_t width, uint32_t height) {
-  if (!glfwState.window) return;
-  glfwState.width = width;
-  glfwState.height = height;
-  glfwSetWindowSize(glfwState.window, (int) width, (int) height);
-}
-
-void os_window_setfullscreen(bool FS)
-{
-    if (!glfwState.window) return;
-
-    if (FS){
-        GLFWmonitor* mon = glfwGetPrimaryMonitor();
-        const GLFWvidmode* mode = glfwGetVideoMode(mon);
-
-        int x,y,w,h;
-
-        glfwGetWindowPos(glfwState.window, &x, &y);
-        glfwGetWindowSize(glfwState.window, &w, &h);
-
-        glfwState.windowX = x;
-        glfwState.windowY = y;
-        glfwState.windowW = w;
-        glfwState.windowH = h;
-
-        #ifdef _WIN32
-            glfwSetWindowMonitor(
-            glfwState.window,
-            mon,
-            0,0,
-            mode->width,
-            mode->height,
-            mode->refreshRate
-                );
-
-        #else
-            glfwSetWindowAttrib(glfwState.window, GLFW_DECORATED, GLFW_FALSE);
-            glfwSetWindowMonitor(glfwState.window, NULL, 0, 0, mode->width, mode->height,0);
-        #endif
-
-           } else {
-
-        #ifdef _WIN32
-            glfwSetWindowMonitor(
-            glfwState.window,
-            NULL,
-            glfwState.windowX,
-            glfwState.windowY,
-            glfwState.windowW,
-            glfwState.windowH,
-            0
-                );
-        #else
-            glfwSetWindowAttrib(glfwState.window, GLFW_DECORATED, GLFW_TRUE);
-            glfwSetWindowMonitor(glfwState.window, NULL, glfwState.windowX, glfwState.windowY, glfwState.windowW, glfwState.windowH,0);
-        #endif
-    }
-
-    glfwState.fullscreen = FS;
-}
-
-bool os_window_is_fullscreen(void)
-{
-    return glfwState.fullscreen;
 }
 
 bool os_window_is_open(void) {
@@ -573,12 +494,12 @@ void os_get_mouse_position(double* x, double* y) {
   }
 }
 
-os_mouse_mode os_get_mouse_mode(void) {
-  if (glfwGetInputMode(glfwState.window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
-    return MOUSE_MODE_GRABBED;
-  } else {
+os_mouse_mode os_get_mouse_mode(void){
+    if (glfwState.window){
+        int STATE = glfwGetInputMode(glfwState.window, GLFW_CURSOR);
+        return (STATE == GLFW_CURSOR_DISABLED) ? MOUSE_MODE_GRABBED : MOUSE_MODE_NORMAL;
+    }
     return MOUSE_MODE_NORMAL;
-  }
 }
 
 void os_set_mouse_mode(os_mouse_mode mode) {
@@ -630,8 +551,6 @@ uintptr_t os_get_xcb_window(void) {
 #else
 #define OS_DLL_EXPORT __attribute__((visibility("default")))
 #endif
-
-typedef struct GLFWwindow GLFWwindow;
 
 OS_DLL_EXPORT GLFWwindow* os_get_glfw_window(void) {
   return glfwState.window;

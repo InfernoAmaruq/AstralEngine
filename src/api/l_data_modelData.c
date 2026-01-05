@@ -64,7 +64,7 @@ uint32_t luax_checknodeindex(lua_State* L, int index, ModelData* model) {
 static int l_lovrModelDataGetMetadata(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
 
-  if (!model->metadata || model->metadataSize == 0) {
+  if (!model->metadata || model->metadataSize == 0 || model->metadataType != META_GLTF_JSON) {
     lua_pushnil(L);
   } else {
     lua_pushlstring(L, model->metadata, model->metadataSize);
@@ -121,13 +121,13 @@ static int l_lovrModelDataGetNodeName(lua_State* L) {
   return 1;
 }
 
-static int l_lovrModelDataGetNodeChild(lua_State* L) {
+static int l_lovrModelDataGetNodeParent(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
-  if (node->child != ~0u) {
-    lua_pushinteger(L, node->child + 1);
-  } else {
+  if (node->parent == ~0u) {
     lua_pushnil(L);
+  } else {
+    lua_pushinteger(L, node->parent + 1);
   }
   return 1;
 }
@@ -135,32 +135,10 @@ static int l_lovrModelDataGetNodeChild(lua_State* L) {
 static int l_lovrModelDataGetNodeChildren(lua_State* L) {
   ModelData* model = luax_checktype(L, 1, ModelData);
   ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
-  lua_newtable(L);
-  for (uint32_t i = node->child; i != ~0u; i = model->nodes[i].sibling) {
-    lua_pushinteger(L, i + 1);
+  lua_createtable(L, node->childCount, 0);
+  for (uint32_t i = 0; i < node->childCount; i++) {
+    lua_pushinteger(L, node->children[i] + 1);
     lua_rawseti(L, -2, i + 1);
-  }
-  return 1;
-}
-
-static int l_lovrModelDataGetNodeSibling(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
-  if (node->sibling != ~0u) {
-    lua_pushinteger(L, node->sibling + 1);
-  } else {
-    lua_pushnil(L);
-  }
-  return 1;
-}
-
-static int l_lovrModelDataGetNodeParent(lua_State* L) {
-  ModelData* model = luax_checktype(L, 1, ModelData);
-  ModelNode* node = &model->nodes[luax_checknodeindex(L, 2, model)];
-  if (node->parent != ~0u) {
-    lua_pushinteger(L, node->parent + 1);
-  } else {
-    lua_pushnil(L);
   }
   return 1;
 }
@@ -759,7 +737,6 @@ static int l_lovrModelDataGetSkinInverseBindMatrix(lua_State* L) {
   ModelSkin* skin = &model->skins[index];
   uint32_t joint = luax_checku32(L, 3) - 1;
   luax_check(L, index < skin->jointCount, "Invalid joint index '%d'", joint + 1);
-  if (!skin->inverseBindMatrices) return lua_pushnil(L), 1;
   float* m = skin->inverseBindMatrices + joint * 16;
   for (uint32_t i = 0; i < 16; i++) {
     lua_pushnumber(L, m[i]);
@@ -790,10 +767,8 @@ const luaL_Reg lovrModelData[] = {
   { "getRootNode", l_lovrModelDataGetRootNode },
   { "getNodeCount", l_lovrModelDataGetNodeCount },
   { "getNodeName", l_lovrModelDataGetNodeName },
-  { "getNodeChild", l_lovrModelDataGetNodeChild },
-  { "getNodeChildren", l_lovrModelDataGetNodeChildren },
-  { "getNodeSibling", l_lovrModelDataGetNodeSibling },
   { "getNodeParent", l_lovrModelDataGetNodeParent },
+  { "getNodeChildren", l_lovrModelDataGetNodeChildren },
   { "getNodePosition", l_lovrModelDataGetNodePosition },
   { "getNodeOrientation", l_lovrModelDataGetNodeOrientation },
   { "getNodeScale", l_lovrModelDataGetNodeScale },

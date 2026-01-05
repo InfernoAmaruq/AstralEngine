@@ -133,23 +133,6 @@ double os_get_time(void) {
   return t.QuadPart / (double) state.timerFrequency;
 }
 
-void os_cursor_setinputmode(int Mode){
-    #ifdef LOVR_USE_GLFW
-        glfwSetInputMode(glfwState.window,GLFW_CURSOR,Mode ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
-    #else
-        // TODO
-    #endif
-}
-
-uint32_t os_cursor_getinputmode(){
-    #ifdef LOVR_USE_GLFW
-        return glfwGetInputMode(glfwState.window,GLFW_CURSOR) == GLFW_CURSOR_DISABLED;
-    #else
-        // TODO
-        return 0;
-    #endif
-}
-
 void os_sleep(double seconds) {
 #ifdef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
   if (!createdTimer) {
@@ -594,8 +577,8 @@ void os_get_mouse_position(double* x, double* y) {
   *y = state.mouseY;
 }
 
-os_mouse_mode os_get_mouse_mode(void) {
-  return state.mouseMode;
+os_mouse_mode os_get_mouse_mode(void){
+    return state.mouseMode;
 }
 
 void os_set_mouse_mode(os_mouse_mode mode) {

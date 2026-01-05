@@ -5,9 +5,15 @@
 #pragma once
 
 #define LOVR_VERSION_MAJOR 0
-#define LOVR_VERSION_MINOR 0
-#define LOVR_VERSION_PATCH 1
-#define LOVR_VERSION_ALIAS "Names Are Not Important"
+#define LOVR_VERSION_MINOR 18
+#define LOVR_VERSION_PATCH 0
+#define LOVR_VERSION_ALIAS "Dream Eater"
+
+#ifdef __cplusplus
+#define LOVR_NORETURN [[noreturn]]
+#else
+#define LOVR_NORETURN _Noreturn
+#endif
 
 #ifndef M_PI
 #define M_PI 3.14159265358979
@@ -22,19 +28,10 @@
 #define BREAK() __asm("int $3")
 
 // Allocation
-#if defined(__clang__) || defined(__GNUC__)
-void* lovrMalloc(size_t size) __attribute__((malloc, returns_nonnull, alloc_size(1)));
-void* lovrCalloc(size_t size) __attribute__((malloc, returns_nonnull, alloc_size(1)));
-void* lovrRealloc(void* data, size_t size) __attribute__((returns_nonnull, alloc_size(2)));
-void lovrFree(void* data);
-#else
 void* lovrMalloc(size_t size);
 void* lovrCalloc(size_t size);
 void* lovrRealloc(void* data, size_t size);
 void lovrFree(void* data);
-#endif
-
-#define lovrStrdup(s) (s ? memcpy(lovrMalloc(strlen(s) + 1), s, strlen(s) + 1) : NULL)
 
 // Refcounting (to be refcounted, a struct must have a uint32_t refcount as its first field)
 void lovrRetain(void* ref);

@@ -15,12 +15,20 @@ struct Pass;
 typedef struct Layer Layer;
 
 typedef enum {
+  DRIVER_SIMULATOR,
+  DRIVER_OPENXR,
+  DRIVER_WEBXR
+} HeadsetDriver;
+
+typedef enum {
   SKELETON_NONE,
   SKELETON_CONTROLLER,
   SKELETON_NATURAL
 } ControllerSkeletonMode;
 
 typedef struct {
+  HeadsetDriver* drivers;
+  size_t driverCount;
   float supersample;
   bool debug;
   bool seated;
@@ -122,7 +130,6 @@ typedef enum {
 typedef enum {
   AXIS_TRIGGER,
   AXIS_THUMBSTICK,
-  AXIS_THUMBREST,
   AXIS_TOUCHPAD,
   AXIS_GRIP,
   AXIS_NIB,
@@ -164,62 +171,6 @@ typedef enum {
   SOURCE_HAND
 } SkeletonSource;
 
-bool lovrHeadsetInit(HeadsetConfig* config);
-void lovrHeadsetDestroy(void);
-bool lovrHeadsetConnect(void);
-bool lovrHeadsetIsConnected(void);
-bool lovrHeadsetGetName(char* name, size_t length);
-bool lovrHeadsetGetDriver(char* name, size_t length);
-void lovrHeadsetGetFeatures(HeadsetFeatures* features);
-bool lovrHeadsetIsSeated(void);
-bool lovrHeadsetStart(void);
-void lovrHeadsetStop(void);
-bool lovrHeadsetIsActive(void);
-bool lovrHeadsetIsVisible(void);
-bool lovrHeadsetIsFocused(void);
-bool lovrHeadsetIsMounted(void);
-bool lovrHeadsetPollEvents(void);
-bool lovrHeadsetUpdate(double* dt);
-double lovrHeadsetGetDeltaTime(void);
-double lovrHeadsetGetDisplayTime(void);
-void lovrHeadsetGetDisplayDimensions(uint32_t* width, uint32_t* height);
-float* lovrHeadsetGetRefreshRates(uint32_t* count);
-float lovrHeadsetGetRefreshRate(void);
-bool lovrHeadsetSetRefreshRate(float refreshRate);
-void lovrHeadsetGetFoveation(FoveationLevel* level, bool* dynamic);
-bool lovrHeadsetSetFoveation(FoveationLevel level, bool dynamic);
-bool lovrHeadsetIsPassthroughSupported(PassthroughMode mode);
-PassthroughMode lovrHeadsetGetPassthrough(void);
-bool lovrHeadsetSetPassthrough(PassthroughMode mode);
-uint32_t lovrHeadsetGetViewCount(void);
-bool lovrHeadsetGetViewPose(uint32_t view, float* position, float* orientation);
-bool lovrHeadsetGetViewAngles(uint32_t view, float* left, float* right, float* up, float* down);
-void lovrHeadsetGetClipDistance(float* clipNear, float* clipFar);
-void lovrHeadsetSetClipDistance(float clipNear, float clipFar);
-void lovrHeadsetGetBoundsDimensions(float* width, float* depth);
-bool lovrHeadsetGetPose(Device device, float* position, float* orientation);
-bool lovrHeadsetGetVelocity(Device device, float* velocity, float* angularVelocity);
-bool lovrHeadsetIsDown(Device device, DeviceButton button, bool* down, bool* changed);
-bool lovrHeadsetIsTouched(Device device, DeviceButton button, bool* touched);
-bool lovrHeadsetGetAxis(Device device, DeviceAxis axis, float* value);
-bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source);
-bool lovrHeadsetVibrate(Device device, float strength, float duration, float frequency);
-void lovrHeadsetStopVibration(Device device);
-uint64_t* lovrHeadsetGetModelKeys(uint32_t* count);
-struct ModelData* lovrHeadsetNewModelData(uint64_t key);
-bool lovrHeadsetGetModelPose(struct Model* model, float* position, float* orientation);
-bool lovrHeadsetAnimate(struct Model* model);
-struct Texture* lovrHeadsetSetBackground(uint32_t width, uint32_t height, uint32_t layers);
-Layer** lovrHeadsetGetLayers(uint32_t* count, bool* main);
-bool lovrHeadsetSetLayers(Layer** layers, uint32_t count, bool main);
-bool lovrHeadsetGetTexture(struct Texture** texture);
-bool lovrHeadsetGetPass(struct Pass** pass);
-bool lovrHeadsetSubmit(void);
-void lovrHeadsetSetPose(Device device, float* position, float* orientation);
-void lovrHeadsetSetButton(Device device, DeviceButton button, bool down);
-
-// Layer
-
 typedef struct {
   uint32_t width;
   uint32_t height;
@@ -229,26 +180,93 @@ typedef struct {
   bool filter;
 } LayerInfo;
 
-Layer* lovrLayerCreate(const LayerInfo* info);
+// Notes:
+// - init is called immediately, the graphics module may not exist yet
+// - start is called after the graphics module is initialized, can be used to set up textures etc.
+// - when the graphics module is destroyed, it stops the headset session, so graphics objects can be destroyed
+// - getRefreshRate may return 0.f if the information is unavailable.
+// - For isDown, changed can be set to false if change information is unavailable or inconvenient.
+// - getAxis may write 4 floats to the output value.  The expected number is a constant (see axisCounts in l_headset).
+// - In general, most input results should be kept constant between calls to update.
+
+typedef struct HeadsetInterface {
+  HeadsetDriver driverType;
+  void (*getVulkanPhysicalDevice)(void* instance, uintptr_t physicalDevice);
+  uint32_t (*createVulkanInstance)(void* instanceCreateInfo, void* allocator, uintptr_t instance, void* getInstanceProcAddr);
+  uint32_t (*createVulkanDevice)(void* instance, void* deviceCreateInfo, void* allocator, uintptr_t device, void* getInstanceProcAddr);
+  uintptr_t (*getOpenXRInstanceHandle)(void);
+  uintptr_t (*getOpenXRSessionHandle)(void);
+  bool (*init)(HeadsetConfig* config);
+  bool (*start)(void);
+  void (*stop)(void);
+  void (*destroy)(void);
+  bool (*getDriverName)(char* name, size_t length);
+  void (*getFeatures)(HeadsetFeatures* features);
+  bool (*getName)(char* name, size_t length);
+  bool (*isSeated)(void);
+  void (*getDisplayDimensions)(uint32_t* width, uint32_t* height);
+  float (*getRefreshRate)(void);
+  bool (*setRefreshRate)(float refreshRate);
+  const float* (*getRefreshRates)(uint32_t* count);
+  void (*getFoveation)(FoveationLevel* level, bool* dynamic);
+  bool (*setFoveation)(FoveationLevel level, bool dynamic);
+  PassthroughMode (*getPassthrough)(void);
+  bool (*setPassthrough)(PassthroughMode mode);
+  bool (*isPassthroughSupported)(PassthroughMode mode);
+  double (*getDisplayTime)(void);
+  double (*getDeltaTime)(void);
+  uint32_t (*getViewCount)(void);
+  bool (*getViewPose)(uint32_t view, float* position, float* orientation);
+  bool (*getViewAngles)(uint32_t view, float* left, float* right, float* up, float* down);
+  void (*getClipDistance)(float* clipNear, float* clipFar);
+  void (*setClipDistance)(float clipNear, float clipFar);
+  void (*getBoundsDimensions)(float* width, float* depth);
+  const float* (*getBoundsGeometry)(uint32_t* count);
+  bool (*getPose)(Device device, float* position, float* orientation);
+  bool (*getVelocity)(Device device, float* velocity, float* angularVelocity);
+  bool (*isDown)(Device device, DeviceButton button, bool* down, bool* changed);
+  bool (*isTouched)(Device device, DeviceButton button, bool* touched);
+  bool (*getAxis)(Device device, DeviceAxis axis, float* value);
+  bool (*getSkeleton)(Device device, float* poses, SkeletonSource* source);
+  bool (*vibrate)(Device device, float strength, float duration, float frequency);
+  void (*stopVibration)(Device device);
+  struct ModelData* (*newModelData)(Device device, bool animated);
+  bool (*animate)(struct Model* model);
+  struct Texture* (*setBackground)(uint32_t width, uint32_t height, uint32_t layers);
+  Layer* (*newLayer)(const LayerInfo* info);
+  void (*destroyLayer)(void* ref);
+  Layer** (*getLayers)(uint32_t* count, bool* main);
+  bool (*setLayers)(Layer** layers, uint32_t count, bool main);
+  void (*getLayerPose)(Layer* layer, float* position, float* orientation);
+  void (*setLayerPose)(Layer* layer, float* position, float* orientation);
+  void (*getLayerDimensions)(Layer* layer, float* width, float* height);
+  void (*setLayerDimensions)(Layer* layer, float width, float height);
+  float (*getLayerCurve)(Layer* layer);
+  bool (*setLayerCurve)(Layer* layer, float curve);
+  void (*getLayerColor)(Layer* layer, float color[4]);
+  void (*setLayerColor)(Layer* layer, float color[4]);
+  void (*getLayerViewport)(Layer* layer, int32_t* viewport);
+  void (*setLayerViewport)(Layer* layer, int32_t* viewport);
+  struct Texture* (*getLayerTexture)(Layer* layer);
+  struct Pass* (*getLayerPass)(Layer* layer);
+  bool (*getTexture)(struct Texture** texture);
+  bool (*getPass)(struct Pass** pass);
+  bool (*submit)(void);
+  bool (*isActive)(void);
+  bool (*isVisible)(void);
+  bool (*isFocused)(void);
+  bool (*isMounted)(void);
+  bool (*update)(double* dt);
+} HeadsetInterface;
+
+// Available drivers
+extern HeadsetInterface lovrHeadsetSimulatorDriver;
+extern HeadsetInterface lovrHeadsetOpenXRDriver;
+extern HeadsetInterface lovrHeadsetWebXRDriver;
+
+// Active driver
+extern HeadsetInterface* lovrHeadsetInterface;
+
+bool lovrHeadsetInit(HeadsetConfig* config);
+void lovrHeadsetDestroy(void);
 void lovrLayerDestroy(void* ref);
-void lovrLayerGetPose(Layer* layer, float* position, float* orientation);
-void lovrLayerSetPose(Layer* layer, float* position, float* orientation);
-void lovrLayerGetDimensions(Layer* layer, float* width, float* height);
-void lovrLayerSetDimensions(Layer* layer, float width, float height);
-float lovrLayerGetCurve(Layer* layer);
-bool lovrLayerSetCurve(Layer* layer, float curve);
-void lovrLayerGetColor(Layer* layer, float color[4]);
-void lovrLayerSetColor(Layer* layer, float color[4]);
-void lovrLayerGetViewport(Layer* layer, int32_t* viewport);
-void lovrLayerSetViewport(Layer* layer, int32_t* viewport);
-struct Texture* lovrLayerGetTexture(Layer* layer);
-struct Pass* lovrLayerGetPass(Layer* layer);
-
-// Private
-
-bool lovrHeadsetIsSupported(void);
-void lovrHeadsetGetVulkanPhysicalDevice(void* instance, uintptr_t physicalDevice);
-uint32_t lovrHeadsetCreateVulkanInstance(void* instanceCreateInfo, void* allocator, uintptr_t instance, void* getInstanceProcAddr);
-uint32_t lovrHeadsetCreateVulkanDevice(void* instance, void* deviceCreateInfo, void* allocatoor, uintptr_t device, void* getInstanceProcAddr);
-uintptr_t lovrHeadsetGetInstanceHandle(void);
-uintptr_t lovrHeadsetGetSessionHandle(void);

@@ -81,23 +81,6 @@ void os_open_console(void) {
   //
 }
 
-void os_cursor_setinputmode(int Mode){
-    #ifdef LOVR_USE_GLFW
-        glfwSetInputMode(glfwState.window,GLFW_CURSOR,Mode ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
-    #else
-        // TODO
-    #endif
-}
-
-uint32_t os_cursor_getinputmode(){
-    #ifdef LOVR_USE_GLFW
-        return glfwGetInputMode(glfwState.window,GLFW_CURSOR) == GLFW_CURSOR_DISABLED;
-    #else
-        // TODO
-        return 0;
-    #endif
-}
-
 double os_get_time(void) {
   struct timespec t;
   clock_gettime(CLOCK_MONOTONIC, &t);
@@ -542,18 +525,6 @@ bool os_window_open(const os_window_config* config) {
   return true;
 }
 
-void os_window_set_size(uint32_t w, uint32_t h)
-{
-  uint32_t values[2] = { w, h };
-  uint16_t mask = XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
-
-  state.width = w;
-  state.height = h;
-
-  xcb_configure_window(state.connection,state.window,mask,values);
-  xcb_flush(state.connection);
-}
-
 bool os_window_is_open(void) {
   return state.connection;
 }
@@ -577,6 +548,7 @@ void os_get_mouse_position(double* x, double* y) {
 }
 
 os_mouse_mode os_get_mouse_mode(void) {
+    #error COMPILING_OS_GET_MOUSE_MODE
   return state.mouseMode;
 }
 

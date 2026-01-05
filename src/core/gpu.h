@@ -69,7 +69,6 @@ typedef enum {
   GPU_FORMAT_R8,
   GPU_FORMAT_RG8,
   GPU_FORMAT_RGBA8,
-  GPU_FORMAT_BGRA8,
   GPU_FORMAT_R16,
   GPU_FORMAT_RG16,
   GPU_FORMAT_RGBA16,
@@ -112,7 +111,8 @@ typedef enum {
   GPU_FORMAT_ASTC_10x10,
   GPU_FORMAT_ASTC_12x10,
   GPU_FORMAT_ASTC_12x12,
-  GPU_FORMAT_COUNT
+  GPU_FORMAT_COUNT,
+  GPU_FORMAT_SURFACE = 0xff
 } gpu_texture_format;
 
 enum {
@@ -163,7 +163,6 @@ typedef struct {
   uint32_t width;
   uint32_t height;
   bool vsync;
-  bool hdr;
   union {
     struct {
       uintptr_t window;
@@ -180,8 +179,6 @@ typedef struct {
 } gpu_surface_info;
 
 bool gpu_surface_init(gpu_surface_info* info);
-gpu_texture_format gpu_surface_get_format(void);
-bool gpu_surface_is_hdr(void);
 bool gpu_surface_resize(uint32_t width, uint32_t height);
 bool gpu_surface_acquire(gpu_texture** texture);
 bool gpu_surface_present(void);
@@ -190,8 +187,7 @@ bool gpu_surface_present(void);
 
 typedef enum {
   GPU_FILTER_NEAREST,
-  GPU_FILTER_LINEAR,
-  GPU_FILTER_CUBIC
+  GPU_FILTER_LINEAR
 } gpu_filter;
 
 typedef enum {
@@ -319,6 +315,47 @@ bool gpu_bundle_pool_init(gpu_bundle_pool* pool, gpu_bundle_pool_info* info);
 void gpu_bundle_pool_destroy(gpu_bundle_pool* pool);
 void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* info, uint32_t count);
 
+// Canvas
+
+typedef enum {
+  GPU_LOAD_OP_CLEAR,
+  GPU_LOAD_OP_DISCARD,
+  GPU_LOAD_OP_KEEP
+} gpu_load_op;
+
+typedef enum {
+  GPU_SAVE_OP_KEEP,
+  GPU_SAVE_OP_DISCARD
+} gpu_save_op;
+
+typedef struct {
+  gpu_texture_format format;
+  bool srgb;
+  gpu_load_op load;
+  gpu_save_op save;
+  bool resolve;
+} gpu_color_info;
+
+typedef struct {
+  gpu_texture_format format;
+  gpu_load_op load, stencilLoad;
+  gpu_save_op save, stencilSave;
+  bool resolve;
+} gpu_depth_info;
+
+typedef struct {
+  gpu_color_info color[4];
+  gpu_depth_info depth;
+  uint32_t colorCount;
+  uint32_t samples;
+  uint32_t views;
+  bool foveated;
+  bool surface;
+} gpu_pass_info;
+
+bool gpu_pass_init(gpu_pass* pass, gpu_pass_info* info);
+void gpu_pass_destroy(gpu_pass* pass);
+
 // Pipeline
 
 typedef enum {
@@ -428,7 +465,6 @@ typedef struct {
 } gpu_multisample_state;
 
 typedef struct {
-  gpu_texture_format format;
   gpu_compare_mode test;
   bool write;
 } gpu_depth_state;
@@ -464,8 +500,7 @@ typedef enum {
   GPU_BLEND_DST_COLOR,
   GPU_BLEND_ONE_MINUS_DST_COLOR,
   GPU_BLEND_DST_ALPHA,
-  GPU_BLEND_ONE_MINUS_DST_ALPHA,
-  GPU_BLEND_SRC_ALPHA_SATURATED
+  GPU_BLEND_ONE_MINUS_DST_ALPHA
 } gpu_blend_factor;
 
 typedef enum {
@@ -486,13 +521,7 @@ typedef struct {
 } gpu_blend_state;
 
 typedef struct {
-  gpu_texture_format format;
-  bool srgb;
-  gpu_blend_state blend;
-  uint8_t mask;
-} gpu_color_state;
-
-typedef struct {
+  gpu_pass* pass;
   gpu_shader* shader;
   gpu_shader_flag* flags;
   uint32_t flagCount;
@@ -502,10 +531,8 @@ typedef struct {
   gpu_multisample_state multisample;
   gpu_depth_state depth;
   gpu_stencil_state stencil;
-  gpu_color_state color[4];
-  uint32_t attachmentCount;
-  uint32_t viewCount;
-  bool foveated;
+  gpu_blend_state blend[4];
+  uint8_t colorMask[4];
   const char* label;
 } gpu_pipeline_info;
 
@@ -516,7 +543,7 @@ typedef struct {
   const char* label;
 } gpu_compute_pipeline_info;
 
-bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info, bool* slow);
+bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info);
 bool gpu_pipeline_init_compute(gpu_pipeline* pipeline, gpu_compute_pipeline_info* info);
 void gpu_pipeline_destroy(gpu_pipeline* pipeline);
 void gpu_pipeline_get_cache(void* data, size_t* size);
@@ -538,30 +565,15 @@ void gpu_tally_destroy(gpu_tally* tally);
 
 // Stream
 
-typedef enum {
-  GPU_LOAD_OP_CLEAR,
-  GPU_LOAD_OP_DISCARD,
-  GPU_LOAD_OP_KEEP
-} gpu_load_op;
-
-typedef enum {
-  GPU_SAVE_OP_KEEP,
-  GPU_SAVE_OP_DISCARD
-} gpu_save_op;
-
 typedef struct {
   gpu_texture* texture;
   gpu_texture* resolve;
-  gpu_load_op load;
-  gpu_save_op save;
   float clear[4];
 } gpu_color_attachment;
 
 typedef struct {
   gpu_texture* texture;
   gpu_texture* resolve;
-  gpu_load_op load, stencilLoad;
-  gpu_save_op save, stencilSave;
   float clear;
   uint8_t stencilClear;
 } gpu_depth_attachment;
@@ -570,6 +582,7 @@ typedef struct {
   gpu_color_attachment color[4];
   gpu_depth_attachment depth;
   gpu_texture* foveation;
+  gpu_pass* pass;
   uint32_t width;
   uint32_t height;
   uint32_t area[4];
@@ -670,8 +683,7 @@ enum {
   GPU_FEATURE_SAMPLE  = (1 << 0),
   GPU_FEATURE_RENDER  = (1 << 1),
   GPU_FEATURE_STORAGE = (1 << 2),
-  GPU_FEATURE_BLIT    = (1 << 3),
-  GPU_FEATURE_CUBIC   = (1 << 4)
+  GPU_FEATURE_BLIT    = (1 << 3)
 };
 
 typedef struct {
@@ -689,7 +701,6 @@ typedef struct {
   bool float64;
   bool int64;
   bool int16;
-  bool cubic;
 } gpu_features;
 
 typedef struct {
@@ -748,8 +759,9 @@ typedef struct {
 
 bool gpu_init(gpu_config* config);
 void gpu_destroy(void);
-char* gpu_get_error(void);
-bool gpu_submit(gpu_stream** streams, uint32_t count, uint32_t tick);
+const char* gpu_get_error(void);
+bool gpu_begin(uint32_t* tick);
+bool gpu_submit(gpu_stream** streams, uint32_t count);
 bool gpu_is_complete(uint32_t tick);
-bool gpu_wait_tick(uint32_t tick);
+bool gpu_wait_tick(uint32_t tick, bool* waited);
 bool gpu_wait_idle(void);

@@ -34,7 +34,6 @@ static size_t measure(uint32_t w, uint32_t h, TextureFormat format) {
     case FORMAT_R8: return w * h * 1;
     case FORMAT_RG8: return w * h * 2;
     case FORMAT_RGBA8: return w * h * 4;
-    case FORMAT_BGRA8: return w * h * 4;
     case FORMAT_R16: return w * h * 2;
     case FORMAT_RG16: return w * h * 4;
     case FORMAT_RGBA16: return w * h * 8;
@@ -754,13 +753,6 @@ static bool loadDDS(Blob* blob, Image** result) {
         format = FORMAT_RGB5A1;
         break;
 
-      case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
-        flags |= IMAGE_SRGB; /* fallthrough */
-      case DXGI_FORMAT_B8G8R8A8_TYPELESS:
-      case DXGI_FORMAT_B8G8R8A8_UNORM:
-        format = FORMAT_BGRA8;
-        break;
-
       case DXGI_FORMAT_BC6H_UF16:
         format = FORMAT_BC6SF;
         break;
@@ -1147,8 +1139,6 @@ static bool loadKTX2(Blob* blob, Image** result) {
     case 16:  image->format = FORMAT_RG8; break;
     case 37:  image->format = FORMAT_RGBA8; break;
     case 43:  image->format = FORMAT_RGBA8, image->flags |= IMAGE_SRGB; break;
-    case 44:  image->format = FORMAT_BGRA8; break;
-    case 50:  image->format = FORMAT_BGRA8, image->flags |= IMAGE_SRGB; break;
     case 70:  image->format = FORMAT_R16; break;
     case 77:  image->format = FORMAT_RG16; break;
     case 91:  image->format = FORMAT_RGBA16; break;

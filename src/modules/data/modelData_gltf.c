@@ -276,6 +276,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   model->metadata = lovrMalloc(jsonLength);
   memcpy(model->metadata, json, jsonLength);
   model->metadataSize = jsonLength;
+  model->metadataType = META_GLTF_JSON;
 
   // Prepass: Basically we iterate over the tokens once and figure out how much memory we need and
   // record the locations of tokens that we'll use later to fill in the memory once it's allocated.
@@ -485,7 +486,8 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
         if (token->size > 0) {
           for (int k = (token++)->size; k > 0; k--) {
             gltfString key = NOM_STR(json, token);
-            if (STR_EQ(key, "name")) { model->charCount += token->end - token->start + 1; }
+            if (STR_EQ(key, "children")) { model->childCount += token->size; }
+            else if (STR_EQ(key, "name")) { model->charCount += token->end - token->start + 1; }
             token = NOM(token);
           }
         }
@@ -530,6 +532,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   // We only support a single root node, so if there is more than one root node in the scene then
   // we create a fake "super root" node and add all the scene's root nodes as its children.
   if (info.sceneCount > 0 && scenes[rootScene].nodeCount > 1) {
+    model->childCount += model->nodeCount;
     model->nodeCount++;
   }
 
@@ -911,18 +914,11 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   }
 
   // Nodes
+  uint32_t childIndex = 0;
   if (model->nodeCount > 0) {
-    for (uint32_t i = 0; i < model->nodeCount; i++) {
-      ModelNode* node = &model->nodes[i];
-      node->child = ~0u;
-      node->sibling = ~0u;
-      node->parent = ~0u;
-    }
-
     jsmntok_t* token = info.nodes;
     ModelNode* node = model->nodes;
     for (int i = (token++)->size; i > 0; i--, node++) {
-      uint32_t nodeIndex = node - model->nodes;
       float* translation = node->transform.translation;
       float* rotation = node->transform.rotation;
       float* scale = node->transform.scale;
@@ -930,6 +926,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
       memcpy(rotation, (float[4]) { 0.f, 0.f, 0.f, 1.f }, 4 * sizeof(float));
       memcpy(scale, (float[3]) { 1.f, 1.f, 1.f }, 3 * sizeof(float));
       node->hasMatrix = false;
+      node->primitiveCount = 0;
       node->skin = ~0u;
 
       jsmntok_t* weights = NULL;
@@ -942,22 +939,17 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
           node->blendShapeIndex = mesh->blendShapeIndex;
           node->blendShapeCount = mesh->blendShapeCount;
           for (uint32_t i = 0, index = node->blendShapeIndex; i < node->blendShapeCount; i++, index++) {
-            model->blendShapes[index].node = nodeIndex;
+            model->blendShapes[index].node = node - model->nodes;
           }
         } else if (STR_EQ(key, "weights")) {
           weights = token; // Deferred due to order dependency
         } else if (STR_EQ(key, "skin")) {
           node->skin = NOM_U32(json, token);
         } else if (STR_EQ(key, "children")) {
-          uint32_t childCount = (token++)->size;
-          node->child = NOM_U32(json, token);
-          model->nodes[node->child].parent = nodeIndex;
-          uint32_t prevChild = node->child;
-          for (uint32_t j = 1; j < childCount; j++) {
-            uint32_t child = NOM_U32(json, token);
-            model->nodes[prevChild].sibling = child;
-            model->nodes[child].parent = nodeIndex;
-            prevChild = child;
+          node->children = &model->children[childIndex];
+          node->childCount = (token++)->size;
+          for (uint32_t j = 0; j < node->childCount; j++) {
+            model->children[childIndex++] = NOM_U32(json, token);
           }
         } else if (STR_EQ(key, "matrix")) {
           lovrAssertGoto(fail, (token++)->size == 16, "Node matrix needs 16 elements");
@@ -1031,13 +1023,16 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
     model->rootNode = 0;
   } else if (scenes[rootScene].nodeCount > 1) {
     model->rootNode = model->nodeCount - 1;
-    ModelNode* root = &model->nodes[model->rootNode];
-    root->skin = ~0u;
+    ModelNode* lastNode = &model->nodes[model->rootNode];
+    lastNode->childCount = scenes[rootScene].nodeCount;
+    lastNode->children = &model->children[childIndex];
+    lastNode->primitiveCount = 0;
+    lastNode->skin = ~0u;
 
-    float* matrix = root->transform.matrix;
+    float* matrix = lastNode->transform.matrix;
     memset(matrix, 0, 16 * sizeof(float));
     matrix[0] = matrix[5] = matrix[10] = matrix[15] = 1.f;
-    root->hasMatrix = true;
+    lastNode->hasMatrix = true;
 
     jsmntok_t* token = info.scenes;
     int sceneCount = (token++)->size;
@@ -1046,15 +1041,8 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
         for (int k = (token++)->size; k > 0; k--) {
           gltfString key = NOM_STR(json, token);
           if (STR_EQ(key, "nodes")) {
-            uint32_t childCount = (token++)->size;
-            root->child = NOM_U32(json, token);
-            model->nodes[root->child].parent = model->rootNode;
-            uint32_t prevChild = root->child;
-            for (uint32_t j = 1; j < childCount; j++) {
-              uint32_t child = NOM_U32(json, token);
-              model->nodes[prevChild].sibling = child;
-              model->nodes[child].parent = model->rootNode;
-              prevChild = child;
+            for (int j = (token++)->size; j > 0; j--) {
+              lastNode->children[lastNode->childCount - j] = NOM_U32(json, token);
             }
           } else {
             token = NOM(token);

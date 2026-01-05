@@ -96,7 +96,6 @@ static int l_lovrTextureNewReadback(lua_State* L) {
   extent[1] = luax_optu32(L, 7, ~0u);
   extent[2] = 1;
   Readback* readback = lovrReadbackCreateTexture(texture, offset, extent);
-  luax_assert(L, readback);
   luax_pushtype(L, Readback, readback);
   lovrRelease(readback, lovrReadbackDestroy);
   return 1;

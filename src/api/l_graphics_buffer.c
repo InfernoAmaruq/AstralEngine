@@ -128,8 +128,8 @@ static void luax_checkfieldn(lua_State* L, int index, const DataField* field, vo
     switch (field->type) {
       case TYPE_I8x4: p.i8[i] = (int8_t) x; break;
       case TYPE_U8x4: p.u8[i] = (uint8_t) x; break;
-      case TYPE_SN8x4: p.i8[i] = (int8_t) (CLAMP(x, -1.f, 1.f) * INT8_MAX); break;
-      case TYPE_UN8x4: p.u8[i] = (uint8_t) (CLAMP(x, 0.f, 1.f) * UINT8_MAX); break;
+      case TYPE_SN8x4: p.i8[i] = (int8_t) CLAMP(x, -1.f, 1.f) * INT8_MAX; break;
+      case TYPE_UN8x4: p.u8[i] = (uint8_t) CLAMP(x, 0.f, 1.f) * UINT8_MAX; break;
       case TYPE_SN10x3: p.u32[0] |= (((uint32_t) (int32_t) (CLAMP(x, -1.f, 1.f) * 511.f)) & 0x3ff) << (10 * i); break;
       case TYPE_UN10x3: p.u32[0] |= (((uint32_t) (CLAMP(x, 0.f, 1.f) * 1023.f)) & 0x3ff) << (10 * i); break;
       case TYPE_I16: p.i16[i] = (int16_t) x; break;
@@ -138,10 +138,10 @@ static void luax_checkfieldn(lua_State* L, int index, const DataField* field, vo
       case TYPE_U16: p.u16[i] = (uint16_t) x; break;
       case TYPE_U16x2: p.u16[i] = (uint16_t) x; break;
       case TYPE_U16x4: p.u16[i] = (uint16_t) x; break;
-      case TYPE_SN16x2: p.i16[i] = (int16_t) (CLAMP(x, -1.f, 1.f) * INT16_MAX); break;
-      case TYPE_SN16x4: p.i16[i] = (int16_t) (CLAMP(x, -1.f, 1.f) * INT16_MAX); break;
-      case TYPE_UN16x2: p.u16[i] = (uint16_t) (CLAMP(x, 0.f, 1.f) * UINT16_MAX); break;
-      case TYPE_UN16x4: p.u16[i] = (uint16_t) (CLAMP(x, 0.f, 1.f) * UINT16_MAX); break;
+      case TYPE_SN16x2: p.i16[i] = (int16_t) CLAMP(x, -1.f, 1.f) * INT16_MAX; break;
+      case TYPE_SN16x4: p.i16[i] = (int16_t) CLAMP(x, -1.f, 1.f) * INT16_MAX; break;
+      case TYPE_UN16x2: p.u16[i] = (uint16_t) CLAMP(x, 0.f, 1.f) * UINT16_MAX; break;
+      case TYPE_UN16x4: p.u16[i] = (uint16_t) CLAMP(x, 0.f, 1.f) * UINT16_MAX; break;
       case TYPE_I32: p.i32[i] = (int32_t) x; break;
       case TYPE_I32x2: p.i32[i] = (int32_t) x; break;
       case TYPE_I32x3: p.i32[i] = (int32_t) x; break;
@@ -180,18 +180,18 @@ static void luax_checkfieldv(lua_State* L, int index, const DataField* field, vo
   switch (field->type) {
     case TYPE_I8x4: for (int i = 0; i < 4; i++) p.i8[i] = (int8_t) v[i]; break;
     case TYPE_U8x4: for (int i = 0; i < 4; i++) p.u8[i] = (uint8_t) v[i]; break;
-    case TYPE_SN8x4: for (int i = 0; i < 4; i++) p.i8[i] = (int8_t) (CLAMP(v[i], -1.f, 1.f) * INT8_MAX); break;
-    case TYPE_UN8x4: for (int i = 0; i < 4; i++) p.u8[i] = (uint8_t) (CLAMP(v[i], 0.f, 1.f) * UINT8_MAX); break;
+    case TYPE_SN8x4: for (int i = 0; i < 4; i++) p.i8[i] = (int8_t) CLAMP(v[i], -1.f, 1.f) * INT8_MAX; break;
+    case TYPE_UN8x4: for (int i = 0; i < 4; i++) p.u8[i] = (uint8_t) CLAMP(v[i], 0.f, 1.f) * UINT8_MAX; break;
     case TYPE_SN10x3: for (int i = 0; i < 3; i++) p.u32[0] |= (((uint32_t) (int32_t) (CLAMP(v[i], -1.f, 1.f) * 511.f)) & 0x3ff) << (10 * i); break;
     case TYPE_UN10x3: for (int i = 0; i < 3; i++) p.u32[0] |= (((uint32_t) (CLAMP(v[i], 0.f, 1.f) * 1023.f)) & 0x3ff) << (10 * i); break;
     case TYPE_I16x2: for (int i = 0; i < 2; i++) p.i16[i] = (int16_t) v[i]; break;
     case TYPE_I16x4: for (int i = 0; i < 4; i++) p.i16[i] = (int16_t) v[i]; break;
     case TYPE_U16x2: for (int i = 0; i < 2; i++) p.u16[i] = (uint16_t) v[i]; break;
     case TYPE_U16x4: for (int i = 0; i < 4; i++) p.u16[i] = (uint16_t) v[i]; break;
-    case TYPE_SN16x2: for (int i = 0; i < 2; i++) p.i16[i] = (int16_t) (CLAMP(v[i], -1.f, 1.f) * INT16_MAX); break;
-    case TYPE_SN16x4: for (int i = 0; i < 4; i++) p.i16[i] = (int16_t) (CLAMP(v[i], -1.f, 1.f) * INT16_MAX); break;
-    case TYPE_UN16x2: for (int i = 0; i < 2; i++) p.u16[i] = (uint16_t) (CLAMP(v[i], 0.f, 1.f) * UINT16_MAX); break;
-    case TYPE_UN16x4: for (int i = 0; i < 4; i++) p.u16[i] = (uint16_t) (CLAMP(v[i], 0.f, 1.f) * UINT16_MAX); break;
+    case TYPE_SN16x2: for (int i = 0; i < 2; i++) p.i16[i] = (int16_t) CLAMP(v[i], -1.f, 1.f) * INT16_MAX; break;
+    case TYPE_SN16x4: for (int i = 0; i < 4; i++) p.i16[i] = (int16_t) CLAMP(v[i], -1.f, 1.f) * INT16_MAX; break;
+    case TYPE_UN16x2: for (int i = 0; i < 2; i++) p.u16[i] = (uint16_t) CLAMP(v[i], 0.f, 1.f) * UINT16_MAX; break;
+    case TYPE_UN16x4: for (int i = 0; i < 4; i++) p.u16[i] = (uint16_t) CLAMP(v[i], 0.f, 1.f) * UINT16_MAX; break;
     case TYPE_I32x2: for (int i = 0; i < 2; i++) p.i32[i] = (int32_t) v[i]; break;
     case TYPE_I32x3: for (int i = 0; i < 3; i++) p.i32[i] = (int32_t) v[i]; break;
     case TYPE_I32x4: for (int i = 0; i < 4; i++) p.i32[i] = (int32_t) v[i]; break;
@@ -251,7 +251,7 @@ static void luax_checkstruct(lua_State* L, int index, const DataField* structure
 
     if (lua_isnil(L, -1)) {
       memset(data + field->offset, 0, MAX(field->length, 1) * field->stride);
-    } else if (field->length == 0 && field->fieldCount == 0 && typeComponents[field->type] > 1 && lua_type(L, -1) == LUA_TNUMBER) {
+    } else if (typeComponents[field->type] > 1 && lua_type(L, -1) == LUA_TNUMBER) {
       // Need to special case situation where number is provided for vector field,
       // luax_checkbufferdata doesn't handle this properly
       int n = typeComponents[field->type];
@@ -504,7 +504,6 @@ static int l_lovrBufferNewReadback(lua_State* L) {
   uint32_t offset = luax_optu32(L, 2, 0);
   uint32_t extent = luax_optu32(L, 3, ~0u);
   Readback* readback = lovrReadbackCreateBuffer(buffer, offset, extent);
-  luax_assert(L, readback);
   luax_pushtype(L, Readback, readback);
   lovrRelease(readback, lovrReadbackDestroy);
   return 1;

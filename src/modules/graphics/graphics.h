@@ -25,7 +25,6 @@ typedef struct {
   bool vsync;
   bool stencil;
   bool antialias;
-  bool hdr;
   void* cacheData;
   size_t cacheSize;
 } GraphicsConfig;
@@ -50,7 +49,6 @@ typedef struct {
   bool float64;
   bool int64;
   bool int16;
-  bool cubic;
 } GraphicsFeatures;
 
 typedef struct {
@@ -90,8 +88,7 @@ enum {
   TEXTURE_FEATURE_SAMPLE  = (1 << 0),
   TEXTURE_FEATURE_RENDER  = (1 << 1),
   TEXTURE_FEATURE_STORAGE = (1 << 2),
-  TEXTURE_FEATURE_BLIT    = (1 << 3),
-  TEXTURE_FEATURE_CUBIC   = (1 << 4)
+  TEXTURE_FEATURE_BLIT    = (1 << 3)
 };
 
 bool lovrGraphicsInit(GraphicsConfig* config);
@@ -103,8 +100,6 @@ void lovrGraphicsGetFeatures(GraphicsFeatures* features);
 void lovrGraphicsGetLimits(GraphicsLimits* limits);
 uint32_t lovrGraphicsGetFormatSupport(uint32_t format, uint32_t features);
 void lovrGraphicsGetShaderCache(void* data, size_t* size);
-
-bool lovrGraphicsIsHDR(void);
 
 void lovrGraphicsGetBackgroundColor(float background[4]);
 void lovrGraphicsSetBackgroundColor(float background[4]);
@@ -235,8 +230,7 @@ typedef struct {
 
 typedef enum {
   FILTER_NEAREST,
-  FILTER_LINEAR,
-  FILTER_CUBIC
+  FILTER_LINEAR
 } FilterMode;
 
 bool lovrGraphicsGetWindowTexture(Texture** texture);
@@ -503,8 +497,8 @@ Material* lovrModelGetMaterial(Model* model, uint32_t index);
 Readback* lovrReadbackCreateBuffer(Buffer* buffer, uint32_t offset, uint32_t extent);
 Readback* lovrReadbackCreateTexture(Texture* texture, uint32_t offset[4], uint32_t extent[3]);
 void lovrReadbackDestroy(void* ref);
-bool lovrReadbackPoll(Readback* readback);
-bool lovrReadbackWait(Readback* readback);
+bool lovrReadbackIsComplete(Readback* readback);
+bool lovrReadbackWait(Readback* readback, bool* waited);
 void* lovrReadbackGetData(Readback* readback, DataField** format, uint32_t* count);
 struct Blob* lovrReadbackGetBlob(Readback* readback);
 struct Image* lovrReadbackGetImage(Readback* readback);
@@ -530,15 +524,7 @@ typedef enum {
 typedef struct {
   Texture* texture;
   Texture* resolve;
-} Attachment;
-
-typedef struct {
-  Attachment color[4];
-  Attachment depth;
-  Texture* foveation;
-  uint32_t depthFormat;
-  uint32_t samples;
-} Canvas;
+} CanvasTexture;
 
 typedef enum {
   STACK_TRANSFORM,
@@ -560,34 +546,6 @@ typedef enum {
   BLEND_SCREEN,
   BLEND_NONE
 } BlendMode;
-
-typedef enum {
-  BLEND_OP_ADD,
-  BLEND_OP_SUBTRACT,
-  BLEND_OP_REVERSE_SUBTRACT,
-  BLEND_OP_MIN,
-  BLEND_OP_MAX
-} BlendOp;
-
-typedef enum {
-  BLEND_FACTOR_ZERO,
-  BLEND_FACTOR_ONE,
-  BLEND_FACTOR_SRC_COLOR,
-  BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
-  BLEND_FACTOR_SRC_ALPHA,
-  BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-  BLEND_FACTOR_DST_COLOR,
-  BLEND_FACTOR_ONE_MINUS_DST_COLOR,
-  BLEND_FACTOR_DST_ALPHA,
-  BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
-  BLEND_FACTOR_SRC_ALPHA_SATURATED
-} BlendFactor;
-
-typedef struct {
-  BlendOp op;
-  BlendFactor src;
-  BlendFactor dst;
-} BlendState;
 
 typedef enum {
   CULL_NONE,
@@ -623,8 +581,8 @@ void lovrPassReset(Pass* pass);
 const PassStats* lovrPassGetStats(Pass* pass);
 const char* lovrPassGetLabel(Pass* pass);
 
-void lovrPassGetCanvas(Pass* pass, Canvas* canvas);
-bool lovrPassSetCanvas(Pass* pass, Canvas* canvas);
+void lovrPassGetCanvas(Pass* pass, CanvasTexture color[4], CanvasTexture* depth, uint32_t* depthFormat, Texture** foveation, uint32_t* samples);
+bool lovrPassSetCanvas(Pass* pass, CanvasTexture color[4], CanvasTexture* depth, uint32_t depthFormat, Texture* foveation, uint32_t samples);
 void lovrPassGetClear(Pass* pass, LoadAction loads[4], float clears[4][4], LoadAction* depthLoad, float* depthClear);
 bool lovrPassSetClear(Pass* pass, LoadAction loads[4], float clears[4][4], LoadAction depthLoad, float depthClear);
 uint32_t lovrPassGetAttachmentCount(Pass* pass, bool* depth);
@@ -636,7 +594,6 @@ bool lovrPassGetViewMatrix(Pass* pass, uint32_t index, float viewMatrix[16]);
 bool lovrPassSetViewMatrix(Pass* pass, uint32_t index, float viewMatrix[16]);
 bool lovrPassGetProjection(Pass* pass, uint32_t index, float projection[16]);
 bool lovrPassSetProjection(Pass* pass, uint32_t index, float projection[16]);
-bool lovrPassGetViewRay(Pass* pass, uint32_t view, uint32_t x, uint32_t y, float position[3], float direction[3]);
 
 bool lovrPassPush(Pass* pass, StackType stack);
 bool lovrPassPop(Pass* pass, StackType stack);
@@ -648,7 +605,6 @@ void lovrPassTransform(Pass* pass, float* transform);
 
 void lovrPassSetAlphaToCoverage(Pass* pass, bool enabled);
 void lovrPassSetBlendMode(Pass* pass, uint32_t index, BlendMode mode, BlendAlphaMode alphaMode);
-void lovrPassSetBlendState(Pass* pass, uint32_t index, bool enable, BlendState color, BlendState alpha);
 void lovrPassSetColor(Pass* pass, float color[4]);
 void lovrPassSetColorWrite(Pass* pass, uint32_t index, bool r, bool g, bool b, bool a);
 void lovrPassSetDepthTest(Pass* pass, CompareMode test);

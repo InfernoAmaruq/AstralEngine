@@ -189,15 +189,13 @@ bool os_window_is_open(void);
 bool os_window_is_visible(void);
 bool os_window_is_focused(void);
 void os_window_get_size(uint32_t* width, uint32_t* height);
-void os_window_set_size(uint32_t w, uint32_t h);
-bool os_window_is_fullscreen(void);
-void os_window_setfullscreen(bool FS);
 float os_window_get_pixel_density(void);
 void os_window_message_box(const char* message);
 
 void os_get_mouse_position(double* x, double* y);
 os_mouse_mode os_get_mouse_mode(void);
 void os_set_mouse_mode(os_mouse_mode mode);
+
 bool os_is_mouse_down(os_mouse_button button);
 bool os_is_key_down(os_key key);
 
@@ -214,6 +212,3 @@ uintptr_t os_get_ca_metal_layer(void);
 
 uintptr_t os_get_xcb_connection(void);
 uintptr_t os_get_xcb_window(void);
-
-void os_cursor_setinputmode(int);
-uint32_t os_cursor_getinputmode();

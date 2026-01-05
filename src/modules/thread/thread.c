@@ -14,7 +14,6 @@ struct Thread {
   uint32_t ref;
   thrd_t handle;
   mtx_t lock;
-  mtx_t waitLock;
   ThreadFunction* function;
   Blob* body;
   Variant arguments[MAX_THREAD_ARGUMENTS];
@@ -121,7 +120,6 @@ Thread* lovrThreadCreate(ThreadFunction* function, Blob* body) {
   thread->body = body;
   thread->function = function;
   mtx_init(&thread->lock, mtx_plain);
-  mtx_init(&thread->waitLock, mtx_plain);
   lovrRetain(body);
   return thread;
 }
@@ -129,7 +127,6 @@ Thread* lovrThreadCreate(ThreadFunction* function, Blob* body) {
 void lovrThreadDestroy(void* ref) {
   Thread* thread = ref;
   mtx_destroy(&thread->lock);
-  mtx_destroy(&thread->waitLock);
   if (thread->handle) thrd_detach(thread->handle);
   for (uint32_t i = 0; i < thread->argumentCount; i++) {
     lovrVariantDestroy(&thread->arguments[i]);
@@ -172,14 +169,7 @@ bool lovrThreadStart(Thread* thread, Variant* arguments, uint32_t argumentCount)
 }
 
 void lovrThreadWait(Thread* thread) {
-  mtx_lock(&thread->waitLock);
-
-  if (thread->handle) {
-    thrd_join(thread->handle, NULL);
-    thread->handle = 0;
-  }
-
-  mtx_unlock(&thread->waitLock);
+  if (thread->handle) thrd_join(thread->handle, NULL);
 }
 
 bool lovrThreadIsRunning(Thread* thread) {

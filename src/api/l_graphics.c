@@ -26,30 +26,6 @@ StringEntry lovrBlendMode[] = {
   { 0 }
 };
 
-StringEntry lovrBlendOp[] = {
-  [BLEND_OP_ADD] = ENTRY("add"),
-  [BLEND_OP_SUBTRACT] = ENTRY("subtract"),
-  [BLEND_OP_REVERSE_SUBTRACT] = ENTRY("reversesubtract"),
-  [BLEND_OP_MIN] = ENTRY("min"),
-  [BLEND_OP_MAX] = ENTRY("max"),
-  { 0 }
-};
-
-StringEntry lovrBlendFactor[] = {
-  [BLEND_FACTOR_ZERO] = ENTRY("zero"),
-  [BLEND_FACTOR_ONE] = ENTRY("one"),
-  [BLEND_FACTOR_SRC_COLOR] = ENTRY("srccolor"),
-  [BLEND_FACTOR_ONE_MINUS_SRC_COLOR] = ENTRY("oneminussrccolor"),
-  [BLEND_FACTOR_SRC_ALPHA] = ENTRY("srcalpha"),
-  [BLEND_FACTOR_ONE_MINUS_SRC_ALPHA] = ENTRY("oneminussrcalpha"),
-  [BLEND_FACTOR_DST_COLOR] = ENTRY("dstcolor"),
-  [BLEND_FACTOR_ONE_MINUS_DST_COLOR] = ENTRY("oneminusdstcolor"),
-  [BLEND_FACTOR_DST_ALPHA] = ENTRY("dstalpha"),
-  [BLEND_FACTOR_ONE_MINUS_DST_ALPHA] = ENTRY("oneminusdstalpha"),
-  [BLEND_FACTOR_SRC_ALPHA_SATURATED] = ENTRY("srcalphasaturated"),
-  { 0 }
-};
-
 StringEntry lovrBufferLayout[] = {
   [LAYOUT_PACKED] = ENTRY("packed"),
   [LAYOUT_STD140] = ENTRY("std140"),
@@ -141,7 +117,6 @@ StringEntry lovrDataType[] = {
 StringEntry lovrFilterMode[] = {
   [FILTER_NEAREST] = ENTRY("nearest"),
   [FILTER_LINEAR] = ENTRY("linear"),
-  [FILTER_CUBIC] = ENTRY("cubic"),
   { 0 }
 };
 
@@ -200,7 +175,6 @@ StringEntry lovrTextureFeature[] = {
   [1] = ENTRY("render"),
   [2] = ENTRY("storage"),
   [3] = ENTRY("blit"),
-  [4] = ENTRY("cubic"),
   { 0 }
 };
 
@@ -351,8 +325,7 @@ static int l_lovrGraphicsInitialize(lua_State* L) {
     .debug = false,
     .vsync = false,
     .stencil = false,
-    .antialias = true,
-    .hdr = false
+    .antialias = true
   };
 
   bool shaderCache = true;
@@ -374,10 +347,6 @@ static int l_lovrGraphicsInitialize(lua_State* L) {
 
     lua_getfield(L, -1, "antialias");
     config.antialias = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-
-    lua_getfield(L, -1, "hdr");
-    config.hdr = lua_toboolean(L, -1);
     lua_pop(L, 1);
 
     lua_getfield(L, -1, "shadercache");
@@ -488,7 +457,6 @@ static int l_lovrGraphicsGetFeatures(lua_State* L) {
   lua_pushboolean(L, features.float64), lua_setfield(L, -2, "float64");
   lua_pushboolean(L, features.int64), lua_setfield(L, -2, "int64");
   lua_pushboolean(L, features.int16), lua_setfield(L, -2, "int16");
-  lua_pushboolean(L, features.cubic), lua_setfield(L, -2, "cubic");
   return 1;
 }
 
@@ -563,12 +531,6 @@ static int l_lovrGraphicsIsFormatSupported(lua_State* L) {
   return 2;
 }
 
-static int l_lovrGraphicsIsHDR(lua_State* L) {
-  bool hdr = lovrGraphicsIsHDR();
-  lua_pushboolean(L, hdr);
-  return 1;
-}
-
 static int l_lovrGraphicsGetBackgroundColor(lua_State* L) {
   float color[4];
   lovrGraphicsGetBackgroundColor(color);
@@ -617,7 +579,6 @@ static uint32_t luax_checkbufferformat(lua_State* L, int index, DataField* field
     lua_getfield(L, -1, "type");
     if (lua_isnil(L, -1)) lua_pop(L, 1), lua_rawgeti(L, -1, 2);
     if (lua_istable(L, -1)) {
-      field->type = ~0u;
       field->fields = fields + *count;
       field->fieldCount = luax_checkbufferformat(L, -1, fields, count, max);
     } else if (lua_type(L, -1) == LUA_TSTRING) {
@@ -650,10 +611,6 @@ static uint32_t luax_checkbufferformat(lua_State* L, int index, DataField* field
 
     lua_getfield(L, -1, "offset");
     field->offset = lua_isnil(L, -1) ? 0 : luax_checku32(L, -1);
-    lua_pop(L, 1);
-
-    lua_getfield(L, -1, "stride");
-    field->stride = lua_isnil(L, -1) ? 0 : luax_checku32(L, -1);
     lua_pop(L, 1);
 
     lua_pop(L, 1);
@@ -1584,7 +1541,6 @@ static const luaL_Reg lovrGraphics[] = {
   { "getFeatures", l_lovrGraphicsGetFeatures },
   { "getLimits", l_lovrGraphicsGetLimits },
   { "isFormatSupported", l_lovrGraphicsIsFormatSupported },
-  { "isHDR", l_lovrGraphicsIsHDR },
   { "getBackgroundColor", l_lovrGraphicsGetBackgroundColor },
   { "setBackgroundColor", l_lovrGraphicsSetBackgroundColor },
   { "getWindowPass", l_lovrGraphicsGetWindowPass },

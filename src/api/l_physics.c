@@ -18,7 +18,6 @@ StringEntry lovrShapeType[] = {
 StringEntry lovrJointType[] = {
   [JOINT_WELD] = ENTRY("weld"),
   [JOINT_BALL] = ENTRY("ball"),
-  [JOINT_CONE] = ENTRY("cone"),
   [JOINT_DISTANCE] = ENTRY("distance"),
   [JOINT_HINGE] = ENTRY("hinge"),
   [JOINT_SLIDER] = ENTRY("slider"),

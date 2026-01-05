@@ -591,7 +591,7 @@ int luax_readmesh(lua_State* L, int index, float** vertices, uint32_t* vertexCou
       }
     }
 
-    return index + (indices ? 2 : 1);
+    return index + 2;
   }
 
   ModelData* modelData = luax_totype(L, index, ModelData);

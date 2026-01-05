@@ -69,20 +69,12 @@ static int l_lovrModelGetNodeName(lua_State* L) {
   return luax_callmodeldata(L, "getNodeName", 1);
 }
 
-static int l_lovrModelGetNodeChild(lua_State* L) {
-  return luax_callmodeldata(L, "getNodeChild", 1);
+static int l_lovrModelGetNodeParent(lua_State* L) {
+  return luax_callmodeldata(L, "getNodeParent", 1);
 }
 
 static int l_lovrModelGetNodeChildren(lua_State* L) {
   return luax_callmodeldata(L, "getNodeChildren", 1);
-}
-
-static int l_lovrModelGetNodeSibling(lua_State* L) {
-  return luax_callmodeldata(L, "getNodeSibling", 1);
-}
-
-static int l_lovrModelGetNodeParent(lua_State* L) {
-  return luax_callmodeldata(L, "getNodeParent", 1);
 }
 
 static int l_lovrModelGetNodePosition(lua_State* L) {
@@ -392,10 +384,8 @@ const luaL_Reg lovrModel[] = {
   { "getRootNode", l_lovrModelGetRootNode },
   { "getNodeCount", l_lovrModelGetNodeCount },
   { "getNodeName", l_lovrModelGetNodeName },
-  { "getNodeChild", l_lovrModelGetNodeChild },
-  { "getNodeChildren", l_lovrModelGetNodeChildren },
-  { "getNodeSibling", l_lovrModelGetNodeSibling },
   { "getNodeParent", l_lovrModelGetNodeParent },
+  { "getNodeChildren", l_lovrModelGetNodeChildren },
   { "getNodePosition", l_lovrModelGetNodePosition },
   { "setNodePosition", l_lovrModelSetNodePosition },
   { "getNodeOrientation", l_lovrModelGetNodeOrientation },

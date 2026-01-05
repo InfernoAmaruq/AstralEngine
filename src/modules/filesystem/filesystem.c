@@ -602,8 +602,10 @@ const char* lovrFilesystemGetRequirePath(void) {
 }
 
 void lovrFilesystemSetRequirePath(const char* requirePath) {
+  size_t length = strlen(requirePath);
   lovrFree(state.requirePath);
-  state.requirePath = lovrStrdup(requirePath);
+  state.requirePath = lovrMalloc(length + 1);
+  memcpy(state.requirePath, requirePath, length + 1);
 }
 
 // Archive: dir
@@ -1124,7 +1126,8 @@ File* lovrFileCreate(const char* p, OpenMode mode) {
   file->mode = mode;
   file->handle = handle;
   file->archive = archive;
-  file->path = lovrStrdup(path);
+  file->path = lovrMalloc(length + 1);
+  memcpy(file->path, path, length + 1);
   lovrRetain(archive);
   return file;
 }

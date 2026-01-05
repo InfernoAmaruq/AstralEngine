@@ -66,13 +66,25 @@ void lovrEventPush(Event event) {
 #ifndef LOVR_DISABLE_THREAD
   if (event.type == EVENT_THREAD_ERROR) {
     lovrRetain(event.data.thread.thread);
-    event.data.thread.error = lovrStrdup(event.data.thread.error);
+    size_t length = strlen(event.data.thread.error);
+    char* copy = lovrMalloc(length + 1);
+    memcpy(copy, event.data.thread.error, length + 1);
+    event.data.thread.error = copy;
   }
 #endif
 
   if (event.type == EVENT_FILECHANGED) {
-    event.data.file.path = lovrStrdup(event.data.file.path);
-    event.data.file.oldpath = lovrStrdup(event.data.file.oldpath);
+    size_t length = strlen(event.data.file.path);
+    char* copy = lovrMalloc(length + 1);
+    memcpy(copy, event.data.file.path, length + 1);
+    event.data.file.path = copy;
+
+    if (event.data.file.oldpath) {
+      length = strlen(event.data.file.oldpath);
+      copy = lovrMalloc(length + 1);
+      memcpy(copy, event.data.file.oldpath, length + 1);
+      event.data.file.oldpath = copy;
+    }
   }
 
   mtx_lock(&state.lock);

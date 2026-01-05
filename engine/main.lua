@@ -120,7 +120,7 @@ function lovr.run()
         width = W,
         height = H,
         fullscreen = AstralEngine._CONFIG.Game.Window.Fullscreen,
-        Vsync = AstralEngine._CONFIG.Game.Window.Vsync,
+        resizable = false,
         title = AstralEngine._CONFIG.Game.Window.Name,
         icon = AstralEngine._CONFIG.Game.Window.Icon,
     })

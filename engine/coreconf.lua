@@ -46,8 +46,8 @@ return {
     Game = {
         Identity = "Astral_Default",
         Window = {
-            Vsync = false, -- vsync via Tick.FrameRate caps is advised, but not forced
-            Fullscreen = false, -- may be fucky on linux, would not recommend!
+            Vsync = false, -- nts: expose vsync and setWindowSize
+            Fullscreen = true,
             Width = 1700, -- or 0 for borderless fullscreen
             Height = 900,
             Resizable = true,

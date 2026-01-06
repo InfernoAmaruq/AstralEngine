@@ -163,7 +163,6 @@ function lovr.run()
                 MainPhysWorld:update(PhysicsRate)
                 UpdTrans(MainPhysWorldID)
                 LastPhysTime = &TIMER
-                POLLPHYS = POLLPHYS + 1
             end
         }
 
@@ -181,7 +180,6 @@ function lovr.run()
                     local Alpha = math.min(PhysicsRate > 0 and (PhysTime / PhysicsRate) or 1,1)
                     MainPhysWorld:interpolate(Alpha)
                     UpdTrans(MainPhysWorldID)
-                    POLLINTERPOL = POLLINTERPOL + 1
                 end
             }
         }
@@ -242,7 +240,6 @@ function lovr.run()
                 elseif Handlers[Name] then Handlers[Name](A,B,C,D) end
             end
             Clear()
-            POLLEVENT = POLLEVENT + 1
         }
         ]===]
     }
@@ -252,7 +249,6 @@ function lovr.run()
             PHYSICS_INTERPOLATE()
         }
         CURRENT_CPUTICK++;
-        POLLCPU = POLLCPU + 1
         Drain()
         lovr.update(CpuTickrate)
     }
@@ -284,7 +280,7 @@ function lovr.run()
                 end
                 RETURNFIELD = RETURNFIELD..[[
                     local Window = WGetPass()
-                    RunService.__TICK(501,1000,Headset or Window); POLLGPU = POLLGPU + 1
+                    RunService.__TICK(501,1000,Headset or Window)
                    ]]..CONCAT.."Present()"
 
             end
@@ -321,11 +317,6 @@ function lovr.run()
     local TICK = 0
 
     local SLEEP = lovr.timer.sleep
-    local POLLCPU = 0
-    local POLLGPU = 0
-    local POLLPHYS = 0
-    local POLLEVENT = 0
-    local POLLINTERPOL = 0
 
     return function()
         local TIME = lovr.timer.getTime()
@@ -335,15 +326,9 @@ function lovr.run()
         TICK = TICK + DT
         COUNTER = COUNTER + 1
         if TICK > 1 then
-        print("POLL AT:",CONFIG.CONFIG.CPURATE)
-            print("TPS:",COUNTER, "CPU:",POLLCPU, "GPU:",POLLGPU,"PHYS:",POLLPHYS,"EVENT:",POLLEVENT,"INTERPOL",POLLINTERPOL)
+            print("TPS:",COUNTER)
             TICK = 0
             COUNTER = 0
-            POLLCPU = 0
-            POLLGPU = 0
-            POLLPHYS = 0
-            POLLEVENT = 0
-            POLLINTERPOL = 0
         end
 
         -- EVENT
@@ -367,6 +352,9 @@ function lovr.run()
         GETTICK(DT,TIME,GCTime,GCRate,M_GCTick,nil)
         }
 
-        SLEEP(0)
+        @execute<UNSAFE>{
+            if lovr.system.getOS() == "Windows" then return "SLEEP(0)" else return "" end
+            -- NTS: make this a PARAMETER!!! not IMPLICIT
+        }
     end
 end

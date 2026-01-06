@@ -121,7 +121,6 @@ end
 }
 
 function Renderer.DrawScene(Frame)
-    if not Frame then return end
     local Cams = Cams
     local TransparentStack = TransparentStack
     local SolidStack = SolidStack

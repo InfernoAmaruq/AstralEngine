@@ -180,3 +180,51 @@ print("\n>FOLDER TEST SUCCESS:",pcall(function()
 
     Obj1.Parent = FOLDER.__id
 end))
+
+-- CONSOLE TESTING:
+
+local function DBG(STACK)
+    STACK = STACK or 1
+    local RealValues = {
+        ["local"] = function(STACK)
+            local i = 1
+            print("DUMP LOCALS: [NAME, ID, VALUE]")
+            while true do
+                local name, value = debug.getlocal(2 + STACK, i)
+                if not name then break end
+                print("      local: "..name, i, value)
+                i = i + 1
+            end
+        end,
+    }
+
+    local Exit = false
+    while not Exit do
+        local Input = io.read("*l")
+        if Input == "exit" then break
+        elseif Input:sub(1,3) == "get" then
+            local SPLIT = Input:split(" ")
+            if #SPLIT == 1 then print("Attempt to call 'get' with no values") else
+                for i = 2, #SPLIT do
+                    local Val = SPLIT[i]
+                    if RealValues[Val] then
+                        RealValues[Val](STACK)
+                    else
+                        print("Attempt to call 'get' with invalid value:"..Val) break
+                    end
+                end
+            end
+        end
+    end
+end
+
+--[[local KB = InputService.GetKeyboard()
+KB.KeyPressed:Connect(function(x)
+    if x == "z" then
+        print(" ---> DEBUG START")
+
+        DBG()
+
+        print("DEBUG END")
+    end
+end)]]

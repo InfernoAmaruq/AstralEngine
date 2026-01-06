@@ -125,9 +125,9 @@ endif()
     target_link_libraries(lua m)
     target_link_libraries(lua dl)
     target_compile_definitions(lua PRIVATE -DLUA_USE_DLOPEN)
-    set(LOVR_LUA_INCLUDE deps/lua)
-    set(LOVR_LUA lua)
     endif()
+    set(LOVR_LUA_INCLUDE ${CMAKE_SOURCE_DIR}deps/lua)
+    set(LOVR_LUA lua)
 
 # MSDF
 if(LOVR_ENABLE_DATA)

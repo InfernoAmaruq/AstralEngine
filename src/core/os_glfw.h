@@ -1,3 +1,4 @@
+#include <sys/types.h>
 #ifndef LOVR_USE_GLFW
 
 const char* os_get_clipboard_text(void) {
@@ -108,6 +109,8 @@ uintptr_t os_get_xcb_connection(void) {
 uintptr_t os_get_xcb_window(void) {
   return 0;
 }
+
+void os_set_window_size(uint w, uint h){return;};
 
 #else
 
@@ -555,5 +558,7 @@ uintptr_t os_get_xcb_window(void) {
 OS_DLL_EXPORT GLFWwindow* os_get_glfw_window(void) {
   return glfwState.window;
 }
+
+void os_set_window_size(uint w, uint h){}
 
 #endif

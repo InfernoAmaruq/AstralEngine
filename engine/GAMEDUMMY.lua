@@ -55,6 +55,11 @@ CAS.Bind("GRAB MOUSE", 200, function(a)
     AstralEngine.Window.GrabMouse(not AstralEngine.Window.MouseGrabbed())
 end, ENUM.KeyCode.g)
 
+CAS.Bind("WIN", 200, function(a)
+    if not a.State then return end
+    lovr.system.setWindowSize(10,10)
+end, ENUM.KeyCode.v)
+
 RunService.BindToStep("CamMove", ENUM.StepPriority.CPUUpdate - 50, function(dt)
     local x = (CACHE[DK] and 1 or 0) - (CACHE[AK] and 1 or 0)
     local z = (CACHE[WK] and 1 or 0) - (CACHE[SK] and 1 or 0)

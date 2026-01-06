@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 #pragma once
 
@@ -36,3 +37,4 @@ void lovrSystemSetMouseGrabbed(bool grabbed);
 float lovrSystemGetScrollDelta(void);
 const char* lovrSystemGetClipboardText(void);
 void lovrSystemSetClipboardText(const char* text);
+void lovrSystemSetWindowSize(uint w, uint h);

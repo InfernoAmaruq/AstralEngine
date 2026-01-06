@@ -1,3 +1,4 @@
+#include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -212,3 +213,5 @@ uintptr_t os_get_ca_metal_layer(void);
 
 uintptr_t os_get_xcb_connection(void);
 uintptr_t os_get_xcb_window(void);
+
+void os_set_window_size(uint w, uint h);

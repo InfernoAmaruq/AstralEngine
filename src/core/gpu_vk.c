@@ -205,6 +205,8 @@ typedef struct {
   bool debug;
   bool shaderDebug;
   bool surface;
+  bool surfaceCapabilities;
+  bool surfaceMaintenance;
   bool surfaceOS;
   bool swapchain;
   bool colorspace;
@@ -2904,6 +2906,8 @@ bool gpu_init(gpu_config* config) {
       { "VK_EXT_debug_utils", config->debug, &state.extensions.debug },
       { "VK_EXT_swapchain_colorspace", true, &state.extensions.colorspace },
       { "VK_KHR_surface", true, &state.extensions.surface },
+      { "VK_KHR_get_surface_capabilities2", true, &state.extensions.surfaceCapabilities },
+      { "VK_KHR_surface_maintenance1", true, &state.extensions.surfaceMaintenance },
 #if defined(_WIN32)
       { "VK_KHR_win32_surface", true, &state.extensions.surfaceOS },
 #elif defined(__APPLE__)

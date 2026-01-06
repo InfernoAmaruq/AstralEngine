@@ -5,6 +5,7 @@ end
 
 local RunService = GetService("RunService")
 local InputService = GetService("InputService")
+local CAS = GetService("ContextActionService")
 
 local Entity = GetService("Entity")
 
@@ -17,7 +18,7 @@ _G.CAM = Camera
 local CACHE = InputService.__GetKeyArr()
 local MoveSpeed = 10
 
---AstralEngine.Window.GrabMouse(true)
+AstralEngine.Window.GrabMouse(true)
 
 local E = ENUM.KeyCode
 local WK = E.w.RawValue
@@ -46,6 +47,13 @@ Mouse.MouseMoved:Connect(function(_, _, dx, dy)
     Pitch = Pitch - dx * RotationStep
     Yaw = Yaw - dy * RotationStep
 end)
+
+CAS.Bind("GRAB MOUSE", 200, function(a)
+    if not a.State then
+        return
+    end
+    AstralEngine.Window.GrabMouse(not AstralEngine.Window.MouseGrabbed())
+end, ENUM.KeyCode.g)
 
 RunService.BindToStep("CamMove", ENUM.StepPriority.CPUUpdate - 50, function(dt)
     local x = (CACHE[DK] and 1 or 0) - (CACHE[AK] and 1 or 0)
@@ -95,8 +103,6 @@ Skybox:AddComponent("Skybox", { Texture = AstralEngine.Graphics.NewTexture("Skyb
 
 local PHYSTEST = true
 local GRAPHTEST = true
-
-local CAS = GetService("ContextActionService")
 
 if TEST_TERRAIN then
     require("GAME2")

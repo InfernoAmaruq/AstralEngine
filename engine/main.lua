@@ -1,8 +1,13 @@
 local CONFIG = CONF
 
+local SIGNAL = require("Lib.Signal")
+
 local ROOT, World, Renderer, RunService
 
+-- DEF WINDOW
 local IsMouseGrabbed = false
+
+AstralEngine.Window.OnFocusChanged = SIGNAL.new(false)
 
 function AstralEngine.Window.GrabMouse(State)
     IsMouseGrabbed = State
@@ -11,12 +16,19 @@ function AstralEngine.Window.GrabMouse(State)
     end
 end
 
+function AstralEngine.Window.MouseGrabbed()
+    return IsMouseGrabbed
+end
+
 function lovr.focus(f)
-    AstralEngine.Window.Focused = true
+    AstralEngine.Window.Focused = f
+    AstralEngine.Window.OnFocusChanged:Fire(f)
     if f and IsMouseGrabbed then
         lovr.system.setMouseGrabbed(f)
     end
 end
+
+-- LOAD
 
 function lovr.load()
     -- INITIAL DECL
@@ -36,8 +48,6 @@ function lovr.load()
     local SERIALIZER = require("Lib.Serialize")
 
     local BRIDGE = require("LOVRBridge")
-
-    local SIGNAL = require("Lib.Signal")
 
     ROOT = {
         SCHEDULERS = {},
@@ -94,7 +104,8 @@ function lovr.update(dt)
     RunService.__TICK(0,500,dt)
 end
 
-AstralEngine.Signals.OnWindowResize = require"Lib.Signal".new()
+-- HANDLE RESIZING
+AstralEngine.Signals.OnWindowResize = SIGNAL.new(false)
 
 function lovr.resize(w,h)
     lovr.graphics.submit(lovr.graphics.getWindowPass())
@@ -261,6 +272,19 @@ function lovr.run()
     local WGetPass = Graph and Graph.getWindowPass
     local Present = Graph and Graph.present
     local Submit = Graph and Graph.submit
+
+    @ifdef<Extra.PinSystemPasses>{
+    -- PIN HEADSET PASS AND WINDOW PASS IN MEMORY
+        local REG = debug.getregistry()
+        if WGetPass then
+            REG.__PINWINDOWPASS = WGetPass()
+        end
+        if HGetPass then
+            REG.__PINHEADPASS = HGetPass()
+        end
+        -- prevents lua GC-ing it and LOVR having to reallocate it each time
+        -- SHOULD be resize-safe, if not, well uh.. prolly this
+    }
 
     local PassTable = Renderer.PassStorage.PassTable
 

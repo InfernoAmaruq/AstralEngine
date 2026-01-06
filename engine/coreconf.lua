@@ -18,6 +18,12 @@ return {
             "Interpolate", -- interpolate automatically or not? Requires BindMainWorld
             "InterpolAtRender", -- "InterpolAtCPU" | "InterpolAtRender". Interpolating at the Render Step or CPU step. Both CAN be used but it carries increased costs
         },
+        Extra = {
+            "PinSystemPasses", -- whether or not to pin system (headset and window) passes so they cannot be GC-d by the lua runtime
+        },
+        --[[
+        --  You can define your own values with the same logic of KEY = {VALUES}, and it will be read as: @ifdef<KEY.VALUE>
+        --]]
     },
     Astral = {
         Debug = true,

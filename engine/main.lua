@@ -9,6 +9,8 @@ local IsMouseGrabbed = false
 
 AstralEngine.Window.OnFocusChanged = SIGNAL.new(false)
 
+AstralEngine.Window.SetSize = lovr.system.setWindowSize
+
 function AstralEngine.Window.GrabMouse(State)
     IsMouseGrabbed = State
     if AstralEngine.Window.Focused then

@@ -121,6 +121,7 @@ end
 }
 
 function Renderer.DrawScene(Frame)
+    if not Frame then print("RESIZING") return end
     local Cams = Cams
     local TransparentStack = TransparentStack
     local SolidStack = SolidStack

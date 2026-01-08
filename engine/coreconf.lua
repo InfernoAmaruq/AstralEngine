@@ -46,8 +46,8 @@ return {
     Game = {
         Identity = "Astral_Default",
         Window = {
-            Vsync = false, -- nts: expose vsync and setWindowSize
-            Fullscreen = true,
+            Vsync = false,
+            Fullscreen = false,
             Width = 1700, -- or 0 for borderless fullscreen
             Height = 900,
             Resizable = true,

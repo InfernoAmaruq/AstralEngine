@@ -453,6 +453,11 @@ float os_window_get_pixel_density(void) {
   return (w == 0 || fw == 0) ? 1.f : (float) fw / w;
 }
 
+void os_set_window_size(uint w, uint h){
+    glfwSetWindowSize(glfwState.window,w,h);
+    printf("SET SIZE: %d %d",w,h);
+}
+
 void os_on_quit(fn_quit* callback) {
   glfwState.onQuitRequest = callback;
 }
@@ -558,7 +563,5 @@ uintptr_t os_get_xcb_window(void) {
 OS_DLL_EXPORT GLFWwindow* os_get_glfw_window(void) {
   return glfwState.window;
 }
-
-void os_set_window_size(uint w, uint h){}
 
 #endif

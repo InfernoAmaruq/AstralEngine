@@ -57,7 +57,7 @@ end, ENUM.KeyCode.g)
 
 CAS.Bind("WIN", 200, function(a)
     if not a.State then return end
-    lovr.system.setWindowSize(10,10)
+    lovr.system.setWindowSize(1500,1500)
 end, ENUM.KeyCode.v)
 
 RunService.BindToStep("CamMove", ENUM.StepPriority.CPUUpdate - 50, function(dt)
@@ -76,6 +76,9 @@ RunService.BindToStep("CamMove", ENUM.StepPriority.CPUUpdate - 50, function(dt)
         local mv = (Forward * z + Right * x + Up * y):normalize():mul(MoveSpeed * Boost * dt)
         Transform.Position = Transform.Position + mv
     end
+end)
+
+RunService.BindToStep("UI",ENUM.StepPriority.Render + 50, function(pass)
 end)
 
 GetService("ContextActionService").Bind("TEST",100,function(x)

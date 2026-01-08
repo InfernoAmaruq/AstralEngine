@@ -18,6 +18,12 @@ return {
             "Interpolate", -- interpolate automatically or not? Requires BindMainWorld
             "InterpolAtRender", -- "InterpolAtCPU" | "InterpolAtRender". Interpolating at the Render Step or CPU step. Both CAN be used but it carries increased costs
         },
+        Extra = {
+            "PinSystemPasses", -- whether or not to pin system (headset and window) passes so they cannot be GC-d by the lua runtime
+        },
+        --[[
+        --  You can define your own values with the same logic of KEY = {VALUES}, and it will be read as: @ifdef<KEY.VALUE>
+        --]]
     },
     Astral = {
         Debug = true,
@@ -40,11 +46,11 @@ return {
     Game = {
         Identity = "Astral_Default",
         Window = {
-            Vsync = false, -- vsync via Tick.FrameRate caps is advised, but not forced
-            Fullscreen = false, -- may be fucky on linux, would not recommend!
+            Vsync = false,
+            Fullscreen = false,
             Width = 1700, -- or 0 for borderless fullscreen
             Height = 900,
-            Resizable = false,
+            Resizable = true,
             Name = "Astral Engine Demo 0.0.1",
         },
     },

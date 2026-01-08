@@ -166,7 +166,7 @@ function lovr.boot()
 
     local Mounted, Failed
     if path then
-        Mounted, Failed = lovr.filesystem.mount(path)
+        Mounted, Failed = lovr.filesystem.mount(Normalize(EXEFOLD .. path, FSType == "Unix"))
     else
         for _, v in ipairs(PossiblePaths) do
             local p = Normalize(EXEFOLD .. v, FSType == "Unix")

@@ -1,3 +1,4 @@
+#include <sys/types.h>
 #ifndef LOVR_USE_GLFW
 
 const char* os_get_clipboard_text(void) {
@@ -108,6 +109,8 @@ uintptr_t os_get_xcb_connection(void) {
 uintptr_t os_get_xcb_window(void) {
   return 0;
 }
+
+void os_set_window_size(uint w, uint h){return;};
 
 #else
 
@@ -448,6 +451,11 @@ float os_window_get_pixel_density(void) {
   glfwGetWindowSize(glfwState.window, &w, &h);
   glfwGetFramebufferSize(glfwState.window, &fw, &fh);
   return (w == 0 || fw == 0) ? 1.f : (float) fw / w;
+}
+
+void os_set_window_size(uint w, uint h){
+    glfwSetWindowSize(glfwState.window,w,h);
+    printf("SET SIZE: %d %d",w,h);
 }
 
 void os_on_quit(fn_quit* callback) {

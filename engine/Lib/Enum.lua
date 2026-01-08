@@ -17,7 +17,7 @@ local function Sub(a, b)
     return (TYPE(a) == "table" and a.RawValue or a) - (TYPE(b) == "table" and b.RawValue or b)
 end
 
-local function Add()
+local function Add(a, b)
     return (TYPE(a) == "table" and a.RawValue or a) + (TYPE(b) == "table" and b.RawValue or b)
 end
 

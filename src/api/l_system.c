@@ -350,6 +350,17 @@ static int l_lovrSystemGetScrollDelta(lua_State* L) {
   return lua_pushnumber(L, lovrSystemGetScrollDelta()), 1;
 }
 
+static int l_lovrSystemSetWindowSize(lua_State* L)
+{
+    lua_Number h,w;
+    h = lua_tonumber(L,1);
+    w = lua_tonumber(L,2);
+
+    lovrSystemSetWindowSize(w,h);
+
+    return 0;
+}
+
 static const luaL_Reg lovrSystem[] = {
   { "getOS", l_lovrSystemGetOS },
   { "getCoreCount", l_lovrSystemGetCoreCount },
@@ -380,6 +391,7 @@ static const luaL_Reg lovrSystem[] = {
   { "getClipboardText", l_lovrSystemGetClipboardText },
   { "setClipboardText", l_lovrSystemSetClipboardText },
   { "_getScrollDelta", l_lovrSystemGetScrollDelta },
+  { "setWindowSize", l_lovrSystemSetWindowSize },
   { NULL, NULL }
 };
 

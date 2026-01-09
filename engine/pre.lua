@@ -41,11 +41,14 @@ require("Global")()
 require("Compile")
 require("CompGlobals")
 
-function AstralEngine.Log(Msg, Flag, Tag)
+function AstralEngine.Log(Msg, Flag, Tag, Level)
+    Flag = Flag and tostring(Flag) or error("Invalid flag provided!")
+    local IsErr = Flag:lower() == "error"
+    local f = IsErr and error or print
     if Tag then
-        print(("[ASTRAL %s][%s]: %s"):format(Flag:upper(), Tag, Msg))
+        f(("[ASTRAL %s][%s]: %s"):format(Flag:upper(), Tag, tostring(Msg)), IsErr and (Level or 2) or "")
     else
-        print(("[ASTRAL %s]: %s"):format(Flag:upper(), Msg))
+        f(("[ASTRAL %s]: %s"):format(Flag:upper(), tostring(Msg)), IsErr and (Level or 2) or "")
     end
 end
 

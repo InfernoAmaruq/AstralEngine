@@ -101,14 +101,19 @@ local function RebuildTexture(V, w, h)
     V[1] = NewV
     local CamRef = V.CREF
     CamRef.__REBUILT_TEX = (CamRef.__REBUILT_TEX or 0) + 1
+    local v = false
     if CamRef.__REBUILT_TEX > TEXCTR then
         AstralEngine.Log("FATAL: __REBUILT_TEX COUNTER OVERFLOW OVER TEXCTR CONSTANT", "error", "CAMERA")
+    elseif CamRef.__REBUILT_TEX == TEXCTR then
+        v = true
     end
     OldV:release()
+    return v
 end
 local function RebuildPasses(CameraRef)
     CameraRef.__REBUILT_TEX = 0
 
+    local OldC1 = CameraRef.CameraPass[1]
     CameraRef.CameraPass[1] = AstralEngine.Graphics.NewRawPass({ CameraRef.CameraTex[1] })
     CameraRef.SolidPass[1]:setCanvas({
         CameraRef.SolidTex[1],
@@ -121,18 +126,14 @@ local function RebuildPasses(CameraRef)
         depth = CameraRef.DepthTexture[1],
         samples = 1,
     })
+    OldC1:relase()
 end
 local function Rebuild(V, IsPass, w, h)
-    local CAMREF = V.CREF
-    if IsPass then
-        if CAMREF.__REBUILT_TEX == TEXCTR then
-            RebuildPasses(CAMREF)
+    if not IsPass then
+        local PassesReady = RebuildTexture(V, w, h)
+        if PassesReady then
+            RebuildPasses(V.CREF)
         end
-    else
-        RebuildTexture(V, w, h)
-    end
-    if CAMREF.__REBUILT_TEX == TEXCTR then
-        RebuildPasses(CAMREF)
     end
 end
 

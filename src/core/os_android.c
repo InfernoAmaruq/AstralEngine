@@ -330,6 +330,8 @@ void os_on_resize(fn_resize* callback) {
   //
 }
 
+void os_set_window_size(uint h, uint w){}
+
 void os_on_key(fn_key* callback) {
   state.onKeyboardEvent = callback;
 }

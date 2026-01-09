@@ -110,8 +110,6 @@ end
 AstralEngine.Signals.OnWindowResize = SIGNAL.new(false)
 
 function lovr.resize(w,h)
-    lovr.graphics.submit(lovr.graphics.getWindowPass())
-    lovr.graphics.wait()
     AstralEngine.Window.W = w
     AstralEngine.Window.H = h
     AstralEngine.Window.__WindowResizedPasses(w,h)

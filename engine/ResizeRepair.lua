@@ -4,7 +4,7 @@ local OgPass = lovr.graphics.newPass
 local RefToRebuild = setmetatable({}, { __mode = "v" })
 
 local TOSTRING = function(self)
-    return "Wrapped " .. (self.__IsPass and "pass" or "texture") .. ": " .. tostring(self[1])
+    return "Wrapped " .. (self.__IsPass and "Pass" or "Texture") .. ": " .. tostring(self[1])
 end
 
 local function CAPTURE(t, ...)
@@ -23,11 +23,10 @@ local function IDX(t, k)
     return Val or rawget(t, k)
 end
 
+local MT = { __index = IDX, __tostring = TOSTRING }
+
 local function MakeRef(Value, Capture, Pass)
-    return setmetatable({ [1] = Value, __CAPTURE = Capture, __IsPass = Pass }, {
-        __index = IDX,
-        __tostring = TOSTRING,
-    })
+    return setmetatable({ [1] = Value, __CAPTURE = Capture, __IsPass = Pass }, MT)
 end
 
 lovr.graphics.newPass = function(...)
@@ -52,7 +51,7 @@ AstralEngine.Graphics = {
 function AstralEngine.Window.__WindowResizedPasses(...)
     for _, v in pairs(RefToRebuild) do
         if v.ResizeCallback then
-            v.ResizeCallback(v, v.IsPass, ...)
+            v.ResizeCallback(v, v.__IsPass, ...)
         end
     end
 end

@@ -372,6 +372,10 @@ void os_on_focus(fn_focus* callback) {
   state.onWindowFocus = callback;
 }
 
+void os_set_window_size(uint w, uint h) {
+  // n/a
+}
+
 void os_on_resize(fn_resize* callback) {
   state.onWindowResize = callback;
 }

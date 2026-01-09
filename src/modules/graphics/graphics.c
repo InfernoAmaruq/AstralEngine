@@ -2285,7 +2285,6 @@ bool lovrGraphicsGetWindowTexture(Texture** texture) {
     }
 
     if (state.resized) {
-        printf("[C]:RESIZED SCREEN!\n");
       lovrAssert(gpu_surface_resize(state.window->info.width, state.window->info.height), "Failed to resize window: %s", gpu_get_error());
       state.resized = false;
     }
@@ -8893,7 +8892,6 @@ static bool checkShaderFeatures(uint32_t* features, uint32_t count) {
 }
 
 static void onResize(uint32_t width, uint32_t height) {
-    printf("CALLED RESIZE");
   float density = os_window_get_pixel_density();
 
   width *= density;

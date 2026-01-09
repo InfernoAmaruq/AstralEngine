@@ -374,6 +374,14 @@ void os_on_focus(fn_focus* callback) {
   state.onFocus = callback;
 }
 
+void os_set_window_size(uint h, uint w){
+  uint32_t Values[2];
+  Values[0] = w;
+  Values[1] = h;
+
+  xcb_configure_window(state.connection, state.window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_WIDTH, Values);
+}
+
 void os_on_resize(fn_resize* callback) {
   state.onResize = callback;
 }
@@ -548,7 +556,6 @@ void os_get_mouse_position(double* x, double* y) {
 }
 
 os_mouse_mode os_get_mouse_mode(void) {
-    #error COMPILING_OS_GET_MOUSE_MODE
   return state.mouseMode;
 }
 

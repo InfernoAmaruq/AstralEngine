@@ -33,8 +33,10 @@ return function(Components)
         if type(k) == "string" and k:sub(1, 2) == "__" then return end
         local v = rawget(self, k) or INSTMETHODS[k]
         if v then return v end
-        for _, t in pairs(Components.GetComponents(rawget(self, "__id"))) do
+        for _, t in pairs(Components.GetComponents(self.__id)) do
             local val = t[k]
+            if rtype(val) == "function" then AstralEngine.Log(
+                ("UNSAFE ACCESS OF FUNCTION %s IN ENTITY %s"):format(k, tostring(self)), "warning", "ENTITY") end
             if val then return val end
         end
     end

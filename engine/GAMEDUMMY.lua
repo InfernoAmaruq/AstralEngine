@@ -55,11 +55,6 @@ CAS.Bind("GRAB MOUSE", 200, function(a)
     AstralEngine.Window.GrabMouse(not AstralEngine.Window.MouseGrabbed())
 end, ENUM.KeyCode.g)
 
-CAS.Bind("WIN", 200, function(a)
-    if not a.State then return end
-    lovr.system.setWindowSize(1500,1500)
-end, ENUM.KeyCode.v)
-
 RunService.BindToStep("CamMove", ENUM.StepPriority.CPUUpdate - 50, function(dt)
     local x = (CACHE[DK] and 1 or 0) - (CACHE[AK] and 1 or 0)
     local z = (CACHE[WK] and 1 or 0) - (CACHE[SK] and 1 or 0)
@@ -77,12 +72,6 @@ RunService.BindToStep("CamMove", ENUM.StepPriority.CPUUpdate - 50, function(dt)
         Transform.Position = Transform.Position + mv
     end
 end)
-
-RunService.BindToStep("UI",ENUM.StepPriority.Render + 50, function(pass)
-end)
-
-GetService("ContextActionService").Bind("TEST",100,function(x)
-end,ENUM.KeyCode.z,ENUM.KeyCode.x,ENUM.KeyCode.c)
 
 @ifdef<!TEST_TERRAIN>{
     local Block = Entity.New("Block")
@@ -184,15 +173,22 @@ end
 
 print("\n>FOLDER TEST SUCCESS:",pcall(function()
     local FOLDER = Entity.New("FOLDER")
-    FOLDER:AddComponent("Ancestry")
-    print("CONTAINER:",FOLDER)
+    local Anc0 = FOLDER:AddComponent("Ancestry")
+    print("CONTAINER:",FOLDER,FOLDER.__id)
 
     local Obj1 = Entity.New("OBJECT1")
     local Obj2 = Entity.New("OBJECT2")
-    Obj1:AddComponent("Ancestry")
-    Obj2:AddComponent("Ancestry")
+    local Anc1 = Obj1:AddComponent("Ancestry")
+    local Anc2 = Obj2:AddComponent("Ancestry")
 
-    Obj1.Parent = FOLDER.__id
+    Obj1.Parent = FOLDER
+
+    print("PARENT:",Obj1.Parent)
+    for _,v in pairs(Anc0:GetChildren()) do
+        print("HAS CHILD:",v)
+    end
+
+    print("TESTING:",Obj1:FindFirstChild(),Anc1:FindFirstChild())
 end))
 
 -- CONSOLE TESTING:

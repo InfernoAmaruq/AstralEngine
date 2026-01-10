@@ -35,6 +35,7 @@ end
 function Component.HasComponent(e, ...)
     local S = select("#", ...)
     local Comp = Component.SetComponents[type(e) == &TYPE and e.__id or e]
+    if not Comp then return nil end
     if S == 1 then
         return Comp[(select(1, ...))]
     else
@@ -141,6 +142,8 @@ function Component.LoadComponents(FileSystem)
                 end
                 Component.NewComponent(File.Name, File.Pattern, File.Metadata)
                 table.insert(FinalProcessing, File.FinalProcessing)
+            else
+                AstralEngine.Log("FAILED TO LOAD COMPONENT: "..f,"warning","COMPONENT")
             end
         end
     end

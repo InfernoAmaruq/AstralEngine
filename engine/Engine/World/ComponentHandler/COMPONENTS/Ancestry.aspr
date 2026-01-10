@@ -7,9 +7,13 @@ Ancestry.Name = "Ancestry"
 Ancestry.Pattern = { Parent = 0 }
 Ancestry.Metadata = {}
 
+@flag:ParentPtr = 1;
+@flag:ChildPtr = 2;
+@flag:SelfPtr = 3;
+
 @macro<L,!USEBRACK>{VALIDATE(&OBJ,&OUT,&REF) = 
-    local PT = typeof(&OBJ)
-    if PT == "Entity" then
+    local PT = type(&OBJ)
+    if PT == "astrobj" then
         &OUT = rawget(&OBJ, "__id")
         &REF = &OBJ
     elseif PT == "number" then
@@ -20,24 +24,65 @@ Ancestry.Metadata = {}
     end
 }
 
+local function HasChild(ChildArray,ChildId)
+    for i = 1, #ChildArray do
+        if ChildArray[i] == ChildId then return ChildArray[i] end
+    end
+    return nil
+end
+local function RemoveChild(ChildArray,ChildId)
+    local Children = #ChildArray
+    for i = 1, Children do
+        if ChildArray[i] == ChildId then
+            ChildArray[i] = ChildArray[Children]
+            ChildArray[Children] = nil
+            return
+        end
+    end
+end
+@macro<L,!USEBRACK>{FastAddChild(ChildArray,ChildId) = table.insert(ChildArray,ChildId)}
+
 local FUNC = {
     -- CORE
     SetParent = function(self, Parent)
-        local Val
-        local Reference
-        VALIDATE(Parent,Val,Reference)
+        if Parent == nil then
+            -- remove parent
 
-        self.__Private.Parent = Val
+            if self[&ParentPtr] then
+                local ParentAnc = Component.HasComponent(self[&ParentPtr],Ancestry.Name)
+                if not ParentAnc then error("FATAL: STALE PARENT POINTER FROM E: "..self[&SelfPtr].." TO "..self[&ParentPtr],2) end
+                RemoveChild(ParentAnc,self[&SelfPtr])
+            end
+
+            self[&ParentPtr] = false
+        else
+            -- set parent
+            local Val
+            local Reference
+            VALIDATE(Parent,Val,Reference)
+
+            local ParentAnc = Component.HasComponent(Val,Ancestry.Name)
+            if not ParentAnc then error("Attempt to set object as child of entity with no ancestry component") end
+
+            self[&ParentPtr] = Val
+            FastAddChild(ParentAnc[&ChildPtr],self[&SelfPtr])
+        end
     end,
     AddChild = function(self, Child)
-        local PT = typeof(Child)
+        local Val
+        local Reference
+        VALIDATE(Child,Val,Reference)
     end,
-    GetChildren = function(self, Child) end,
+    GetChildren = function(self)
+        return self[&ChildPtr]
+    end,
 
     -- QUERRY
     IsChildOf = function(self, Entity) end,
     FindFirstChildOfType = function(self, Type) end,
-    FindFirstChild = function(self, Child) end,
+    FindFirstChild = function(self, Child)
+        print(self)
+    end,
     FindFirstAncestor = function(self, Ancestor) end,
     FindFirstAncestorOfType = function(self, Type) end,
 
@@ -48,7 +93,7 @@ local FUNC = {
 local MT = {
     __index = function(self, k)
         if k == "Parent" then
-            return self.__Private.Parent
+            return self[&ParentPtr] or nil
         end
         local CACHE = FUNC[k]
         if CACHE then
@@ -67,10 +112,10 @@ local MT = {
 }
 
 Ancestry.Metadata.__create = function(DATA, e)
-    local Proxy = {}
-    Proxy.Children = {}
     local m = {}
-    m.__Private = Proxy
+    m[&ParentPtr] = false -- false so array is linear
+    m[&ChildPtr] = {}
+    m[&SelfPtr] = e
 
     setmetatable(m, MT)
 

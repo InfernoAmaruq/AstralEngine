@@ -88,12 +88,10 @@ function Component.AddComponent(e, id, DATA)
     else
         local Cached = MTCACHE[id]
         if not Cached then
-            local NewMT = { __type = "Component", __tostring = ToString, __CName = id }
-            setmetatable(D,NewMT)
-            MTCACHE[id] = NewMT
-        else
-            setmetatable(D,Cached)
+            Cached = { __type = "Component", __tostring = ToString, __CName = id }
+            MTCACHE[id] = Cached
         end
+        setmetatable(D,Cached)
     end
 
     Component.Components[id].Storage[e] = D

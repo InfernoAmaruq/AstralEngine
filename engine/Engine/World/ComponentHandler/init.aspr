@@ -9,7 +9,7 @@ local DEADMT = {
     end
 }
 
-local MTCACHE = {}
+local MTCACHE = setmetatable({},{__mode = "v"})
 
 function Component.NewComponent(Name, Pattern, Metadata)
     assert(not Component.Components[Name], "Component already exists: " .. Name)

@@ -9,6 +9,8 @@ local DEADMT = {
     end
 }
 
+local MTCACHE = {}
+
 function Component.NewComponent(Name, Pattern, Metadata)
     assert(not Component.Components[Name], "Component already exists: " .. Name)
     Component.Components[Name] = setmetatable(
@@ -84,7 +86,14 @@ function Component.AddComponent(e, id, DATA)
         MT.__CName = id
         setmetatable(D, MT)
     else
-        setmetatable(D, { __type = "Component", __tostring = ToString, __CName = id })
+        local Cached = MTCACHE[id]
+        if not Cached then
+            local NewMT = { __type = "Component", __tostring = ToString, __CName = id }
+            setmetatable(D,NewMT)
+            MTCACHE[id] = NewMT
+        else
+            setmetatable(D,Cached)
+        end
     end
 
     Component.Components[id].Storage[e] = D

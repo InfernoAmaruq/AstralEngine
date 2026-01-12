@@ -181,14 +181,10 @@ print("\n>FOLDER TEST SUCCESS:",pcall(function()
     local Anc1 = Obj1:AddComponent("Ancestry")
     local Anc2 = Obj2:AddComponent("Ancestry")
 
-    Obj1.Parent = FOLDER
+    Anc1.Parent = FOLDER
+    Anc2.Parent = Obj1
 
-    print("PARENT:",Obj1.Parent)
-    for _,v in pairs(Anc0:GetChildren()) do
-        print("HAS CHILD:",v)
-    end
-
-    print("TESTING:",Obj1:FindFirstChild(),Anc1:FindFirstChild())
+    print(Anc1.Parent,"Children:",table.concat(Anc1:GetChildren()))
 end))
 
 -- CONSOLE TESTING:

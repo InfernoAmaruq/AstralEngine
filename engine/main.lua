@@ -342,6 +342,7 @@ function lovr.run()
 
     local SLEEP = lovr.timer.sleep
 
+    local LASTCPUT = 0
     return function()
         local TIME = lovr.timer.getTime()
         local DT = TIME - LastTime
@@ -350,9 +351,11 @@ function lovr.run()
         TICK = TICK + DT
         COUNTER = COUNTER + 1
         if TICK > 1 then
-            print("TPS:",COUNTER)
+            local osc, cpuc = os.clock(), debug.cpuclock()
+            print("TPS:",COUNTER,osc,cpuc,cpuc/osc*100,cpuc-LASTCPUT)
             TICK = 0
             COUNTER = 0
+            LASTCPUT = cpuc
         end
 
         -- EVENT

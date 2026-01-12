@@ -18,9 +18,9 @@ Ancestry.Metadata = {}
         &REF = &OBJ
     elseif PT == "number" then
         &REF = World.GetEntityFromId(&OBJ)
-        &OUT = &REF and &OBJ or error("[ANCESTRY]: NO VALID ENTITY ID FOR PARENT/CHILD!")
+        &OUT = &REF and &OBJ or error("[ANCESTRY]: NO VALID ENTITY ID FOR PARENT/CHILD!",2)
     else
-        error("CANNOT SET TYPE OF `" .. PT .. "` AS PARENT/CHILD IN ANCESTRY GRAPH")
+        error("CANNOT SET TYPE OF `" .. PT .. "` AS PARENT/CHILD IN ANCESTRY GRAPH",2)
     end
 }
 
@@ -51,7 +51,7 @@ local FUNC = {
             if self[&ParentPtr] then
                 local ParentAnc = Component.HasComponent(self[&ParentPtr],Ancestry.Name)
                 if not ParentAnc then error("FATAL: STALE PARENT POINTER FROM E: "..self[&SelfPtr].." TO "..self[&ParentPtr],2) end
-                RemoveChild(ParentAnc,self[&SelfPtr])
+                RemoveChild(ParentAnc[&ChildPtr],self[&SelfPtr])
             end
 
             self[&ParentPtr] = false
@@ -61,8 +61,10 @@ local FUNC = {
             local Reference
             VALIDATE(Parent,Val,Reference)
 
+            if Val == self[&SelfPtr] then error("Attempt to set object parent to itself",2) end
+
             local ParentAnc = Component.HasComponent(Val,Ancestry.Name)
-            if not ParentAnc then error("Attempt to set object as child of entity with no ancestry component") end
+            if not ParentAnc then error("Attempt to set object as child of entity with no ancestry component",2) end
 
             self[&ParentPtr] = Val
             FastAddChild(ParentAnc[&ChildPtr],self[&SelfPtr])
@@ -90,6 +92,10 @@ local FUNC = {
     TestCyclic = function() end,
 }
 
+local INVALID = {
+    ParentId = true
+}
+
 local MT = {
     __index = function(self, k)
         if k == "Parent" then
@@ -107,8 +113,8 @@ local MT = {
     __newindex = function(self, k, v)
         if k == "Parent" then
             FUNC.SetParent(self, v)
-        else
-            return
+        elseif INVALID[k] then
+            AstralEngine.Log("Cannot write to Ancestry field "..k,"Warning","ANCESTRY")
         end
     end,
 }

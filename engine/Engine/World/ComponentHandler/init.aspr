@@ -19,10 +19,8 @@ function Component.NewComponent(Name, Pattern, Metadata)
     )
 end
 
-@execute<UNSAFE>{
-    print"EXECUTING"
+@execute<UNSAFE>{ -- so, it used to be solobj, then astralobj, then engineobj... its a fuckin mess dude with all the renaming, so i just make it a flag!
     local NAME = type.EngineObj
-    print("USING:",NAME)
     return "@flag:TYPE='"..NAME.."';"
 }
 

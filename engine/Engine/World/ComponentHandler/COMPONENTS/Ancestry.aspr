@@ -93,6 +93,8 @@ local FUNC = {
 local MT = {
     __index = function(self, k)
         if k == "Parent" then
+            return self[&ParentPtr] and World.GetEntityFromId(self[&ParentPtr]) or nil
+        elseif k == "ParentId" then
             return self[&ParentPtr] or nil
         end
         local CACHE = FUNC[k]

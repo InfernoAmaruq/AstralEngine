@@ -4,12 +4,11 @@ local Transform = {}
 
 Transform.Name = "Transform"
 Transform.FastFetch = {
-    "Position", "Orientation", "Rotation", "ParentCascade", "Matrix", "LocalOrientation", "LocalPosition", "LocalRotation", "LocalMatrix"
+    "Position", "Orientation", "Rotation", "Matrix", "LocalOrientation", "LocalPosition", "LocalRotation", "LocalMatrix"
 }
 Transform.Pattern = {
     Position = Vec3,
     Orientation = Quat,
-    ParentCascade = true,
     Rotation = Vec3,
     Matrix = Mat4,
     FromPose = 0,
@@ -21,14 +20,14 @@ Transform.Pattern = {
 Transform.Metadata = {}
 
 @flag{
-    LOCALOFFSET = 5,
+    LOCALOFFSET = 4,
 
     PosIdx = 1,
     OriIdx = 2,
     MatIdx = 3,
     RotIdx = 4,
 
-    ParentCascade = 5,
+    Proxy = 9,
 
     ParentMatrix = 10
 }
@@ -38,8 +37,7 @@ local FIELDS = {
     Orientation = 2,
     Matrix = 3,
     Rotation = 4,
-    ParentCascade = 5,
-    LocalPosition = 6, LocalOrientation = 7, LocalMatrix = 8, LocalRotation = 9,
+    LocalPosition = 5, LocalOrientation = 6, LocalMatrix = 7, LocalRotation = 8,
 }
 
 local function GetOrientation(Comp)
@@ -76,7 +74,7 @@ local function __INDEX(T, k)
     if KEY then
         return T[KEY]
     else
-        return BaseMethods[k] or T[6][k]
+        return BaseMethods[k] or T[9][k]
     end
 end
 
@@ -85,7 +83,7 @@ end
 Transform.Metadata.__create = function(DATA, Entity)
     local Proxy = {}
     local Ret = {
-        [6] = Proxy,
+        [9] = Proxy,
     }
 
     if DATA then

@@ -52,7 +52,7 @@ local SHAREDT = {
     SetStatic = function(self, State)
         if self[&IDX_STATIC] == State then return end
         local ColRef = self.ColRef
-        local w = self.World
+        local w = self.WorldComp
         local Tag
         GetStaticTag(Tag,w,ColRef,State)
 
@@ -73,7 +73,7 @@ local SHAREDT = {
 
         self[&IDX_ANCHORED] = State
 
-        Physics.UpdateSyncField(self.World.WorldId,self.ColRef,"Anchored", State)
+        Physics.UpdateSyncField(self.WorldComp.WorldId,self.ColRef,"Anchored", State)
     end,
     SetTranslationDOF = function(self, v)
         VALIDATEDOF(self)
@@ -167,6 +167,7 @@ function mt.__create(DATA, e)
     local Transform = assert(Component.HasComponent(e, "Transform"), "NO COMPONENT TYPE OF 'Transform' PRESENT, CANNOT ADD COLLIDER!")
 
     local World = DATA.World
+    local WorldComp
     local WId
 
     if not World then
@@ -175,6 +176,8 @@ function mt.__create(DATA, e)
     else
         WId = World.WorldId
     end
+
+    WorldComp = Component.SetComponents[World.__id]["World"]
 
     local RawWorld = World:GetComponent("World").World
 
@@ -194,11 +197,12 @@ function mt.__create(DATA, e)
 
     local COLLIDER = RawWorld[FUNCNAME](RawWorld, vec3(0,0,0), ConvertedSize)
     COLLIDER:setPose(Transform.Position,Transform.Orientation)
-    COLLIDER:setTag(DATA.Tag or World.DefaultTag)
+    COLLIDER:setTag(DATA.Tag or WorldComp.DefaultTag)
 
     local Tab = {
         World = World,
-        WId = World.WorldId,
+        WorldComp = WorldComp,
+        WId = WorldComp.WorldId,
         ColliderType = ColliderType,
         ColRef = COLLIDER,
         Tags = 0,

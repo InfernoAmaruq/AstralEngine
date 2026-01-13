@@ -183,10 +183,13 @@ print("\n>FOLDER TEST SUCCESS:",pcall(function()
 
     Anc1.Parent = FOLDER
 
+    print(Anc1:GetChildren())
     print(Anc1.Parent,"Children:",table.concat(Anc1:GetChildren()))
 
     print("GET COMPONENT:",Anc1:FindFirstChildWithComponent("Ancestry"))
     print("GET CHILD:",Anc1:FindFirstChild("OBJECT2"))
+
+    print("TESTING:",Obj1.Ancestry,Obj1.Ancestry.Parent,Obj1.Parent)
 end))
 
 -- CONSOLE TESTING:

@@ -29,46 +29,37 @@ return function(Components)
     INSTMETHODS.AddComponent = Components.AddComponent
 
     function Instance.__index(self, k)
-        if self.IsNull then error("ILLEGAL ACCESS: ATTEMPT TO ACCESS DEAD ENTITY") end
-
-        if type(k) == "string" and k:sub(1, 2) == "__" then return end
-        local v = INSTMETHODS[k]
-        if v then return v end
-
-        local FastFetch = Components.FastFetch[k]
-        if FastFetch then
-            local s = Components.SetComponents[self.__id]
-            return s and s[k] or nil
+        if self.IsNull then
+            error("ILLEGAL ACCESS: ATTEMPT TO ACCESS DEAD ENTITY")
         end
 
-        for _, t in pairs(Components.GetComponents(self.__id)) do
-            local val = t[k]
-            if rtype(val) == "function" then
-                AstralEngine.Log(
-                    ("UNSAFE ACCESS OF FUNCTION %s IN ENTITY %s"):format(k, tostring(self)), "warning", "ENTITY")
-            end
-            if val then return val end
+        if type(k) == "string" and k:sub(1, 2) == "__" then
+            return
+        end
+        local v = INSTMETHODS[k]
+        if v then
+            return v
+        end
+
+        local FastFetch = Components.FastFetch[k]
+        local s = Components.SetComponents[self.__id]
+        if FastFetch and s then
+            return s and s[FastFetch] and s[FastFetch][k] or nil
+        end
+
+        if s and s[k] then
+            return s[k]
         end
     end
 
     function Instance.__newindex(self, k, v)
-        print "NIDX"
-        local CompatibleComp
-
         local FastFetch = Components.FastFetch[k]
-        if FastFetch then
-            print("FAST ACCESS")
+        local s = Components.SetComponents[self.__id]
+        if FastFetch and s and s[FastFetch] then
+            s[FastFetch][k] = v
         end
 
-        for _, t in pairs(Components.GetComponents(rawget(self, "__id"))) do
-            local CACHED = Components.Components[_].Pattern
-            if t[k] || (CACHED && CACHED[k]) then
-                CompatibleComp = t
-                break
-            end
-        end
-        if not CompatibleComp then return end
-        CompatibleComp[k] = v
+        rawset(self, k, v)
     end
 
     function Instance.__tostring(self)

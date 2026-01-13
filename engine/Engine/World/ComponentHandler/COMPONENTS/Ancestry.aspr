@@ -5,7 +5,7 @@ local World = GetService("World")
 
 Ancestry.Name = "Ancestry"
 Ancestry.Pattern = { Parent = 0 }
-Ancestry.FastFetch = { "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById" }
+Ancestry.FastFetch = { "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById", "GetChildren" }
 Ancestry.Metadata = {}
 
 @flag:ParentPtr = 1;
@@ -42,7 +42,7 @@ local function RemoveChild(ChildArray,ChildId)
     end
 end
 @macro<L,!USEBRACK>{FastAddChild(ChildArray,ChildId) = table.insert(ChildArray,ChildId)}
-@macro<L,!USEBRACK>{GetSelf(S) = self.__id and Component.SetComponents[self.__id]["Ancestry"] or self}
+@macro<L,!USEBRACK>{GetSelf(&S) = rawget(&S,"__id") and Component.SetComponents[&S.__id]["Ancestry"] or &S}
 
 local FUNC = {
     -- CORE
@@ -74,6 +74,7 @@ local FUNC = {
     end,
 
     GetChildren = function(self)
+        self = GetSelf(self)
         return self[&ChildPtr]
     end,
     GetChildByIdx = function(self,Idx)
@@ -85,6 +86,7 @@ local FUNC = {
 
     -- QUERRY
     FindFirstChildWithComponent = function(self, Type)
+        self = GetSelf(self)
         for _, ChildIdx in ipairs(self[&ChildPtr]) do
             local Storage = Component.SetComponents[ChildIdx]
             local Comp = Storage and Storage[Type]
@@ -92,15 +94,18 @@ local FUNC = {
         end
     end,
     FindFirstChild = function(self, Child)
+        self = GetSelf(self)
         for _, ChildIdx in ipairs(self[&ChildPtr]) do
             local ChildRef = World.GetEntityFromId(ChildIdx)
             if ChildRef.Name == Child then return ChildRef end
         end
     end,
     FindFirstChildById = function(self, ChildId)
+        self = GetSelf(self)
         return HasChild(self[&ChildPtr],ChildId)
     end,
     FindFirstAncestor = function(self, Ancestor)
+        self = GetSelf(self)
         local SelfPtr = self[&SelfPtr]
         local CurPtr = self[&ParentPtr]
         while true do
@@ -121,6 +126,7 @@ local FUNC = {
         end
     end,
     FindFirstAncestorWithComponent = function(self, Type)
+        self = GetSelf(self)
         local CurPtr = self[&ParentPtr]
         local SelfPtr = self[&SelfPtr]
         while true do
@@ -165,7 +171,7 @@ local FUNC = {
         else
             return false, nil
         end
-    end
+    end,
     FastTestCyclic = function(self)
         -- no alloc path, fast and light
         local SelfPtr = self[&SelfPtr]
@@ -178,14 +184,14 @@ local FUNC = {
             Depth = Depth + 1
             local AncC = Component.SetComponents[CurPtr]["Ancestry"]
 
-            if AncC and AncC[&ParentAnc] then
+            if AncC and AncC[&ParentPtr] then
                 CurPtr = AncC[ParentAnc]
             else
                 break
             end
         end
         return CurPtr == SelfPtr or Depth >= 100
-    end,
+    end
 }
 
 local INVALID = {

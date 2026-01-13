@@ -5,6 +5,7 @@ local World = GetService("World")
 
 Ancestry.Name = "Ancestry"
 Ancestry.Pattern = { Parent = 0 }
+Ancestry.FastFetch = { "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById" }
 Ancestry.Metadata = {}
 
 @flag:ParentPtr = 1;
@@ -41,6 +42,7 @@ local function RemoveChild(ChildArray,ChildId)
     end
 end
 @macro<L,!USEBRACK>{FastAddChild(ChildArray,ChildId) = table.insert(ChildArray,ChildId)}
+@macro<L,!USEBRACK>{GetSelf(S) = self.__id and Component.SetComponents[self.__id]["Ancestry"] or self}
 
 local FUNC = {
     -- CORE
@@ -151,7 +153,7 @@ local FUNC = {
             local AncC = Component.SetComponents[CurPtr]["Ancestry"]
 
             Checked[CurPtr] = true
-            if AncC and AncC[&ParentAnc] then
+            if AncC and AncC[&ParentPtr] then
                 CurPtr = AncC[ParentAnc]
             else
                 break

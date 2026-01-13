@@ -2,6 +2,7 @@ local Component = {}
 
 Component.Components = {}
 Component.SetComponents = {}
+Component.FastFetch = {}
 
 local DEADMT = {
     __index = function(_,k)
@@ -11,12 +12,19 @@ local DEADMT = {
 
 local MTCACHE = setmetatable({},{__mode = "v"})
 
-function Component.NewComponent(Name, Pattern, Metadata)
+function Component.NewComponent(Name, Pattern, Metadata, FastFetch)
+    print("ATTACHING:",Name)
     assert(not Component.Components[Name], "Component already exists: " .. Name)
     Component.Components[Name] = setmetatable(
         { Storage = {}, Name = Name, Pattern = Pattern, Metadata = Metadata },
         { __type = "ComponentPrefab" }
     )
+
+    if FastFetch then
+        for _, Obj in pairs(FastFetch) do
+            Component.FastFetch[Obj] = Name
+        end
+    end
 end
 
 @execute<UNSAFE>{ -- so, it used to be solobj, then astralobj, then engineobj... its a fuckin mess dude with all the renaming, so i just make it a flag!
@@ -145,7 +153,7 @@ function Component.LoadComponents(FileSystem)
                 if File.Serializer then
                     SERIALIZE.AddSerializeMethod(File.Name, File.Serializer)
                 end
-                Component.NewComponent(File.Name, File.Pattern, File.Metadata)
+                Component.NewComponent(File.Name, File.Pattern, File.Metadata, File.FastFetch)
                 table.insert(FinalProcessing, File.FinalProcessing)
             else
                 AstralEngine.Log("FAILED TO LOAD COMPONENT: "..f,"warning","COMPONENT")

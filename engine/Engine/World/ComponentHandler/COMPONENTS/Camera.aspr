@@ -139,7 +139,7 @@ Camera.Metadata.__create = function(Data, Entity)
     local Comps = Component.GetComponents(Entity)
 
     if not Comps.Transform then
-        Component.AddComponent(Entity, "Transform", { Position = Vec3(0), Orientation = Quat(), Size = Vec3(1) })
+        Component.AddComponent(Entity, "Transform", { Position = Vec3(0), Orientation = Quat() })
     end
 
     local REBUILD_CALLBACK = Data.Rebuild or Rebuild

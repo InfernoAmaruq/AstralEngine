@@ -3,22 +3,43 @@ local Physics = GetService("Physics","Physics")
 local Transform = {}
 
 Transform.Name = "Transform"
+Transform.FastFetch = {
+    "Position", "Orientation", "Rotation", "ParentCascade", "Matrix", "LocalOrientation", "LocalPosition", "LocalRotation", "LocalMatrix"
+}
 Transform.Pattern = {
     Position = Vec3,
     Orientation = Quat,
-    RelativeToParent = true,
+    ParentCascade = true,
     Rotation = Vec3,
     Matrix = Mat4,
     FromPose = 0,
+    LocalPosition = Vec3,
+    LocalOrientation = Quat,
+    LocalRotation = Vec3,
+    LocalMatrix = Mat4,
 }
 Transform.Metadata = {}
+
+@flag{
+    LOCALOFFSET = 5,
+
+    PosIdx = 1,
+    OriIdx = 2,
+    MatIdx = 3,
+    RotIdx = 4,
+
+    ParentCascade = 5,
+
+    ParentMatrix = 10
+}
 
 local FIELDS = {
     Position = 1,
     Orientation = 2,
     Matrix = 3,
     Rotation = 4,
-    RelativeToParent = 5,
+    ParentCascade = 5,
+    LocalPosition = 6, LocalOrientation = 7, LocalMatrix = 8, LocalRotation = 9,
 }
 
 local function GetOrientation(Comp)
@@ -40,10 +61,14 @@ local function FromPose(T, x, y, z, a, ax, ay, az)
     R:set(ex, ey, ez)
 end
 
+local function LocalFromMatrix()
+end
+
 local BaseMethods = {
     FromPose = FromPose,
     GetOrientation = GetOrientation,
     GetMatrix = GetMatrix,
+    LocalFromMatrix = LocalFromMatrix,
 }
 
 local function __INDEX(T, k)

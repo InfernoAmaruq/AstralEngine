@@ -19,7 +19,8 @@ return function(Components)
         return Comp and Comp[p]
     end
 
-    function INSTMETHODS:Destroy()
+    function INSTMETHODS:Destroy(Recursive)
+        Recursive = Recursive ~= false and true or false
         print("Destroy or smth")
     end
 
@@ -31,18 +32,34 @@ return function(Components)
         if self.IsNull then error("ILLEGAL ACCESS: ATTEMPT TO ACCESS DEAD ENTITY") end
 
         if type(k) == "string" and k:sub(1, 2) == "__" then return end
-        local v = rawget(self, k) or INSTMETHODS[k]
+        local v = INSTMETHODS[k]
         if v then return v end
+
+        local FastFetch = Components.FastFetch[k]
+        if FastFetch then
+            local s = Components.SetComponents[self.__id]
+            return s and s[k] or nil
+        end
+
         for _, t in pairs(Components.GetComponents(self.__id)) do
             local val = t[k]
-            if rtype(val) == "function" then AstralEngine.Log(
-                ("UNSAFE ACCESS OF FUNCTION %s IN ENTITY %s"):format(k, tostring(self)), "warning", "ENTITY") end
+            if rtype(val) == "function" then
+                AstralEngine.Log(
+                    ("UNSAFE ACCESS OF FUNCTION %s IN ENTITY %s"):format(k, tostring(self)), "warning", "ENTITY")
+            end
             if val then return val end
         end
     end
 
     function Instance.__newindex(self, k, v)
+        print "NIDX"
         local CompatibleComp
+
+        local FastFetch = Components.FastFetch[k]
+        if FastFetch then
+            print("FAST ACCESS")
+        end
+
         for _, t in pairs(Components.GetComponents(rawget(self, "__id"))) do
             local CACHED = Components.Components[_].Pattern
             if t[k] || (CACHED && CACHED[k]) then

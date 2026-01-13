@@ -99,6 +99,7 @@ local FUNC = {
         return HasChild(self[&ChildPtr],ChildId)
     end,
     FindFirstAncestor = function(self, Ancestor)
+        local SelfPtr = self[&SelfPtr]
         local CurPtr = self[&ParentPtr]
         while true do
             local ParentRef = World.GetEntityFromId(CurPtr)
@@ -108,6 +109,10 @@ local FUNC = {
 
             if AncComp[&ParentPtr] then
                CurPtr = AncComp[&ParentPtr]
+               if CurPtr == SelfPtr then
+                   AstralEngine.Log("Cyclic recursion detected in FindFirstAncestorWithComponent, terminating!","Warning","ANCESTRY")
+                   break
+               end
             else
                 break
             end
@@ -115,6 +120,7 @@ local FUNC = {
     end,
     FindFirstAncestorWithComponent = function(self, Type)
         local CurPtr = self[&ParentPtr]
+        local SelfPtr = self[&SelfPtr]
         while true do
             local ParentRef = World.GetEntityFromId(CurPtr)
             local AncComp = Component.SetComponents[CurPtr]["Ancestry"]
@@ -123,6 +129,10 @@ local FUNC = {
 
             if AncComp[&ParentPtr] then
                CurPtr = AncComp[&ParentPtr]
+               if CurPtr == SelfPtr then
+                   AstralEngine.Log("Cyclic recursion detected in FindFirstAncestorWithComponent, terminating!","Warning","ANCESTRY")
+                   break
+               end
             else
                 break
             end
@@ -133,12 +143,46 @@ local FUNC = {
     TestCyclic = function(self)
         -- allocating path, more precise
         local Checked = {}
-        local Cyclic, FirstCyclicRef
 
-        return Cyclic, FirstCyclicRef
+        local CurPtr = self[&ParentPtr]
+        if not CurPtr then AstralEngine.Log("Cyclic reference tests must go upwards. No parent set","Warning","ANCESTRY") return end
+
+        while not Checked[CurPtr] do
+            local AncC = Component.SetComponents[CurPtr]["Ancestry"]
+
+            Checked[CurPtr] = true
+            if AncC and AncC[&ParentAnc] then
+                CurPtr = AncC[ParentAnc]
+            else
+                break
+            end
+        end
+
+        if Checked[CurPtr] then
+            return true, World.GetEntityFromId(CurPtr)
+        else
+            return false, nil
+        end
     end
-    LightTestCyclic = function(self)
+    FastTestCyclic = function(self)
         -- no alloc path, fast and light
+        local SelfPtr = self[&SelfPtr]
+        local CurPtr = self[&ParentPtr]
+
+        local Depth = 0
+
+        if not CurPtr then AstralEngine.Log("Cyclic reference tests must go upwards. No parent set","Warning","ANCESTRY") return end
+        while CurPtr ~= SelfPtr and Depth < 100 do
+            Depth = Depth + 1
+            local AncC = Component.SetComponents[CurPtr]["Ancestry"]
+
+            if AncC and AncC[&ParentAnc] then
+                CurPtr = AncC[ParentAnc]
+            else
+                break
+            end
+        end
+        return CurPtr == SelfPtr or Depth >= 100
     end,
 }
 

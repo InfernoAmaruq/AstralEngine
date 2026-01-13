@@ -45,15 +45,15 @@ end
 local FUNC = {
     -- CORE
     SetParent = function(self, Parent)
+        -- Remove old reference
+        if self[&ParentPtr] then
+            local ParentAnc = Component.HasComponent(self[&ParentPtr],Ancestry.Name)
+            if not ParentAnc then error("FATAL: STALE PARENT POINTER FROM E: "..self[&SelfPtr].." TO "..self[&ParentPtr],2) end
+            RemoveChild(ParentAnc[&ChildPtr],self[&SelfPtr])
+        end
+
         if Parent == nil then
             -- remove parent
-
-            if self[&ParentPtr] then
-                local ParentAnc = Component.HasComponent(self[&ParentPtr],Ancestry.Name)
-                if not ParentAnc then error("FATAL: STALE PARENT POINTER FROM E: "..self[&SelfPtr].." TO "..self[&ParentPtr],2) end
-                RemoveChild(ParentAnc[&ChildPtr],self[&SelfPtr])
-            end
-
             self[&ParentPtr] = false
         else
             -- set parent
@@ -70,26 +70,76 @@ local FUNC = {
             FastAddChild(ParentAnc[&ChildPtr],self[&SelfPtr])
         end
     end,
-    AddChild = function(self, Child)
-        local Val
-        local Reference
-        VALIDATE(Child,Val,Reference)
-    end,
+
     GetChildren = function(self)
         return self[&ChildPtr]
     end,
+    GetChildByIdx = function(self,Idx)
+        return self[&ChildPtr][Idx]
+    end,
+    GetChildCount = function(self)
+        return #self[&ChildPtr]
+    end,
 
     -- QUERRY
-    IsChildOf = function(self, Entity) end,
-    FindFirstChildOfType = function(self, Type) end,
-    FindFirstChild = function(self, Child)
-        print(self)
+    FindFirstChildWithComponent = function(self, Type)
+        for _, ChildIdx in ipairs(self[&ChildPtr]) do
+            local Storage = Component.SetComponents[ChildIdx]
+            local Comp = Storage and Storage[Type]
+            if Comp then return World.GetEntityFromId(ChildIdx), Comp end
+        end
     end,
-    FindFirstAncestor = function(self, Ancestor) end,
-    FindFirstAncestorOfType = function(self, Type) end,
+    FindFirstChild = function(self, Child)
+        for _, ChildIdx in ipairs(self[&ChildPtr]) do
+            local ChildRef = World.GetEntityFromId(ChildIdx)
+            if ChildRef.Name == Child then return ChildRef end
+        end
+    end,
+    FindFirstChildById = function(self, ChildId)
+        return HasChild(self[&ChildPtr],ChildId)
+    end,
+    FindFirstAncestor = function(self, Ancestor)
+        local CurPtr = self[&ParentPtr]
+        while true do
+            local ParentRef = World.GetEntityFromId(CurPtr)
+            local AncComp = Component.SetComponents[CurPtr]["Ancestry"]
+
+            if ParentRef.Name == Ancestor then return ParentRef end
+
+            if AncComp[&ParentPtr] then
+               CurPtr = AncComp[&ParentPtr]
+            else
+                break
+            end
+        end
+    end,
+    FindFirstAncestorWithComponent = function(self, Type)
+        local CurPtr = self[&ParentPtr]
+        while true do
+            local ParentRef = World.GetEntityFromId(CurPtr)
+            local AncComp = Component.SetComponents[CurPtr]["Ancestry"]
+
+            if Component.SetComponents[CurPtr][Type] then return ParentRef, Component.SetComponents[CurPtr][Type] end
+
+            if AncComp[&ParentPtr] then
+               CurPtr = AncComp[&ParentPtr]
+            else
+                break
+            end
+        end
+    end,
 
     -- DBG
-    TestCyclic = function() end,
+    TestCyclic = function(self)
+        -- allocating path, more precise
+        local Checked = {}
+        local Cyclic, FirstCyclicRef
+
+        return Cyclic, FirstCyclicRef
+    end
+    LightTestCyclic = function(self)
+        -- no alloc path, fast and light
+    end,
 }
 
 local INVALID = {
@@ -128,10 +178,7 @@ Ancestry.Metadata.__create = function(DATA, e)
     setmetatable(m, MT)
 
     if DATA.Parent then
-        -- set parent
-    end
-    if DATA.Children then
-        -- set children
+        FUNC.SetParent(m,DATA.Parent)
     end
 
     return m

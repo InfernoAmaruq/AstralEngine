@@ -379,9 +379,8 @@ function lovr.run()
         GETTICK(DT,TIME,GCTime,GCRate,M_GCTick,nil)
         }
 
-        @execute<UNSAFE>{
-            if lovr.system.getOS() == "Windows" then return "SLEEP(0)" else return "" end
-            -- NTS: make this a PARAMETER!!! not IMPLICIT
+        @ifdef<Runtime.Sleep>{
+            SLEEP(0)
         }
     end
 end

@@ -179,12 +179,14 @@ print("\n>FOLDER TEST SUCCESS:",pcall(function()
     local Obj1 = Entity.New("OBJECT1")
     local Obj2 = Entity.New("OBJECT2")
     local Anc1 = Obj1:AddComponent("Ancestry")
-    local Anc2 = Obj2:AddComponent("Ancestry")
+    local Anc2 = Obj2:AddComponent("Ancestry",{Parent = Obj1})
 
     Anc1.Parent = FOLDER
-    Anc2.Parent = Obj1
 
     print(Anc1.Parent,"Children:",table.concat(Anc1:GetChildren()))
+
+    print("GET COMPONENT:",Anc1:FindFirstChildWithComponent("Ancestry"))
+    print("GET CHILD:",Anc1:FindFirstChild("OBJECT2"))
 end))
 
 -- CONSOLE TESTING:

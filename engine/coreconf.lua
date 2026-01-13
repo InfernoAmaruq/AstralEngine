@@ -21,6 +21,9 @@ return {
         Extra = {
             "PinSystemPasses", -- whether or not to pin system (headset and window) passes so they cannot be GC-d by the lua runtime
         },
+        Runtime = {
+            --"Sleep" -- sleep 0s after each runtime step
+        },
         --[[
         --  You can define your own values with the same logic of KEY = {VALUES}, and it will be read as: @ifdef<KEY.VALUE>
         --]]

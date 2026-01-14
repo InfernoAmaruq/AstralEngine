@@ -342,6 +342,7 @@ function lovr.run()
 
     local SLEEP = lovr.timer.sleep
 
+    local LASTCPUT = 0
     return function()
         local TIME = lovr.timer.getTime()
         local DT = TIME - LastTime
@@ -350,9 +351,11 @@ function lovr.run()
         TICK = TICK + DT
         COUNTER = COUNTER + 1
         if TICK > 1 then
-            print("TPS:",COUNTER)
+            local osc, cpuc = os.clock(), debug.cpuclock()
+            print("TPS:",COUNTER,osc,cpuc,cpuc/osc*100,cpuc-LASTCPUT)
             TICK = 0
             COUNTER = 0
+            LASTCPUT = cpuc
         end
 
         -- EVENT
@@ -376,9 +379,8 @@ function lovr.run()
         GETTICK(DT,TIME,GCTime,GCRate,M_GCTick,nil)
         }
 
-        @execute<UNSAFE>{
-            if lovr.system.getOS() == "Windows" then return "SLEEP(0)" else return "" end
-            -- NTS: make this a PARAMETER!!! not IMPLICIT
+        @ifdef<Runtime.Sleep>{
+            SLEEP(0)
         }
     end
 end

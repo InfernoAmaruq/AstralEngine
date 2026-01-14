@@ -5,50 +5,233 @@ local World = GetService("World")
 
 Ancestry.Name = "Ancestry"
 Ancestry.Pattern = { Parent = 0 }
+Ancestry.FastFetch = { "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById", "GetChildren", "GetChildrenIds", "IterChildren" }
 Ancestry.Metadata = {}
 
+@flag:ParentPtr = 1;
+@flag:ChildPtr = 2;
+@flag:SelfPtr = 3;
+
 @macro<L,!USEBRACK>{VALIDATE(&OBJ,&OUT,&REF) = 
-    local PT = typeof(&OBJ)
-    if PT == "Entity" then
+    local PT = type(&OBJ)
+    if PT == "astrobj" then
         &OUT = rawget(&OBJ, "__id")
         &REF = &OBJ
     elseif PT == "number" then
         &REF = World.GetEntityFromId(&OBJ)
-        &OUT = &REF and &OBJ or error("[ANCESTRY]: NO VALID ENTITY ID FOR PARENT/CHILD!")
+        &OUT = &REF and &OBJ or error("[ANCESTRY]: NO VALID ENTITY ID FOR PARENT/CHILD!",2)
     else
-        error("CANNOT SET TYPE OF `" .. PT .. "` AS PARENT/CHILD IN ANCESTRY GRAPH")
+        error("CANNOT SET TYPE OF `" .. PT .. "` AS PARENT/CHILD IN ANCESTRY GRAPH",2)
     end
 }
+
+local function HasChild(ChildArray,ChildId)
+    for i = 1, #ChildArray do
+        if ChildArray[i] == ChildId then return ChildArray[i] end
+    end
+    return nil
+end
+local function RemoveChild(ChildArray,ChildId)
+    local Children = #ChildArray
+    for i = 1, Children do
+        if ChildArray[i] == ChildId then
+            ChildArray[i] = ChildArray[Children]
+            ChildArray[Children] = nil
+            return
+        end
+    end
+end
+@macro<L,!USEBRACK>{FastAddChild(ChildArray,ChildId) = table.insert(ChildArray,ChildId)}
+@macro<L,!USEBRACK>{GetSelf(&S) = rawget(&S,"__id") and Component.SetComponents[&S.__id]["Ancestry"] or &S}
+
+local SelfPtrForIter
+local function ITERATOR()
+    local self = SelfPtrForIter
+    self.__ITERIDXCACHE = self.__ITERIDXCACHE + 1
+    local Id = self[&ChildPtr][self.__ITERIDXCACHE]
+    return World.GetEntityFromId(Id), Id
+end
 
 local FUNC = {
     -- CORE
     SetParent = function(self, Parent)
-        local Val
-        local Reference
-        VALIDATE(Parent,Val,Reference)
+        -- Remove old reference
+        if self[&ParentPtr] then
+            local ParentAnc = Component.HasComponent(self[&ParentPtr],Ancestry.Name)
+            if not ParentAnc then error("FATAL: STALE PARENT POINTER FROM E: "..self[&SelfPtr].." TO "..self[&ParentPtr],2) end
+            RemoveChild(ParentAnc[&ChildPtr],self[&SelfPtr])
+        end
 
-        self.__Private.Parent = Val
+        if Parent == nil then
+            -- remove parent
+            self[&ParentPtr] = false
+        else
+            -- set parent
+            local Val
+            local Reference
+            VALIDATE(Parent,Val,Reference)
+
+            if Val == self[&SelfPtr] then error("Attempt to set object parent to itself",2) end
+
+            local ParentAnc = Component.HasComponent(Val,Ancestry.Name)
+            if not ParentAnc then error("Attempt to set object as child of entity with no ancestry component",2) end
+
+            self[&ParentPtr] = Val
+            FastAddChild(ParentAnc[&ChildPtr],self[&SelfPtr])
+        end
     end,
-    AddChild = function(self, Child)
-        local PT = typeof(Child)
+
+    IterChildren = function(self)
+        self = GetSelf(self)
+        rawset(self,"__ITERIDXCACHE",0)
+
+        SelfPtrForIter = self
+
+        return ITERATOR
     end,
-    GetChildren = function(self, Child) end,
+
+    GetChildren = function(self)
+        self = GetSelf(self)
+        local Ret = {}
+
+        for i = 1, #self[&ChildPtr] do
+            local Ent = World.GetEntityFromId(self[&ChildPtr][i])
+            table.insert(Ret, Ent)
+        end
+
+        return Ret
+    end,
+    GetChildrenIds = function(self)
+        self = GetSelf(self)
+        return self[&ChildPtr]
+    end,
+    GetChildByIdx = function(self,Idx)
+        return self[&ChildPtr][Idx]
+    end,
+    GetChildCount = function(self)
+        return #self[&ChildPtr]
+    end,
 
     -- QUERRY
-    IsChildOf = function(self, Entity) end,
-    FindFirstChildOfType = function(self, Type) end,
-    FindFirstChild = function(self, Child) end,
-    FindFirstAncestor = function(self, Ancestor) end,
-    FindFirstAncestorOfType = function(self, Type) end,
+    FindFirstChildWithComponent = function(self, Type)
+        self = GetSelf(self)
+        for _, ChildIdx in ipairs(self[&ChildPtr]) do
+            local Storage = Component.SetComponents[ChildIdx]
+            local Comp = Storage and Storage[Type]
+            if Comp then return World.GetEntityFromId(ChildIdx), Comp end
+        end
+    end,
+    FindFirstChild = function(self, Child)
+        self = GetSelf(self)
+        for _, ChildIdx in ipairs(self[&ChildPtr]) do
+            local ChildRef = World.GetEntityFromId(ChildIdx)
+            if ChildRef.Name == Child then return ChildRef end
+        end
+    end,
+    FindFirstChildById = function(self, ChildId)
+        self = GetSelf(self)
+        return HasChild(self[&ChildPtr],ChildId)
+    end,
+    FindFirstAncestor = function(self, Ancestor)
+        self = GetSelf(self)
+        local SelfPtr = self[&SelfPtr]
+        local CurPtr = self[&ParentPtr]
+        while true do
+            local ParentRef = World.GetEntityFromId(CurPtr)
+            local AncComp = Component.SetComponents[CurPtr]["Ancestry"]
+
+            if ParentRef.Name == Ancestor then return ParentRef end
+
+            if AncComp[&ParentPtr] then
+               CurPtr = AncComp[&ParentPtr]
+               if CurPtr == SelfPtr then
+                   AstralEngine.Log("Cyclic recursion detected in FindFirstAncestorWithComponent, terminating!","Warning","ANCESTRY")
+                   break
+               end
+            else
+                break
+            end
+        end
+    end,
+    FindFirstAncestorWithComponent = function(self, Type)
+        self = GetSelf(self)
+        local CurPtr = self[&ParentPtr]
+        local SelfPtr = self[&SelfPtr]
+        while true do
+            local ParentRef = World.GetEntityFromId(CurPtr)
+            local AncComp = Component.SetComponents[CurPtr]["Ancestry"]
+
+            if Component.SetComponents[CurPtr][Type] then return ParentRef, Component.SetComponents[CurPtr][Type] end
+
+            if AncComp[&ParentPtr] then
+               CurPtr = AncComp[&ParentPtr]
+               if CurPtr == SelfPtr then
+                   AstralEngine.Log("Cyclic recursion detected in FindFirstAncestorWithComponent, terminating!","Warning","ANCESTRY")
+                   break
+               end
+            else
+                break
+            end
+        end
+    end,
 
     -- DBG
-    TestCyclic = function() end,
+    TestCyclic = function(self)
+        -- allocating path, more precise
+        local Checked = {}
+
+        local CurPtr = self[&ParentPtr]
+        if not CurPtr then AstralEngine.Log("Cyclic reference tests must go upwards. No parent set","Warning","ANCESTRY") return end
+
+        while not Checked[CurPtr] do
+            local AncC = Component.SetComponents[CurPtr]["Ancestry"]
+
+            Checked[CurPtr] = true
+            if AncC and AncC[&ParentPtr] then
+                CurPtr = AncC[ParentAnc]
+            else
+                break
+            end
+        end
+
+        if Checked[CurPtr] then
+            return true, World.GetEntityFromId(CurPtr)
+        else
+            return false, nil
+        end
+    end,
+    FastTestCyclic = function(self)
+        -- no alloc path, fast and light
+        local SelfPtr = self[&SelfPtr]
+        local CurPtr = self[&ParentPtr]
+
+        local Depth = 0
+
+        if not CurPtr then AstralEngine.Log("Cyclic reference tests must go upwards. No parent set","Warning","ANCESTRY") return end
+        while CurPtr ~= SelfPtr and Depth < 100 do
+            Depth = Depth + 1
+            local AncC = Component.SetComponents[CurPtr]["Ancestry"]
+
+            if AncC and AncC[&ParentPtr] then
+                CurPtr = AncC[ParentAnc]
+            else
+                break
+            end
+        end
+        return CurPtr == SelfPtr or Depth >= 100
+    end
+}
+
+local INVALID = {
+    ParentId = true
 }
 
 local MT = {
     __index = function(self, k)
         if k == "Parent" then
-            return self.__Private.Parent
+            return self[&ParentPtr] and World.GetEntityFromId(self[&ParentPtr]) or nil
+        elseif k == "ParentId" then
+            return self[&ParentPtr] or nil
         end
         local CACHE = FUNC[k]
         if CACHE then
@@ -60,25 +243,22 @@ local MT = {
     __newindex = function(self, k, v)
         if k == "Parent" then
             FUNC.SetParent(self, v)
-        else
-            return
+        elseif INVALID[k] then
+            AstralEngine.Log("Cannot write to Ancestry field "..k,"Warning","ANCESTRY")
         end
     end,
 }
 
 Ancestry.Metadata.__create = function(DATA, e)
-    local Proxy = {}
-    Proxy.Children = {}
     local m = {}
-    m.__Private = Proxy
+    m[&ParentPtr] = false -- false so array is linear
+    m[&ChildPtr] = {}
+    m[&SelfPtr] = e
 
     setmetatable(m, MT)
 
     if DATA.Parent then
-        -- set parent
-    end
-    if DATA.Children then
-        -- set children
+        FUNC.SetParent(m,DATA.Parent)
     end
 
     return m

@@ -113,7 +113,6 @@ end
 local function RebuildPasses(CameraRef)
     CameraRef.__REBUILT_TEX = 0
 
-    local OldC1 = CameraRef.CameraPass[1]
     CameraRef.CameraPass[1] = AstralEngine.Graphics.NewRawPass({ CameraRef.CameraTex[1] })
     CameraRef.SolidPass[1]:setCanvas({
         CameraRef.SolidTex[1],
@@ -126,7 +125,6 @@ local function RebuildPasses(CameraRef)
         depth = CameraRef.DepthTexture[1],
         samples = 1,
     })
-    OldC1:relase()
 end
 local function Rebuild(V, IsPass, w, h)
     if not IsPass then
@@ -141,7 +139,7 @@ Camera.Metadata.__create = function(Data, Entity)
     local Comps = Component.GetComponents(Entity)
 
     if not Comps.Transform then
-        Component.AddComponent(Entity, "Transform", { Position = Vec3(0), Orientation = Quat(), Size = Vec3(1) })
+        Component.AddComponent(Entity, "Transform", { Position = Vec3(0), Orientation = Quat() })
     end
 
     local REBUILD_CALLBACK = Data.Rebuild or Rebuild

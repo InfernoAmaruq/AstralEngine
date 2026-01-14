@@ -1,5 +1,4 @@
-local n = 0
-math.rmap = ! n
+math.rmap = !0
 
 local Component = GetService("Component", "Component")
 

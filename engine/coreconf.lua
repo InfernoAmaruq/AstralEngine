@@ -21,6 +21,9 @@ return {
         Extra = {
             "PinSystemPasses", -- whether or not to pin system (headset and window) passes so they cannot be GC-d by the lua runtime
         },
+        Runtime = {
+            --"Sleep" -- sleep 0s after each runtime step
+        },
         --[[
         --  You can define your own values with the same logic of KEY = {VALUES}, and it will be read as: @ifdef<KEY.VALUE>
         --]]
@@ -50,7 +53,7 @@ return {
             Fullscreen = false,
             Width = 1700, -- or 0 for borderless fullscreen
             Height = 900,
-            Resizable = true,
+            Resizable = false,
             Name = "Astral Engine Demo 0.0.1",
         },
     },

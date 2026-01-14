@@ -524,13 +524,13 @@ void luaV_execute (lua_State *L, int nexeccalls) {
         continue;
       }
       case OP_BNOT: {
-	TValue *rb = RB(i);
-	if (ttisnumber(rb)) {
-	lua_Number nb = nvalue(rb);
-	setnvalue(ra,luai_numbnot(nb));
-	}
-        else luaG_runerror(L, "bitwise not on non-number");
-	continue;
+        TValue *rb = RB(i);
+        if (ttisnumber(rb)) {
+            lua_Number nb = nvalue(rb);
+            setnvalue(ra,luai_numbnot(nb));
+        }
+            else luaG_runerror(L, "bitwise not on non-number");
+        continue;
 	}
       case OP_UNM: {
         TValue *rb = RB(i);

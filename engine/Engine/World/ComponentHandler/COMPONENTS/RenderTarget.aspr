@@ -49,7 +49,7 @@ RendTarget.Metadata.__create = function(Type, Entity)
     return Data
 end
 
-RendTarget.Metadata.__remove = function(Entity)
+RendTarget.Metadata.__remove = function(self, Entity)
     Renderer.RemoveFromStack(Entity)
 end
 

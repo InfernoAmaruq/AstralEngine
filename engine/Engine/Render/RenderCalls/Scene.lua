@@ -79,7 +79,7 @@ function Renderer.RemoveFromStack(Entity) -- number
     for i = 1, 2 do
         local Stack = i == 1 and SolidStack or TransparentStack
         local Idx = table.find(Stack, Entity)
-        if not Idx then return end
+        if not Idx then continue end
         local Last = Stack[#Stack]
         Stack[Idx] = Last
         Stack[#Stack] = nil

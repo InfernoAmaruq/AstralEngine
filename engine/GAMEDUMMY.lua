@@ -220,7 +220,9 @@ print("\n>TESTING DESTRUCTION:",pcall(function()
     for i,v in pairs(Sphere.Transform) do
         print(i,v)
     end
+    local START = debug.cpuclock()
     Sphere:Destroy()
+    print(debug.cpuclock()-START)
 end))
 
 -- CONSOLE TESTING:

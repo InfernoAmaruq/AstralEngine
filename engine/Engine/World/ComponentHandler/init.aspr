@@ -109,16 +109,24 @@ function Component.RemoveComponent(e, id)
     if type(e) == &TYPE then
         e = e.__id
     end
-    if not Component.SetComponents[e] then
+
+    local Comp = Component.Components[id]
+
+    if not Component.SetComponents[e] or not Comp then
         return
     end
 
-    local Comp = Component.Components[id]
+    local CompInst = Component.SetComponents[e][id]
     if Comp.Metadata and Comp.Metadata.__remove then
-        Comp.Metadata.__remove(Component.SetComponents[e][id], e)
+        Comp.Metadata.__remove(CompInst, e, true)
     end
 
-    setmetatable(Component.SetComponents[e][id], DEADMT)
+    setmetatable(CompInst, DEADMT)
+
+    for i in pairs(CompInst) do
+        CompInst[i] = nil
+    end
+
     Component.Components[id].Storage[e] = nil
     Component.SetComponents[e][id] = nil
 end

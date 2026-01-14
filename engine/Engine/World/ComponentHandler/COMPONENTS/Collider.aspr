@@ -231,6 +231,12 @@ end
 
 function mt.__remove(self, EId)
     Physics.DequeueToSyncLTJ(self)
+    Physics.UnbindCollider(self.WId,self.ColRef)
+
+    self.ColRef:release()
+    for i in pairs(self) do
+        self[i] = nil
+    end
 end
 
 return Collider

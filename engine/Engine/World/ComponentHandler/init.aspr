@@ -113,14 +113,27 @@ function Component.RemoveComponent(e, id)
         return
     end
 
-    local Comp = Component.Components[e]
+    local Comp = Component.Components[id]
     if Comp.Metadata and Comp.Metadata.__remove then
-        Comp.Metadata.__remove(e, Component.SetComponents[e][id])
+        Comp.Metadata.__remove(Component.SetComponents[e][id], e)
     end
 
-    setmetatable(Component.SetComponents[e][id], nil)
+    setmetatable(Component.SetComponents[e][id], DEADMT)
     Component.Components[id].Storage[e] = nil
     Component.SetComponents[e][id] = nil
+end
+
+function Component.__RemoveAllComponents(EntityHandle)
+    local Id = EntityHandle.__id
+
+    if not Component.SetComponents[Id] then
+        -- no components, return
+        return
+    end
+
+    for CId in pairs(Component.SetComponents[Id]) do
+        Component.RemoveComponent(Id,CId)
+    end
 end
 
 local SERIALIZE = require("Lib.Serialize")

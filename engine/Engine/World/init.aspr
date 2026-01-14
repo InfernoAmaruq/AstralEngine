@@ -1,5 +1,5 @@
 local Component = require("ComponentHandler")
-local InstMeta = require("Instance")(Component)
+local InstMeta, Methods = require("Instance")(Component)
 local World = {}
 
 World.Component = Component
@@ -31,7 +31,7 @@ local function ALLOC(Use)
     local ID = World.Capacity
     local Gen = Use and 1 or 0
 
-    local t = setmetatable({ __id = ID, __gen = Gen, UniqueId = Gen << SHIFT | ID, IsNull = true }, InstMeta)
+    local t = setmetatable({ __id = ID, Id = ID, __gen = Gen, UniqueId = Gen << SHIFT | ID, IsNull = true }, InstMeta)
 
     World.Alive[World.Capacity] = t
 
@@ -87,6 +87,38 @@ function Entity.New(Name, ...)
 
     return NewEntity
 end
+
+function Entity.Destroy(Ent, Recursive)
+    Recursive = Recursive ~= false and true or false
+    Ent = type(Ent) == "astrobj" and Ent or World.Alive[Ent]
+
+    if Ent.IsNull then
+        AstralEngine.Log("Attempt to destroy dead entity", "warning", "ENTITY")
+        return
+    end
+
+    local Id = Ent.__id
+    rawset(Ent, "IsNull", true)
+
+    if Id == World.TopPtr then
+        -- reset top ptr
+        local Idx = Id - 1
+        while true do
+            local TempEnt = World.Alive[Idx]
+            if not TempEnt then
+                break
+            end
+            if not TempEnt.IsNull then
+                World.TopPtr = TempEnt.__id
+                break
+            end
+        end
+    end
+
+    Component.__RemoveAllComponents(Ent)
+end
+
+Methods.Destroy = Entity.Destroy
 
 GetService.AddService("Component", Component)
 GetService.AddService("Entity", Entity)

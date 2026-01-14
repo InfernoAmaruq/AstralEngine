@@ -202,6 +202,15 @@ print("\n>FOLDER TEST SUCCESS:",pcall(function()
     print("TESTING:",Obj1.Ancestry,Obj1.Ancestry.Parent,Obj1.Parent)
 end))
 
+print("\n>TESTING DESTRUCTION:",pcall(function()
+    for _ = 1, 5 do
+        local Obj = Entity.New"OBJECT_ONE"
+        print(Obj.__gen,Obj.UniqueId)
+        local TRANSFORM = Obj:AddComponent("Transform")
+        Entity.Destroy(Obj)
+    end
+end))
+
 -- CONSOLE TESTING:
 
 local function DBG(STACK)

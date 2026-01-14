@@ -172,7 +172,7 @@ function Physics.UnbindCollider(WId, v)
     local Max = #WorldColliders[WId][&F_Col]
     WorldColliders[WId][&F_Col][Index] = WorldColliders[WId][&F_Col][Max]
     WorldColliders[WId][&F_Trans][Index] = WorldColliders[WId][&F_Trans][Max]
-    WorldColliders[WId][&F_Flags][Index] = SorldColliders[WId][&F_Flags][Max]
+    WorldColliders[WId][&F_Flags][Index] = WorldColliders[WId][&F_Flags][Max]
     WorldColliders[WId][&F_Col][Max] = nil
     WorldColliders[WId][&F_Trans][Max] = nil
     WorldColliders[WId][&F_Flags][Max] = nil

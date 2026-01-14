@@ -184,12 +184,28 @@ print("\n>FOLDER TEST SUCCESS:",pcall(function()
     Anc1.Parent = FOLDER
 
     print(Anc1:GetChildren())
-    print(Anc1.Parent,"Children:",table.concat(Anc1:GetChildren()))
+    print(Anc1.Parent,"Children:")
+    for _,v in ipairs(Anc1:GetChildren()) do
+        print("C:",v)
+    end
+    print("End children")
+
+    print("ITERATE")
+    for Child, Id in Anc1:IterChildren() do
+        print("ITERATION:",Child,Id)
+    end
+    print("END ITERATE")
 
     print("GET COMPONENT:",Anc1:FindFirstChildWithComponent("Ancestry"))
     print("GET CHILD:",Anc1:FindFirstChild("OBJECT2"))
 
     print("TESTING:",Obj1.Ancestry,Obj1.Ancestry.Parent,Obj1.Parent)
+end))
+
+print("\n>MATH TEST:",pcall(function()
+    local x = 0
+    print(0,!0,!x)
+    print(0,~0,~x)
 end))
 
 -- CONSOLE TESTING:

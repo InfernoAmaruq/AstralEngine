@@ -5,7 +5,7 @@ local World = GetService("World")
 
 Ancestry.Name = "Ancestry"
 Ancestry.Pattern = { Parent = 0 }
-Ancestry.FastFetch = { "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById", "GetChildren" }
+Ancestry.FastFetch = { "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById", "GetChildren", "GetChildrenIds", "IterChildren" }
 Ancestry.Metadata = {}
 
 @flag:ParentPtr = 1;
@@ -44,6 +44,14 @@ end
 @macro<L,!USEBRACK>{FastAddChild(ChildArray,ChildId) = table.insert(ChildArray,ChildId)}
 @macro<L,!USEBRACK>{GetSelf(&S) = rawget(&S,"__id") and Component.SetComponents[&S.__id]["Ancestry"] or &S}
 
+local SelfPtrForIter
+local function ITERATOR()
+    local self = SelfPtrForIter
+    self.__ITERIDXCACHE = self.__ITERIDXCACHE + 1
+    local Id = self[&ChildPtr][self.__ITERIDXCACHE]
+    return World.GetEntityFromId(Id), Id
+end
+
 local FUNC = {
     -- CORE
     SetParent = function(self, Parent)
@@ -73,7 +81,27 @@ local FUNC = {
         end
     end,
 
+    IterChildren = function(self)
+        self = GetSelf(self)
+        rawset(self,"__ITERIDXCACHE",0)
+
+        SelfPtrForIter = self
+
+        return ITERATOR
+    end,
+
     GetChildren = function(self)
+        self = GetSelf(self)
+        local Ret = {}
+
+        for i = 1, #self[&ChildPtr] do
+            local Ent = World.GetEntityFromId(self[&ChildPtr][i])
+            table.insert(Ret, Ent)
+        end
+
+        return Ret
+    end,
+    GetChildrenIds = function(self)
         self = GetSelf(self)
         return self[&ChildPtr]
     end,

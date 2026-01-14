@@ -539,7 +539,7 @@
 #define luai_numbxor(a,b)	((a)^(b))
 #define luai_numbls(a,b)	((a)<<(b))
 #define luai_numbrs(a,b)	((a)>>(b))
-#define luai_numbnot(a)		(~(int)(a))
+#define luai_numbnot(a)		(~((int)(a)))
 #endif
 
 

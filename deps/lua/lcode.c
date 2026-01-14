@@ -644,6 +644,7 @@ static int constfolding (OpCode op, expdesc *e1, expdesc *e2) {
       r = luai_nummod(v1, v2); break;
     case OP_POW: r = luai_numpow(v1, v2); break;
     case OP_UNM: r = luai_numunm(v1); break;
+    case OP_BNOT: r = luai_numbnot(v1); break;
     case OP_LEN: return 0;  /* no constant folding for 'len' */
     default: lua_assert(0); r = 0; break;
   }
@@ -658,7 +659,7 @@ static void codearith (FuncState *fs, OpCode op, expdesc *e1, expdesc *e2) {
     return;
   else {
     int o1 = luaK_exp2RK(fs, e1);
-    int o2 = (op != OP_UNM && op != OP_LEN) ? luaK_exp2RK(fs, e2) : 0;
+    int o2 = (op != OP_UNM && op != OP_LEN && op != OP_BNOT) ? luaK_exp2RK(fs, e2) : 0;
     freeexp(fs, e2);
     freeexp(fs, e1);
     e1->u.s.info = luaK_codeABC(fs, op, 0, o1, o2);
@@ -700,10 +701,10 @@ void luaK_prefix (FuncState *fs, UnOpr op, expdesc *e) {
       break;
     }
     case OPR_BNOT:{
-	if (!isnumeral(e)) luaK_exp2anyreg(fs,e);
-
-	codearith(fs,OP_BNOT,e,&e2);
-	break;
+        if (e->k == VK)
+            luaK_exp2anyreg(fs,e);
+        codearith(fs,OP_BNOT,e,&e2);
+        break;
     }
     default: lua_assert(0);
   }
@@ -812,14 +813,12 @@ static int luaK_code (FuncState *fs, Instruction i, int line) {
   return fs->pc++;
 }
 
-
 int luaK_codeABC (FuncState *fs, OpCode o, int a, int b, int c) {
   lua_assert(getOpMode(o) == iABC);
   lua_assert(getBMode(o) != OpArgN || b == 0);
   lua_assert(getCMode(o) != OpArgN || c == 0);
   return luaK_code(fs, CREATE_ABC(o, a, b, c), fs->ls->lastline);
 }
-
 
 int luaK_codeABx (FuncState *fs, OpCode o, int a, unsigned int bc) {
   lua_assert(getOpMode(o) == iABx || getOpMode(o) == iAsBx);

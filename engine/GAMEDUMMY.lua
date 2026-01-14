@@ -202,12 +202,6 @@ print("\n>FOLDER TEST SUCCESS:",pcall(function()
     print("TESTING:",Obj1.Ancestry,Obj1.Ancestry.Parent,Obj1.Parent)
 end))
 
-print("\n>MATH TEST:",pcall(function()
-    local x = 0
-    print(0,!0,!x)
-    print(0,~0,~x)
-end))
-
 -- CONSOLE TESTING:
 
 local function DBG(STACK)

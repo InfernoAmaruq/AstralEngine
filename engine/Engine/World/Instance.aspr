@@ -52,6 +52,7 @@ return function(Components)
         local s = Components.SetComponents[self.__id]
         if FastFetch and s and s[FastFetch] then
             s[FastFetch][k] = v
+            return
         end
 
         rawset(self, k, v)

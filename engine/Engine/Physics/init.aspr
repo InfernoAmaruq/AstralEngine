@@ -205,6 +205,22 @@ function Physics.UpdateTransforms(World)
     end
 end
 
+function Physics.DequeueToSyncLTJ(Col)
+    local t = LuaToJoltToSync[Col.WId]
+    Col = Col.ColRef
+
+    local SelfPtr = nil
+    for i = 1, #t[&F_Col] do
+        if t[&F_Col][i] == Col then SelfPtr = i break end
+    end
+    if not SelfPtr then return end
+
+    t[&F_Col][SelfPtr] = t[&F_Col][#t[&F_Col]]
+    t[&F_Trans][SelfPtr] = t[&F_Trans][#t[&F_Trans]]
+    t[&F_Trans][#t[&F_Trans]] = nil
+    t[&F_Col][#t[&F_Col]] = nil
+end
+
 function Physics.QueueToSyncLTJ(W,Col,Transform)
     local t = LuaToJoltToSync[W]
 

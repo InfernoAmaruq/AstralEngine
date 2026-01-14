@@ -209,6 +209,18 @@ print("\n>TESTING DESTRUCTION:",pcall(function()
         local TRANSFORM = Obj:AddComponent("Transform")
         Entity.Destroy(Obj)
     end
+
+    print("PHYS DESTROY")
+    for i,v in pairs(Sphere.Transform) do
+        print(i,v)
+    end
+    print("POS1",Sphere.Transform.Position)
+    Sphere:GetComponent("Transform").Position = vec3(0,0,4)
+    print("POS2",Sphere.Transform.Position)
+    for i,v in pairs(Sphere.Transform) do
+        print(i,v)
+    end
+    Sphere:Destroy()
 end))
 
 -- CONSOLE TESTING:

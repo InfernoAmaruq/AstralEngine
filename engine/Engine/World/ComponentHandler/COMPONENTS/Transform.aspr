@@ -27,7 +27,7 @@ Transform.Metadata = {}
     MatIdx = 3,
     RotIdx = 4,
 
-    Proxy = 9,
+    Self = 9,
 
     ParentMatrix = 10
 }
@@ -91,18 +91,20 @@ local function __NEWINDEX(Ret, k, v)
 
     if k == "Rotation" then
         GetOrientation(Ret)
+    elseif k == "Orientation" then
+        Ret[4]:set(Ret[3]:getEuler())
     end
     if k ~= "Matrix" then
         GetMatrix(Ret)
     end
 
-    local Col = HasCollider(Entity)
+    local Col = HasCollider(Ret[9])
     if Col then
         Physics.QueueToSyncLTJ(Col.WId,Col.ColRef,Ret)
     end
 end
 
-local MT = {__index = __INDEX, __newindex == __NEWINDEX}
+local MT = {__index = __INDEX, __newindex = __NEWINDEX}
 
 @macro<L>:HasCollider(&E) = Component.HasComponent(&E,"Collider")
 
@@ -113,7 +115,7 @@ Transform.Metadata.__remove = function(self, EId)
 end
 
 Transform.Metadata.__create = function(DATA, Entity)
-    local Ret = {}
+    local Ret = {[9] = Entity}
 
     if DATA then
         for i, v in pairs(DATA) do

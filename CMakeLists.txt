@@ -980,7 +980,7 @@ function(build_lua_module SRC)
       )
     else()
       target_compile_options(${MODULE_NAME} PRIVATE
-          -include ${CMAKE_SOURCE_DIR}/etc/astral_api.h
+          -include "${CMAKE_SOURCE_DIR}/etc/astral_api.h"
       )
     endif()
 
@@ -1001,9 +1001,9 @@ function(build_lua_module SRC)
     else()
     set_target_properties(${MODULE_NAME} PROPERTIES
         PREFIX ""
-        LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>
-        RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>
-        ARCHIVE_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>
+	LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
+        RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
+        ARCHIVE_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
     )
     endif()
 endfunction()

@@ -73,14 +73,14 @@ function AstralEngine.Error(Msg, Tag, Layer)
 end
 
 -- mount game folders
+local ResolveTable = {
+    Components = Eq.COMPONENTS,
+    Shaders = Eq.Shaders,
+    Globals = "/Global",
+    Scenes = "GAMEFILE/Assets/Scenes",
+}
 AstralEngine._MOUNT(PATH, "GAMEFILE", "GAMEFILE", true, function(Name)
-    if Name == "Components" then
-        return "/Assets/Components"
-    elseif Name == "Globals" then
-        return "/Global"
-    elseif Name == "Shaders" then
-        return "/Assets/Shaders"
-    end
+    return ResolveTable[Name]
 end)
 
 -- parse config

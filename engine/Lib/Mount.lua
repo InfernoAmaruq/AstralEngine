@@ -10,7 +10,7 @@ local function RecursiveMount(Path, Search, CoreMountPoint, Recurse, Handler)
     local Files = FS.getDirectoryItems(Search)
     for _, v in ipairs(Files) do
         if FS.isDirectory(Search .. "/" .. v) then
-            local TruePath = Path .. v .. "/"
+            local TruePath = Path .. "/" .. v .. "/"
 
             local MountAt = CoreMountPoint .. "/" .. v
             if Handler then
@@ -18,6 +18,7 @@ local function RecursiveMount(Path, Search, CoreMountPoint, Recurse, Handler)
             end
 
             local MountAttempt, Err = FS.mount(TruePath, MountAt, true)
+            print(MountAt)
             if MountAttempt then
                 Mounted[MountAt] = TruePath
                 if Recurse then

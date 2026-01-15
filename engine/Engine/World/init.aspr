@@ -31,7 +31,10 @@ local function ALLOC(Use)
     local ID = World.Capacity
     local Gen = Use and 1 or 0
 
-    local t = setmetatable({ __id = ID, Id = ID, __gen = Gen, UniqueId = Gen << SHIFT | ID, IsNull = true }, InstMeta)
+    local t = setmetatable(
+        { __id = ID, Id = ID, __gen = Gen, UniqueId = Gen << SHIFT | ID, IsNull = true, __context = _G.CONTEXTGEN or 0 },
+        InstMeta
+    )
 
     World.Alive[World.Capacity] = t
 

@@ -171,15 +171,11 @@ function lovr.boot()
         for _, v in ipairs(PossiblePaths) do
             local p = Normalize(EXEFOLD .. v, FSType == "Unix")
 
-            print("MOUNTING:", p)
             Mounted, Failed = lovr.filesystem.mount(p)
 
             if Mounted then
                 path = p
-                print("USING PATH:", path)
                 break
-            else
-                print("MOUNT FAILED:", Failed)
             end
         end
     end
@@ -208,7 +204,6 @@ function lovr.boot()
     -- Mount source archive, make sure it's got the main file, and load pre.lua
 
     lovr.filesystem.setSource(path)
-    print("SET SRC:", path)
     if path ~= bundle then
         lovr.filesystem.unmount(bundle)
     end
@@ -257,8 +252,6 @@ function lovr.boot()
 
     if lovr.filesystem then
         local Os = lovr.system and lovr.system.getOS() or lovr.getOS()
-
-        print("OS:", Os)
 
         if Os == "Windows" then
             -- set paths

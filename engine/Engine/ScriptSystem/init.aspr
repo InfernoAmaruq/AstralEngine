@@ -18,7 +18,11 @@ function ScriptSystem.New(Parameters)
     return self
 end
 
-setmetatable(ScriptSystem, { __call = function(_, ...) return ScriptSystem.New(...) end })
+setmetatable(ScriptSystem, {
+    __call = function(_, ...)
+        return ScriptSystem.New(...)
+    end,
+})
 
 -- [[ ATTACH FUNCS ]]
 
@@ -46,7 +50,7 @@ local CHECKS = {
     end,
     SchedulerValid = function(self)
         return (self.Scheduler and self.Scheduler.Update)
-    end
+    end,
 }
 
 for Name, Func in pairs(CHECKS) do
@@ -62,11 +66,11 @@ local SAFE = {
         end
         local Files = self.FileSystem.GetDir(PATH)
         for _, f in ipairs(Files) do
-            if f:match('%.lua$') or f:match('%.sol$') then
-                local FullPath = PATH .. '/' .. f
+            if f:match("%.lua$") or f:match("%.sol$") then
+                local FullPath = PATH .. "/" .. f
                 local Ok, Err = self:Load(FullPath, UseSandbox)
                 if not Ok then
-                    print('[ScriptSystem] Failed to load', FullPath, Err)
+                    print("[ScriptSystem] Failed to load", FullPath, Err)
                 end
             end
         end
@@ -74,7 +78,9 @@ local SAFE = {
     Load = function(self, PATH, UseSandbox)
         local Chunk, Err = lovr.filesystem.load(PATH)
 
-        if not Chunk then return nil, Err end
+        if not Chunk then
+            return nil, Err
+        end
 
         if UseSandbox ~= false then -- meaning, nil is default and is to be seen as true
             local SandBox = type(UseSandbox) == "table" and UseSandbox or self.Sandbox
@@ -85,14 +91,16 @@ local SAFE = {
         self.Scheduler:Defer(Chunk)
 
         return Chunk
-    end
+    end,
 }
 
 for Name, Func in pairs(SAFE) do
     ScriptSystem[Name] = function(self, ...)
         for NAME, FUNC in pairs(CHECKS) do
             local Success = FUNC(self)
-            if Success then continue end
+            if Success then
+                continue
+            end
 
             error(NAME .. " validation before script loading has failed!")
         end

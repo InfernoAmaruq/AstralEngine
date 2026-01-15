@@ -40,7 +40,6 @@ function lovr.load()
 
     require("Engine")
     local CentralScheduler = require("Engine.Scheduler")
-    local ScriptSys = require("Engine.ScriptSystem")
     require("Engine.Render")
     World = require("Engine.World")
 
@@ -70,11 +69,6 @@ function lovr.load()
     -- EXE
 
     ROOT.SCHEDULERS.MAIN = CentralScheduler.New(lovr.timer.getTime)
-    ROOT.SCRIPTSYS.MAIN = ScriptSys({
-        Scheduler = ROOT.SCHEDULERS.MAIN,
-        FileSystem = FS,
-        DisableAfterSuccess = true,
-    })
 
     SIGNAL.SCHEDULER = ROOT.SCHEDULERS.MAIN
     SIGNAL.CLOCK = lovr.timer.getTime
@@ -135,14 +129,6 @@ function lovr.run()
         title = AstralEngine._CONFIG.Game.Window.Name,
         icon = AstralEngine._CONFIG.Game.Window.Icon,
     })
-
-    -- GET GAME SCRIPTS
-    local f = coroutine.create(function()
-        require("GAMEDUMMY")
-    end)
-    local s,e = pcall(coroutine.resume,f)
-    if not s then print(debug.traceback(f)) error(e) end
-    -- GAME SCRIPTS OVER
 
     local Frames = 0
     local t = 0

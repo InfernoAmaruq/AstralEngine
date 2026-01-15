@@ -18,7 +18,6 @@ local function RecursiveMount(Path, Search, CoreMountPoint, Recurse, Handler)
             end
 
             local MountAttempt, Err = FS.mount(TruePath, MountAt, true)
-            print(MountAt)
             if MountAttempt then
                 Mounted[MountAt] = TruePath
                 if Recurse then

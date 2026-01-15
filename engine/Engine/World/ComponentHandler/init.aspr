@@ -87,6 +87,7 @@ function Component.AddComponent(e, id, DATA)
     end
 
     local MT = getmetatable(D)
+    rawset(D,".CONTEXT",_G.CONTEXTGEN or 0)
     if MT then
         MT.__type = "Component"
         MT.__tostring = ToString

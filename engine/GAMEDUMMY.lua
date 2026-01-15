@@ -203,26 +203,21 @@ print("\n>FOLDER TEST SUCCESS:",pcall(function()
 end))
 
 print("\n>TESTING DESTRUCTION:",pcall(function()
-    for _ = 1, 5 do
-        local Obj = Entity.New"OBJECT_ONE"
-        print(Obj.__gen,Obj.UniqueId)
-        local TRANSFORM = Obj:AddComponent("Transform")
-        Entity.Destroy(Obj)
-    end
+        collectgarbage"collect"
+        local START = collectgarbage"count"
+        for i = 1, 2 do
+        for _ = 1, 16000 do
+            local Obj = Entity.New"OBJECT_ONE"
+            Obj:AddComponent("Transform", { Position = Vec3(3, 0, -10) })
+            Obj:AddComponent("Shape", { Shape = ENUM.ShapeType.Sphere, Color = color.Blue, Size = Vec3(5, 5, 5) })
+            Obj:AddComponent("Collider", { ColliderType = ENUM.ColliderType.Sphere })
 
-    print("PHYS DESTROY")
-    for i,v in pairs(Sphere.Transform) do
-        print(i,v)
-    end
-    print("POS1",Sphere.Transform.Position)
-    Sphere:GetComponent("Transform").Position = vec3(0,0,4)
-    print("POS2",Sphere.Transform.Position)
-    for i,v in pairs(Sphere.Transform) do
-        print(i,v)
-    end
-    local START = debug.cpuclock()
-    Sphere:Destroy()
-    print(debug.cpuclock()-START)
+            Entity.Destroy(Obj)
+        end
+        end
+        collectgarbage"collect"
+        local EndGc = collectgarbage"count"
+        print("DELTA:",EndGc - START,"S:",START,"E:",EndGc)
 end))
 
 -- CONSOLE TESTING:

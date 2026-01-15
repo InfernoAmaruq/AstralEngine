@@ -1374,6 +1374,7 @@ bool lovrHeadsetConnect(void) {
       { ACTION_BUMPER_TOUCH, "/user/hand/right/input/bumper/touch" },
       { ACTION_HAND_VIBRATE, "/user/hand/left/output/haptic" },
       { ACTION_HAND_VIBRATE, "/user/hand/right/output/haptic" },
+      { 0, NULL }
     }
   };
 

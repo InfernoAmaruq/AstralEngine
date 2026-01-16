@@ -57,4 +57,7 @@ return {
             Name = "Astral Engine Demo 0.0.1",
         },
     },
+    Filesystem = {
+        EntryScene = "entry",
+    },
 }

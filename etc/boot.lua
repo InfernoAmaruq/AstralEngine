@@ -110,6 +110,9 @@ function lovr.boot()
     lovr.filesystem.toUnix = function(Path)
         return Path:gsub(Win, Unix)
     end
+    lovr.filesystem.folderFromPath = function(p)
+        return p:gsub(PATTERN, "")
+    end
 
     -- See if there's a ZIP archive fused to the executable, and set up the fused CLI if it exists
 

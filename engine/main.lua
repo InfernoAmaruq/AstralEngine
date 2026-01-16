@@ -2,7 +2,7 @@ local CONFIG = CONF
 
 local SIGNAL = require("Lib.Signal")
 
-local ROOT, World, Renderer, RunService
+local ROOT, World, Renderer, RunService, SS
 
 -- DEF WINDOW
 local IsMouseGrabbed = false
@@ -93,6 +93,8 @@ function lovr.load()
     World.Component.LoadComponents({GetDir = lovr.filesystem.getDirectoryItems})
 
     World.Component.__RunPostPass()
+
+    SS = require("Engine.ScriptSystem")
 end
 
 function lovr.update(dt)
@@ -129,6 +131,22 @@ function lovr.run()
         title = AstralEngine._CONFIG.Game.Window.Name,
         icon = AstralEngine._CONFIG.Game.Window.Icon,
     })
+
+    -- MOUNT
+
+    -- try execute core script first
+    local Ok, Err = pcall(loadfile,"GAMEFILE/launch.lua")
+    if Ok then
+        if Err then
+            Err()
+        end
+    else
+        AstralEngine.Log("File 'launch.lua' encountered an error!\n > "..tostring(Err),"FATAL")
+    end
+
+    SS.Scene.LoadScene(AstralEngine._CONFIG.Filesystem.EntryScene)
+
+    -- RUNTIME
 
     local Frames = 0
     local t = 0

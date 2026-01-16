@@ -43,18 +43,24 @@ require("CompGlobals")
 
 function AstralEngine.Log(Msg, Flag, Tag, Level)
     Flag = Flag and tostring(Flag) or error("Invalid flag provided!")
-    local IsErr = Flag:lower() == "error" or Flag:lower() == "fatal"
+    local IsErr = Flag:lower() == "error"
     local IsFatal = Flag:lower() == "fatal"
     local f = IsErr and error or print
+
+    local MsgT = type(Msg)
+    if MsgT == "table" then
+        Msg = table.concat(Msg, " ")
+    end
+
     if Tag then
         f(("[ASTRAL %s][%s]: %s"):format(Flag:upper(), Tag, tostring(Msg)), IsErr and (Level or 2) or "")
         if IsFatal then
-            lovr.quit()
+            QUIT()
         end
     else
         f(("[ASTRAL %s]: %s"):format(Flag:upper(), tostring(Msg)), IsErr and (Level or 2) or "")
         if IsFatal then
-            lovr.quit()
+            QUIT()
         end
     end
 end

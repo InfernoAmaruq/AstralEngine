@@ -15,7 +15,7 @@ return {
             Height = nil,
         },
     },
-    Pointer = {
-        EntryPoint = "entry",
+    Filesystem = {
+        EntryScene = "entry",
     },
 }

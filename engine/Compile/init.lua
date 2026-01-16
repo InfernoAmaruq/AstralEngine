@@ -86,19 +86,19 @@ local function COMPILE_LOADSTRING(c, NAME)
     end
     local f, err = loadstring(c, NAME)
     if not f then
-        print("RECOMP ERROR:", err)
+        error("RECOMPILER ERROR: " .. err, 2)
     end
     return f
 end
 
 _G.comp_loadstring = COMPILE_LOADSTRING
 
-Recompiler.Loadfile = function(path,fenv)
+Recompiler.Loadfile = function(path, fenv)
     if lovr.filesystem.isFile(path) then
         local c = lovr.filesystem.read(path, -1)
         if c then
             local DATA = COMPILE_LOADSTRING(c, path)
-            return fenv and setfenv(DATA,fenv) or DATA
+            return fenv and setfenv(DATA, fenv) or DATA
         end
     end
 end

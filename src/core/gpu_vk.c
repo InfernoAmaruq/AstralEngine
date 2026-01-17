@@ -205,12 +205,9 @@ typedef struct {
   bool debug;
   bool shaderDebug;
   bool surface;
-  bool surfaceCapabilities;
-  bool surfaceMaintenance;
   bool surfaceOS;
   bool swapchain;
   bool colorspace;
-  bool swapchainMaintenance;
   bool depthResolve;
   bool formatList;
   bool renderPass2;
@@ -1088,7 +1085,6 @@ bool gpu_surface_resize(uint32_t width, uint32_t height) {
 
   VkSwapchainCreateInfoKHR swapchainInfo = {
     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-    .flags = state.extensions.swapchainMaintenance ? VK_SWAPCHAIN_CREATE_DEFERRED_MEMORY_ALLOCATION_BIT_KHR : 0,
     .surface = surface->handle,
     .minImageCount = surface->capabilities.minImageCount,
     .imageFormat = surface->vkformat.format,
@@ -2906,8 +2902,6 @@ bool gpu_init(gpu_config* config) {
       { "VK_EXT_debug_utils", config->debug, &state.extensions.debug },
       { "VK_EXT_swapchain_colorspace", true, &state.extensions.colorspace },
       { "VK_KHR_surface", true, &state.extensions.surface },
-      { "VK_KHR_get_surface_capabilities2", true, &state.extensions.surfaceCapabilities },
-      { "VK_KHR_surface_maintenance1", true, &state.extensions.surfaceMaintenance },
 #if defined(_WIN32)
       { "VK_KHR_win32_surface", true, &state.extensions.surfaceOS },
 #elif defined(__APPLE__)
@@ -2995,7 +2989,6 @@ bool gpu_init(gpu_config* config) {
       { "VK_KHR_create_renderpass2", true, &state.extensions.renderPass2 },
       { "VK_KHR_deferred_host_operations", true, &state.extensions.deferredHostOperations },
       { "VK_KHR_swapchain", true, &state.extensions.swapchain },
-      { "VK_KHR_swapchain_maintenance1", true, &state.extensions.swapchainMaintenance },
       { "VK_KHR_portability_subset", true, &state.extensions.portability },
       { "VK_KHR_depth_stencil_resolve", true, &state.extensions.depthResolve },
       { "VK_KHR_ray_query", true, &state.extensions.rayQuery },
@@ -3106,7 +3099,6 @@ bool gpu_init(gpu_config* config) {
     VkPhysicalDeviceFragmentDensityMapFeaturesEXT fragmentDensityMapFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT };
     VkPhysicalDevicePipelineCreationCacheControlFeaturesEXT pipelineCreationCacheControlFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES_EXT };
     VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timelineSemaphoreFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR };
-    VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchainMaintenanceFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR };
     VkPhysicalDeviceBufferDeviceAddressFeaturesKHR bufferDeviceAddressFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR };
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
     VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
@@ -3165,11 +3157,6 @@ bool gpu_init(gpu_config* config) {
     if (state.extensions.pipelineCacheControl) {
       pipelineCreationCacheControlFeatures.pipelineCreationCacheControl = true;
       CHAIN(pipelineCreationCacheControlFeatures);
-    }
-
-    if (state.extensions.swapchainMaintenance) {
-      swapchainMaintenanceFeatures.swapchainMaintenance1 = true;
-      CHAIN(swapchainMaintenanceFeatures);
     }
 
     if (state.extensions.bufferDeviceAddress) {

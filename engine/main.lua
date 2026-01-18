@@ -4,31 +4,7 @@ local SIGNAL = require("Lib.Signal")
 
 local ROOT, World, Renderer, RunService, SS
 
--- DEF WINDOW
-local IsMouseGrabbed = false
-
-AstralEngine.Window.OnFocusChanged = SIGNAL.new(false)
-
-AstralEngine.Window.SetSize = lovr.system.setWindowSize
-
-function AstralEngine.Window.GrabMouse(State)
-    IsMouseGrabbed = State
-    if AstralEngine.Window.Focused then
-        lovr.system.setMouseGrabbed(State)
-    end
-end
-
-function AstralEngine.Window.MouseGrabbed()
-    return IsMouseGrabbed
-end
-
-function lovr.focus(f)
-    AstralEngine.Window.Focused = f
-    AstralEngine.Window.OnFocusChanged:Fire(f)
-    if f and IsMouseGrabbed then
-        lovr.system.setMouseGrabbed(f)
-    end
-end
+-- DEF WINDO
 
 -- LOAD
 
@@ -76,7 +52,6 @@ function lovr.load()
     -- DEFINING EXTRA GLOBALS
 
     BRIDGE.LoadGlobals({ SIGNAL = SIGNAL, ROOT = ROOT, ALLKEYS = require("ALLKEYS") })
-    BRIDGE.ConnectDevices()
 
     RunService = GetService"RunService"
     require("Engine.Physics")
@@ -95,6 +70,11 @@ function lovr.load()
     World.Component.__RunPostPass()
 
     SS = require("Engine.ScriptSystem")
+
+    -- now that everything is loaded, alias
+    BRIDGE.ConnectDevices()
+    BRIDGE.LoadWindow()
+    BRIDGE.Alias()
 end
 
 function lovr.update(dt)
@@ -102,35 +82,10 @@ function lovr.update(dt)
     RunService.__TICK(0,500,dt)
 end
 
--- HANDLE RESIZING
-AstralEngine.Signals.OnWindowResize = SIGNAL.new(false)
-
-function lovr.resize(w,h)
-    AstralEngine.Window.W = w
-    AstralEngine.Window.H = h
-    AstralEngine.Window.__WindowResizedPasses(w,h)
-    AstralEngine.Signals.OnWindowResize:Fire(w,h)
-    GetService"Renderer".PassStorage.RebuildPassTable()
-    collectgarbage("collect")
-end
-
 lovr.textinput = nil
 
 function lovr.run()
     if lovr.load then lovr.load() end
-
-    local W,H = AstralEngine._CONFIG.Game.Window.Width, AstralEngine._CONFIG.Game.Window.Height
-
-    AstralEngine.Window.W = W
-    AstralEngine.Window.H = H
-    lovr.system.openWindow({
-        width = W,
-        height = H,
-        fullscreen = AstralEngine._CONFIG.Game.Window.Fullscreen,
-        resizable = AstralEngine._CONFIG.Game.Window.Resizable,
-        title = AstralEngine._CONFIG.Game.Window.Name,
-        icon = AstralEngine._CONFIG.Game.Window.Icon,
-    })
 
     -- MOUNT
 

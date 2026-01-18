@@ -88,11 +88,17 @@ return function(ScriptService, Ctx)
             AstralEngine.Log({ "Failed to load scene file:", Scene, "at path:", SceneFile, "\n > with error:", err })
         end
 
-        -- lua loading passed!! now we do whatevs we gotta do
+        -- all done, time to load the files
 
-        local AssetMap = err.AssetMaps and GetAssetMap(err.AssetMaps, Folder)
+        -- make a new context first
 
-        LoadedScenes[Scene] = Ctx.New()
+        local SceneT = {}
+        SceneT.Context = Ctx.New()
+
+        local AssetMap = err.AssetMaps and GetAssetMap(err.AssetMaps, Folder) or nil
+        SceneT.AssetMap = AssetMap
+
+        LoadedScenes[Scene] = SceneT
     end
 
     function SceneManager.UnloadScene(Scene)
@@ -100,7 +106,7 @@ return function(ScriptService, Ctx)
             AstralEngine.Log("Scene " .. Scene .. " is not loaded", "Warning", "SCENEMANAGER")
         end
 
-        LoadedScenes[Scene]:KillAll()
+        LoadedScenes[Scene].Context:KillAll()
         LoadedScenes[Scene] = nil
     end
 

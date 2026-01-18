@@ -32,7 +32,14 @@ local function ALLOC(Use)
     local Gen = Use and 1 or 0
 
     local t = setmetatable(
-        { __id = ID, Id = ID, __gen = Gen, UniqueId = Gen << SHIFT | ID, IsNull = true, __context = _G.CONTEXTGEN or 0 },
+        {
+            __id = ID,
+            Id = ID,
+            __gen = Gen,
+            UniqueId = Gen << SHIFT | ID,
+            IsNull = true,
+            __context = _G.CONTEXT and _G.CONTEXT.Gen or 0,
+        },
         InstMeta
     )
 

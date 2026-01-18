@@ -2727,11 +2727,12 @@ bool lovrTextureSetPixels(Texture* texture, Image* image, uint32_t dstOffset[4],
   lovrCheck(srcOffset[3] < lovrImageGetLevelCount(image), "Image copy region exceeds its %s", "mipmap count");
   if (!checkTextureBounds(&texture->info, dstOffset, extent)) return false;
 
+  uint32_t srcWidth = lovrImageGetWidth(image, srcOffset[3]);
   uint32_t rowSize = measureTexture(format, extent[0], 1, 1);
   uint32_t totalSize = measureTexture(format, extent[0], extent[1], 1) * extent[2];
-  uint32_t layerOffset = measureTexture(format, extent[0], srcOffset[1], 1);
+  uint32_t layerOffset = measureTexture(format, srcWidth, srcOffset[1], 1);
   layerOffset += measureTexture(format, srcOffset[0], 1, 1);
-  uint32_t pitch = measureTexture(format, lovrImageGetWidth(image, srcOffset[3]), 1, 1);
+  uint32_t pitch = measureTexture(format, srcWidth, 1, 1);
   BufferView view = getBuffer(GPU_BUFFER_UPLOAD, totalSize, 64);
   if (!view.buffer) return false;
 

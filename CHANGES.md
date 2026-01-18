@@ -15,6 +15,7 @@ dev
 - Fix possible crash in Model animation.
 - Fix `t.headset.seated`.
 - Fix `lovr.filesystem.newFile` to search all mounted archives properly.
+- Fix `Texture:setPixels` when copying from an `Image` with an offset.
 
 v0.18.0 - 2025-02-14
 ---

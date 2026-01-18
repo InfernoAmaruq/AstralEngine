@@ -239,6 +239,45 @@ LVRB.LoadWindow = function()
     })
 end
 
+LVRB.LoadRandom = function()
+    math.randomseed = lovr.math.setRandomSeed
+    math.random = lovr.math.random
+    math.noise = lovr.math.noise
+    math.getrandomseed = lovr.math.getRandomSeed
+    math.randomnormal = lovr.math.randomNormal
+
+    -- seeding
+    local t = lovr.timer.getTime()
+    local os = lovr.system.getOS()
+    local pid = lovr.system.getCoreCount()
+    local addr = debug.getaddress({})
+
+    local SEED = math.floor(t * 1e9)
+    ^^ (#os * 0x9e3779b9)
+    ^^ (pid << 16)
+    ^^ tonumber(addr, 16)
+    math.randomseed(SEED, SEED ^^ tonumber(debug.getaddress({}),16))
+
+    math.newrandom = function(...)
+        local RanGen = lovr.math.newRandomGenerator(...)
+        local Mt = getmetatable(RanGen)
+
+        if Mt.WRAPPED then return RanGen end
+
+        local OgIdx = Mt.__index
+        Mt.__index = function(_,k)
+            local r = k:sub(1,1)
+            if r == r:upper() then
+                k = r:lower()..k:sub(2)
+            end
+            return OgIdx[k]
+        end
+
+        return RanGen
+    end
+
+end
+
 LVRB.Alias = function()
     -- this is for aliasing LOVR functions, should be done last when there is no more mutation
 
@@ -258,6 +297,20 @@ LVRB.Alias = function()
     AstralEngine.System.SetClipboardText = lovr.system.setClipboardText
     AstralEngine.System.GetClipboardText = lovr.system.getClipboardText
     AstralEngine.System.RequestPermission = lovr.system.requestPermission
+    AstralEngine.System.GetGPUInfo = lovr.graphics.getDevice
+    AstralEngine.System.GetGPUFeatures = lovr.graphics.getFeatures
+    AstralEngine.System.GetGPULimits = lovr.graphics.getLimits
+    AstralEngine.System.IsTextureSupported = lovr.graphics.isFormatSupported
+
+    AstralEngine.Graphics.SetBackgroundColor = lovr.graphics.setBackgroundColor
+    AstralEngine.Graphics.GetBackgroundColor = lovr.graphics.GetBackgroundColor
+    AstralEngine.Graphics.EnableTiming = lovr.graphics.setTimingEnabled
+    AstralEngine.Graphics.IsTimingEnabled = lovr.graphics.isTimingEnabled
+    AstralEngine.Graphics.GetDefaultFont = lovr.graphics.getDefaultFont
+
+    AstralEngine.Quit = lovr.event.quit
+    AstralEngine.Restart = lovr.event.restart
+    AstralEngine.GetHostVersion = lovr.getVersion
 end
 
 return LVRB

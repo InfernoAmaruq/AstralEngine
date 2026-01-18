@@ -572,7 +572,7 @@ end
 function lovr.log(message, level, tag)
     message = message:gsub("\n$", "")
     level = level:gsub("\n$", "")
-    tag = tag:gsub("\n$", "")
+    tag = tag and tag:gsub("\n$", "") or ""
     print(("[LOVR %s][%s]:%s"):format(level, tag, message))
 end
 

@@ -73,6 +73,7 @@ function lovr.load()
 
     -- now that everything is loaded, alias
     BRIDGE.ConnectDevices()
+    BRIDGE.LoadRandom()
     BRIDGE.LoadWindow()
     BRIDGE.Alias()
 end

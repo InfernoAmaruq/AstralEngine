@@ -31,17 +31,14 @@ local function ALLOC(Use)
     local ID = World.Capacity
     local Gen = Use and 1 or 0
 
-    local t = setmetatable(
-        {
-            __id = ID,
-            Id = ID,
-            __gen = Gen,
-            UniqueId = Gen << SHIFT | ID,
-            IsNull = true,
-            __context = _G.CONTEXT and _G.CONTEXT.Gen or 0,
-        },
-        InstMeta
-    )
+    local t = setmetatable({
+        __id = ID,
+        Id = ID,
+        __gen = Gen,
+        UniqueId = Gen << SHIFT | ID,
+        IsNull = true,
+        __context = _G.CONTEXT and _G.CONTEXT.Gen or 0,
+    }, InstMeta)
 
     World.Alive[World.Capacity] = t
 
@@ -79,6 +76,7 @@ local function GetEntity()
 end
 
 function Entity.New(Name, ...)
+    Name = Name or "UNNAMED_ENTITY"
     assert(type(Name) == "string", "Entity name not a string!")
     local NewEntity = GetEntity()
 
@@ -97,6 +95,10 @@ function Entity.New(Name, ...)
 
     return NewEntity
 end
+
+function Entity.CreateAsExternal(Struct, Name, ...) end
+
+function Entity.CreateAtId(Id, Name, ...) end
 
 function Entity.Destroy(Ent, Recursive)
     Recursive = Recursive ~= false and true or false

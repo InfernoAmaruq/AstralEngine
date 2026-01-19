@@ -8,41 +8,7 @@ return function(ScriptService, Ctx)
 
     local SceneManager = {}
 
-    -- PRIVATE
-
-    local function LoadAssetFile(Path)
-        local f = loadfile(Path)
-        return f()
-    end
-
-    local function GetAssetMap(AssetMapFS, Folder)
-        local Map = {}
-
-        for _, v in ipairs(AssetMapFS) do
-            local GlobalPath = v
-            local LocalPath = lovr.filesystem.normalize(Folder .. "/" .. v)
-
-            local GlobalFile, LocalFile = lovr.filesystem.isFile(GlobalPath), lovr.filesystem.isFile(LocalPath)
-
-            if GlobalFile or LocalFile then
-                local UsePath = GlobalFile and GlobalPath or LocalPath
-
-                local s, err = pcall(LoadAssetFile, UsePath)
-                if not s then
-                    AstralEngine.Log(
-                        "Failed to load asset map at " .. UsePath .. "\n > with error: " .. err,
-                        "fatal",
-                        "SCENEMANAGER"
-                    )
-                else
-                    for i, v in ipairs(err) do
-                    end
-                end
-            end
-        end
-
-        return Map
-    end
+    local AssetMapLoader = require("./AssetMap")
 
     -- PUBLIC
 
@@ -95,10 +61,14 @@ return function(ScriptService, Ctx)
         local SceneT = {}
         SceneT.Context = Ctx.New()
 
-        local AssetMap = err.AssetMaps and GetAssetMap(err.AssetMaps, Folder) or nil
+        local AssetMap = err.AssetMaps and AssetMapLoader.GetAssetMap(err.AssetMaps, Folder) or nil
         SceneT.AssetMap = AssetMap
 
         LoadedScenes[Scene] = SceneT
+
+        -- aaand get to loading shit
+
+        AssetMapLoader.LoadAssetMap(AssetMap)
     end
 
     function SceneManager.UnloadScene(Scene)

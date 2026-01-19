@@ -53,7 +53,7 @@ return {
             Fullscreen = false,
             Width = 1700, -- or 0 for borderless fullscreen
             Height = 900,
-            Resizable = true,
+            Resizable = false,
             Name = "Astral Engine Demo 0.0.1",
         },
     },

@@ -202,6 +202,24 @@ print("\n>FOLDER TEST SUCCESS:",pcall(function()
     print("TESTING:",Obj1.Ancestry,Obj1.Ancestry.Parent,Obj1.Parent)
 end))
 
+print("\n>TESTING DESTRUCTION:",pcall(function()
+        collectgarbage"collect"
+        local START = collectgarbage"count"
+        for i = 1, 2 do
+        for _ = 1, 16000 do
+            local Obj = Entity.New"OBJECT_ONE"
+            Obj:AddComponent("Transform", { Position = Vec3(3, 0, -10) })
+            Obj:AddComponent("Shape", { Shape = ENUM.ShapeType.Sphere, Color = color.Blue, Size = Vec3(5, 5, 5) })
+            Obj:AddComponent("Collider", { ColliderType = ENUM.ColliderType.Sphere })
+
+            Entity.Destroy(Obj)
+        end
+        end
+        collectgarbage"collect"
+        local EndGc = collectgarbage"count"
+        print("DELTA:",EndGc - START,"S:",START,"E:",EndGc)
+end))
+
 -- CONSOLE TESTING:
 
 local function DBG(STACK)

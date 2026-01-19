@@ -20,6 +20,24 @@ Code.LoadMemory(SharedMemory)
 
 Recompiler.MaxPasses = 5
 
+-- APPEND STACK
+_G.meta.LoadfileAppendStack = {}
+
+function meta.LoadfileAppendStack.Push(s)
+    table.insert(meta.LoadfileAppendStack, s)
+end
+
+function meta.LoadfileAppendStack.Pop()
+    local Stack = meta.LoadfileAppendStack
+    Stack[#Stack] = nil
+end
+
+function meta.LoadfileAppendStack.Clear()
+    for i = #meta.LoadfileAppendStack, 1, -1 do
+        meta.LoadfileAppendStack[i] = nil
+    end
+end
+
 local function PREPROCESS(Src, n)
     for _, v in ipairs(Recompiler.Dirs) do
         if v.PRE then
@@ -59,6 +77,13 @@ end
 local COUNTER = 0
 
 local function COMPILE_LOADSTRING(c, NAME)
+    for i = 1, #meta.LoadfileAppendStack do
+        local S = meta.LoadfileAppendStack[i]
+        c = S .. c
+        meta.LoadfileAppendStack.Pop()
+        print("APPENDED:\n", s, "\nRESULT:\n", c)
+    end
+
     local Dirs
     if Lexer.FSearch(c) or Verify(c) then
         COUNTER = COUNTER + 1
@@ -86,19 +111,19 @@ local function COMPILE_LOADSTRING(c, NAME)
     end
     local f, err = loadstring(c, NAME)
     if not f then
-        print("RECOMP ERROR:", err)
+        error("RECOMPILER ERROR: " .. err, 2)
     end
     return f
 end
 
 _G.comp_loadstring = COMPILE_LOADSTRING
 
-Recompiler.Loadfile = function(path,fenv)
+Recompiler.Loadfile = function(path, fenv)
     if lovr.filesystem.isFile(path) then
         local c = lovr.filesystem.read(path, -1)
         if c then
             local DATA = COMPILE_LOADSTRING(c, path)
-            return fenv and setfenv(DATA,fenv) or DATA
+            return fenv and setfenv(DATA, fenv) or DATA
         end
     end
 end

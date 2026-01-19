@@ -2,33 +2,9 @@ local CONFIG = CONF
 
 local SIGNAL = require("Lib.Signal")
 
-local ROOT, World, Renderer, RunService
+local ROOT, World, Renderer, RunService, SS
 
--- DEF WINDOW
-local IsMouseGrabbed = false
-
-AstralEngine.Window.OnFocusChanged = SIGNAL.new(false)
-
-AstralEngine.Window.SetSize = lovr.system.setWindowSize
-
-function AstralEngine.Window.GrabMouse(State)
-    IsMouseGrabbed = State
-    if AstralEngine.Window.Focused then
-        lovr.system.setMouseGrabbed(State)
-    end
-end
-
-function AstralEngine.Window.MouseGrabbed()
-    return IsMouseGrabbed
-end
-
-function lovr.focus(f)
-    AstralEngine.Window.Focused = f
-    AstralEngine.Window.OnFocusChanged:Fire(f)
-    if f and IsMouseGrabbed then
-        lovr.system.setMouseGrabbed(f)
-    end
-end
+AstralEngine.Callbacks = {}
 
 -- LOAD
 
@@ -40,7 +16,6 @@ function lovr.load()
 
     require("Engine")
     local CentralScheduler = require("Engine.Scheduler")
-    local ScriptSys = require("Engine.ScriptSystem")
     require("Engine.Render")
     World = require("Engine.World")
 
@@ -70,11 +45,6 @@ function lovr.load()
     -- EXE
 
     ROOT.SCHEDULERS.MAIN = CentralScheduler.New(lovr.timer.getTime)
-    ROOT.SCRIPTSYS.MAIN = ScriptSys({
-        Scheduler = ROOT.SCHEDULERS.MAIN,
-        FileSystem = FS,
-        DisableAfterSuccess = true,
-    })
 
     SIGNAL.SCHEDULER = ROOT.SCHEDULERS.MAIN
     SIGNAL.CLOCK = lovr.timer.getTime
@@ -82,16 +52,11 @@ function lovr.load()
     -- DEFINING EXTRA GLOBALS
 
     BRIDGE.LoadGlobals({ SIGNAL = SIGNAL, ROOT = ROOT, ALLKEYS = require("ALLKEYS") })
-    BRIDGE.ConnectDevices()
 
     RunService = GetService"RunService"
     require("Engine.Physics")
 
-    GetService.AddService("Graphics", AstralEngine.Graphics)
-
     -- RUNNING ALL SCRIPTS
-
-    CONFIG:APPLY()
 
     CURRENT_FRAME = 0
     CURRENT_CPUTICK = 0
@@ -99,6 +64,14 @@ function lovr.load()
     World.Component.LoadComponents({GetDir = lovr.filesystem.getDirectoryItems})
 
     World.Component.__RunPostPass()
+
+    SS = require("Engine.ScriptSystem")
+
+    -- now that everything is loaded, alias
+    BRIDGE.ConnectDevices()
+    BRIDGE.LoadRandom()
+    BRIDGE.LoadWindow()
+    BRIDGE.Alias()
 end
 
 function lovr.update(dt)
@@ -106,43 +79,38 @@ function lovr.update(dt)
     RunService.__TICK(0,500,dt)
 end
 
--- HANDLE RESIZING
-AstralEngine.Signals.OnWindowResize = SIGNAL.new(false)
-
-function lovr.resize(w,h)
-    AstralEngine.Window.W = w
-    AstralEngine.Window.H = h
-    AstralEngine.Window.__WindowResizedPasses(w,h)
-    AstralEngine.Signals.OnWindowResize:Fire(w,h)
-    GetService"Renderer".PassStorage.RebuildPassTable()
-    collectgarbage("collect")
-end
-
 lovr.textinput = nil
+
+local QuitSig = SIGNAL.new(false)
+function lovr.quit(...)
+    local ShouldAbort = false
+    if AstralEngine.Callbacks.OnQuit then ShouldAbort = AstralEngine.Callbacks.OnQuit(...) end
+
+    if ShouldAbort then return false end
+
+    QuitSig:Fire(...)
+
+    return true
+end
 
 function lovr.run()
     if lovr.load then lovr.load() end
 
-    local W,H = AstralEngine._CONFIG.Game.Window.Width, AstralEngine._CONFIG.Game.Window.Height
+    -- MOUNT
 
-    AstralEngine.Window.W = W
-    AstralEngine.Window.H = H
-    lovr.system.openWindow({
-        width = W,
-        height = H,
-        fullscreen = AstralEngine._CONFIG.Game.Window.Fullscreen,
-        resizable = AstralEngine._CONFIG.Game.Window.Resizable,
-        title = AstralEngine._CONFIG.Game.Window.Name,
-        icon = AstralEngine._CONFIG.Game.Window.Icon,
-    })
+    -- try execute core script first
+    local Ok, Err = pcall(loadfile,"GAMEFILE/launch.lua")
+    if Ok then
+        if Err then
+            Err()
+        end
+    else
+        AstralEngine.Log("File 'launch.lua' encountered an error!\n > "..tostring(Err),"FATAL")
+    end
 
-    -- GET GAME SCRIPTS
-    local f = coroutine.create(function()
-        require("GAMEDUMMY")
-    end)
-    local s,e = pcall(coroutine.resume,f)
-    if not s then print(debug.traceback(f)) error(e) end
-    -- GAME SCRIPTS OVER
+    SS.Scene.LoadScene(AstralEngine._CONFIG.Filesystem.EntryScene)
+
+    -- RUNTIME
 
     local Frames = 0
     local t = 0

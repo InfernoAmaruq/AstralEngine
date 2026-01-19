@@ -1,6 +1,6 @@
 return {
     Define = {},
-    Solstice = {
+    Astral = {
         Debug = true,
         Modules = {
             Headset = false,
@@ -9,10 +9,13 @@ return {
     },
     Game = {
         Version = "0",
-        Identity = "default",
+        Identity = "ASTRL_TEST_GAME",
         Window = {
             Width = nil,
             Height = nil,
         },
+    },
+    Filesystem = {
+        EntryScene = "entry",
     },
 }

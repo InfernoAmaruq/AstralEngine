@@ -1,4 +1,4 @@
-math.rmap = !0
+math.rmap = ~0
 
 local Component = GetService("Component", "Component")
 

@@ -71,6 +71,8 @@ local FUNC = {
             local Reference
             VALIDATE(Parent,Val,Reference)
 
+            if Reference.IsNull then error("Attempt to set parent to dead object") end
+
             if Val == self[&SelfPtr] then error("Attempt to set object parent to itself",2) end
 
             local ParentAnc = Component.HasComponent(Val,Ancestry.Name)

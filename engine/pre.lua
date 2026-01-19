@@ -8,8 +8,6 @@ local ExeFold = lovr.filesystem.getExecutableFolder()
 
 PATH = lovr.filesystem.normalize(lovr.filesystem.toUnix(ExeFold .. PATH), true)
 
-print(PATH)
-
 _G.__BOOT = {}
 _G.AstralEngine = {
     Signals = {},
@@ -43,18 +41,24 @@ require("CompGlobals")
 
 function AstralEngine.Log(Msg, Flag, Tag, Level)
     Flag = Flag and tostring(Flag) or error("Invalid flag provided!")
-    local IsErr = Flag:lower() == "error" or Flag:lower() == "fatal"
+    local IsErr = Flag:lower() == "error"
     local IsFatal = Flag:lower() == "fatal"
     local f = IsErr and error or print
+
+    local MsgT = type(Msg)
+    if MsgT == "table" then
+        Msg = table.concat(Msg, " ")
+    end
+
     if Tag then
         f(("[ASTRAL %s][%s]: %s"):format(Flag:upper(), Tag, tostring(Msg)), IsErr and (Level or 2) or "")
         if IsFatal then
-            lovr.quit()
+            QUIT()
         end
     else
         f(("[ASTRAL %s]: %s"):format(Flag:upper(), tostring(Msg)), IsErr and (Level or 2) or "")
         if IsFatal then
-            lovr.quit()
+            QUIT()
         end
     end
 end
@@ -73,14 +77,14 @@ function AstralEngine.Error(Msg, Tag, Layer)
 end
 
 -- mount game folders
+local ResolveTable = {
+    Components = Eq.COMPONENTS,
+    Shaders = Eq.Shaders,
+    Globals = "/Global",
+    Scenes = "GAMEFILE/Assets/Scenes",
+}
 AstralEngine._MOUNT(PATH, "GAMEFILE", "GAMEFILE", true, function(Name)
-    if Name == "Components" then
-        return "/Assets/Components"
-    elseif Name == "Globals" then
-        return "/Global"
-    elseif Name == "Shaders" then
-        return "/Assets/Shaders"
-    end
+    return ResolveTable[Name]
 end)
 
 -- parse config
@@ -151,30 +155,6 @@ end
 -- set astral config, not lovr config
 local CONF = {}
 _G.CONF = CONF
-
-local APPLYTABLE = {
-    DEBUG = function(STATE)
-        if not STATE then
-            return
-        end
-        GetService("InputService").GetKeyboard().KeyPressed:Connect(function(k)
-            if k == "escape" then
-                QUIT()
-            end
-        end)
-    end,
-}
-
-function CONF:APPLY()
-    if self == CONF then
-        self = CONF.CONFIG
-    end
-    for KEY, STATE in pairs(self) do
-        if APPLYTABLE[KEY] then
-            APPLYTABLE[KEY](STATE)
-        end
-    end
-end
 
 CONF.CONFIG = {
     DEBUG = AstralEngine._CONFIG.Astral.Debug,

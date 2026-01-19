@@ -11,13 +11,14 @@ local DEADMT = {
 }
 
 local MTCACHE = setmetatable({},{__mode = "v"})
+local CBaseMT = {__type = "ComponentPrefab"}
 
 function Component.NewComponent(Name, Pattern, Metadata, FastFetch)
     print("ATTACHING:",Name)
     assert(not Component.Components[Name], "Component already exists: " .. Name)
     Component.Components[Name] = setmetatable(
         { Storage = {}, Name = Name, Pattern = Pattern, Metadata = Metadata },
-        { __type = "ComponentPrefab" }
+        CBaseMT
     )
 
     if FastFetch then
@@ -86,6 +87,7 @@ function Component.AddComponent(e, id, DATA)
     end
 
     local MT = getmetatable(D)
+    rawset(D,".CONTEXT",_G.CONTEXTGEN or 0)
     if MT then
         MT.__type = "Component"
         MT.__tostring = ToString
@@ -109,18 +111,39 @@ function Component.RemoveComponent(e, id)
     if type(e) == &TYPE then
         e = e.__id
     end
-    if not Component.SetComponents[e] then
+
+    local Comp = Component.Components[id]
+
+    if not Component.SetComponents[e] or not Comp then
         return
     end
 
-    local Comp = Component.Components[e]
+    local CompInst = Component.SetComponents[e][id]
     if Comp.Metadata and Comp.Metadata.__remove then
-        Comp.Metadata.__remove(e, Component.SetComponents[e][id])
+        Comp.Metadata.__remove(CompInst, e, true)
     end
 
-    setmetatable(Component.SetComponents[e][id], nil)
+    setmetatable(CompInst, DEADMT)
+
+    for i in pairs(CompInst) do
+        CompInst[i] = nil
+    end
+
     Component.Components[id].Storage[e] = nil
     Component.SetComponents[e][id] = nil
+end
+
+function Component.__RemoveAllComponents(EntityHandle)
+    local Id = EntityHandle.__id
+
+    if not Component.SetComponents[Id] then
+        -- no components, return
+        return
+    end
+
+    for CId in pairs(Component.SetComponents[Id]) do
+        Component.RemoveComponent(Id,CId)
+    end
 end
 
 local SERIALIZE = require("Lib.Serialize")

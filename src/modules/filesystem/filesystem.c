@@ -474,15 +474,15 @@ bool lovrFilesystemSetIdentity(const char* identity, bool precedence) {
 
   bool fused = lovrFilesystemIsFused();
 
-  // Make sure there is enough room to tack on /LOVR/<identity>
-  if (cursor + (fused ? 0 : 1 + strlen("LOVR")) + 1 + length >= sizeof(state.savePath)) {
+  // Make sure there is enough room to tack on /ASTR/<identity>
+  if (cursor + (fused ? 0 : 1 + strlen("ASTR")) + 1 + length >= sizeof(state.savePath)) {
     return lovrSetError("Identity path is too long");
   }
 
   if (!fused) {
     state.savePath[cursor++] = SLASH;
-    memcpy(state.savePath + cursor, "LOVR", strlen("LOVR"));
-    cursor += strlen("LOVR");
+    memcpy(state.savePath + cursor, "ASTR", strlen("ASTR"));
+    cursor += strlen("ASTR");
   }
 
   // Append /<identity>

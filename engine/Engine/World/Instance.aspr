@@ -19,11 +19,6 @@ return function(Components)
         return Comp and Comp[p]
     end
 
-    function INSTMETHODS:Destroy(Recursive)
-        Recursive = Recursive ~= false and true or false
-        print("Destroy or smth")
-    end
-
     INSTMETHODS.GetComponents = Components.GetComponents
     INSTMETHODS.RemoveComponent = Components.RemoveComponent
     INSTMETHODS.AddComponent = Components.AddComponent
@@ -57,6 +52,7 @@ return function(Components)
         local s = Components.SetComponents[self.__id]
         if FastFetch and s and s[FastFetch] then
             s[FastFetch][k] = v
+            return
         end
 
         rawset(self, k, v)
@@ -77,5 +73,5 @@ return function(Components)
         return a.UniqueId == b.UniqueId
     end
 
-    return Instance
+    return Instance, INSTMETHODS
 end

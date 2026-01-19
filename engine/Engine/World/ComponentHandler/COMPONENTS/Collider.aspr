@@ -229,6 +229,16 @@ function mt.__create(DATA, e)
     return T
 end
 
-function mt.__remove(DATA, e) end
+function mt.__remove(self, EId)
+    Physics.DequeueToSyncLTJ(self)
+    Physics.UnbindCollider(self.WId,self.ColRef)
+
+    self.ColRef:setUserData(nil)
+    self.ColRef:destroy()
+    self.ColRef:release()
+    for i in pairs(self) do
+        self[i] = nil
+    end
+end
 
 return Collider

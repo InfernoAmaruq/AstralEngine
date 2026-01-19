@@ -12,16 +12,20 @@ _G.__BOOT = {}
 _G.AstralEngine = {
     Signals = {},
 }
-AstralEngine._MOUNT = require("Lib.Mount")
-loadfile, require = unpack(require("Lib.Require"))
+AstralEngine._MOUNT = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Mount.lua")()
+loadfile, require = unpack(lovr.filesystem.load(package.ENG_PATH .. "/Lib/Require.lua")())
 
-local mnt, err = lovr.filesystem.mount(PATH, "GAMEFILE", true)
-if not mnt then
-    print("FAILED TO MOUNT GAME PATH <" .. PATH .. ">:", err)
-    return -1
+if not arg.SHARED then
+    local mnt, err = lovr.filesystem.mount(PATH, "GAMEFILE", true)
+    if not mnt then
+        print("FAILED TO MOUNT GAME PATH <" .. PATH .. ">:", err)
+        return -1
+    end
+else
+    print("GAME ALREADY MOUNTED!")
 end
 
-local Real = lovr.filesystem.getRealDirectory("/") .. "/"
+local Real = lovr.filesystem.getRealDirectory(package.ENG_PATH) .. "/"
 AstralEngine.EnginePath = Real
 AstralEngine.GamePath = PATH
 local Eq = {

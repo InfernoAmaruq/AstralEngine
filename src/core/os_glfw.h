@@ -455,7 +455,6 @@ float os_window_get_pixel_density(void) {
 
 void os_set_window_size(uint w, uint h){
     glfwSetWindowSize(glfwState.window,w,h);
-    printf("SET SIZE: %d %d",w,h);
 }
 
 void os_on_quit(fn_quit* callback) {

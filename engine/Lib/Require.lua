@@ -119,7 +119,8 @@ local Methods = {
         local CurDir = CurPath:match(Match)
         local PathsToTry = {
             Path,
-            "GAMEFILE/" .. Path,
+            _G.package.ENG_PATH .. Path,
+            _G.package.GAME_PATH .. Path,
             CurDir and CurDir .. "/" .. Path or nil,
         }
         for _, v in ipairs(PathsToTry) do

@@ -87,6 +87,26 @@ local function Normalize(path, full)
     end
 end
 
+local ZipTag = "__ZIP__"
+
+local function HandleZipPath(Path)
+    local ZipEnd = Path:find("%.zip", 1, false)
+    if not ZipEnd then
+        return nil
+    end
+
+    ZipEnd = ZipEnd + 3
+
+    local ZipPath = Path:sub(1, ZipEnd)
+    local InnerPath = Path:sub(ZipEnd + 2)
+
+    if InnerPath == "" then
+        InnerPath = nil
+    end
+
+    return ZipPath, InnerPath
+end
+
 function lovr.boot()
     lovr.filesystem = require("lovr.filesystem")
 
@@ -154,6 +174,7 @@ function lovr.boot()
     local path = arg.engine
 
     local main = "main.lua"
+    local pre = "pre.lua"
 
     local EXE = (lovr.filesystem.getExecutablePath() or root or bundle):gsub("\\", "/")
     local EXEFOLD = EXE:gsub(PATTERN, "")
@@ -167,9 +188,36 @@ function lovr.boot()
         arg.game = game
     end
 
+    _G.package.ENG_PATH = "/"
+    _G.package.GAME_PATH = "GAMEFILE/"
+    _G.package.SHARED = false
+
     local Mounted, Failed
     if path then
-        Mounted, Failed = lovr.filesystem.mount(Normalize(EXEFOLD .. path, FSType == "Unix"))
+        path = Normalize(EXEFOLD .. path, FSType == "Unix")
+        local Zip, Inner = HandleZipPath(path)
+
+        if Zip then
+            Mounted, Failed = lovr.filesystem.mount(Zip, ZipTag)
+            if not Mounted then
+                error("Failed to mount zip file! " .. Failed)
+            else
+                print("MOUNTED:", Zip, ZipTag, Inner, #lovr.filesystem.getDirectoryItems("__ZIP__"))
+            end
+            path = ZipTag .. "/" .. Inner
+            Mounted = lovr.filesystem.isDirectory(path) or lovr.filesystem.isFile(path)
+            if not Mounted then
+                Failed = "Path" .. path .. " in zip " .. Zip .. " is not a valid file/folder"
+            else
+                main = lovr.filesystem.isDirectory(path) and path .. "/main.lua" or path
+                pre = lovr.filesystem.isDirectory(path) and path .. "/pre.lua" or path
+                _G.package.ENG_PATH = path .. "/"
+                local NGAME = Normalize(EXEFOLD .. game, FSType == "Unix")
+                arg.SHARED = (HandleZipPath(NGAME) == Zip) and not lovr.filesystem.mount(NGAME, "GAMEFILE")
+            end
+        else
+            Mounted, Failed = lovr.filesystem.mount(path)
+        end
     else
         for _, v in ipairs(PossiblePaths) do
             local p = Normalize(EXEFOLD .. v, FSType == "Unix")
@@ -185,7 +233,7 @@ function lovr.boot()
 
     if not Mounted then
         if path then
-            error(("Failed to mount engine path at: %s"):format(Failed))
+            error(("Failed to mount engine path at: %s (%s)"):format(path, Failed))
         else
             local NormalizedPaths = {}
 
@@ -210,8 +258,8 @@ function lovr.boot()
     if path ~= bundle then
         lovr.filesystem.unmount(bundle)
     end
-    if lovr.filesystem.isFile("pre.lua") then
-        ok, failure = pcall(require, "pre")
+    if lovr.filesystem.isFile(pre) then
+        ok, failure = pcall(require, pre:sub(1, -5))
         if failure == -1 then
             error("No game path has been provided")
         end

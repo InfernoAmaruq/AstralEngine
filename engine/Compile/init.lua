@@ -20,6 +20,24 @@ Code.LoadMemory(SharedMemory)
 
 Recompiler.MaxPasses = 5
 
+-- APPEND STACK
+_G.meta.LoadfileAppendStack = {}
+
+function meta.LoadfileAppendStack.Push(s)
+    table.insert(meta.LoadfileAppendStack, s)
+end
+
+function meta.LoadfileAppendStack.Pop()
+    local Stack = meta.LoadfileAppendStack
+    Stack[#Stack] = nil
+end
+
+function meta.LoadfileAppendStack.Clear()
+    for i = #meta.LoadfileAppendStack, 1, -1 do
+        meta.LoadfileAppendStack[i] = nil
+    end
+end
+
 local function PREPROCESS(Src, n)
     for _, v in ipairs(Recompiler.Dirs) do
         if v.PRE then
@@ -59,6 +77,13 @@ end
 local COUNTER = 0
 
 local function COMPILE_LOADSTRING(c, NAME)
+    for i = 1, #meta.LoadfileAppendStack do
+        local S = meta.LoadfileAppendStack[i]
+        c = S .. c
+        meta.LoadfileAppendStack.Pop()
+        print("APPENDED:\n", s, "\nRESULT:\n", c)
+    end
+
     local Dirs
     if Lexer.FSearch(c) or Verify(c) then
         COUNTER = COUNTER + 1

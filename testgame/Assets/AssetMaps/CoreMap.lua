@@ -1,7 +1,9 @@
 return {
     [1] = {
         Name = "RenderRoot",
-        Ancestry = {},
-        Components = {},
+        Components = {
+            Transform = {},
+            Camera = {},
+        },
     },
 }

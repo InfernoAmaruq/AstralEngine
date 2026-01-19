@@ -162,7 +162,7 @@ function Physics.UpdateSyncField(WId, ColliderRef, Field, Value)
     if Value then
         t[Id] |= FlagVal
     else
-        t[Id] &= !FlagVal
+        t[Id] &= ~FlagVal
     end
 end
 

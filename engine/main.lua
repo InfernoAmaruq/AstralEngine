@@ -4,7 +4,7 @@ local SIGNAL = require("Lib.Signal")
 
 local ROOT, World, Renderer, RunService, SS
 
--- DEF WINDO
+AstralEngine.Callbacks = {}
 
 -- LOAD
 
@@ -56,11 +56,7 @@ function lovr.load()
     RunService = GetService"RunService"
     require("Engine.Physics")
 
-    GetService.AddService("Graphics", AstralEngine.Graphics)
-
     -- RUNNING ALL SCRIPTS
-
-    CONFIG:APPLY()
 
     CURRENT_FRAME = 0
     CURRENT_CPUTICK = 0
@@ -84,6 +80,18 @@ function lovr.update(dt)
 end
 
 lovr.textinput = nil
+
+local QuitSig = SIGNAL.new(false)
+function lovr.quit(...)
+    local ShouldAbort = false
+    if AstralEngine.Callbacks.OnQuit then ShouldAbort = AstralEngine.Callbacks.OnQuit(...) end
+
+    if ShouldAbort then return false end
+
+    QuitSig:Fire(...)
+
+    return true
+end
 
 function lovr.run()
     if lovr.load then lovr.load() end

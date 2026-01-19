@@ -8,44 +8,46 @@ local TAG_FORCE = 0b01 << TAG_OFFSET
 local TAG_RES = 0b10 << TAG_OFFSET
 
 local TAG_MASK = 0b11 << TAG_OFFSET
-local ID_MASK = ! TAG_MASK
+local ID_MASK = ~TAG_MASK
 
 local FENVFLAGS = {
-    F_PHYS_WORLD = 0b0001
+    F_PHYS_WORLD = 0b0001,
 }
 
-local SinkNidx = function() return end
+local SinkNidx = function()
+    return
+end
 
 local RES_PTR = 0
 local RES_HASH = {}
 
 local CURSHARED
 local FENV = setmetatable({
-        GID = setmetatable({}, {
-            __index = function(_, n)
-                return n | TAG_FORCE
-            end,
-            __newindex = SinkNidx
-        }),
-        RES = setmetatable({}, {
-            __index = function(_, s)
-                if RES_HASH[s] then
-                    return RES_HASH[s]
-                end
-                RES_PTR = RES_PTR + 1
-                RES_HASH[s] = RES_PTR
-                return RES_PTR | TAG_RES
-            end,
-            __newindex = SinkNidx,
-        })
-    },
-    {
-        __index = function(_, k) return FENVFLAGS[k] or CURSHARED[k] or _G[k] end,
-        __newindex = function(_, k, v)
-            rawset(
-                CURSHARED, k, v)
-        end
-    })
+    GID = setmetatable({}, {
+        __index = function(_, n)
+            return n | TAG_FORCE
+        end,
+        __newindex = SinkNidx,
+    }),
+    RES = setmetatable({}, {
+        __index = function(_, s)
+            if RES_HASH[s] then
+                return RES_HASH[s]
+            end
+            RES_PTR = RES_PTR + 1
+            RES_HASH[s] = RES_PTR
+            return RES_PTR | TAG_RES
+        end,
+        __newindex = SinkNidx,
+    }),
+}, {
+    __index = function(_, k)
+        return FENVFLAGS[k] or CURSHARED[k] or _G[k]
+    end,
+    __newindex = function(_, k, v)
+        rawset(CURSHARED, k, v)
+    end,
+})
 
 local function LoadAssetFile(Path)
     local f = loadfile(Path)
@@ -145,15 +147,17 @@ function AssetMapLoader.LoadAssetMap(Map)
         if Flags & FENVFLAGS.F_PHYS_WORLD ~= 0 then
             -- construct world
         else
-
         end
 
         if Tag & TAG_FORCE ~= 0 then
             Ent = EntityService.CreateAtId(NewId, Val.Name)
         elseif Tag & TAG_RES ~= 0 then
             if RESERVED[NewId] then
-                AstralEngine.Log("RESERVED ID COLLISION, WITH ID " .. NewId .. " ON ENTITY " .. Val.Name, "error",
-                    "SCENEMANAGER")
+                AstralEngine.Log(
+                    "RESERVED ID COLLISION, WITH ID " .. NewId .. " ON ENTITY " .. Val.Name,
+                    "error",
+                    "SCENEMANAGER"
+                )
             end
             Ent = EntityService.New(Val.Name)
             RESERVED[NewId] = Ent

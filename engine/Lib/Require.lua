@@ -1,9 +1,12 @@
 lovr.filesystem.setRequirePath(package.path)
 
+-- set cpath
+local SavePath = lovr.filesystem.getSaveDirectory()
+
 local OgRequire = require
 local OgLoadfile = function(Path, Env)
     local Raw = lovr.filesystem.read(Path)
-    local f = Raw and loadstring(Raw, "@"..Path) or nil
+    local f = Raw and loadstring(Raw, "@" .. Path) or nil
     return (f and Env) and setfenv(f, Env) or f
 end
 local Match = "^(.*)/[^/]+$"
@@ -60,7 +63,7 @@ end
 
 local function LoadFile(Path, Env, STACK)
     local UseGlobalPath = false
-    if Path:sub(1,1) == "-" then
+    if Path:sub(1, 1) == "-" then
         Path = Path:sub(2)
         UseGlobalPath = true
     end
@@ -153,7 +156,10 @@ local Methods = {
             local OSP = lovr.filesystem.getRealDirectory(CurPath)
             local PhysPath = OSP .. "/" .. CurDir .. "/"
             local TryPath = PhysPath .. Path .. package.clibtag
-            local Lib = package.loadlib(TryPath, "IMPORTED LIB: <" .. TryPath .. ">")
+            local List = DotFix(Path):split("/")
+            local Name = List[#List]
+            local Lib = package.loadlib(TryPath, "luaopen_" .. Name)
+            print("TRY LOADLIB:", Lib, TryPath, Name, CurPath)
             if Lib and type(Lib) == "function" then
                 local Extract = Lib()
                 package.loaded[Canon] = Extract

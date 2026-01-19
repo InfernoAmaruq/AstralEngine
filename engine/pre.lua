@@ -8,8 +8,6 @@ local ExeFold = lovr.filesystem.getExecutableFolder()
 
 PATH = lovr.filesystem.normalize(lovr.filesystem.toUnix(ExeFold .. PATH), true)
 
-print(PATH)
-
 _G.__BOOT = {}
 _G.AstralEngine = {
     Signals = {},
@@ -157,30 +155,6 @@ end
 -- set astral config, not lovr config
 local CONF = {}
 _G.CONF = CONF
-
-local APPLYTABLE = {
-    DEBUG = function(STATE)
-        if not STATE then
-            return
-        end
-        GetService("InputService").GetKeyboard().KeyPressed:Connect(function(k)
-            if k == "escape" then
-                QUIT()
-            end
-        end)
-    end,
-}
-
-function CONF:APPLY()
-    if self == CONF then
-        self = CONF.CONFIG
-    end
-    for KEY, STATE in pairs(self) do
-        if APPLYTABLE[KEY] then
-            APPLYTABLE[KEY](STATE)
-        end
-    end
-end
 
 CONF.CONFIG = {
     DEBUG = AstralEngine._CONFIG.Astral.Debug,

@@ -35,8 +35,9 @@ local FENV = setmetatable({
                 return RES_HASH[s]
             end
             RES_PTR = RES_PTR + 1
-            RES_HASH[s] = RES_PTR
-            return RES_PTR | TAG_RES
+            local RET = RES_PTR | TAG_RES
+            RES_HASH[s] = RET
+            return RET
         end,
         __newindex = SinkNidx,
     }),
@@ -64,6 +65,9 @@ function AssetMapLoader.GetAssetMap(AssetMapFS, Folder)
     local Map = {}
     Map.LARGEST = -1
     Map.SMALLEST = math.huge
+    Map.PATH = Folder
+
+    local RESERVE = {}
 
     CURSHARED = {}
 
@@ -76,8 +80,6 @@ function AssetMapLoader.GetAssetMap(AssetMapFS, Folder)
         if GlobalFile or LocalFile then
             local UsePath = GlobalFile and GlobalPath or LocalPath
 
-            Map.PATH = UsePath
-
             local s, err = pcall(LoadAssetFile, UsePath)
             if not s then
                 AstralEngine.Log(
@@ -89,10 +91,11 @@ function AssetMapLoader.GetAssetMap(AssetMapFS, Folder)
                 for i, Val in pairs(err) do
                     local RawId = i
                     i = i & ID_MASK
-                    local Tag = i & TAG_MASK
+                    local Tag = RawId & TAG_MASK
 
                     if Tag == TAG_RES then
-                        -- handle reserve
+                        AstralEngine.Assert(not RESERVE[i], "Slot " .. i .. " already reserved!", 1)
+                        RESERVE[i] = true
                     elseif Tag == TAG_FORCE and IDs[i] then
                         AstralEngine.Log(
                             "ID COLLISION: Id of "
@@ -107,7 +110,9 @@ function AssetMapLoader.GetAssetMap(AssetMapFS, Folder)
                     end
 
                     Map[#Map + 1] = Val
+                    Val.Idx = i
                     Val.Ptr = RawId
+                    Val.Map = UsePath
                 end
             end
         end
@@ -117,15 +122,14 @@ function AssetMapLoader.GetAssetMap(AssetMapFS, Folder)
 end
 
 function AssetMapLoader.LoadAssetMap(Map)
-    local Root = Map.SMALLEST
-    local End = Map.LARGEST
-
     local RESERVED = {}
 
     if #Map == 0 then
         AstralEngine.Log("Asset map " .. Map.PATH .. " is empty", "Warning", "SCENEMANAGER")
         return
     end
+
+    local ENTITIES = {}
 
     for i = 1, #Map do
         local Val = Map[i]
@@ -144,31 +148,42 @@ function AssetMapLoader.LoadAssetMap(Map)
 
         local Flags = Val.Flags and Val.Flags or 0
 
+        -- summon the entity
         if Flags & FENVFLAGS.F_PHYS_WORLD ~= 0 then
-            -- construct world
+            local WorldData = AstralEngine.Assert(Val.WorldData, "No world data provided!", "SCENEMANAGER")
+            local Phys = GetService("Physics")
+            Ent = Phys.NewWorld(WorldData)
         else
-        end
-
-        if Tag & TAG_FORCE ~= 0 then
-            Ent = EntityService.CreateAtId(NewId, Val.Name)
-        elseif Tag & TAG_RES ~= 0 then
-            if RESERVED[NewId] then
-                AstralEngine.Log(
-                    "RESERVED ID COLLISION, WITH ID " .. NewId .. " ON ENTITY " .. Val.Name,
-                    "error",
-                    "SCENEMANAGER"
-                )
+            if Tag & TAG_FORCE ~= 0 then
+                Ent = EntityService.CreateAtId(NewId, Val.Name)
+            elseif Tag & TAG_RES ~= 0 then
+                if RESERVED[NewId] then
+                    AstralEngine.Log(
+                        "RESERVED ID COLLISION, WITH ID " .. NewId .. " ON ENTITY " .. Val.Name,
+                        "error",
+                        "SCENEMANAGER"
+                    )
+                end
+                Ent = EntityService.New(Val.Name)
+                RESERVED[NewId] = Ent
+            elseif Tag & TAG_UNSET == 0 then
+                Ent = EntityService.New(Val.Name)
+            else
+                AstralEngine.Log("INVALID TAG FOUND: " .. tostring(i >> TAG_OFFSET & 0b11), "Fatal", "SCENEMANAGER")
             end
-            Ent = EntityService.New(Val.Name)
-            RESERVED[NewId] = Ent
-        elseif Tag & TAG_UNSET == 0 then
-            Ent = EntityService.New(Val.Name)
-        else
-            AstralEngine.Log("INVALID TAG FOUND: " .. tostring(i >> TAG_OFFSET & 0b11), "Fatal", "SCENEMANAGER")
         end
 
-        if Ent then
-            print("SPAWNED:", Ent, Ent.Id, Ent.UniqueId)
+        ENTITIES[Val.Map] = ENTITIES[Val.Map] or {}
+
+        ENTITIES[Val.Map][Val.Idx] =
+            AstralEngine.Assert(Ent, ("Entity creation failed for entity: %s"):format(Val.Name), "SCENEMANAGER")
+
+        -- ASSIGNING FIELDS
+
+        if not Val.Components then
+            continue
+        end
+        for Name, Data in pairs(Val.Components) do
         end
     end
 end

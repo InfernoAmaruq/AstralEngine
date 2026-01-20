@@ -67,6 +67,13 @@ function AstralEngine.Log(Msg, Flag, Tag, Level)
     end
 end
 
+function AstralEngine.Assert(v, Msg, Tag, Layer)
+    if v then
+        return v
+    end
+    AstralEngine.Error(Msg, Tag, (Layer or 1) + 1)
+end
+
 function AstralEngine.Error(Msg, Tag, Layer)
     local IsNum = type(Tag) == "number"
     if IsNum then

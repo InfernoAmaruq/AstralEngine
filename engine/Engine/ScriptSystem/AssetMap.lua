@@ -178,12 +178,15 @@ function AssetMapLoader.LoadAssetMap(Map)
         ENTITIES[Val.Map][Val.Idx] =
             AstralEngine.Assert(Ent, ("Entity creation failed for entity: %s"):format(Val.Name), "SCENEMANAGER")
 
+        print("LOADED ENTITY:", Ent)
+
         -- ASSIGNING FIELDS
 
         if not Val.Components then
             continue
         end
         for Name, Data in pairs(Val.Components) do
+            Ent:AddComponent(Name, Data)
         end
     end
 end

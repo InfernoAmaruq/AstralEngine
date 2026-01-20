@@ -1,5 +1,6 @@
 local OgTex = lovr.graphics.newTexture
 local OgPass = lovr.graphics.newPass
+local FS = lovr.filesystem
 
 local RefToRebuild = setmetatable({}, { __mode = "v" })
 
@@ -23,6 +24,16 @@ local function IDX(t, k)
     return Val or rawget(t, k)
 end
 
+local function ResolvePath(Path)
+    if FS.isFile(Path) then
+        return Path
+    end
+    local CallFrom = debug.getinfo(3, "S")
+    local LocalizedPath = CallFrom.source:gsub("%@")
+
+    return FS.normalize(FS.folderFromPath(LocalizedPath) .. Path)
+end
+
 local MT = { __index = IDX, __tostring = TOSTRING }
 
 local function MakeRef(Value, Capture, Pass)
@@ -36,7 +47,17 @@ lovr.graphics.newPass = function(...)
 end
 
 lovr.graphics.newTexture = function(...)
-    local CAPTURE = MakeRef(OgTex(...), { ... }, false)
+    local ARGS
+    if type(select(1, ...)) == "string" then
+        ARGS = { ... }
+        ARGS[1] = ResolvePath(ARGS[1])
+    end
+    local CAPTURE
+    if ARGS then
+        CAPTURE = MakeRef(OgTex(unpack(ARGS)), ARGS, false)
+    else
+        CAPTURE = MakeRef(OgTex(...), { ... }, false)
+    end
     table.insert(RefToRebuild, CAPTURE)
     return CAPTURE
 end

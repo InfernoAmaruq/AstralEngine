@@ -1,9 +1,17 @@
 return {
     [1] = {
-        Name = "RenderRoot",
+        Name = "WorldCam",
         Components = {
             Transform = {},
-            Camera = {},
+            Camera = { FOV = math.rad(90), DrawToScreen = true, NearestSampler = true },
+        },
+    },
+    [2] = {
+        Name = "Skybox",
+        Components = {
+            Skybox = {
+                Texture = AstralEngine.Graphics.NewTexture("../Img/Skybox.jpg"),
+            },
         },
     },
 }

@@ -31,11 +31,6 @@ function lovr.load()
         SCRIPTSYS = {},
     }
 
-    local FS = {
-        GetDir = lovr.filesystem.getDirectoryItems,
-        IsFile = lovr.filesystem.isFile,
-    }
-
     QUIT = lovr.event.quit
 
     lovr.draw = Renderer.DrawScene
@@ -95,6 +90,7 @@ end
 
 function lovr.run()
     if lovr.load then lovr.load() end
+    collectgarbage("collect")
 
     -- MOUNT
 
@@ -102,7 +98,7 @@ function lovr.run()
     local Ok, Err = pcall(loadfile,"GAMEFILE/launch.lua")
     if Ok then
         if Err then
-            Err()
+            task.spawn(Err)
         end
     else
         AstralEngine.Log("File 'launch.lua' encountered an error!\n > "..tostring(Err),"FATAL")

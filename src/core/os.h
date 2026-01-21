@@ -214,4 +214,4 @@ uintptr_t os_get_ca_metal_layer(void);
 uintptr_t os_get_xcb_connection(void);
 uintptr_t os_get_xcb_window(void);
 
-void os_set_window_size(uint w, uint h);
+void os_set_window_size(uint32_t width, uint32_t height);

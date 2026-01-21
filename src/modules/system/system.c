@@ -236,6 +236,6 @@ void lovrSystemSetClipboardText(const char* text) {
   os_set_clipboard_text(text);
 }
 
-void lovrSystemSetWindowSize(uint w, uint h) {
-  os_set_window_size(w,h);
+void lovrSystemSetWindowSize(uint32_t width, uint32_t height) {
+  os_set_window_size(width,height);
 };

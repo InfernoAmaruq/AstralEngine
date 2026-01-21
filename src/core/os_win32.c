@@ -164,6 +164,8 @@ const char* os_get_clipboard_text(void) {
 void os_set_clipboard_text(const char* text) {
   // TODO
 }
+
+void* os_set_window_size(uint32_t w, uint32_ h){}
 #endif
 
 void* os_vm_init(size_t size) {

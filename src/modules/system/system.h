@@ -37,4 +37,4 @@ void lovrSystemSetMouseGrabbed(bool grabbed);
 float lovrSystemGetScrollDelta(void);
 const char* lovrSystemGetClipboardText(void);
 void lovrSystemSetClipboardText(const char* text);
-void lovrSystemSetWindowSize(uint w, uint h);
+void lovrSystemSetWindowSize(uint32_t w, uint32_t h);

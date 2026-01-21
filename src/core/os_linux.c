@@ -374,10 +374,10 @@ void os_on_focus(fn_focus* callback) {
   state.onFocus = callback;
 }
 
-void os_set_window_size(uint h, uint w){
+void os_set_window_size(uint32_t width, uint32_t height){
   uint32_t Values[2];
-  Values[0] = w;
-  Values[1] = h;
+  Values[0] = height;
+  Values[1] = width;
 
   xcb_configure_window(state.connection, state.window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_WIDTH, Values);
 }

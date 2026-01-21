@@ -1,12 +1,12 @@
 return {
-    [1] = {
+    [RES["CAMERA"]] = {
         Name = "WorldCam",
         Components = {
             Transform = {},
             Camera = { FOV = math.rad(90), DrawToScreen = true, NearestSampler = true },
         },
     },
-    [2] = {
+    [1] = {
         Name = "Skybox",
         Components = {
             Skybox = {

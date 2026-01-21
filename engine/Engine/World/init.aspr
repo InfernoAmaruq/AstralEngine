@@ -18,13 +18,15 @@ function World.GetEntityFromId(Id)
     if not E then
         return nil
     else
-        return not E.IsNull and E
+        return not E.IsNull and E or nil
     end
 end
 
 local Entity = {}
 
 local SERIALIZER = require("Lib.Serialize")
+
+Entity.GetEntityFromId = World.GetEntityFromId
 
 local function ALLOC(Use)
     World.Capacity = World.Capacity + 1
@@ -45,8 +47,8 @@ local function ALLOC(Use)
     return t
 end
 
-local function ADD()
-    local ResizeTo = World.Capacity * RESIZESTEP
+local function ADD(Res)
+    local ResizeTo = Res or (World.Capacity * RESIZESTEP)
 
     while World.Capacity <= ResizeTo do
         ALLOC()
@@ -57,14 +59,18 @@ for _ = 1, PREALLOCSIZE do
     ALLOC()
 end
 
+local function Alive(Ent)
+    Ent.__gen = Ent.__gen + 1
+    local k = Ent.__gen << SHIFT | Ent.__id
+    Ent.UniqueId = k
+end
+
 local function GetEntity()
     local n = World.Capacity
     for i = 1, n do
         local Ent = World.Alive[i]
         if Ent.IsNull then
-            Ent.__gen = Ent.__gen + 1
-            local k = Ent.__gen << SHIFT | Ent.__id
-            Ent.UniqueId = k
+            Alive(Ent)
             if i >= RESIZEAT * n then
                 ADD()
             end
@@ -96,9 +102,26 @@ function Entity.New(Name, ...)
     return NewEntity
 end
 
-function Entity.CreateAsExternal(Struct, Name, ...) end
+function Entity.CreateAtId(Id, Name, ...)
+    if not World.Alive[Id] then
+        ADD(Id + 1)
+    end
 
-function Entity.CreateAtId(Id, Name, ...) end
+    local Obj = World.Alive[Id]
+
+    if not Obj.IsNull then
+        Entity.Destroy(Obj)
+    end
+
+    Alive(Obj)
+    rawset(Obj, "Name", Name)
+    Obj.IsNull = false
+    if Obj.__id > World.TopPtr then
+        World.TopPtr = Obj.__id
+    end
+
+    return Obj
+end
 
 function Entity.Destroy(Ent, Recursive)
     Recursive = Recursive ~= false and true or false

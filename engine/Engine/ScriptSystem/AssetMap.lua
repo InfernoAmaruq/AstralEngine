@@ -22,6 +22,25 @@ local RES_PTR = 0
 local RES_HASH = {}
 local INV_RES_HASH = {}
 
+local RTMT = {
+    __index = function(self, Name)
+        local RealName = "@CACHE:" .. Name
+        local PTR = rawget(self, RealName)
+        if not PTR then
+            return nil
+        end
+        local Entity, UUID = rawget(self, PTR), rawget(self, PTR + 1)
+        if Entity and UUID and Entity.UniqueId == UUID then
+            return Entity
+        end
+        -- free referene when not used anymore
+        self[PTR] = nil
+        self[PTR + 1] = nil
+        self[RealName] = nil
+        return nil
+    end,
+}
+
 local CURSHARED
 local FENV = setmetatable({
     GID = setmetatable({}, {
@@ -195,7 +214,7 @@ function AssetMapLoader.LoadAssetMap(Map)
         ENTITIES[Val.Map] = ENTITIES[Val.Map] or {}
 
         ENTITIES[Val.Map][Val.Idx] = {
-            ENT = AstralEngine.Assert(Ent, ("Entity creation failed for entity: %s"):format(Val.Name), "SCENEMANAGER"),
+            ENT = AstralEngine.Assert(Ent, ("Entity creation failed for entity: " .. Val.Name), "SCENEMANAGER"),
             VAL = Val,
         }
 
@@ -223,6 +242,13 @@ function AssetMapLoader.LoadAssetMap(Map)
                 local EntityTarget =
                     AstralEngine.Assert(RESERVED[Val], "INVALID RESERVE FIELD FOUND: " .. Val, "SCENEMANAGER")
                 ResolveParent(Ent, EntityTarget)
+            elseif Tag == TAG_FORCE then
+                local EntityTarget = AstralEngine.Assert(
+                    EntityService.GetEntityFromId(Val),
+                    "INVALID RESERVE FIELD FOUND: " .. Val,
+                    "SCENEMANAGER"
+                )
+                ResolveParent(Ent, EntityTarget)
             else
                 ResolveParent(
                     Ent,
@@ -239,10 +265,16 @@ function AssetMapLoader.LoadAssetMap(Map)
     -- final part: resolve res table to pass it to scripts
 
     local RT = {}
+    setmetatable(RT, RTMT)
+
+    local Ptr = 1
 
     for Id, Ent in pairs(RESERVED) do
         local Str = INV_RES_HASH[Id]
-        RT[Str] = Ent
+        RT["@CACHE:" .. Str] = Ptr
+        RT[Ptr] = Ent
+        RT[Ptr + 1] = Ent.UniqueId
+        Ptr = Ptr + 2
     end
 
     return RT

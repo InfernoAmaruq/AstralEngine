@@ -121,6 +121,12 @@ function AssetMapLoader.GetAssetMap(AssetMapFS, Folder)
     return Map
 end
 
+local function ResolveParent(Child, Parent)
+    local ChildAnc = Child:GetComponent("Ancestry") or Child:AddComponent("Ancestry")
+    local _ = Parent:GetComponent("Ancestry") or Parent:AddComponent("Ancestry")
+    ChildAnc:SetParent(Parent)
+end
+
 function AssetMapLoader.LoadAssetMap(Map)
     local RESERVED = {}
 
@@ -152,7 +158,17 @@ function AssetMapLoader.LoadAssetMap(Map)
         if Flags & FENVFLAGS.F_PHYS_WORLD ~= 0 then
             local WorldData = AstralEngine.Assert(Val.WorldData, "No world data provided!", "SCENEMANAGER")
             local Phys = GetService("Physics")
-            Ent = Phys.NewWorld(WorldData)
+            Ent = Phys.NewWorld(WorldData, Tag & TAG_FORCE ~= 0 and NewId or nil)
+            if Tag & TAG_RES ~= 0 and not (Tag & TAG_FORCE ~= 0) then
+                if RESERVED[NewId] then
+                    AstralEngine.Log(
+                        "RESERVED ID COLLISION, WITH ID " .. NewId .. " ON ENTITY " .. Val.Name,
+                        "error",
+                        "SCENEMANAGER"
+                    )
+                end
+                RESERVED[NewId] = Ent
+            end
         else
             if Tag & TAG_FORCE ~= 0 then
                 Ent = EntityService.CreateAtId(NewId, Val.Name)
@@ -175,10 +191,10 @@ function AssetMapLoader.LoadAssetMap(Map)
 
         ENTITIES[Val.Map] = ENTITIES[Val.Map] or {}
 
-        ENTITIES[Val.Map][Val.Idx] =
-            AstralEngine.Assert(Ent, ("Entity creation failed for entity: %s"):format(Val.Name), "SCENEMANAGER")
-
-        print("LOADED ENTITY:", Ent)
+        ENTITIES[Val.Map][Val.Idx] = {
+            ENT = AstralEngine.Assert(Ent, ("Entity creation failed for entity: %s"):format(Val.Name), "SCENEMANAGER"),
+            VAL = Val,
+        }
 
         -- ASSIGNING FIELDS
 
@@ -187,6 +203,33 @@ function AssetMapLoader.LoadAssetMap(Map)
         end
         for Name, Data in pairs(Val.Components) do
             Ent:AddComponent(Name, Data)
+        end
+    end
+
+    for _, EntList in pairs(ENTITIES) do
+        for _, Obj in pairs(EntList) do
+            local Core = Obj.VAL
+            local ResolveTo = Core.Parent
+            if not ResolveTo then
+                continue
+            end
+            local Ent = Obj.ENT
+            local Tag, Val = ResolveTo & TAG_MASK, ResolveTo & ID_MASK
+
+            if Tag == TAG_RES then
+                local EntityTarget =
+                    AstralEngine.Assert(RESERVED[Val], "INVALID RESERVE FIELD FOUND: " .. Val, "SCENEMANAGER")
+                ResolveParent(Ent, EntityTarget)
+            else
+                ResolveParent(
+                    Ent,
+                    AstralEngine.Assert(
+                        EntList[ResolveTo],
+                        "NON-EXISTENT ID FOR PARENT RESOLUTION: " .. Val,
+                        "SCENEMANAGER"
+                    ).ENT
+                )
+            end
         end
     end
 end

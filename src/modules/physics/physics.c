@@ -2955,6 +2955,7 @@ SliderJoint* lovrSliderJointCreate(Collider* a, Collider* b, float axis[3]) {
   JPH_SliderConstraintSettings settings;
   JPH_SliderConstraintSettings_Init(&settings);
   JPH_SliderConstraintSettings_SetSliderAxis(&settings, vec3_toJolt(axis));
+  settings.autoDetectPoint = true;
   joint->constraint = (JPH_Constraint*) JPH_SliderConstraint_Create(&settings, parent, b->body);
   JPH_PhysicsSystem_AddConstraint(b->world->system, joint->constraint);
   lovrJointInit(joint, a, b);

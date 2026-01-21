@@ -29,9 +29,10 @@ local RTMT = {
         if not PTR then
             return nil
         end
-        local Entity, UUID = rawget(self, PTR), rawget(self, PTR + 1)
-        if Entity and UUID and Entity.UniqueId == UUID then
-            return Entity
+        local EntityId, UUID = rawget(self, PTR), rawget(self, PTR + 1)
+        local EntPtr = EntityService.GetEntityFromId(EntityId)
+        if EntityId and UUID and EntPtr and EntPtr.UniqueId == UUID then
+            return EntPtr
         end
         -- free referene when not used anymore
         self[PTR] = nil
@@ -272,7 +273,7 @@ function AssetMapLoader.LoadAssetMap(Map)
     for Id, Ent in pairs(RESERVED) do
         local Str = INV_RES_HASH[Id]
         RT["@CACHE:" .. Str] = Ptr
-        RT[Ptr] = Ent
+        RT[Ptr] = Ent.Id
         RT[Ptr + 1] = Ent.UniqueId
         Ptr = Ptr + 2
     end

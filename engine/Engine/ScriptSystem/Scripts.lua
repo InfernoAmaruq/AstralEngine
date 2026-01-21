@@ -22,7 +22,7 @@ function ScriptLoader.LoadScriptList(List, Folder, ...)
 
         local Ok, Result = pcall(comp_loadstring, Content, UsePath)
         AstralEngine.Assert(Ok, "SCRIPT LOADING ERROR:\n > " .. tostring(Result), "SCENEMANAGER")
-        Result(...)
+        task.defer(Result, ...)
     end
 end
 

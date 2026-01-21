@@ -61,7 +61,7 @@ local function ToString(c)
     return debug.getmetatable(c).__CName
 end
 
-function Component.AddComponent(e, id, DATA)
+function Component.AddComponent(e, id, DATA, ShouldSink)
     if type(e) == &TYPE then
         e = e.__id
     end
@@ -75,7 +75,7 @@ function Component.AddComponent(e, id, DATA)
     end
 
     if t.Metadata and t.Metadata.__create then
-        D = t.Metadata.__create(DATA or {}, e)
+        D = t.Metadata.__create(DATA or {}, e, ShouldSink)
     elseif DATA then
         D = {}
         for i, v in pairs(DATA) do

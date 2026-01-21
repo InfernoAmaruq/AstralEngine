@@ -5,8 +5,6 @@
 
 #define KillRoutine(L,RIdx) (lua_pushvalue(L.-1);lua_pushnil(L);lua_settable(L,RIdx);)
 
-extern double os_get_time(void);
-
 int DoRoutines(lua_State* L, double Budget, double Start){
     return 0;
 };
@@ -24,7 +22,6 @@ int lua_GetClock(lua_State* L){
 }
 
 int TEST_FUNC(lua_State* L){
-    lua_pushnumber(L,os_get_time());
     return 1;
 }
 

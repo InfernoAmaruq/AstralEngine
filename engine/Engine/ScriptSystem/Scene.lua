@@ -9,6 +9,7 @@ return function(ScriptService, Ctx)
     local SceneManager = {}
 
     local AssetMapLoader = require("./AssetMap")
+    local ScriptLoader = require("./Scripts")
 
     -- PUBLIC
 
@@ -58,6 +59,8 @@ return function(ScriptService, Ctx)
 
         -- make a new context first
 
+        _G.SceneCache = {}
+
         local SceneT = {}
         SceneT.Context = Ctx.New()
 
@@ -65,10 +68,20 @@ return function(ScriptService, Ctx)
         SceneT.AssetMap = AssetMap
 
         LoadedScenes[Scene] = SceneT
+        _G.SceneCache.__SceneData = SceneT
 
         -- aaand get to loading shit
 
-        AssetMapLoader.LoadAssetMap(AssetMap)
+        local Reserved = AssetMapLoader.LoadAssetMap(AssetMap)
+
+        local _ = err.Scripts
+            and ScriptLoader.LoadScriptList(
+                err.Scripts,
+                Folder,
+                Reserved,
+                err.ScriptValues and unpack(err.ScriptValues)
+            )
+            or nil
     end
 
     function SceneManager.UnloadScene(Scene)

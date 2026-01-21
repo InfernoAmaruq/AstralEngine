@@ -20,6 +20,7 @@ end
 
 local RES_PTR = 0
 local RES_HASH = {}
+local INV_RES_HASH = {}
 
 local CURSHARED
 local FENV = setmetatable({
@@ -37,6 +38,7 @@ local FENV = setmetatable({
             RES_PTR = RES_PTR + 1
             local RET = RES_PTR | TAG_RES
             RES_HASH[s] = RET
+            INV_RES_HASH[RES_PTR] = s
             return RET
         end,
         __newindex = SinkNidx,
@@ -59,6 +61,7 @@ end
 function AssetMapLoader.GetAssetMap(AssetMapFS, Folder)
     RES_PTR = 0
     RES_HASH = {}
+    INV_RES_HASH = {}
 
     local IDs = {}
 
@@ -232,6 +235,17 @@ function AssetMapLoader.LoadAssetMap(Map)
             end
         end
     end
+
+    -- final part: resolve res table to pass it to scripts
+
+    local RT = {}
+
+    for Id, Ent in pairs(RESERVED) do
+        local Str = INV_RES_HASH[Id]
+        RT[Str] = Ent
+    end
+
+    return RT
 end
 
 return AssetMapLoader

@@ -224,6 +224,11 @@ function Scheduler:Update()
         local Status = STATUS(co)
         if Status == "dead" then continue end
         if self.Routines[#self.Routines] == co then continue end
+        local Found = false
+        for _,MiscCo in ipairs(self.Routines) do
+            if MiscCo == co then Found = true break end
+        end
+        if Found then continue end
         self.Routines[#self.Routines + 1] = co
     end
 

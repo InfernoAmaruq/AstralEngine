@@ -59,6 +59,8 @@ return function(ScriptService, Ctx)
 
         -- make a new context first
 
+        CurScene = Scene
+
         _G.SceneCache = {}
 
         local SceneT = {}

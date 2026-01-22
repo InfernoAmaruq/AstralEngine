@@ -25,10 +25,21 @@ return function(ScriptService)
     end
 
     function Context:KillAll()
+        print("KILL ALL")
         self.Alive = false
+        local SELFCO = coroutine.running()
         for i, _ in pairs(self.Tasks) do
             task.escape(i)
+            -- tf i write
             self.Tasks[i] = nil
+            if i == SELFCO then
+            end
+            coroutine.close(i)
+            print("Kill task:", i)
+        end
+        print(GetService("World"), GetService("World").Alive)
+        for _, Ent in ipairs(GetService("World").Alive) do
+            print("ENTITIES:", Ent)
         end
     end
 

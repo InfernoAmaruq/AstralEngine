@@ -16,19 +16,15 @@ local Speed = 0.5
 local BALL = RES["BALL"]
 local Transform = BALL.Transform
 
-local t = 0
-local last
 GetService("RunService").BindToStep("Func", 300, function(dt)
     Transform.Position = Transform.Position + Vec3(Speed * dt, 0, 0)
 end)
 
 local i = 0
-
-while task.wait(3) do
+while task.wait(1) do
     i = i + 1
-    Speed = -Speed
-
     if i == 3 then
-        AstralEngine.Window.SetSize(700, 1200)
+        local SM = GetService("SceneManager")
+        SM.UnloadScene(SM.GetCurrentScene())
     end
 end

@@ -20,10 +20,17 @@ return function(ScriptService)
             AllocObjects = setmetatable({}, WMT), -- {Obj = Type}
             -- cache / scene allocated assets (meshes, images, sfx, whatevs)
         }
+        _G.CONTEXT = t
         return setmetatable(t, MT)
     end
 
-    function Context:KillAll() end
+    function Context:KillAll()
+        self.Alive = false
+        for i, _ in pairs(self.Tasks) do
+            task.escape(i)
+            self.Tasks[i] = nil
+        end
+    end
 
     function Context:BindToContext(Ctx, Obj1, Obj2)
         if Ctx == "Tasks" then

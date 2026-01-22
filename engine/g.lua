@@ -1,6 +1,12 @@
-local wrapself = function(s, f)
-    return function(...)
-        return f(s, ...)
+local wrapself = function(s, f, VAL)
+    if VAL ~= nil then
+        return function(...)
+            return f(s, VAL, ...)
+        end
+    else
+        return function(...)
+            return f(s, ...)
+        end
     end
 end
 
@@ -8,13 +14,13 @@ local ParamProcess = {
     SCHEDULER = function(SCHEDULER)
         local DATA = {}
 
-        DATA.wait = wrapself(SCHEDULER, SCHEDULER.Wait)
-        DATA.delay = wrapself(SCHEDULER, SCHEDULER.Delay)
-        DATA.defer = wrapself(SCHEDULER, SCHEDULER.Defer)
-        DATA.spawn = wrapself(SCHEDULER, SCHEDULER.Spawn)
+        DATA.wait = wrapself(SCHEDULER, SCHEDULER.Wait, false)
+        DATA.delay = wrapself(SCHEDULER, SCHEDULER.Delay, false)
+        DATA.defer = wrapself(SCHEDULER, SCHEDULER.Defer, false)
+        DATA.spawn = wrapself(SCHEDULER, SCHEDULER.Spawn, false)
         DATA.waitfor = wrapself(SCHEDULER, SCHEDULER.WaitFor)
         DATA.spawnat = wrapself(SCHEDULER, SCHEDULER.SpawnAt)
-        DATA.escape = wrapself(SCHEDULER, SCHEDULER.Escape)
+        DATA.escape = wrapself(SCHEDULER, SCHEDULER.Escape, false)
 
         return "task", DATA
     end,

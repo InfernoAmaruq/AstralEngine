@@ -42,32 +42,42 @@ end
 
 @macro<L,!USEBRACK>{VERF(&P) = if not &P then return end}
 
+@macro<L,!USEBRACK>{CTX_BIND(&RV, &TSK) =
+    -- CTX_BIND
+}
+
 local RS = GetService("RunService","RS")
 local GetAddress = debug.getaddress
 
 function Scheduler:WaitFor(Priority)
+    -- BIND BASED
     VERF(Priority)
     local C = coroutine.running()
     RS.__TEMPBIND("TEMP_"..GetAddress(C),Priority,C)
     self.ExternQueued[C] = true
-    local CAPTURE = {coroutine.yield(-1)}
+    local a,b,c,d,e,f,g = coroutine.yield(-1)
     self.ExternQueued[C] = nil
-    return unpack(CAPTURE)
+    return a,b,c,d,e,f,g
 end
 
 function Scheduler:SpawnAt(Priority,Task)
+    -- BIND BASED
     VERF(Priority)
 
     local COR = coroutine.create(Task)
     RS.__TEMPBIND("TEMP_"..GetAddress(COR),Priority,COR)
 end
 
-function Scheduler:Wait(s)
+function Scheduler:Wait(RAW,s)
+    if not RAW then
+        
+    end
+    -- USE W CTX
     local co = coroutine.running()
     if not co then return end
 
     local Exists = false
-    for _, v in rpairs(self.Routines) do
+    for _, v in ipairs(self.Routines) do
         if v == co then
             Exists = true
             break
@@ -83,7 +93,11 @@ function Scheduler:Wait(s)
     return true
 end
 
-function Scheduler:Spawn(f, ...)
+function Scheduler:Spawn(RAW, f, ...)
+    if not RAW then
+        
+    end
+    -- USE W CTX
     local co = CREATE(f)
     local Ok, Err = RESUME(co,...)
     if not Ok then
@@ -96,18 +110,30 @@ function Scheduler:Spawn(f, ...)
     return co, Status
 end
 
-function Scheduler:Escape(co)
+function Scheduler:Escape(RAW, co)
+    if not RAW then
+        
+    end
+    -- USE W CTX
     co = co or coroutine.running()
     local t = self.Routines
     SafeRemove(co,t)
     self.ExternQueued[co] = nil
 end
 
-function Scheduler:Defer(f, ...)
-    self.Queue[#self.Queue + 1] = { F = f, P = { ... } }
+function Scheduler:Defer(RAW, f, ...)
+    if not RAW then
+        
+    end
+    -- USE W CTX
+    self.Queue[#self.Queue + 1] = { F = f, P = { ... }, CTX = not RAW and (_G.CONTEXT and _G.CONTEXT.Gen)}
 end
 
-function Scheduler:Delay(s, f)
+function Scheduler:Delay(RAW, s, f)
+    if not RAW then
+        
+    end
+    -- USE W CTX
     local co = coroutine.create(f)
     self.ResumeAt[co] = self.Clock() + s
     self.Routines[#self.Routines + 1] = co

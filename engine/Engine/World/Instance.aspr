@@ -59,6 +59,9 @@ return function(Components)
     end
 
     function Instance.__tostring(self)
+        if self.IsNull then
+            return "Dead entity: " .. debug.getaddress(self) .. " id: " .. self.Id
+        end
         local n = rawget(self, "Name") or ("Unnamed Entity:" .. debug.getaddress(self))
 
         local t = {}

@@ -97,6 +97,9 @@ function Entity.New(Name, ...)
         Component.AddComponent(NewEntity.__id, v, Data)
     end
 
+    local CTX = _G.CONTEXT and _G.CONTEXT.Gen
+    NewEntity.__context = CTX or NewEntity.__context
+
     NewEntity.IsNull = false
 
     return NewEntity
@@ -115,6 +118,10 @@ function Entity.CreateAtId(Id, Name, ...)
 
     Alive(Obj)
     rawset(Obj, "Name", Name)
+
+    local CTX = _G.CONTEXT and _G.CONTEXT.Gen
+    Obj.__context = CTX or Obj.__context
+
     Obj.IsNull = false
     if Obj.__id > World.TopPtr then
         World.TopPtr = Obj.__id
@@ -147,6 +154,7 @@ function Entity.Destroy(Ent, Recursive)
                 World.TopPtr = TempEnt.__id
                 break
             end
+            Idx = Idx - 1
         end
     end
 

@@ -209,7 +209,7 @@ Camera.Metadata.__create = function(Data, Entity)
     return D
 end
 
-Camera.Metadata.__remove = function(Entity)
+Camera.Metadata.__remove = function(_, Entity)
     Renderer.RemoveCamera(Entity)
 end
 

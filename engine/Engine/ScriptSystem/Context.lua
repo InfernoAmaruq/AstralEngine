@@ -25,21 +25,32 @@ return function(ScriptService)
     end
 
     function Context:KillAll()
-        print("KILL ALL")
+        local CTXGEN = self.Gen
+
         self.Alive = false
+
+        -- TASKS
         local SELFCO = coroutine.running()
+        local KILL = nil
         for i, _ in pairs(self.Tasks) do
             task.escape(i)
-            -- tf i write
-            self.Tasks[i] = nil
             if i == SELFCO then
+                KILL = true
             end
-            coroutine.close(i)
-            print("Kill task:", i)
+            self.Tasks[i] = nil
         end
-        print(GetService("World"), GetService("World").Alive)
+
+        -- ENTITIES
         for _, Ent in ipairs(GetService("World").Alive) do
-            print("ENTITIES:", Ent)
+            if not Ent.IsNull and Ent.__context == CTXGEN then
+                Ent:Destroy()
+            end
+        end
+
+        -- close caller
+        if KILL then
+            -- error bc corutine.close doesnt exist here
+            error("__KILL COROUTINE__")
         end
     end
 

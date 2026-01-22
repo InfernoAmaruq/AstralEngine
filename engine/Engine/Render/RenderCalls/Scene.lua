@@ -59,7 +59,13 @@ function Renderer.AddCamera(Entity)
 end
 
 function Renderer.RemoveCamera(Entity)
-    local Idx = table.find(Cams, Entity)
+    local Idx
+    for _,v in ipairs(Cams) do
+        if v == Entity then
+            Idx = v
+            break
+        end
+    end
     if not Idx then return end
     local Last = Cams[#Cams]
     Cams[Idx] = Last

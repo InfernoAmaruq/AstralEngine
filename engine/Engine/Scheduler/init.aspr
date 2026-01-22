@@ -3,6 +3,18 @@ local ALLOCATE = table.alloc
 
 local Scheduler = {}
 
+local ThreadCtx = setmetatable({},{__mode = "k"})
+local ThreadMT = {
+    __index = function(Co,K)
+        if K == "Context" then return ThreadCtx[Co] or 0 end
+    end,
+    __newindex = function(Co,K,V)
+        if K == "Context" then ThreadCtx[Co] = V end
+    end
+}
+
+debug.setmetatable(coroutine.running(),ThreadMT)
+
 Scheduler.__index = Scheduler
 
 @ifdef<Sched.UseNative || Sched.UseAuto>{

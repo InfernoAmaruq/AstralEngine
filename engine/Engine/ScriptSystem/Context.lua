@@ -33,11 +33,15 @@ return function(ScriptService)
         local SELFCO = coroutine.running()
         local KILL = nil
         for i, _ in pairs(self.Tasks) do
-            task.escape(i)
-            if i == SELFCO then
-                KILL = true
+            local Ctx = i.Context
+            if Ctx == CTXGEN then
+                print("KILL TASK")
+                task.escape(i)
+                if i == SELFCO then
+                    KILL = true
+                end
+                self.Tasks[i] = nil
             end
-            self.Tasks[i] = nil
         end
 
         -- ENTITIES
@@ -56,6 +60,7 @@ return function(ScriptService)
 
     function Context:BindToContext(Ctx, Obj1, Obj2)
         if Ctx == "Tasks" then
+            Obj1.Context = self.Gen
             self.Tasks[Obj1] = true
         elseif Ctx == "Signals" then
             self.Signals[Obj1] = Obj2

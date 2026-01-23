@@ -95,6 +95,24 @@ function Physics.NewWorld(Parameters)
     return T
 end
 
+function Physics.DestroyWorld(WorldEntity,FromComp)
+    local Comp = WorldEntity:GetComponent("World")
+
+    local WorldId = Comp.WorldId
+    if not Physics.Worlds[WorldId] then return end
+
+    Physics.Worlds[WorldId] = nil
+    Physics.RawWorlds[WorldId] = nil
+    WorldColliders[WorldId] = nil
+    LuaToJoltToSync[WorldId] = nil
+
+    if WorldId == N and N > 0 then N = N - 1 end
+
+    if not FromComp then
+        WorldEntity:RemoveComponent("World")
+    end
+end
+
 local StoredComponents = {
     --[COMPONENTNAME] = SIZEFIELD
 }
@@ -181,10 +199,10 @@ end
 local MainWorld, MainWorldId
 
 function Physics.SetMainWorld(W)
-    W = W.__id and Component.SetComponents[W.__id]["World"] or W
+    W = W and W.__id and Component.SetComponents[W.__id]["World"] or W
 
-    MainWorld = W.World
-    MainWorldId = W.WorldId
+    MainWorld = W and W.World or nil
+    MainWorldId = W and W.WorldId or nil
     if Physics.__OnWorldReset then
         Physics.__OnWorldReset(MainWorld, MainWorldId)
     end

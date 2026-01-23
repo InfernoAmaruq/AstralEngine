@@ -4,7 +4,7 @@ local World = {}
 
 World.Component = Component
 
-local PREALLOCSIZE = 65
+local PREALLOCSIZE = 50
 local SHIFT = 24
 local RESIZEAT = 2 / 3
 local RESIZESTEP = 1.25
@@ -140,7 +140,6 @@ function Entity.Destroy(Ent, Recursive)
     end
 
     local Id = Ent.__id
-    rawset(Ent, "IsNull", true)
 
     if Id == World.TopPtr then
         -- reset top ptr
@@ -159,6 +158,7 @@ function Entity.Destroy(Ent, Recursive)
     end
 
     Component.__RemoveAllComponents(Ent)
+    rawset(Ent, "IsNull", true)
 end
 
 Methods.Destroy = Entity.Destroy

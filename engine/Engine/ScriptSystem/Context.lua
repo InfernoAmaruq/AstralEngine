@@ -35,7 +35,6 @@ return function(ScriptService)
         for i, _ in pairs(self.Tasks) do
             local Ctx = i.Context
             if Ctx == CTXGEN then
-                print("KILL TASK")
                 task.escape(i)
                 if i == SELFCO then
                     KILL = true
@@ -47,6 +46,7 @@ return function(ScriptService)
         -- ENTITIES
         for _, Ent in ipairs(GetService("World").Alive) do
             if not Ent.IsNull and Ent.__context == CTXGEN then
+                print("KILL:", Ent)
                 Ent:Destroy()
             end
         end

@@ -1,5 +1,6 @@
 local AssetMapLoader = {}
 
+local PhysicsService = GetService("Physics", "PhysicsService")
 local EntityService = GetService("Entity", "EntityService")
 
 local TAG_OFFSET = 40
@@ -10,8 +11,20 @@ local TAG_RES = 0b10 << TAG_OFFSET
 local TAG_MASK = 0b11 << TAG_OFFSET
 local ID_MASK = ~TAG_MASK
 
+local BYTE = 8
 local FENVFLAGS = {
-    F_PHYS_WORLD = 0b0001,
+    F_PHYS_WORLD = 0b0001 << BYTE,
+    F_PHYS_MAINWORLD = 0b0010 << BYTE,
+    F_ENT_NOCTX = 0b0100 << BYTE,
+}
+
+local FLAG_RESOLVE = {
+    [FENVFLAGS.F_PHYS_MAINWORLD] = function(Ent)
+        PhysicsService.SetMainWorld(Ent)
+    end,
+    [FENVFLAGS.F_ENT_NOCTX] = function(Ent)
+        Ent.__context = 0
+    end,
 }
 
 local SinkNidx = function()
@@ -160,6 +173,8 @@ function AssetMapLoader.LoadAssetMap(Map)
 
     local ENTITIES = {}
 
+    -- SPAWNING ASSETS
+
     for i = 1, #Map do
         local Val = Map[i]
         if not Val then
@@ -219,6 +234,18 @@ function AssetMapLoader.LoadAssetMap(Map)
             VAL = Val,
         }
 
+        -- RESOLVE FLAGS
+        local FLAG_I = 0
+        while FLAG_I < 53 do -- double int precision is up to 53 bits
+            local FlagVal = Flags & (1 << FLAG_I)
+
+            if FLAG_RESOLVE[FlagVal] then
+                FLAG_RESOLVE[FlagVal](Ent)
+            end
+
+            FLAG_I = FLAG_I + 1
+        end
+
         -- ASSIGNING FIELDS
 
         if not Val.Components then
@@ -228,6 +255,8 @@ function AssetMapLoader.LoadAssetMap(Map)
             Ent:AddComponent(Name, Data)
         end
     end
+
+    -- RESOLVE ANCESTRY
 
     for _, EntList in pairs(ENTITIES) do
         for _, Obj in pairs(EntList) do

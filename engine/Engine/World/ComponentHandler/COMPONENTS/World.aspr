@@ -56,4 +56,21 @@ World.Metadata.__create = function(DATA)
     return T
 end
 
+World.Metadata.__remove = function(self, e)
+    local Ent = GetService("World").GetEntityFromId(e)
+
+    local MW = Physics.GetMainWorld()
+
+    local w = self.World
+
+    Physics.DestroyWorld(Ent, true)
+
+    if w == MW then
+        Physics.SetMainWorld(nil)
+    end
+
+    w:destroy()
+    w:release()
+end
+
 return World

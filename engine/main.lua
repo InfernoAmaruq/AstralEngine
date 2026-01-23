@@ -92,21 +92,7 @@ function lovr.run()
     if lovr.load then lovr.load() end
     collectgarbage("collect")
 
-    -- MOUNT
-
-    -- try execute core script first
-    local Ok, Err = pcall(loadfile,"GAMEFILE/launch.lua")
-    if Ok then
-        if Err then
-            task.spawn(Err)
-        end
-    else
-        AstralEngine.Log("File 'launch.lua' encountered an error!\n > "..tostring(Err),"FATAL")
-    end
-
-    SS.Scene.LoadScene(AstralEngine._CONFIG.Filesystem.EntryScene)
-
-    -- RUNTIME
+    -- RUNTIME DEFINITION
 
     local Frames = 0
     local t = 0
@@ -134,6 +120,7 @@ function lovr.run()
 
         @macro<L,!USEBRACK>{M_PHYSTICK(&TIMER) =
             if MainPhysWorld then
+                print("PHYS TICK")
                 SyncState(MainPhysWorldID)
                 MainPhysWorld:update(PhysicsRate)
                 UpdTrans(MainPhysWorldID)
@@ -307,6 +294,23 @@ function lovr.run()
     local SLEEP = lovr.timer.sleep
 
     local LASTCPUT = 0
+
+    -- MOUNT
+
+    -- try execute core script first
+    local Ok, Err = pcall(loadfile,"GAMEFILE/launch.lua")
+    if Ok then
+        if Err then
+            task.spawn(Err)
+        end
+    else
+        AstralEngine.Log("File 'launch.lua' encountered an error!\n > "..tostring(Err),"FATAL")
+    end
+
+    SS.Scene.LoadScene(AstralEngine._CONFIG.Filesystem.EntryScene)
+
+    -- DEFINE LOOP FUNC
+
     return function()
         local TIME = lovr.timer.getTime()
         local DT = TIME - LastTime

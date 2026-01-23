@@ -5,20 +5,22 @@ Signal.CLOCK = os.clock
 
 Signal.Type = {
     Default = 0,
-    RTC = 1,
-    Yield = 2,
+    RTC = 1 << 0,
+    Yield = 1 << 1,
+    NoCtx = 1 << 2,
 }
 
 function Signal.new(Type, timeout)
+    Type = Type or Signal.Type.Default
     local Tab = {
         _connections = {},
         _waiting = {},
-        _RTC = Type == Signal.Type.RTC or false,
-        _yielding = Type == Signal.Type.Yield or false,
+        _RTC = Type & Signal.Type.Yield ~= 0,
+        _yielding = Type & Signal.Type.Yield ~= 0,
         _type = Type,
         _timeout = timeout or 0.05,
     }
-    if _G.CONTEXT then
+    if _G.CONTEXT and Type & Signal.Type.NoCtx == 0 then
         _G.CONTEXT:BindToContext("Signal", Tab)
     end
     return setmetatable(Tab, Signal)

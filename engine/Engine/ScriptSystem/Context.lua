@@ -8,6 +8,8 @@ return function(ScriptService)
 
     local ContextGen = 0
 
+    local CAS, RS = GetService("ContextActionService", "CAS"), GetService("RunService", "RS")
+
     function Context.New()
         ContextGen = ContextGen + 1
         local t = {
@@ -16,8 +18,11 @@ return function(ScriptService)
             Tasks = setmetatable({}, WMT),  -- {task = true}
             Signals = setmetatable({}, WMT), -- {UNBINDFUNC = true}
             SignalInstances = setmetatable({}, WMT), -- {SIGNAL = true}
-            Binds = {},                     -- {Name}
-            Passes = {},                    -- {PassRef}
+            RSTemp = setmetatable({}, WMT),
+            RSBinds = {},                   -- {Name}
+            CASBinds = {},
+            Require = setmetatable({}, WMT),
+            Passes = {},                 -- {PassRef}
             AllocObjects = setmetatable({}, WMT), -- {Obj = Type}
             -- cache / scene allocated assets (meshes, images, sfx, whatevs)
         }
@@ -30,6 +35,20 @@ return function(ScriptService)
         local CTXGEN = self.Gen
 
         self.Alive = false
+
+        -- BINDS
+
+        for i, v in pairs(self.RSTemp) do
+            RS.__UNBIND_TEMP(i, v)
+        end
+
+        for _, v in pairs(self.RSBinds) do
+            RS.UnbindFromStep(v)
+        end
+
+        for _, v in pairs(self.CASBinds) do
+            CAS.__RawUnbind(v)
+        end
 
         -- TASKS
         local SELFCO = coroutine.running()
@@ -63,6 +82,14 @@ return function(ScriptService)
             end
         end
 
+        -- CACHE
+        for Module, Name in pairs(self.Requre) do
+            local Mod = package.loaded[Name]
+            if Mod == Module then
+                package.loaded[Name] = nil
+            end
+        end
+
         -- close caller
         if KILL then
             -- error bc corutine.close doesnt exist here
@@ -78,16 +105,35 @@ return function(ScriptService)
             self.SignalInstances[Obj1] = true
         elseif Ctx == "SignalBind" then
             self.Signals[Obj1] = true
-        elseif Ctx == "Binds" then
-            self.Binds[#self.Binds + 1] = Obj1
+        elseif Ctx == "CASBinds" then
+            self.CASBinds[#self.CASBinds + 1] = Obj1
+        elseif Ctx == "RSBinds" then
+            self.RSBinds[#self.RSBinds + 1] = Obj1
+        elseif Ctx == "RSTemp" then
+            self.RSTemp[Obj1] = Obj2
+            -- gc does the job better for RSTemp, so we dont add an Unbind to it
         elseif Ctx == "Passes" then
             self.Passes[#self.Passes + 1] = Obj1
         elseif Ctx == "AllocObjects" then
             self.AllocObjects[Obj] = Obj2
+        elseif Ctx == "Require" then
+            self.Require[Obj1] = Obj2
         end
     end
 
-    function Context:UnbindFromContext(Ctx, Obj) end
+    function Context:UnbindFromContext(Ctx, Obj)
+        if Ctx == "SignalBind" then
+            self.Signals[Obj] = nil
+        elseif Ctx == "Signal" then
+            self.SignalInstances[Obj] = nil
+        elseif Ctx == "CASBinds" then
+            local Idx = table.find(self.CASBinds, Obj)
+            table.remove(self.CASBinds, Idx)
+        elseif Ctx == "RSBinds" then
+            local Idx = table.find(self.RSBinds, Obj)
+            table.remove(self.RSBinds, Idx)
+        end
+    end
 
     return Context
 end

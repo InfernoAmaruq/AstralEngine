@@ -15,7 +15,7 @@ function Signal.new(Type, timeout)
     local Tab = {
         _connections = {},
         _waiting = {},
-        _RTC = Type & Signal.Type.Yield ~= 0,
+        _RTC = Type & Signal.Type.RTC ~= 0,
         _yielding = Type & Signal.Type.Yield ~= 0,
         _type = Type,
         _timeout = timeout or 0.05,
@@ -23,6 +23,7 @@ function Signal.new(Type, timeout)
     if _G.CONTEXT and Type & Signal.Type.NoCtx == 0 then
         _G.CONTEXT:BindToContext("Signal", Tab)
     end
+
     return setmetatable(Tab, Signal)
 end
 
@@ -35,6 +36,9 @@ local DisconnectFunc = function(s)
     for i, con in ipairs(self._connections) do
         if con == Callback then
             table.remove(self._connections, i)
+            if _G.CONTEXT then
+                _G.CONTEXT:UnbindFromContext("SignalBind", s)
+            end
             break
         end
     end
@@ -71,7 +75,7 @@ function Signal:Fire(...)
         local Threads = {}
 
         for _, cb in ipairs(self._connections) do
-            local Thread = self.SCHEDULER:Spawn(cb, ...)
+            local Thread = self.SCHEDULER:Spawn(false, cb, ...)
             table.insert(Threads, Thread)
         end
 
@@ -94,7 +98,7 @@ function Signal:Fire(...)
         end
     else
         for _, cb in ipairs(self._connections) do
-            local Ok, Error = self.SCHEDULER:Spawn(cb, ...)
+            local Ok, Error = self.SCHEDULER:Spawn(false, cb, ...)
             if not Ok then
                 print("SIGNAL ERR:" .. Error)
             end
@@ -115,6 +119,11 @@ function Signal:Destroy()
     for i in pairs(self) do
         self[i] = nil
     end
+
+    if _G.CONTEXT then
+        _G.CONTEXT:UnbindFromContext("Signal", self)
+    end
+
     setmetatable(self, nil)
 end
 

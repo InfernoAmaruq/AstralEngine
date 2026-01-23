@@ -130,7 +130,7 @@ LVRB.ConnectDevices = function()
 
     local OGBIND = CAS.Bind
 
-    @macro<L>:TRANSLATE_ENUM(K) = K and K.RawValue;
+    @macro<L>:TRANSLATE_ENUM(K) = rtype(K) == "table" and K.RawValue or K;
 
     CAS.Bind = function(N, P, F, ...)
         if select('#', ...) > 3 then

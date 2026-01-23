@@ -12,7 +12,6 @@ local Speed = 0.5
 local BALL = RES["BALL"]
 local Transform = BALL.Transform
 
-print("BALL:", BALL)
 GetService("RunService").BindToStep("Func", 300, function(dt)
     Transform.Position = Transform.Position + Vec3(Speed * dt, 0, 0)
 end)

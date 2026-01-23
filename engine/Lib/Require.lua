@@ -111,8 +111,11 @@ local function Canonical(Path)
     return (RealDir .. "/" .. Path):gsub("//+", "/")
 end
 
+local NEXT_CONTEXTUAL
+
 local Methods = {
     function(Path, ...)
+        -- cache fetch
         Path = DotFix(Path)
         local Info = debug.getinfo(3, "S")
         local CurPath = Info.source:sub(1, 1) == "@" and Info.source:sub(2) or Info.source
@@ -127,7 +130,7 @@ local Methods = {
             for _, ext in ipairs(LoadExtensionsToTry) do
                 local c = Canonical(v == Path and v .. ext or Normalize(v .. ext))
                 if c and package.loaded[c] then
-                    return true, package.loaded[c]
+                    return true, (package.loaded[c] and unpack(package.loaded[c]))
                 end
             end
         end
@@ -137,11 +140,14 @@ local Methods = {
         if f then
             local Canon = Canonical(TruePath)
             if type(f) == "function" then
-                package.loaded[Canon] = f(...)
+                package.loaded[Canon] = { f(...) }
             else
-                package.loaded[Canon] = f
+                package.loaded[Canon] = { f }
             end
-            return true, package.loaded[Canon]
+            if _G.CONTEXT and NEXT_CONTEXTUAL then
+                _G.CONTEXT:BindToContext("Require", package.loaded[Canon], Canon)
+            end
+            return true, unpack(package.loaded[Canon])
         end
     end,
     function(Path, ...)
@@ -161,30 +167,50 @@ local Methods = {
             local Name = List[#List]
             local Lib = package.loadlib(TryPath, "luaopen_" .. Name)
             if Lib and type(Lib) == "function" then
-                local Extract = Lib()
-                package.loaded[Canon] = Extract
-                return true, Extract
+                local a, b, c, d, e = Lib()
+                package.loaded[Canon] = { a, b, c, d, e }
+                if _G.CONTEXT and NEXT_CONTEXTUAL then
+                    _G.CONTEXT:BindToContext("Require", package.loaded[Canon], Canon)
+                end
+                return true, a, b, c, d, e
             end
             -- loadlib failed, try require
             package.cpath = package.cpath .. ";" .. PhysPath .. "?" .. package.clibtag
         end
 
-        local f = OgRequire(Path)
+        local a, b, c, d, e = OgRequire(Path)
         package.cpath = old
-        if f then
-            package.loaded[Canon] = f
-            return true, f
+        if a or b or c or d or e then
+            package.loaded[Canon] = { a, b, c, d, e }
+            if _G.CONTEXT and NEXT_CONTEXTUAL then
+                _G.CONTEXT:BindToContext("Require", package.loaded[Canon], Canon)
+            end
+            return true, a, b, c, d, e
         end
     end,
 }
 
-local function Require(Path, ...)
+local function RequireNoCtx(Path, ...)
     for _, v in ipairs(Methods) do
-        local s, r = v(Path, ...)
+        local s, a, b, c, d, e = v(Path, ...)
         if s then
-            return r
+            return a, b, c, d, e
         end
     end
+end
+
+_G.require_noctx = RequireNoCtx
+
+local function Require(Path, ...)
+    NEXT_CONTEXTUAL = true
+    for _, v in ipairs(Methods) do
+        local s, a, b, c, d, e = v(Path, ...)
+        if s then
+            NEXT_CONTEXTUAL = false
+            return a, b, c, d, e
+        end
+    end
+    NEXT_CONTEXTUAL = false
 end
 
 return { LoadFile, Require }

@@ -29,10 +29,16 @@ return function(D)
         end
     end
 
-    function DATA.Bind(NAME, PRIORITY, FUNC, Raw, ...)
+    function DATA.Bind(NAME, PRIORITY, FUNC, Conf, ...)
         if DATA.__USEDNAMES[NAME] then
             return
         end
+
+        local ConfT = type(Conf)
+        local Raw = (ConfT == "table" and Conf.Raw) or (ConfT == "string" and Conf:find("Raw"))
+        local Contextless = (ConfT == "table" and Conf.Contextless)
+            or (ConfT == "string" and Conf:find("Contextless"))
+            or false
 
         local IsBool = type(Raw) == "boolean"
         if not IsBool or Raw == false then
@@ -45,11 +51,25 @@ return function(D)
             N = NAME,
             P = PRIORITY,
             F = FUNC,
-            C = { not IsBool and Raw or nil, ... },
+            C = { not IsBool and Conf or nil, ... },
         }
 
         DATA.__BOUND[PRIORITY] = DATA.__BOUND[PRIORITY] or {}
         DATA.__BOUND[PRIORITY][NAME] = TABLE
+
+        if _G.CONTEXT and not Contextless then
+            _G.CONTEXT:BindToContext("CASBinds", NAME)
+        end
+
+        SORT()
+    end
+
+    function DATA.__RawUnbind(NAME)
+        if not DATA.__USEDNAMES[NAME] then
+            return
+        end
+        DATA.__BOUND[DATA.__USEDNAMES[NAME]][NAME] = nil
+        DATA.__USEDNAMES[NAME] = nil
 
         SORT()
     end
@@ -60,6 +80,10 @@ return function(D)
         end
         DATA.__BOUND[DATA.__USEDNAMES[NAME]][NAME] = nil
         DATA.__USEDNAMES[NAME] = nil
+
+        if _G.CONTEXT then
+            _G.CONTEXT:UnbindFromContext("CASBinds", NAME)
+        end
 
         SORT()
     end

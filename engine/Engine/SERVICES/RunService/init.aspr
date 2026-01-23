@@ -15,6 +15,18 @@ return function(D)
             return
         end
 
+        if _G.CONTEXT then
+            _G.CONTEXT:UnbindFromContext("RSBinds", NAME)
+        end
+
+        DATA.__BOUNDTOSTEP[DATA.__USEDNAMES[NAME]][NAME] = nil
+    end
+
+    DATA.__RawUnbind = function(NAME)
+        if not DATA.__USEDNAMES[NAME] then
+            return
+        end
+
         DATA.__BOUNDTOSTEP[DATA.__USEDNAMES[NAME]][NAME] = nil
     end
 
@@ -37,11 +49,31 @@ return function(D)
         assert(math.mathtype(PRIORITY) == "Integer", PRIORITY .. " NOT AN INT")
         DATA.__BOUNDTOSTEP[PRIORITY] = DATA.__BOUNDTOSTEP[PRIORITY] or {}
         DATA.__BOUNDTOSTEP[PRIORITY][n] = F
+        if _G.CONTEXT then
+            _G.CONTEXT:BindToContext("RSTemp", F, PRIORITY)
+        end
     end
 
-    DATA.BindToStep = function(NAME, PRIORITY, F, BindRaw)
+    DATA.__UNBIND_TEMP = function(F, P)
+        for Idx, Func in pairs(DATA.__BOUNDTOSTEP[P]) do
+            if F == Func then
+                DATA.__BOUNDTOSTEP[P][Idx] = nil
+            end
+        end
+    end
+
+    DATA.Flags = {
+        Raw = 1 << 0,
+        Contextless = 1 << 1,
+    }
+
+    DATA.BindToStep = function(NAME, PRIORITY, F, Flag)
+        Flag = Flag or 0
         PRIORITY = Processor(PRIORITY) or PRIORITY
         assert(math.mathtype(PRIORITY) == "Integer", PRIORITY .. " NOT AN INT")
+
+        local BindRaw = Flag & DATA.Flags.Raw ~= 0
+        local Contextless = Flag & DATA.Flags.Contextless ~= 0
 
         if rtype(F) == "function" and not BindRaw then
             F = Shared.AllocRoutine(F)
@@ -53,6 +85,10 @@ return function(D)
         end
 
         DATA.__BOUNDTOSTEP[PRIORITY] = DATA.__BOUNDTOSTEP[PRIORITY] or {}
+
+        if _G.CONTEXT and not Contextless then
+            _G.CONTEXT:BindToContext("RSBinds", NAME)
+        end
 
         local T = DATA.__BOUNDTOSTEP[PRIORITY]
 

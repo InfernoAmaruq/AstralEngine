@@ -63,7 +63,7 @@ World.Metadata.__remove = function(self, e)
 
     local w = self.World
 
-    Physics.DestroyWorld(Ent, true)
+    Physics.DestroyWorld(Ent, false, true)
 
     if w == MW then
         Physics.SetMainWorld(nil)

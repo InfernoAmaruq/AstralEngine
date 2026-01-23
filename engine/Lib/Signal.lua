@@ -3,27 +3,51 @@ Signal.__index = Signal
 Signal.SCHEDULER = nil
 Signal.CLOCK = os.clock
 
-function Signal.new(yield, timeout)
-    local Tab = { _connections = {}, _waiting = {}, _yielding = yield or false, _timeout = timeout or 1 }
+Signal.Type = {
+    Default = 0,
+    RTC = 1,
+    Yield = 2,
+}
+
+function Signal.new(Type, timeout)
+    local Tab = {
+        _connections = {},
+        _waiting = {},
+        _RTC = Type == Signal.Type.RTC or false,
+        _yielding = Type == Signal.Type.Yield or false,
+        _type = Type,
+        _timeout = timeout or 0.05,
+    }
+    if _G.CONTEXT then
+        _G.CONTEXT:BindToContext("Signal", Tab)
+    end
     return setmetatable(Tab, Signal)
 end
+
+local DisconnectFunc = function(s)
+    local self = s._self
+    local Callback = s._callback
+    if not self or not self._connections then
+        error("Attempt to disconnect dead signal")
+    end
+    for i, con in ipairs(self._connections) do
+        if con == Callback then
+            table.remove(self._connections, i)
+            break
+        end
+    end
+end
+local ConMt = { __index = { Disconnect = DisconnectFunc }, __mode = "v" }
 
 function Signal:Connect(Callback)
     table.insert(self._connections, Callback)
 
-    return {
-        Disconnect = function()
-            if not self or not self._connections then
-                return
-            end
-            for i, con in ipairs(self._connections) do
-                if con == Callback then
-                    table.remove(self._connections, i)
-                    break
-                end
-            end
-        end,
-    }
+    local Tab = setmetatable({ _self = self, _callback = Callback }, ConMt)
+    if _G.CONTEXT then
+        _G.CONTEXT:BindToContext("SignalBind", Tab)
+    end
+
+    return Tab
 end
 
 function Signal:Fire(...)
@@ -37,7 +61,11 @@ function Signal:Fire(...)
         coroutine.resume(WAIT[i], ...)
         WAIT[i] = nil
     end
-    if self._yielding then
+    if self._RTC then
+        for _, f in ipairs(self._connections) do
+            f(...)
+        end
+    elseif self._yielding then
         local Threads = {}
 
         for _, cb in ipairs(self._connections) do

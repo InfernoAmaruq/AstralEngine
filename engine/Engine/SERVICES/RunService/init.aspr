@@ -5,7 +5,7 @@ return function(D)
 
     local DATA = {}
 
-    DATA.RenderStepped = SIGNALLIB.new(true, 0.1)
+    DATA.RenderStepped = SIGNALLIB.new()
 
     DATA.__BOUNDTOSTEP = {}
     DATA.__USEDNAMES = {}

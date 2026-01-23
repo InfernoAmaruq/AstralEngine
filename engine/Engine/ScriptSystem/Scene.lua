@@ -1,4 +1,6 @@
 return function(ScriptService, Ctx)
+    local Signal = require("../../Lib/Signal.lua")
+
     local ScenesPath = "GAMEFILE/Assets/Scenes/"
 
     local AppendsToTry = { "", ".lbmf", ".lua", ".aspr" }
@@ -7,6 +9,9 @@ return function(ScriptService, Ctx)
     local CurScene
 
     local SceneManager = {}
+
+    SceneManager.OnLoad = Signal.new(Signal.Type.RTC)
+    SceneManager.OnUnload = Signal.new(Signal.Type.RTC)
 
     local AssetMapLoader = require("./AssetMap")
     local ScriptLoader = require("./Scripts")
@@ -55,6 +60,8 @@ return function(ScriptService, Ctx)
             AstralEngine.Log({ "Failed to load scene file:", Scene, "at path:", SceneFile, "\n > with error:", err })
         end
 
+        SceneManager.OnLoad:Fire(Scene, err)
+
         -- all done, time to load the files
 
         -- make a new context first
@@ -91,6 +98,7 @@ return function(ScriptService, Ctx)
             AstralEngine.Log("Scene " .. Scene .. " is not loaded", "Warning", "SCENEMANAGER")
         end
 
+        SceneManager.OnUnload:Fire(Scene)
         LoadedScenes[Scene].Context:KillAll()
         LoadedScenes[Scene] = nil
     end

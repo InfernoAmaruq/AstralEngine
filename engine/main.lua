@@ -76,7 +76,7 @@ end
 
 lovr.textinput = nil
 
-local QuitSig = SIGNAL.new(false)
+local QuitSig = SIGNAL.new(SIGNAL.Type.RTC)
 function lovr.quit(...)
     local ShouldAbort = false
     if AstralEngine.Callbacks.OnQuit then ShouldAbort = AstralEngine.Callbacks.OnQuit(...) end
@@ -91,6 +91,7 @@ end
 function lovr.run()
     if lovr.load then lovr.load() end
     collectgarbage("collect")
+    _G.AstralEngine.__ENGINETHREAD = coroutine.running()
 
     -- RUNTIME DEFINITION
 
@@ -120,7 +121,6 @@ function lovr.run()
 
         @macro<L,!USEBRACK>{M_PHYSTICK(&TIMER) =
             if MainPhysWorld then
-                print("PHYS TICK")
                 SyncState(MainPhysWorldID)
                 MainPhysWorld:update(PhysicsRate)
                 UpdTrans(MainPhysWorldID)

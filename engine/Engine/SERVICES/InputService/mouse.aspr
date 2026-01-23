@@ -8,23 +8,23 @@ return function(D, SIGNAL)
 
     UserMouse.Position = D.VECTOR2(D.MOUSEPOS())
 
-    local MouseMeta = setmetatable({},
-        {
-            __newindex = function() end,
-            __index = UserMouse,
-            __metatable = false,
-            __pairs = function()
-                return next,
-                    UserMouse, nil
-            end
-        })
+    local MouseMeta = setmetatable({}, {
+        __newindex = function() end,
+        __index = UserMouse,
+        __metatable = false,
+        __pairs = function()
+            return next, UserMouse, nil
+        end,
+    })
 
-    DATA.GetMouse = function() return MouseMeta end
+    DATA.GetMouse = function()
+        return MouseMeta
+    end
 
-    UserMouse.MouseButtonDown = SIGNAL.new(true, 0.05)
-    UserMouse.MouseButtonUp = SIGNAL.new(true, 0.05)
-    UserMouse.MouseMoved = SIGNAL.new(true, 0.05)
-    UserMouse.WheelMoved = SIGNAL.new(true, 0.05)
+    UserMouse.MouseButtonDown = SIGNAL.new(SIGNAL.Type.RTC)
+    UserMouse.MouseButtonUp = SIGNAL.new(SIGNAL.Type.RTC)
+    UserMouse.MouseMoved = SIGNAL.new(SIGNAL.Type.RTC)
+    UserMouse.WheelMoved = SIGNAL.new(SIGNAL.Type.RTC)
 
     return DATA
 end

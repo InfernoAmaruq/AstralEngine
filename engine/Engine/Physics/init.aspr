@@ -95,7 +95,7 @@ function Physics.NewWorld(Parameters)
     return T
 end
 
-function Physics.DestroyWorld(WorldEntity,FromComp)
+function Physics.DestroyWorld(WorldEntity, KillEntity, FromComp)
     local Comp = WorldEntity:GetComponent("World")
 
     local WorldId = Comp.WorldId
@@ -110,6 +110,9 @@ function Physics.DestroyWorld(WorldEntity,FromComp)
 
     if not FromComp then
         WorldEntity:RemoveComponent("World")
+    end
+    if KillEntity then
+        WorldEntity:Destroy()
     end
 end
 

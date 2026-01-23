@@ -81,7 +81,6 @@ local function COMPILE_LOADSTRING(c, NAME)
         local S = meta.LoadfileAppendStack[i]
         c = S .. c
         meta.LoadfileAppendStack.Pop()
-        print("APPENDED:\n", s, "\nRESULT:\n", c)
     end
 
     local Dirs

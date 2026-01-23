@@ -160,7 +160,6 @@ local Methods = {
             local List = DotFix(Path):split("/")
             local Name = List[#List]
             local Lib = package.loadlib(TryPath, "luaopen_" .. Name)
-            print("TRY LOADLIB:", Lib, TryPath, Name, CurPath)
             if Lib and type(Lib) == "function" then
                 local Extract = Lib()
                 package.loaded[Canon] = Extract

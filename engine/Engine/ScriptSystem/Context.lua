@@ -13,13 +13,15 @@ return function(ScriptService)
         local t = {
             Alive = false,
             Gen = ContextGen,
-            Tasks = setmetatable({}, WMT), -- {task = true}
-            Signals = setmetatable({}, WMT), -- {UNBINDFUNC = SIGNAL}
-            Binds = {},                  -- {Name}
-            Passes = {},                 -- {PassRef}
+            Tasks = setmetatable({}, WMT),  -- {task = true}
+            Signals = setmetatable({}, WMT), -- {UNBINDFUNC = true}
+            SignalInstances = setmetatable({}, WMT), -- {SIGNAL = true}
+            Binds = {},                     -- {Name}
+            Passes = {},                    -- {PassRef}
             AllocObjects = setmetatable({}, WMT), -- {Obj = Type}
             -- cache / scene allocated assets (meshes, images, sfx, whatevs)
         }
+        -- entities are tracked externally with _context field
         _G.CONTEXT = t
         return setmetatable(t, MT)
     end
@@ -43,10 +45,20 @@ return function(ScriptService)
             end
         end
 
+        -- SIGNALS
+        for i in pairs(self.Signals) do
+            self[i] = nil
+            i:Disconnect()
+        end
+
+        for i in pairs(self.SignalInstances) do
+            self[i] = nil
+            i:Destroy()
+        end
+
         -- ENTITIES
         for _, Ent in ipairs(GetService("World").Alive) do
             if not Ent.IsNull and Ent.__context == CTXGEN then
-                print("KILL:", Ent)
                 Ent:Destroy()
             end
         end
@@ -62,8 +74,10 @@ return function(ScriptService)
         if Ctx == "Tasks" then
             Obj1.Context = self.Gen
             self.Tasks[Obj1] = true
-        elseif Ctx == "Signals" then
-            self.Signals[Obj1] = Obj2
+        elseif Ctx == "Signal" then
+            self.SignalInstances[Obj1] = true
+        elseif Ctx == "SignalBind" then
+            self.Signals[Obj1] = true
         elseif Ctx == "Binds" then
             self.Binds[#self.Binds + 1] = Obj1
         elseif Ctx == "Passes" then

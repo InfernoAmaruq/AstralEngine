@@ -1,5 +1,11 @@
-local RESUME, STATUS, CREATE = coroutine.resume, coroutine.status, coroutine.create
+local RESUME, STATUS, CREATE, YIELD = coroutine.resume, coroutine.status, coroutine.create, coroutine.yield
 local ALLOCATE = table.alloc
+
+coroutine.isyieldable = function(CO)
+    CO = CO or coroutine.running()
+    local EngThread = AstralEngine.__ENGINETHREAD
+    return EngThread ~= CO
+end
 
 local Scheduler = {}
 

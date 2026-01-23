@@ -11,8 +11,8 @@ return function(D, SIGNAL)
         return KBProxy
     end
 
-    UserKB.KeyPressed = SIGNAL.new(true, 0.05)
-    UserKB.KeyReleased = SIGNAL.new(true, 0.05)
+    UserKB.KeyPressed = SIGNAL.new(SIGNAL.Type.RTC)
+    UserKB.KeyReleased = SIGNAL.new(SIGNAL.Type.RTC)
 
     return DATA
 end

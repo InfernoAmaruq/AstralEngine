@@ -91,7 +91,8 @@ Shape* luax_newconvexshape(lua_State* L, int index) {
   float* points;
   uint32_t count;
   index = luax_readmesh(L, index, &points, &count, NULL, NULL);
-  float scale = luax_optfloat(L, index, 1.f);
+  float scale[3];
+  luax_readscale(L, index, scale, 3, NULL);
   ConvexShape* shape = lovrConvexShapeCreate(points, count, scale);
   lovrFree(points);
   luax_assert(L, shape);
@@ -113,7 +114,8 @@ Shape* luax_newmeshshape(lua_State* L, int index) {
 
   index = luax_readmesh(L, index, &vertices, &vertexCount, &indices, &indexCount);
 
-  float scale = luax_optfloat(L, index, 1.f);
+  float scale[3];
+  luax_readscale(L, index, scale, 3, NULL);
   Shape* shape = lovrMeshShapeCreate(vertexCount, vertices, indexCount, indices, scale);
 
   lovrFree(vertices);
@@ -561,9 +563,12 @@ static int l_lovrConvexShapeGetFace(lua_State* L) {
 
 static int l_lovrConvexShapeGetScale(lua_State* L) {
   ConvexShape* convex = luax_checktype(L, 1, ConvexShape);
-  float scale = lovrConvexShapeGetScale(convex);
-  lua_pushnumber(L, scale);
-  return 1;
+  float scale[3];
+  lovrConvexShapeGetScale(convex, scale);
+  lua_pushnumber(L, scale[0]);
+  lua_pushnumber(L, scale[1]);
+  lua_pushnumber(L, scale[2]);
+  return 3;
 }
 
 const luaL_Reg lovrConvexShape[] = {
@@ -578,9 +583,12 @@ const luaL_Reg lovrConvexShape[] = {
 
 static int l_lovrMeshShapeGetScale(lua_State* L) {
   MeshShape* mesh = luax_checktype(L, 1, MeshShape);
-  float scale = lovrMeshShapeGetScale(mesh);
-  lua_pushnumber(L, scale);
-  return 1;
+  float scale[3];
+  lovrMeshShapeGetScale(mesh, scale);
+  lua_pushnumber(L, scale[0]);
+  lua_pushnumber(L, scale[1]);
+  lua_pushnumber(L, scale[2]);
+  return 3;
 }
 
 const luaL_Reg lovrMeshShape[] = {

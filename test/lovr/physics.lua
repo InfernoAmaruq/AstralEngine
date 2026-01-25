@@ -151,7 +151,7 @@ group('physics', function()
 
       test('scale', function()
         shape = lovr.physics.newConvexShape({ 1, 1, 0, -1, 1, 0, 0, 0, 0, 0, 0, 1 }, 2)
-        expect(shape:getScale()).to.equal(2)
+        expect({ shape:getScale() }).to.equal({ 2, 2, 2 })
       end)
     end)
 
@@ -173,9 +173,9 @@ group('physics', function()
           {   0,  .4, 0 },
           { -.5, -.4, 0 },
           {  .5, -.4, 0 }
-        }, { 1, 2, 3 }, 5)
+        }, { 1, 2, 3 }, 5, 1, 1)
 
-        expect(shape:getScale()).to.equal(5)
+        expect({ shape:getScale() }).to.equal({ 5, 1, 1 })
       end)
     end)
   end)

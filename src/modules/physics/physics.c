@@ -2311,7 +2311,7 @@ bool lovrCylinderShapeSetLength(CylinderShape* shape, float length) {
   return lovrShapeReplace(shape, makeCylinder(radius, length));
 }
 
-ConvexShape* lovrConvexShapeCreate(float points[], uint32_t count, float scale) {
+ConvexShape* lovrConvexShapeCreate(float points[], uint32_t count, float* scale) {
   ConvexShape* shape = lovrCalloc(sizeof(ConvexShape));
   shape->ref = 1;
   shape->type = SHAPE_CONVEX;
@@ -2319,8 +2319,7 @@ ConvexShape* lovrConvexShapeCreate(float points[], uint32_t count, float scale) 
   JPH_Shape* hull = (JPH_Shape*) JPH_ConvexHullShapeSettings_CreateShape(settings);
   lovrCheck(hull, "Invalid convex hull!");
   JPH_ShapeSettings_Destroy((JPH_ShapeSettings*) settings);
-  float scale3[3] = { scale, scale, scale };
-  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(hull, vec3_toJolt(scale3));
+  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(hull, vec3_toJolt(scale));
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
   quat_identity(shape->rotation);
   JPH_Shape_Destroy(hull);
@@ -2370,13 +2369,13 @@ uint32_t lovrConvexShapeGetFace(ConvexShape* shape, uint32_t index, uint32_t* po
   return JPH_ConvexHullShape_GetFaceVertices(hull, index, capacity, pointIndices);
 }
 
-float lovrConvexShapeGetScale(ConvexShape* shape) {
+void lovrConvexShapeGetScale(ConvexShape* shape, float* scale) {
   JPH_Vec3 v;
   JPH_ScaledShape_GetScale((JPH_ScaledShape*) shape->handle, &v);
-  return v.x;
+  vec3_fromJolt(scale, &v);
 }
 
-MeshShape* lovrMeshShapeCreate(uint32_t vertexCount, float* vertices, uint32_t indexCount, uint32_t* indices, float scale) {
+MeshShape* lovrMeshShapeCreate(uint32_t vertexCount, float* vertices, uint32_t indexCount, uint32_t* indices, float* scale) {
   MeshShape* shape = lovrCalloc(sizeof(MeshShape));
   shape->ref = 1;
   shape->type = SHAPE_MESH;
@@ -2398,8 +2397,7 @@ MeshShape* lovrMeshShapeCreate(uint32_t vertexCount, float* vertices, uint32_t i
   lovrFree(triangles);
 
   // We wrap MeshShapes in ScaledShapes so that clones can have unique userdata
-  float scale3[3] = { scale, scale, scale };
-  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(mesh, vec3_toJolt(scale3));
+  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(mesh, vec3_toJolt(scale));
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
   quat_identity(shape->rotation);
   JPH_Shape_Destroy(mesh);
@@ -2419,10 +2417,10 @@ MeshShape* lovrMeshShapeClone(MeshShape* parent, float scale) {
   return shape;
 }
 
-float lovrMeshShapeGetScale(MeshShape* shape) {
+void lovrMeshShapeGetScale(MeshShape* shape, float* scale) {
   JPH_Vec3 v;
   JPH_ScaledShape_GetScale((JPH_ScaledShape*) shape->handle, &v);
-  return v.x;
+  vec3_fromJolt(scale, &v);
 }
 
 TerrainShape* lovrTerrainShapeCreate(float* vertices, uint32_t n, float scaleXZ, float scaleY) {

@@ -39,6 +39,7 @@ dev
 - Add `lovr.graphics.getStats`.
 - Add `Model:is/setNodeVisible`.
 - Add `Layer:get/setOrigin`.
+- Add support for non-uniform scale in `ConvexShape` and `MeshShape`.
 
 ### Change
 

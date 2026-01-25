@@ -12,6 +12,9 @@ return {
                 Color = color.Red,
                 Size = Vec3(10, 1, 10),
             },
+            Collider = {
+                Anchored = true,
+            },
         },
     },
     [RES["BALL"]] = {
@@ -26,6 +29,9 @@ return {
                 Shape = ENUM.ShapeType.Sphere,
                 Color = color.fromHex("#0000ff99"),
                 Size = Vec3(0.5, 0.5, 0.5),
+            },
+            Collider = {
+                ColliderType = ENUM.ColliderType.Sphere,
             },
         },
     },

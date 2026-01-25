@@ -1,0 +1,14 @@
+local Material = {}
+
+Material.Name = "Material"
+Material.Metadata = {}
+
+Material.Metadata.__create = function(Data, _)
+    local Storage = {}
+
+    Storage[1] = Data.Material
+
+    return Storage
+end
+
+return Material

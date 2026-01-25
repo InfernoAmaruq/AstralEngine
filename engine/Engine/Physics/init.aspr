@@ -8,8 +8,6 @@ local N = 1
 Physics.Worlds = {}
 Physics.RawWorlds = {}
 
-local DefaultParameters = { ThreadSafe = false, RestitutionThreshold = 1, Stabilization = .7, MixedTags = {"DEFAULT"}, DefaultTag = "DEFAULT"}
-
 local function GetTags(Tags,Static,Mixed)
     local T, S, ALL = table.alloc(32,0), table.alloc(32,0), table.alloc(0,32)
 
@@ -62,6 +60,23 @@ local LuaToJoltToSync = table.alloc(5, 0)
 
 @flag:SHOULD_MOVE = 0b101100000011;
 
+local CALLBACKS = {
+    Enter = function(a,b,c)
+        local PtrA, PtrB = a:getUserData(), b:getUserData()
+        PtrA.Touched:Fire(PtrB.Entity,c)
+        PtrB.Touched:Fire(PtrA.Entity,c)
+    end,
+    Exit = function(a,b)
+        local PtrA, PtrB = a:getUserData(), b:getUserData()
+        PtrA.TouchEnded:Fire(PtrB.Entity,c)
+        PtrB.TouchEnded:Fire(PtrA.Entity,c)
+    end,
+}
+
+local DefaultParameters = { ThreadSafe = false, RestitutionThreshold = 1, Stabilization = .7, MixedTags = {"DEFAULT"}, DefaultTag = "DEFAULT", Callbacks = {
+    Enter = CALLBACKS.Enter, Exit = CALLBACKS.Exit
+}}
+
 function Physics.NewWorld(Parameters)
     Parameters = Parameters or DefaultParameters
 
@@ -78,6 +93,11 @@ function Physics.NewWorld(Parameters)
         restitutionThreshold = Parameters.RestitutionThreshold or DefaultParameters.RestitutionThreshold,
         velocitySteps = Parameters.VelocitySteps,
         positionSteps = Parameters.PositionSteps,
+    }
+
+    W:setCallbacks{
+        exit = Parameters.Callbacks.Exit,
+        enter = Parameters.Callbacks.Enter
     }
 
     assert(W, "Failed to create world!")

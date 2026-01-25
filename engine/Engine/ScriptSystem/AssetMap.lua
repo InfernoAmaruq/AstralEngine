@@ -194,7 +194,7 @@ function AssetMapLoader.LoadAssetMap(Map)
 
         -- summon the entity
         if Flags & FENVFLAGS.F_PHYS_WORLD ~= 0 then
-            local WorldData = AstralEngine.Assert(Val.WorldData, "No world data provided!", "SCENEMANAGER")
+            local WorldData = Val.WorldData or nil
             local Phys = GetService("Physics")
             Ent = Phys.NewWorld(WorldData, Tag & TAG_FORCE ~= 0 and NewId or nil)
             if Tag & TAG_RES ~= 0 and not (Tag & TAG_FORCE ~= 0) then

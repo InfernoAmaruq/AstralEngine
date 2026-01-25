@@ -1,5 +1,8 @@
 local Physics = GetService("Physics", "Physics")
 local Component = GetService("Component", "Component")
+local WorldSer = GetService("World","World")
+
+local Signal = require("../../../Lib/Signal.lua")
 
 local mt = {}
 
@@ -120,20 +123,6 @@ local FIELDTOFUNC = {
     Tag = SHAREDT.SetTag
 }
 
-do -- connecting stuffs so you can index
-    local TABLE = Collider.Pattern
-
-    for i in pairs(FIELDTOFUNC) do
-        TABLE[i] = 0
-    end
-    for i in pairs(LIST) do
-        TABLE[i] = 0
-    end
-    for i in pairs(SHAREDT) do
-        TABLE[i] = 0
-    end
-end
-
 local METATAB = {
     __index = function(self, k)
         local Col = self.ColRef
@@ -165,6 +154,8 @@ local SphereVal = CT.Sphere.Value
 
 function mt.__create(DATA, e)
     local Transform = assert(Component.HasComponent(e, "Transform"), "NO COMPONENT TYPE OF 'Transform' PRESENT, CANNOT ADD COLLIDER!")
+
+    local EntPtr = WorldSer.GetEntityFromId(e)
 
     local World = DATA.World
     local WorldComp
@@ -208,7 +199,10 @@ function mt.__create(DATA, e)
         Tags = 0,
         [&IDX_T_DOF] = DATA.TranslationDOF or "xyz",
         [&IDX_R_DOF] = DATA.RotationDOF or "xyz",
-        [&TAG] = COLLIDER:getTag()
+        [&TAG] = COLLIDER:getTag(),
+        Touched = Signal.new(Signal.Type.Default),
+        TouchEnded = Signal.new(Signal.Type.Default),
+        Entity = EntPtr,
     }
 
     COLLIDER:setDegreesOfFreedom(Tab[&IDX_T_DOF],Tab[&IDX_R_DOF])
@@ -232,6 +226,10 @@ end
 function mt.__remove(self, EId)
     Physics.DequeueToSyncLTJ(self)
     Physics.UnbindCollider(self.WId,self.ColRef)
+
+    self.Touched:Destroy()
+    self.TouchEnded:Destroy()
+    self.Entity = nil
 
     self.ColRef:setUserData(nil)
     self.ColRef:destroy()

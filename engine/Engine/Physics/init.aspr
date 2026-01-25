@@ -1,5 +1,5 @@
 local Entity = GetService("Entity", "Entity")
-local Component = GetService("Component")
+local Component = GetService("Component","Component")
 local NewWorld = lovr.physics.newWorld
 
 local Physics = {}
@@ -8,46 +8,12 @@ local N = 1
 Physics.Worlds = {}
 Physics.RawWorlds = {}
 
-local function GetTags(Tags,Static,Mixed)
-    local T, S, ALL = table.alloc(32,0), table.alloc(32,0), table.alloc(0,32)
-
-    local SCRATCH = table.alloc(32,0)
-
-    if Tags then
-        for _,v in pairs(Tags) do
-            table.insert(T,v)
-            SCRATCH[v] = true
-        end
-    end
-
-    if Static then
-        for _,v in pairs(Static) do
-            table.insert(S,v)
-            if not SCRATCH[v] then
-                table.insert(T,v)
-            else
-                SCRATCH[v] = nil
-            end
-        end
-    end
-
-    if Mixed then
-        for _,v in pairs(Mixed) do
-            table.insert(T,v)
-            local STAT = "."..v..".STATIC"
-            table.insert(S,STAT)
-            table.insert(T,STAT)
-        end
-    end
-
-    for _,v in pairs(T) do
-        local Exists = table.find(S,v)
-        ALL[v] = Exists and true or false
-    end
-
-    return T,S,ALL
+local ParamsList = require("./Params")
+for i,v in pairs(ParamsList) do
+    Physics[i] = v
 end
 
+-- PHYS CONFIG
 local WorldColliders = table.alloc(5, 0)
 local LuaToJoltToSync = table.alloc(5, 0)
 
@@ -73,14 +39,22 @@ local CALLBACKS = {
     end,
 }
 
-local DefaultParameters = { ThreadSafe = false, RestitutionThreshold = 1, Stabilization = .7, MixedTags = {"DEFAULT"}, DefaultTag = "DEFAULT", Callbacks = {
+local DefaultParameters = { ThreadSafe = false, RestitutionThreshold = 1, Stabilization = .7, Callbacks = {
     Enter = CALLBACKS.Enter, Exit = CALLBACKS.Exit
-}}
+}, SetCollisionBetween = {},
+    Tags = {"DEFAULT"}, StaticTags = {"STATIC_DEFAULT"}
+}
 
 function Physics.NewWorld(Parameters)
     Parameters = Parameters or DefaultParameters
 
-    local Tags, StaticTags, All = GetTags(Parameters.Tags,Parameters.StaticTags,Parameters.MixedTags)
+    local Tags, StaticTags = Parameters.Tags or DefaultParameters.Tags, Parameters.StaticTags or DefaultParameters.StaticTags
+
+    for _, Tag in pairs(StaticTags) do
+        table.insert(Tags,Tag)
+    end
+
+    AstralEngine.Assert(#Tags <= 31,"Too many tags passed when creating world!\n"..table.concat(Tags,"\n"),"PHYSICS")
 
     local W = NewWorld{
         tags = Tags,
@@ -96,14 +70,25 @@ function Physics.NewWorld(Parameters)
     }
 
     W:setCallbacks{
-        exit = Parameters.Callbacks.Exit,
-        enter = Parameters.Callbacks.Enter
+        exit = (Parameters.Callbacks or DefaultParameters.Callbacks).Exit,
+        enter = (Parameters.Callbacks or DefaultParameters.Callbacks).Enter
     }
+
+    for Tag, List in pairs(Parameters.SetCollisionBetween) do
+        for Tag2, State in pairs(List) do
+
+            if State then
+                W:enableCollisionBetween(Tag,Tag2)
+            else
+                W:disableCollisionBetween(Tag,Tag2)
+            end
+        end
+    end
 
     assert(W, "Failed to create world!")
 
     local T = Entity.New("WORLD_" .. N)
-    T:AddComponent("World", { W = W, N = N, D = Parameters.DefaultTag or Tags[1] or "DEFAULT", ALLTAGS = All })
+    T:AddComponent("World", { W = W, N = N, D = Parameters.DefaultTag or nil, STATIC = StaticTags, TAGS = Tags })
 
     Physics.Worlds[N] = T
     Physics.RawWorlds[N] = W
@@ -156,7 +141,7 @@ end
 local FF_GetPose, FF_FromPose, CC_SetPose, CC_SetVel, CC_SetAngVel
 
 local FieldToFlag = {
-    Anchored = &S_Kinematic,
+    Kinematic = &S_Kinematic,
     Static = &S_Static
 }
 
@@ -193,6 +178,7 @@ function Physics.UpdateSyncField(WId, ColliderRef, Field, Value)
     if not FlagVal then return end
 
     local Id
+
     for i,v in pairs(WorldColliders[WId][&F_Col]) do
         if v == ColliderRef then Id = i break end
     end

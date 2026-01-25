@@ -12,6 +12,14 @@ local CAPTUREFUNC = function(t, ...)
     return FUNC(WORLD, ...)
 end
 
+local Functions = {
+    Raycast = function() end,
+    Shapecast = function() end,
+    Overlap = function() end,
+    QueryBox = function() end,
+    QuerySphere = function() end,
+}
+
 local AliasMap = {
     Update = "update",
     Interpolate = "interpolate",
@@ -22,6 +30,11 @@ local WORLDINHERITANCE = {
         k = rtype(k) == "string" and AliasMap[k] or k
         local W = rawget(t, "World")
         local v = W and W[k]
+
+        if k == "Gravity" then
+            return t.World:getGravity()
+        end
+
         if rtype(v) == "function" then
             rawset(t, ".NEXTCALL", v)
             return CAPTUREFUNC
@@ -29,7 +42,11 @@ local WORLDINHERITANCE = {
             return v or rawget(t, k)
         end
     end,
-    __newindex = function()
+    __newindex = function(t, k, v)
+        if k == "Gravity" then
+            t.World:setGravity(v)
+            return
+        end
         error("CANNOT WRITE TO WORLD", 2)
     end,
 }
@@ -39,8 +56,13 @@ World.Pattern = { update = 0, World = 0, WorldId = 0 }
 World.Metadata = {}
 
 local function HasTag(World, Name)
-    local t = World.Tags[Name]
-    return t ~= nil, t
+    local t = World.TagLookUp[Name]
+    return t ~= nil
+end
+
+local function IsStatic(World, Tag)
+    local t = table.find(World.StaticTags, Tag)
+    return t and true or false
 end
 
 World.Metadata.__create = function(DATA)
@@ -48,9 +70,16 @@ World.Metadata.__create = function(DATA)
     T.World = DATA.W
     T.DefaultTag = DATA.D
     T.WorldId = DATA.N
-    T.Tags = DATA.ALLTAGS
+    T.Tags = DATA.TAGS
+    T.TagLookUp = {}
+    T.StaticTags = DATA.STATIC
+
+    for _, v in pairs(DATA.TAGS) do
+        T.TagLookUp[v] = true
+    end
 
     T.HasTag = HasTag
+    T.IsStaticTag = IsStatic
 
     setmetatable(T, WORLDINHERITANCE)
     return T

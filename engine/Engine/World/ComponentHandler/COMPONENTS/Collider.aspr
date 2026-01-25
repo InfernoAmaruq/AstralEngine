@@ -18,19 +18,7 @@ local CT = ENUM({
 }, "ColliderType")
 
 -- FLAGS
-@macro<L>:ToStatic(&T) = "."..&T..".STATIC"
-
-@macro<L>:FromStatic(&T) = &T:sub(2,-7)
-
-@macro<L>:IsStatic(&T) = &T and &T:sub(-7) or false
-
-@macro<L,!USEBRACK>{GetStaticTag(&TAG,&W,&COLL,&STATE) =
-        local CURTAG = &COLL:getTag()
-        local NEWTAG = &STATE and ToStatic(CURTAG) or FromStatic(CURTAG)
-        &TAG = NEWTAG
-};
-
-@flag:IDX_ANCHORED = 1;
+@flag:IDX_KIN = 1;
 @flag:IDX_STATIC = 2;
 @flag:IDX_T_DOF = 3;
 @flag:IDX_R_DOF = 4;
@@ -52,38 +40,23 @@ local CT = ENUM({
 @macro<L,!USEBRACK>{VALIDATEDOF(&OBJ) = local RDOF, TDOF = &OBJ[&IDX_R_DOF], &OBJ[&IDX_T_DOF]; if (RDOF == nil or RDOF == "") and (TDOF == nil or TDOF == "") then error("CANNOT SET ALL DEGREES OF FREEDOM TO NIL. USE STATIC OR ANCHORED COLLIDER") end}
 
 local SHAREDT = {
-    SetStatic = function(self, State)
-        if self[&IDX_STATIC] == State then return end
-        local ColRef = self.ColRef
-        local w = self.WorldComp
-        local Tag
-        GetStaticTag(Tag,w,ColRef,State)
-
-        if (w:HasTag(Tag)) then
-            ColRef:setTag(Tag)
-        else
-            error("NO STATIC TAG FOR OBJECT",self)
-        end
-        self[&IDX_STATIC] = State
-        self[&TAG] = Tag
-
-        Physics.UpdateSyncField(w.WorldId,self.ColRef,"Static", State)
-    end,
-    Anchor = function(self, State)
-        if self[&IDX_ANCHORED] == State then return end
+    SetKinematic = function(self, State)
+        if self[&IDX_KIN] == State then return end
 
         self.ColRef:setKinematic(State)
 
-        self[&IDX_ANCHORED] = State
+        self[&IDX_KIN] = State
 
-        Physics.UpdateSyncField(self.WorldComp.WorldId,self.ColRef,"Anchored", State)
+        Physics.UpdateSyncField(self.WorldComp.WorldId,self.ColRef,"Kinematic", State)
     end,
     SetTranslationDOF = function(self, v)
+        AstralEngine.Assert(not self.IsStatic,"Cannot change DOF on static collider!","COLLIDER")
         VALIDATEDOF(self)
         self.ColRef:setDegreesOfFreedom(v,self[&IDX_R_DOF])
         self[&IDX_T_DOF] = v
     end,
     SetRotationDOF = function(self, v)
+        AstralEngine.Assert(not self.IsStatic,"Cannot change DOF on static collider!","COLLIDER")
         VALIDATEDOF(self)
         self.ColRef:setDegreesOfFreedom(self[&IDX_T_DOF],v)
         self[&IDX_R_DOF] = v
@@ -96,14 +69,29 @@ local SHAREDT = {
     SetTag = function(self, v)
         self.ColRef:setTag(v)
         self[&TAG] = v
+
+        local IsStatic = self.WorldComp:IsStaticTag(v)
+        Physics.UpdateSyncField(w.WorldId,self.ColRef,"Static",IsStatic)
+        self.IsStatic = IsStatic
     end,
     SetAngularVelocity = function(self, v)
+        AstralEngine.Assert(not self.IsStatic,"Cannot set Angular Velocity on static collider!","COLLIDER")
     end,
-    SetVelocity = function(self, v) end,
-    ApplyForce = function(self, v) end,
-    ApplyAngularForce = function(self, v) end,
-    ApplyImpulse = function(self, v) end,
-    ApplyAngularImpulse = function(self, v) end
+    SetVelocity = function(self, v)
+        AstralEngine.Assert(not self.IsStatic,"Cannot set Velocity on static collider!","COLLIDER")
+    end,
+    ApplyForce = function(self, v)
+        AstralEngine.Assert(not self.IsStatic,"Cannot apply force to static collider!","COLLIDER")
+    end,
+    ApplyAngularForce = function(self, v)
+        AstralEngine.Assert(not self.IsStatic,"Cannot apply force to static collider!","COLLIDER")
+    end,
+    ApplyImpulse = function(self, v)
+        AstralEngine.Assert(not self.IsStatic,"Cannot apply impulse to static collider!","COLLIDER")
+    end,
+    ApplyAngularImpulse = function(self, v)
+        AstralEngine.Assert(not self.IsStatic,"Cannot apply impulse to static collider!","COLLIDER")
+    end
 }
 
 local function CALLFUNC(self, ...)
@@ -111,11 +99,11 @@ local function CALLFUNC(self, ...)
 end
 
 local LIST = {
-    Anchored = &IDX_ANCHORED, Static = &IDX_STATIC, RotationDOF = &IDX_R_DOF, TranslationDOF = &IDX_T_DOF, IsTrigger = &IDX_TRIGGER, Tag = &TAG
+    Kinematic = &IDX_KIN, Static = &IDX_STATIC, RotationDOF = &IDX_R_DOF, TranslationDOF = &IDX_T_DOF, IsTrigger = &IDX_TRIGGER, Tag = &TAG
 }
 
 local FIELDTOFUNC = {
-    Anchored = SHAREDT.Anchor,
+    SetKinematic = SHAREDT.SetKinematic,
     Static = SHAREDT.SetStatic,
     RotationDOF = SHAREDT.SetRotationDOF,
     TranslationDOF = SHAREDT.SetTranslationDOF,
@@ -190,6 +178,8 @@ function mt.__create(DATA, e)
     COLLIDER:setPose(Transform.Position,Transform.Orientation)
     COLLIDER:setTag(DATA.Tag or WorldComp.DefaultTag)
 
+    local IsStatic = WorldComp:IsStaticTag(COLLIDER:getTag())
+
     local Tab = {
         World = World,
         WorldComp = WorldComp,
@@ -197,6 +187,7 @@ function mt.__create(DATA, e)
         ColliderType = ColliderType,
         ColRef = COLLIDER,
         Tags = 0,
+        IsStatic = IsStatic,
         [&IDX_T_DOF] = DATA.TranslationDOF or "xyz",
         [&IDX_R_DOF] = DATA.RotationDOF or "xyz",
         [&TAG] = COLLIDER:getTag(),
@@ -205,7 +196,9 @@ function mt.__create(DATA, e)
         Entity = EntPtr,
     }
 
-    COLLIDER:setDegreesOfFreedom(Tab[&IDX_T_DOF],Tab[&IDX_R_DOF])
+    if not IsStatic then
+        COLLIDER:setDegreesOfFreedom(Tab[&IDX_T_DOF],Tab[&IDX_R_DOF])
+    end
 
     local T = setmetatable(Tab,METATAB)
 
@@ -213,17 +206,14 @@ function mt.__create(DATA, e)
 
     Physics.BindCollider(WId, T, Transform)
 
-    if DATA.Anchored then
-        SHAREDT.Anchor(T,true)
-    end
-    if DATA.Static then
-        SHAREDT.SetStatic(T,true)
+    if DATA.Kinematic then
+        SHAREDT.SetKinematic(T,true)
     end
 
     return T
 end
 
-function mt.__remove(self, EId)
+function mt.__remove(self)
     Physics.DequeueToSyncLTJ(self)
     Physics.UnbindCollider(self.WId,self.ColRef)
 

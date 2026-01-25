@@ -13,7 +13,8 @@ return {
                 Size = Vec3(10, 1, 10),
             },
             Collider = {
-                Anchored = true,
+                Tag = "STATIC_DEFAULT",
+                Kinematic = true,
             },
         },
     },

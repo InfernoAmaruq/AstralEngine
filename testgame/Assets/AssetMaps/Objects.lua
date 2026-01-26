@@ -24,7 +24,7 @@ return {
         Components = {
             Transform = {
                 Rotation = Vec3(0, 45, 45),
-                Position = Vec3(-3, -0.7, -4),
+                Position = Vec3(-3, 3, -4),
             },
             Shape = {
                 Shape = ENUM.ShapeType.Sphere,
@@ -36,8 +36,34 @@ return {
             },
         },
     },
-    [3] = {
+    [RES["HITBOX"]] = {
         Name = "Obj3",
         Parent = Obj1,
+        Components = {
+            Transform = {
+                Position = Vec3(-3, 0, -4),
+            },
+            Shape = {
+                Color = color.fromHex("#AAAA0044"),
+                Size = Vec3(5, 0.25, 5),
+            },
+            Collider = {
+                IsTrigger = true,
+                Tag = "STATIC_DEFAULT",
+            },
+        },
+    },
+    [RES["WALL"]] = {
+        Name = "Obj4",
+        Components = {
+            Transform = { Position = Vec3(0, 0, -10) },
+            Shape = {
+                Color = color.fromHex("#FF0000FF"),
+                Size = Vec3(5, 5, 1),
+            },
+            Collider = {
+                Tag = "STATIC_DEFAULT",
+            },
+        },
     },
 }

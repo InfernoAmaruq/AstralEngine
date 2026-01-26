@@ -36,6 +36,7 @@ local CT = ENUM({
 @flag:DAMP_L = 16;
 @flag:DAMP_A = 17;
 @flag:CENTER_OF_MASS = 18;
+@flag:ENABLED = 19;
 
 @macro<L,!USEBRACK>{VALIDATEDOF(&OBJ) = local RDOF, TDOF = &OBJ[&IDX_R_DOF], &OBJ[&IDX_T_DOF]; if (RDOF == nil or RDOF == "") and (TDOF == nil or TDOF == "") then error("CANNOT SET ALL DEGREES OF FREEDOM TO NIL. USE STATIC OR ANCHORED COLLIDER") end}
 
@@ -206,6 +207,9 @@ function mt.__create(DATA, e)
 
     Physics.BindCollider(WId, T, Transform)
 
+    if DATA.IsTrigger then
+        SHAREDT.SetTrigger(T,true)
+    end
     if DATA.Kinematic then
         SHAREDT.SetKinematic(T,true)
     end

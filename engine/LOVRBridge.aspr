@@ -82,10 +82,12 @@ LVRB.ConnectDevices = function()
             tostring(t.Mouse) or "NIL")
     end
 
+    local MT = {__tostring = INPTOSTR}
+
     local function MakeT(i)
         return setmetatable(
             { __INUSE = false, __index = i, KeyCode = nil, UserInputType = nil, State = nil, Mouse = nil },
-            { __tostring = INPTOSTR })
+            MT)
     end
 
     for i = 1, PoolSize do

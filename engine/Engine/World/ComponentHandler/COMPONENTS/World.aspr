@@ -13,7 +13,30 @@ local CAPTUREFUNC = function(t, ...)
 end
 
 local Functions = {
-    Raycast = function() end,
+    Raycast = function(WorldTab, Start, End, Parameters, Out)
+        Parameters = Parameters or Physics.RaycastParams.Default
+
+        if not Parameters.GetFirst then
+            Out = Out or {}
+            Parameters.__OUT = Out
+        end
+
+        local ReleaseFunc = Physics.RaycastData.Release
+
+        WorldTab.World:raycast(Start, End, Parameters[".Tags"], Parameters.Callback)
+
+        if Parameters.GetFirst then
+            local Obj = Parameters.__OUT or Physics.RaycastData.New()
+            ReleaseFunc(Obj)
+            return Obj
+        else
+            Parameters.__OUT = nil
+            for _, v in ipairs(Out) do
+                ReleaseFunc(v)
+            end
+            return Out
+        end
+    end,
     Shapecast = function() end,
     Overlap = function() end,
     QueryBox = function() end,
@@ -27,6 +50,10 @@ local AliasMap = {
 
 local WORLDINHERITANCE = {
     __index = function(t, k)
+        if Functions[k] then
+            return Functions[k]
+        end
+
         k = rtype(k) == "string" and AliasMap[k] or k
         local W = rawget(t, "World")
         local v = W and W[k]

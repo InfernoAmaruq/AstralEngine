@@ -8,6 +8,11 @@ local N = 1
 Physics.Worlds = {}
 Physics.RawWorlds = {}
 
+local DataList = require("./Data")
+for i,v in pairs(DataList) do
+    Physics[i] = v
+end
+
 local ParamsList = require("./Params")
 for i,v in pairs(ParamsList) do
     Physics[i] = v

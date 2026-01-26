@@ -52,12 +52,12 @@ do
         DATAPOOL[i] = Alloc()
     end
 
-    local RaycastData = {}
+    local QueryData = {}
 
-    RaycastData.New = GetTab
-    RaycastData.Release = ReleaseTab
+    QueryData.New = GetTab
+    QueryData.Release = ReleaseTab
 
-    Data.RaycastData = RaycastData
+    Data.QueryData = QueryData
 end
 
 return Data

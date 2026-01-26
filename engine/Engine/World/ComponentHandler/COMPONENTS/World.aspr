@@ -21,12 +21,12 @@ local Functions = {
             Parameters.__OUT = Out
         end
 
-        local ReleaseFunc = Physics.RaycastData.Release
+        local ReleaseFunc = Physics.QueryData.Release
 
         WorldTab.World:raycast(Start, End, Parameters[".Tags"], Parameters.Callback)
 
         if Parameters.GetFirst then
-            local Obj = Parameters.__OUT or Physics.RaycastData.New()
+            local Obj = Parameters.__OUT or Physics.QueryData.New()
             ReleaseFunc(Obj)
             return Obj
         else

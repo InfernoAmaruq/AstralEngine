@@ -83,7 +83,7 @@ do
                 end
             end
             if Valid then
-                local Obj = Physics.RaycastData.New()
+                local Obj = Physics.QueryData.New()
                 Obj.Position:set(x, y, z)
                 Obj.Normal:set(nx, ny, nz)
                 Obj.Collider = C

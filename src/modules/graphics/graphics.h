@@ -539,7 +539,7 @@ void lovrRaytracerClear(Raytracer* raytracer);
 bool lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16], uint32_t layers, uint32_t tag, uint32_t* id);
 bool lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16], uint32_t layers, uint32_t tag, uint32_t* id);
 bool lovrRaytracerSet(Raytracer* raytracer, uint32_t id, float transform[16], uint32_t layers, uint32_t tag);
-void lovrRaytracerBuild(Raytracer* raytracer);
+bool lovrRaytracerBuild(Raytracer* raytracer);
 
 // Readback
 

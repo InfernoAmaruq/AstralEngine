@@ -1734,10 +1734,6 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
   // We might be submitting a command that copies GPU data to a readback, but there might be an
   // older readback that references the same buffer.  We poll readbacks to avoid a situation where
   // a submitted command overwrites buffer data that hasn't been copied to CPU memory yet.
-  // Also note that polling readbacks can cause another GPU submission, since the readback (and its
-  // buffer) gets released when it completes.  It's important to be careful when polling readbacks
-  // during a submit, because it can cause infinite loops, deadlocks, or other inconsistencies due
-  // to the nested submissions.
   pollReadbacks();
 
   size_t stack = stackPush(&thread.stack);

@@ -5,6 +5,7 @@
 #pragma once
 
 #define HAND_JOINT_COUNT 26
+#define BODY_JOINT_COUNT 24
 #define MAX_LAYERS 10
 
 struct Model;
@@ -44,6 +45,7 @@ typedef struct {
   bool eyeTracking;
   bool handTracking;
   bool handTrackingElbow;
+  bool bodyTracking;
   bool keyboardTracking;
   bool viveTrackers;
   bool handModel;
@@ -103,6 +105,7 @@ typedef enum {
   DEVICE_EYE_LEFT,
   DEVICE_EYE_RIGHT,
   DEVICE_EYE_GAZE,
+  DEVICE_BODY,
   MAX_DEVICES
 } Device;
 
@@ -171,6 +174,33 @@ typedef enum {
   SOURCE_HAND
 } SkeletonSource;
 
+typedef enum {
+  BODY_JOINT_PELVIS,
+  BODY_JOINT_LEFT_HIP,
+  BODY_JOINT_RIGHT_HIP,
+  BODY_JOINT_SPINE1,
+  BODY_JOINT_LEFT_KNEE,
+  BODY_JOINT_RIGHT_KNEE,
+  BODY_JOINT_SPINE2,
+  BODY_JOINT_LEFT_ANKLE,
+  BODY_JOINT_RIGHT_ANKLE,
+  BODY_JOINT_SPINE3,
+  BODY_JOINT_LEFT_FOOT,
+  BODY_JOINT_RIGHT_FOOT,
+  BODY_JOINT_NECK,
+  BODY_JOINT_LEFT_COLLAR,
+  BODY_JOINT_RIGHT_COLLAR,
+  BODY_JOINT_HEAD,
+  BODY_JOINT_LEFT_SHOULDER,
+  BODY_JOINT_RIGHT_SHOULDER,
+  BODY_JOINT_LEFT_ELBOW,
+  BODY_JOINT_RIGHT_ELBOW,
+  BODY_JOINT_LEFT_WRIST,
+  BODY_JOINT_RIGHT_WRIST,
+  BODY_JOINT_LEFT_HAND,
+  BODY_JOINT_RIGHT_HAND
+} BodyJoint;
+
 bool lovrHeadsetInit(HeadsetConfig* config);
 void lovrHeadsetDestroy(void);
 bool lovrHeadsetConnect(void);
@@ -210,6 +240,7 @@ bool lovrHeadsetIsDown(Device device, DeviceButton button, bool* down, bool* cha
 bool lovrHeadsetIsTouched(Device device, DeviceButton button, bool* touched);
 bool lovrHeadsetGetAxis(Device device, DeviceAxis axis, float* value);
 bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source);
+bool lovrHeadsetGetBodySkeleton(float* poses);
 bool lovrHeadsetVibrate(Device device, float strength, float duration, float frequency);
 void lovrHeadsetStopVibration(Device device);
 uint64_t* lovrHeadsetGetModelKeys(uint32_t* count);

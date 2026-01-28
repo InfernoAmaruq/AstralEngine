@@ -60,6 +60,7 @@ StringEntry lovrDevice[] = {
   [DEVICE_EYE_LEFT] = ENTRY("eye/left"),
   [DEVICE_EYE_RIGHT] = ENTRY("eye/right"),
   [DEVICE_EYE_GAZE] = ENTRY("eye/gaze"),
+  [DEVICE_BODY] = ENTRY("body"),
   { 0 }
 };
 
@@ -139,6 +140,7 @@ static int l_lovrHeadsetGetFeatures(lua_State* L) {
   lua_pushboolean(L, features.eyeTracking), lua_setfield(L, -2, "eyeTracking");
   lua_pushboolean(L, features.handTracking), lua_setfield(L, -2, "handTracking");
   lua_pushboolean(L, features.handTrackingElbow), lua_setfield(L, -2, "handTrackingElbow");
+  lua_pushboolean(L, features.bodyTracking), lua_setfield(L, -2, "bodyTracking");
   lua_pushboolean(L, features.keyboardTracking), lua_setfield(L, -2, "keyboardTracking");
   lua_pushboolean(L, features.viveTrackers), lua_setfield(L, -2, "viveTrackers");
   lua_pushboolean(L, features.handModel), lua_setfield(L, -2, "handModel");
@@ -584,6 +586,50 @@ static int l_lovrHeadsetGetAxis(lua_State* L) {
 
 static int l_lovrHeadsetGetSkeleton(lua_State* L) {
   Device device = luax_optdevice(L, 1);
+  
+  // Handle body tracking
+  if (device == DEVICE_BODY) {
+    float poses[BODY_JOINT_COUNT * 7];
+    if (lovrHeadsetGetBodySkeleton(poses)) {
+      if (!lua_istable(L, 2)) {
+        lua_createtable(L, BODY_JOINT_COUNT, 0);
+      } else {
+        lua_settop(L, 2);
+      }
+
+      for (uint32_t i = 0; i < BODY_JOINT_COUNT; i++) {
+        lua_createtable(L, 7, 0);
+
+        float angle, ax, ay, az;
+        float* pose = poses + i * 7;
+        quat_getAngleAxis(pose + 3, &angle, &ax, &ay, &az);
+        lua_pushnumber(L, pose[0]);  // x
+        lua_pushnumber(L, pose[1]);  // y
+        lua_pushnumber(L, pose[2]);  // z
+        lua_pushnumber(L, 0.0);      // radius (always 0 for body)
+        lua_pushnumber(L, angle);
+        lua_pushnumber(L, ax);
+        lua_pushnumber(L, ay);
+        lua_pushnumber(L, az);
+        lua_rawseti(L, -9, 8);
+        lua_rawseti(L, -8, 7);
+        lua_rawseti(L, -7, 6);
+        lua_rawseti(L, -6, 5);
+        lua_rawseti(L, -5, 4);
+        lua_rawseti(L, -4, 3);
+        lua_rawseti(L, -3, 2);
+        lua_rawseti(L, -2, 1);
+
+        lua_rawseti(L, -2, i + 1);
+      }
+
+      return 1;
+    }
+    lua_pushnil(L);
+    return 1;
+  }
+  
+  // Handle hand tracking (original code)
   float poses[HAND_JOINT_COUNT * 8];
   SkeletonSource source = SOURCE_UNKNOWN;
   if (lovrHeadsetGetSkeleton(device, poses, &source)) {
@@ -632,6 +678,7 @@ static int l_lovrHeadsetGetSkeleton(lua_State* L) {
   lua_pushnil(L);
   return 1;
 }
+
 
 static int l_lovrHeadsetVibrate(lua_State* L) {
   Device device = luax_optdevice(L, 1);

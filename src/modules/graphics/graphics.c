@@ -200,6 +200,7 @@ typedef struct {
 
 struct Font {
   uint32_t ref;
+  mtx_t lock;
   FontInfo info;
   Material* material;
   arr_t(Glyph) glyphs;
@@ -4158,6 +4159,12 @@ Font* lovrFontCreate(const FontInfo* info) {
   arr_init(&font->glyphs);
   map_init(&font->glyphLookup, 36);
 
+  if (mtx_init(&font->lock, mtx_plain)) {
+    lovrSetError("Failed to create mutex");
+    lovrFontDestroy(font);
+    return NULL;
+  }
+
   font->pixelDensity = lovrRasterizerGetLeading(info->rasterizer);
   font->lineSpacing = 1.f;
   font->padding = lovrRasterizerGetType(info->rasterizer) == RASTERIZER_TTF ? (uint32_t) ceil(info->spread / 2.) : 0;
@@ -4241,6 +4248,7 @@ void lovrFontDestroy(void* ref) {
   lovrRelease(font->atlas, lovrTextureDestroy);
   arr_free(&font->glyphs);
   map_free(&font->glyphLookup);
+  mtx_destroy(&font->lock);
   lovrFree(font);
 }
 
@@ -4265,10 +4273,14 @@ void lovrFontSetLineSpacing(Font* font, float spacing) {
 }
 
 static Glyph* lovrFontGetGlyph(Font* font, uint32_t codepoint, bool* resized) {
+  // TODO this could be improved a LOT (batch glyph lookups, readwrite lock, don't lock for as long, etc.)
+  mtx_lock(&font->lock);
+
   uint64_t hash = hash64(&codepoint, 4);
   uint64_t index = map_get(&font->glyphLookup, hash);
 
   if (index != MAP_NIL) {
+    mtx_unlock(&font->lock);
     if (resized) *resized = false;
     return &font->glyphs.data[index];
   }
@@ -4281,6 +4293,7 @@ static Glyph* lovrFontGetGlyph(Font* font, uint32_t codepoint, bool* resized) {
     memset(glyph->box, 0, sizeof(glyph->box));
     if (resized) *resized = false;
     map_set(&font->glyphLookup, hash, font->glyphs.length++);
+    mtx_unlock(&font->lock);
     return glyph;
   }
 
@@ -4297,7 +4310,11 @@ static Glyph* lovrFontGetGlyph(Font* font, uint32_t codepoint, bool* resized) {
   if (!font->atlas || resize) {
     uint32_t newWidth = font->atlasWidth << (font->atlasWidth == font->atlasHeight);
     uint32_t newHeight = font->atlasHeight << (font->atlasWidth != font->atlasHeight);
-    lovrCheck(newWidth <= 65536, "Font atlas is way too big!");
+    if (newWidth > 65536) {
+      lovrSetError("Font atlas is way too big!");
+      mtx_unlock(&font->lock);
+      return false;
+    }
 
     Texture* atlas = lovrTextureCreate(&(TextureInfo) {
       .type = TEXTURE_2D,
@@ -4312,6 +4329,7 @@ static Glyph* lovrFontGetGlyph(Font* font, uint32_t codepoint, bool* resized) {
     });
 
     if (!atlas) {
+      mtx_unlock(&font->lock);
       return NULL;
     }
 
@@ -4324,6 +4342,7 @@ static Glyph* lovrFontGetGlyph(Font* font, uint32_t codepoint, bool* resized) {
 
     if (!material) {
       lovrTextureDestroy(atlas);
+      mtx_unlock(&font->lock);
       return NULL;
     }
 
@@ -4390,6 +4409,7 @@ static Glyph* lovrFontGetGlyph(Font* font, uint32_t codepoint, bool* resized) {
 
   if (!bufferView.buffer) {
     mtx_unlock(&state.lock);
+    mtx_unlock(&font->lock);
     return NULL;
   }
 
@@ -4435,6 +4455,7 @@ static Glyph* lovrFontGetGlyph(Font* font, uint32_t codepoint, bool* resized) {
   stackPop(&thread.stack, stack);
 
   map_set(&font->glyphLookup, hash, font->glyphs.length++);
+  mtx_unlock(&font->lock);
   return glyph;
 }
 

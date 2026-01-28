@@ -12,7 +12,7 @@ TypeOf.__PRO = function()
         end
 
         local t = type(x)
-        local IsCompound = t == "solobj" or t == "table"
+        local IsCompound = t == "astrobj" or t == "table"
         local mt = IsCompound and getmetatable(x)
 
         if IsCompound then

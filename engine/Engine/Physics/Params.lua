@@ -50,12 +50,14 @@ do
             if k == "FilterType" then
                 return _[".RFilterType"]
             end
-            return RTF[k]
+            return RTF[k] or rawget(self, k)
         end,
         __newindex = function(self, k, v)
             if k == "FilterType" then
                 rawset(self, ".RFilterType", v.RawValue)
+                return
             end
+            rawset(self, k)
         end,
     }
 
@@ -106,6 +108,55 @@ do
     end
 
     RT.Default = RT.New()
+
+    -- SHAPES
+
+    local SC_BOX, SC_SPHERE, SC_CYLINDER, SC_CAPSULE
+
+    function RT.GetTempShape(Shape, ShapeSize)
+        local CTENUM = ENUM.ColliderType
+        local RV = Shape.RawValue
+        if RV < 1 or RV > 4 then
+            AstralEngine.Error("Attempted to use illegal shape for RaycastParams.GetShape() : " .. Shape, "RAYCAST")
+        end
+
+        if Shape == CTENUM.Box then
+            if not SC_BOX then
+                SC_BOX = lovr.physics.newBoxShape(ShapeSize:unpack())
+            else
+                SC_BOX:setDimensions(ShapeSize:unpack())
+            end
+
+            return SC_BOX
+        elseif Shape == CTENUM.Sphere then
+            if not SC_SPHERE then
+                SC_SPHERE =
+                    lovr.physics.newSphereShape(typeof(ShapeSize) == "number" and ShapeSize or ShapeSize:length())
+            else
+                SC_SPHERE:setRadius(typeof(ShapeSize) == "number" and ShapeSize or ShapeSize:length())
+            end
+
+            return SC_SPHERE
+        elseif Shape == CTENUM.Cylinder then
+            if not SC_CYLINDER then
+                SC_CYLINDER = lovr.physics.newCylinderShape(ShapeSize.x, ShapeSize.y)
+            else
+                SC_CYLINDER:setRadius(ShapeSize.x)
+                SC_CYLINDER:setLength(ShapeSize.y)
+            end
+
+            return SC_CYLINDER
+        elseif Shape == CTENUM.Capsule then
+            if not SC_CAPSULE then
+                SC_CAPSULE = lovr.physics.newCapsuleShape(ShapeSize.x, ShapeSize.y)
+            else
+                SC_CAPSULE:setRadius(ShapeSize.x)
+                SC_CAPSULE:setLength(ShapeSize.y)
+            end
+
+            return SC_CAPSULE
+        end
+    end
 end
 
 -- OVERLAP

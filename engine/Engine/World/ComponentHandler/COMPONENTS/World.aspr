@@ -37,7 +37,43 @@ local Functions = {
             return Out
         end
     end,
-    Shapecast = function() end,
+    Shapecast = function(WorldTab, Shape, ShapeSize, ShapeRotation, Start, End, Parameters, Out)
+        Parameters = Parameters or Physics.RaycastParams.Default
+
+        if not Parameters.GetFirst then
+            Out = Out or {}
+            Parameters.__OUT = Out
+        end
+
+        local ReleaseFunc = Physics.QueryData.Release
+
+        local TypeOf = typeof(ShapeRotation)
+        local Quat = TypeOf == "Quat" and ShapeRotation
+
+        if not Quat then
+            if TypeOf == "Vec4" then
+                Quat = quat(ShapeRotation:unpack())
+            elseif TypeOf == "Vec3" then
+                Quat = quat():setEuler(ShapeRotation:unpack())
+            end
+        end
+
+        local RawShape = Physics.RaycastParams.GetTempShape(Shape, ShapeSize, ShapeRotation)
+
+        WorldTab.World:shapecast(RawShape, Start, End, Quat, Parameters[".Tags"], Parameters.Callback)
+
+        if Parameters.GetFirst then
+            local Obj = Parameters.__OUT or Physics.QueryData.New()
+            ReleaseFunc(Obj)
+            return Obj
+        else
+            Parameters.__OUT = nil
+            for _, v in ipairs(Out) do
+                ReleaseFunc(v)
+            end
+            return Out
+        end
+    end,
     Overlap = function() end,
     QueryBox = function() end,
     QuerySphere = function() end,

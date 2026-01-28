@@ -240,7 +240,6 @@ bool lovrHeadsetIsDown(Device device, DeviceButton button, bool* down, bool* cha
 bool lovrHeadsetIsTouched(Device device, DeviceButton button, bool* touched);
 bool lovrHeadsetGetAxis(Device device, DeviceAxis axis, float* value);
 bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source);
-bool lovrHeadsetGetBodySkeleton(float* poses);
 bool lovrHeadsetVibrate(Device device, float strength, float duration, float frequency);
 void lovrHeadsetStopVibration(Device device);
 uint64_t* lovrHeadsetGetModelKeys(uint32_t* count);

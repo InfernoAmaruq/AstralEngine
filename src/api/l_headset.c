@@ -587,87 +587,66 @@ static int l_lovrHeadsetGetAxis(lua_State* L) {
 static int l_lovrHeadsetGetSkeleton(lua_State* L) {
   Device device = luax_optdevice(L, 1);
   
-  // Handle body tracking
-  if (device == DEVICE_BODY) {
-    float poses[BODY_JOINT_COUNT * 7];
-    if (lovrHeadsetGetBodySkeleton(poses)) {
-      if (!lua_istable(L, 2)) {
-        lua_createtable(L, BODY_JOINT_COUNT, 0);
-      } else {
-        lua_settop(L, 2);
-      }
-
-      for (uint32_t i = 0; i < BODY_JOINT_COUNT; i++) {
-        lua_createtable(L, 7, 0);
-
-        float angle, ax, ay, az;
-        float* pose = poses + i * 7;
-        quat_getAngleAxis(pose + 3, &angle, &ax, &ay, &az);
-        lua_pushnumber(L, pose[0]);  // x
-        lua_pushnumber(L, pose[1]);  // y
-        lua_pushnumber(L, pose[2]);  // z
-        lua_pushnumber(L, 0.0);      // radius (always 0 for body)
-        lua_pushnumber(L, angle);
-        lua_pushnumber(L, ax);
-        lua_pushnumber(L, ay);
-        lua_pushnumber(L, az);
-        lua_rawseti(L, -9, 8);
-        lua_rawseti(L, -8, 7);
-        lua_rawseti(L, -7, 6);
-        lua_rawseti(L, -6, 5);
-        lua_rawseti(L, -5, 4);
-        lua_rawseti(L, -4, 3);
-        lua_rawseti(L, -3, 2);
-        lua_rawseti(L, -2, 1);
-
-        lua_rawseti(L, -2, i + 1);
-      }
-
-      return 1;
-    }
-    lua_pushnil(L);
-    return 1;
-  }
+  // Unified skeleton retrieval for both body tracking (24 joints) and hand tracking (27 joints)
+  // Body: pelvis, spine, chest, shoulders, elbows, wrists, hips, knees, ankles, head, neck, eyes
+  // Hands: palm, wrist, thumb, index, middle, ring, pinky (with knuckles and tips)
+  uint32_t jointCount = (device == DEVICE_BODY) ? BODY_JOINT_COUNT : HAND_JOINT_COUNT;
+  float poses[MAX(BODY_JOINT_COUNT, HAND_JOINT_COUNT) * 8];
   
-  // Handle hand tracking (original code)
-  float poses[HAND_JOINT_COUNT * 8];
+  // Call the C backend to get raw skeleton data
+  // Backend returns 8 floats per joint: [x, y, z, radius, qx, qy, qz, qw]
   SkeletonSource source = SOURCE_UNKNOWN;
   if (lovrHeadsetGetSkeleton(device, poses, &source)) {
+    // Reuse existing table if provided, otherwise create new one
     if (!lua_istable(L, 2)) {
-      lua_createtable(L, HAND_JOINT_COUNT, 0);
+      lua_createtable(L, jointCount, 0);
     } else {
       lua_settop(L, 2);
     }
 
-    for (uint32_t i = 0; i < HAND_JOINT_COUNT; i++) {
+    // Convert each joint from backend format to Lua format
+    // Backend provides: [x, y, z, radius, qx, qy, qz, qw] (quaternion orientation)
+    // Lua receives: [x, y, z, radius, angle, ax, ay, az] (angle-axis orientation)
+    for (uint32_t i = 0; i < jointCount; i++) {
       lua_createtable(L, 8, 0);
 
+      // Convert quaternion to angle-axis representation for Lua
+      // This matches LOVR's standard orientation format used throughout the API
       float angle, ax, ay, az;
       float* pose = poses + i * 8;
       quat_getAngleAxis(pose + 4, &angle, &ax, &ay, &az);
-      lua_pushnumber(L, pose[0]);
-      lua_pushnumber(L, pose[1]);
-      lua_pushnumber(L, pose[2]);
-      lua_pushnumber(L, pose[3]);
-      lua_pushnumber(L, angle);
-      lua_pushnumber(L, ax);
-      lua_pushnumber(L, ay);
-      lua_pushnumber(L, az);
-      lua_rawseti(L, -9, 8);
-      lua_rawseti(L, -8, 7);
-      lua_rawseti(L, -7, 6);
-      lua_rawseti(L, -6, 5);
-      lua_rawseti(L, -5, 4);
-      lua_rawseti(L, -4, 3);
-      lua_rawseti(L, -3, 2);
-      lua_rawseti(L, -2, 1);
+      
+      // Push all 8 values onto the stack
+      lua_pushnumber(L, pose[0]);  // x position
+      lua_pushnumber(L, pose[1]);  // y position
+      lua_pushnumber(L, pose[2]);  // z position
+      lua_pushnumber(L, pose[3]);  // radius (0 for body, >0 for hands)
+      lua_pushnumber(L, angle);    // rotation angle
+      lua_pushnumber(L, ax);       // rotation axis x
+      lua_pushnumber(L, ay);       // rotation axis y
+      lua_pushnumber(L, az);       // rotation axis z
+      
+      // Set values into joint table using raw indices (fastest approach)
+      // Stack indices are negative offsets from top
+      lua_rawseti(L, -9, 8);  // az -> joint[8]
+      lua_rawseti(L, -8, 7);  // ay -> joint[7]
+      lua_rawseti(L, -7, 6);  // ax -> joint[6]
+      lua_rawseti(L, -6, 5);  // angle -> joint[5]
+      lua_rawseti(L, -5, 4);  // radius -> joint[4]
+      lua_rawseti(L, -4, 3);  // z -> joint[3]
+      lua_rawseti(L, -3, 2);  // y -> joint[2]
+      lua_rawseti(L, -2, 1);  // x -> joint[1]
 
+      // Also set radius as a named field for convenient access
       lua_pushnumber(L, pose[3]);
       lua_setfield(L, -2, "radius");
 
+      // Add this joint table to the skeleton array
       lua_rawseti(L, -2, i + 1);
     }
 
+    // For hand tracking, indicate if data is from controller or hand sensor
+    // Body tracking always returns SOURCE_UNKNOWN
     if (source != SOURCE_UNKNOWN) {
       lua_pushboolean(L, source == SOURCE_CONTROLLER);
       lua_setfield(L, -2, "controller");
@@ -675,6 +654,9 @@ static int l_lovrHeadsetGetSkeleton(lua_State* L) {
 
     return 1;
   }
+  
+  // Return nil if skeleton data is not available
+  // This can happen if tracking is lost or the device doesn't support skeleton tracking
   lua_pushnil(L);
   return 1;
 }

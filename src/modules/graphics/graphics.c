@@ -2009,19 +2009,24 @@ fail:
 }
 
 bool lovrGraphicsPresent(void) {
+  mtx_lock(&state.lock);
+
   if (state.shouldPresent) {
     state.window->gpu = NULL;
     state.window->renderView = NULL;
     state.shouldPresent = false;
-    lovrAssert(gpu_surface_present(), "Failed to present: %s", gpu_get_error());
-    lovrGraphicsGetWindowTexture(NULL);
+    bool success = gpu_surface_present();
+    mtx_unlock(&state.lock);
+    lovrAssert(success, "Failed to present: %s", gpu_get_error());
+    lovrGraphicsGetWindowTexture(NULL); // Takes lock
+    mtx_lock(&state.lock);
   }
 
   // Avoid CPU getting too far ahead of GPU
   gpu_wait_tick(state.waitTick);
   state.waitTick = state.tick - 1;
-
   lovrProfileMarkFrame();
+  mtx_unlock(&state.lock);
   return true;
 }
 
@@ -2346,6 +2351,8 @@ bool lovrBufferClear(Buffer* buffer, uint32_t offset, uint32_t extent, uint32_t 
 // Texture
 
 bool lovrGraphicsGetWindowTexture(Texture** texture) {
+  mtx_lock(&state.lock);
+
   if (!state.window && os_window_is_open()) {
     uint32_t width, height;
     os_window_get_size(&width, &height);
@@ -2396,6 +2403,8 @@ bool lovrGraphicsGetWindowTexture(Texture** texture) {
 
     if (!gpu_surface_init(&info)) {
       lovrFree(state.window);
+      state.window = NULL;
+      mtx_unlock(&state.lock);
       return lovrSetError("Failed to create window surface: %s", gpu_get_error());
     }
 
@@ -2414,7 +2423,11 @@ bool lovrGraphicsGetWindowTexture(Texture** texture) {
       uint32_t width, height;
       os_window_get_size(&width, &height);
       float density = os_window_get_pixel_density();
-      lovrAssert(gpu_surface_resize(width * density, height * density), "Failed to resize window: %s", gpu_get_error());
+      if (!gpu_surface_resize(width * density, height * density)) {
+        lovrSetError("Failed to resize window: %s", gpu_get_error());
+        mtx_unlock(&state.lock);
+        return false;
+      }
       state.resized = false;
     }
 
@@ -2424,11 +2437,13 @@ bool lovrGraphicsGetWindowTexture(Texture** texture) {
     // Window texture may be unavailable during a resize
     if (!state.window->gpu) {
       if (texture) *texture = NULL;
+      mtx_unlock(&state.lock);
       return true;
     }
   }
 
   if (texture) *texture = state.window;
+  mtx_unlock(&state.lock);
   return true;
 }
 

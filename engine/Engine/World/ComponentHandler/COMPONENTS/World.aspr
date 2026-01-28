@@ -58,7 +58,7 @@ local Functions = {
             end
         end
 
-        local RawShape = Physics.RaycastParams.GetTempShape(Shape, ShapeSize, ShapeRotation)
+        local RawShape = Physics.RaycastParams.GetTempShape(Shape, ShapeSize)
 
         WorldTab.World:shapecast(RawShape, Start, End, Quat, Parameters[".Tags"], Parameters.Callback)
 
@@ -74,7 +74,35 @@ local Functions = {
             return Out
         end
     end,
-    Overlap = function() end,
+    Overlap = function(WorldTab, Shape, ShapeSize, Position, ShapeRotation, Parameters, MaxDistance, Out)
+        Parameters = Parameters or Physics.RaycastParams.Default
+
+        Out = Out or {}
+        Parameters.__OUT = Out
+
+        local ReleaseFunc = Physics.QueryData.Release
+
+        local TypeOf = typeof(ShapeRotation)
+        local Quat = TypeOf == "Quat" and ShapeRotation
+
+        if not Quat then
+            if TypeOf == "Vec4" then
+                Quat = quat(ShapeRotation:unpack())
+            elseif TypeOf == "Vec3" then
+                Quat = quat():setEuler(ShapeRotation:unpack())
+            end
+        end
+
+        local RawShape = Physics.RaycastParams.GetTempShape(Shape, ShapeSize)
+
+        WorldTab.World:overlapShape(RawShape, Position, Quat, MaxDistance, Parameters[".Tags"], Parameters.Callback)
+
+        Parameters.__OUT = nil
+        for _, v in ipairs(Out) do
+            ReleaseFunc(v)
+        end
+        return Out
+    end,
     QueryBox = function() end,
     QuerySphere = function() end,
 }

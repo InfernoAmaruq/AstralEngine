@@ -57,7 +57,7 @@ do
                 rawset(self, ".RFilterType", v.RawValue)
                 return
             end
-            rawset(self, k)
+            rawset(self, k, v)
         end,
     }
 

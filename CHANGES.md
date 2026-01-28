@@ -60,6 +60,7 @@ dev
 - Change `Pass:transform` to also take a pose (7 numbers for the position and orientation).
 - Change `Mat4` to be a regular object instead of a vector type.
 - Change `lovr.graphics.submit` to have better performance when called multiple times per frame.
+- Change `Pass:text` and Font methods to also take nested tables of multicolor strings.
 
 ### Fix
 

@@ -6,16 +6,35 @@
 
 ColoredString* luax_checkcoloredstrings(lua_State* L, int index, uint32_t* count, ColoredString* stack) {
   if (lua_istable(L, index)) {
-    *count = luax_len(L, index) / 2;
+    lua_rawgeti(L, index, 1);
+    bool nested = lua_istable(L, -1);
+    lua_pop(L, 1);
+
+    *count = luax_len(L, index) / (nested ? 1 : 2);
     ColoredString* strings = lovrMalloc(*count * sizeof(*strings));
-    for (uint32_t i = 0; i < *count; i++) {
-      lua_rawgeti(L, index, i * 2 + 1);
-      lua_rawgeti(L, index, i * 2 + 2);
-      luax_optcolor(L, -2, strings[i].color);
-      luax_check(L, lua_isstring(L, -1), "Expected a string to print");
-      strings[i].string = luaL_checklstring(L, -1, &strings[i].length);
-      lua_pop(L, 2);
+
+    if (nested) {
+      for (uint32_t i = 0; i < *count; i++) {
+        lua_rawgeti(L, index, i + 1);
+        luax_check(L, lua_istable(L, -1), "Expected table of tables for multicolor strings");
+        lua_rawgeti(L, -1, 1);
+        lua_rawgeti(L, -2, 2);
+        luax_optcolor(L, -2, strings[i].color);
+        luax_check(L, lua_isstring(L, -1), "Expected a string to print");
+        strings[i].string = luaL_checklstring(L, -1, &strings[i].length);
+        lua_pop(L, 3);
+      }
+    } else {
+      for (uint32_t i = 0; i < *count; i++) {
+        lua_rawgeti(L, index, i * 2 + 1);
+        lua_rawgeti(L, index, i * 2 + 2);
+        luax_optcolor(L, -2, strings[i].color);
+        luax_check(L, lua_isstring(L, -1), "Expected a string to print");
+        strings[i].string = luaL_checklstring(L, -1, &strings[i].length);
+        lua_pop(L, 2);
+      }
     }
+
     return strings;
   } else {
     stack->string = luaL_checklstring(L, index, &stack->length);

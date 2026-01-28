@@ -9148,7 +9148,7 @@ static void pollReadbacks(void) {
 static Layout* getLayout(gpu_slot* slots, uint32_t count) {
   uint64_t hash = hash64(slots, count * sizeof(gpu_slot));
 
-  for (Layout* layout = state.layouts; layout; layout = layout->next) {
+  for (Layout* layout = atomic_load(&state.layouts); layout; layout = layout->next) {
     if (layout->hash == hash) {
       return layout;
     }
@@ -9177,8 +9177,11 @@ static Layout* getLayout(gpu_slot* slots, uint32_t count) {
     return NULL;
   }
 
-  layout->next = state.layouts;
-  state.layouts = layout;
+  layout->next = atomic_load(&state.layouts);
+  while (!atomic_compare_exchange_strong(&state.layouts, &layout->next, layout)) {
+    continue;
+  }
+
   return layout;
 }
 

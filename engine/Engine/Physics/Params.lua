@@ -104,6 +104,14 @@ do
 
         Tab.Callback = BaseCallback
 
+        Tab.OverlapCallback = function(Collider)
+            local Out = Tab.__OUT
+
+            local Ent = Collider:getUserData().Entity
+
+            Out[#Out + 1] = Ent
+        end
+
         return setmetatable(Tab, RTMT)
     end
 

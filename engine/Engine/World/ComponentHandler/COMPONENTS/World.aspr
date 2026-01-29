@@ -103,8 +103,38 @@ local Functions = {
         end
         return Out
     end,
-    QueryBox = function() end,
-    QuerySphere = function() end,
+    QueryBox = function(WorldTab, Pos, Size, Parameters, Out)
+        Parameters = Parameters or Physics.RaycastParams.Default
+
+        Out = Out or {}
+        Parameters.__OUT = Out
+
+        local ReleaseFunc = Physics.QueryData.Release
+
+        WorldTab.World:queryBox(Pos, Size, Parameters[".Tags"], Parameters.OverlapCallback)
+
+        Parameters.__OUT = nil
+        for _, v in ipairs(Out) do
+            ReleaseFunc(v)
+        end
+        return Out
+    end,
+    QuerySphere = function(WorldTab, Pos, Radius, Parameters, Out)
+        Parameters = Parameters or Physics.RaycastParams.Default
+
+        Out = Out or {}
+        Parameters.__OUT = Out
+
+        local ReleaseFunc = Physics.QueryData.Release
+
+        WorldTab.World:querySphere(Pos, Radius, Parameters[".Tags"], Parameters.OverlapCallback)
+
+        Parameters.__OUT = nil
+        for _, v in ipairs(Out) do
+            ReleaseFunc(v)
+        end
+        return Out
+    end,
 }
 
 local AliasMap = {

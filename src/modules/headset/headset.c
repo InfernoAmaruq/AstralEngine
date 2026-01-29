@@ -2705,16 +2705,6 @@ bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source)
     // We don't require all joints to be tracked, as partial tracking is still useful
     // (e.g., upper body only, or temporary occlusion of some joints)
     bool anyTracked = false;
-    for (uint32_t i = 0; i < BODY_JOINT_COUNT; i++) {
-      if (joints[i].locationFlags & (XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) {
-        anyTracked = true;
-        break;
-      }
-    }
-
-    if (!anyTracked) {
-      return false;
-    }
 
     // Convert OpenXR body joint data to LOVR's internal format
     // Each joint is represented as 8 floats: [x, y, z, radius, qx, qy, qz, qw]
@@ -2724,9 +2714,19 @@ bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source)
     // This matches the hand tracking format for consistency in the Lua API
     float* pose = poses;
     for (uint32_t i = 0; i < BODY_JOINT_COUNT; i++) {
-      memcpy(pose, &joints[i].pose.position.x, 3 * sizeof(float));
-      pose[3] = 0.f;  // Body joints don't have radius (no collision detection)
-      memcpy(pose + 4, &joints[i].pose.orientation.x, 4 * sizeof(float));
+      // Clear to zeros.  Radius in pose[3] is always 0.0 for body joints.
+      memset(pose, 0, 8 * sizeof(float));
+
+      if (joints[i].locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) {
+        memcpy(pose, &joints[i].pose.position.x, 3 * sizeof(float));
+      }
+      if (joints[i].locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) {
+        memcpy(pose + 4, &joints[i].pose.orientation.x, 4 * sizeof(float));
+      }
+      
+      // Update anyTracked flag, if either position or orientation is valid.
+      anyTracked |= (joints[i].locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) || (joints[i].locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT);
+      
       pose += 8;
     }
 

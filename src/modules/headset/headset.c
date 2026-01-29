@@ -2657,38 +2657,6 @@ bool lovrHeadsetGetAxis(Device device, DeviceAxis axis, float* value) {
 bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source) {
   // Body tracking: Get skeleton using OpenXR XR_BD_body_tracking extension
   // Specification: https://registry.khronos.org/OpenXR/specs/1.1/html/xrspec.html#XR_BD_body_tracking
-  // 
-  // 24 Body Joints (indices match XrBodyJointBD enum):
-  // ==================================================
-  // Index  Joint Name                Parent
-  // -----  ------------------------  -------------------
-  //   0    PELVIS                    (none - root)
-  //   1    HIPS                      PELVIS
-  //   2    SPINE_LOWER               PELVIS
-  //   3    SPINE_MIDDLE              SPINE_LOWER
-  //   4    SPINE_UPPER               SPINE_MIDDLE
-  //   5    CHEST                     SPINE_UPPER
-  //   6    NECK                      CHEST
-  //   7    HEAD                      NECK
-  //   8    LEFT_SHOULDER             CHEST
-  //   9    LEFT_SCAPULA              LEFT_SHOULDER
-  //  10    LEFT_ARM_UPPER            LEFT_SCAPULA
-  //  11    LEFT_ARM_LOWER            LEFT_ARM_UPPER
-  //  12    LEFT_HAND_WRIST_TWIST     LEFT_ARM_LOWER
-  //  13    RIGHT_SHOULDER            CHEST
-  //  14    RIGHT_SCAPULA             RIGHT_SHOULDER
-  //  15    RIGHT_ARM_UPPER           RIGHT_SCAPULA
-  //  16    RIGHT_ARM_LOWER           RIGHT_ARM_UPPER
-  //  17    RIGHT_HAND_WRIST_TWIST    RIGHT_ARM_LOWER
-  //  18    LEFT_HIP                  HIPS
-  //  19    LEFT_LEG_UPPER            LEFT_HIP
-  //  20    LEFT_LEG_LOWER            LEFT_LEG_UPPER
-  //  21    LEFT_FOOT_ANKLE_TWIST     LEFT_LEG_LOWER
-  //  22    RIGHT_HIP                 HIPS
-  //  23    RIGHT_LEG_UPPER           RIGHT_HIP
-  //  24    RIGHT_LEG_LOWER           RIGHT_LEG_UPPER
-  //  25    RIGHT_FOOT_ANKLE_TWIST    RIGHT_LEG_LOWER
-  //
   // Data is returned in the same format as hand tracking for API consistency
   if (device == DEVICE_BODY) {
     XrBodyTrackerBD tracker = getBodyTracker();

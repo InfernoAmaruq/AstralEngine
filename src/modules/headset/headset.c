@@ -2778,9 +2778,9 @@ bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source)
     pose += 8;
   }
 
-  if (state.extensions.handTrackingDataSource && source) {
+  if (state.extensions.handTrackingDataSource) {
     *source = sourceState.dataSource == XR_HAND_TRACKING_DATA_SOURCE_CONTROLLER_EXT ? SOURCE_CONTROLLER : SOURCE_HAND;
-  } else if (source) {
+  } else {
     *source = SOURCE_UNKNOWN;
   }
 

@@ -1809,6 +1809,19 @@ bool lovrHeadsetStart(void) {
     lovrEventPush((Event) { .type = EVENT_MODELSCHANGED });
   }
 
+  // Create body tracker if body tracking extension is available
+  if (state.extensions.bodyTracking) {
+    XrBodyTrackerCreateInfoBD info = {
+      .type = XR_TYPE_BODY_TRACKER_CREATE_INFO_BD,
+      .jointSet = XR_BODY_JOINT_SET_FULL_BODY_JOINTS_BD
+    };
+
+    if (XR_FAILED(xrCreateBodyTrackerBD(state.session, &info, &state.bodyTracker))) {
+      lovrLog(LOG_WARN, "XR", "Failed to create body tracker");
+      state.bodyTracker = XR_NULL_HANDLE;
+    }
+  }
+
   state.showMainLayer = true;
 
   return true;
@@ -4258,24 +4271,7 @@ static XrHandTrackerEXT getHandTracker(Device device) {
   return *tracker;
 }
 
-// Body tracker is created lazily because on some implementations xrCreateBodyTrackerBD
-// will return XR_ERROR_FEATURE_UNSUPPORTED if called too early.
 static XrBodyTrackerBD getBodyTracker(void) {
-  if (!state.session || !state.extensions.bodyTracking) {
-    return XR_NULL_HANDLE;
-  }
-
-  if (!state.bodyTracker) {
-    XrBodyTrackerCreateInfoBD info = {
-      .type = XR_TYPE_BODY_TRACKER_CREATE_INFO_BD,
-      .jointSet = XR_BODY_JOINT_SET_FULL_BODY_JOINTS_BD
-    };
-
-    if (XR_FAILED(xrCreateBodyTrackerBD(state.session, &info, &state.bodyTracker))) {
-      return XR_NULL_HANDLE;
-    }
-  }
-
   return state.bodyTracker;
 }
 

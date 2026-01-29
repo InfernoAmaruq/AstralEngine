@@ -1459,24 +1459,6 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
   }
 
   if (pass->tally.buffer && pass->tally.count > 0) {
-    if (!pass->tally.gpu) {
-      pass->tally.gpu = lovrMalloc(gpu_sizeof_tally());
-
-      gpu_tally_info tallyInfo = {
-        .type = GPU_TALLY_PIXEL,
-        .count = MAX_TALLIES * state.limits.renderSize[2]
-      };
-
-      lovrAssert(gpu_tally_init(pass->tally.gpu, &tallyInfo), "Failed to create tally: %s", gpu_get_error());
-
-      BufferInfo bufferInfo = {
-        .size = MAX_TALLIES * state.limits.renderSize[2] * sizeof(uint32_t)
-      };
-
-      pass->tally.tempBuffer = lovrBufferCreate(&bufferInfo, NULL);
-      lovrAssert(pass->tally.tempBuffer, "Failed to create tally buffer: %s", lovrGetError());
-    }
-
     gpu_clear_tally(stream, pass->tally.gpu, 0, pass->tally.count * pass->views);
   }
 
@@ -8950,6 +8932,25 @@ bool lovrPassMeshIndirect(Pass* pass, Buffer* vertices, Buffer* indices, Buffer*
 bool lovrPassBeginTally(Pass* pass, uint32_t* index) {
   lovrCheck(pass->tally.count < MAX_TALLIES, "Pass has too many tallies!");
   lovrCheck(!pass->tally.active, "Trying to start a tally, but the previous tally wasn't finished");
+
+  if (!pass->tally.gpu) {
+    pass->tally.gpu = lovrMalloc(gpu_sizeof_tally());
+
+    gpu_tally_info tallyInfo = {
+      .type = GPU_TALLY_PIXEL,
+      .count = MAX_TALLIES * state.limits.renderSize[2]
+    };
+
+    lovrAssert(gpu_tally_init(pass->tally.gpu, &tallyInfo), "Failed to create tally: %s", gpu_get_error());
+
+    BufferInfo bufferInfo = {
+      .size = MAX_TALLIES * state.limits.renderSize[2] * sizeof(uint32_t)
+    };
+
+    pass->tally.tempBuffer = lovrBufferCreate(&bufferInfo, NULL);
+    lovrAssert(pass->tally.tempBuffer, "Failed to create tally buffer: %s", lovrGetError());
+  }
+
   pass->tally.active = true;
   if (index) *index = pass->tally.count;
   return true;

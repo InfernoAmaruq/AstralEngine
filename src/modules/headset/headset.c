@@ -1809,7 +1809,6 @@ bool lovrHeadsetStart(void) {
     lovrEventPush((Event) { .type = EVENT_MODELSCHANGED });
   }
 
-  // Create body tracker if body tracking extension is available
   if (state.extensions.bodyTracking) {
     XrBodyTrackerCreateInfoBD info = {
       .type = XR_TYPE_BODY_TRACKER_CREATE_INFO_BD,
@@ -2668,27 +2667,19 @@ bool lovrHeadsetGetAxis(Device device, DeviceAxis axis, float* value) {
 }
 
 bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source) {
-  // Body tracking: Get skeleton using OpenXR XR_BD_body_tracking extension
-  // Specification: https://registry.khronos.org/OpenXR/specs/1.1/html/xrspec.html#XR_BD_body_tracking
-  // Data is returned in the same format as hand tracking for API consistency
   if (device == DEVICE_BODY) {
     XrBodyTrackerBD tracker = getBodyTracker();
 
-    // Body tracking requires an active tracker and valid frame timing
     if (!tracker || state.frameState.predictedDisplayTime <= 0) {
       return false;
     }
 
-    // Set up the locate info structure to query body joint locations
-    // We query in the reference space (world space) at the predicted display time
-    // to match when the frame will be displayed to the user
     XrBodyJointsLocateInfoBD locateInfo = {
       .type = XR_TYPE_BODY_JOINTS_LOCATE_INFO_BD,
       .baseSpace = state.referenceSpace,
       .time = state.frameState.predictedDisplayTime
     };
 
-    // Allocate space for all 24 body joints returned by OpenXR
     XrBodyJointLocationBD joints[XR_BODY_JOINT_COUNT_BD];
     XrBodyJointLocationsBD locations = {
       .type = XR_TYPE_BODY_JOINT_LOCATIONS_BD,
@@ -2696,25 +2687,12 @@ bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source)
       .jointLocations = joints
     };
 
-    // Query the OpenXR runtime for current body joint locations
     if (XR_FAILED(xrLocateBodyJointsBD(tracker, &locateInfo, &locations))) {
       return false;
     }
 
-    // Verify that at least some joints have valid tracking data
-    // We don't require all joints to be tracked, as partial tracking is still useful
-    // (e.g., upper body only, or temporary occlusion of some joints)
-    bool anyTracked = false;
-
-    // Convert OpenXR body joint data to LOVR's internal format
-    // Each joint is represented as 8 floats: [x, y, z, radius, qx, qy, qz, qw]
-    // - Position (x, y, z) in meters relative to the reference space
-    // - Radius is always 0 for body joints (unlike hand joints which have collision radii)
-    // - Orientation as a quaternion (qx, qy, qz, qw)
-    // This matches the hand tracking format for consistency in the Lua API
     float* pose = poses;
     for (uint32_t i = 0; i < BODY_JOINT_COUNT; i++) {
-      // Clear to zeros.  Radius in pose[3] is always 0.0 for body joints.
       memset(pose, 0, 8 * sizeof(float));
 
       if (joints[i].locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) {
@@ -2723,14 +2701,10 @@ bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source)
       if (joints[i].locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) {
         memcpy(pose + 4, &joints[i].pose.orientation.x, 4 * sizeof(float));
       }
-      
-      // Update anyTracked flag, if either position or orientation is valid.
-      anyTracked |= (joints[i].locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) || (joints[i].locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT);
-      
+
       pose += 8;
     }
 
-    // Body tracking doesn't distinguish between controller/hand source like hand tracking does
     if (source) {
       *source = SOURCE_UNKNOWN;
     }
@@ -2738,7 +2712,6 @@ bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source)
     return true;
   }
 
-  // Hand tracking: Get hand skeleton using OpenXR XR_EXT_hand_tracking extension
   XrHandTrackerEXT tracker = getHandTracker(device);
 
   if (!tracker || state.frameState.predictedDisplayTime <= 0) {

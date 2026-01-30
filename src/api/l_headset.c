@@ -60,6 +60,7 @@ StringEntry lovrDevice[] = {
   [DEVICE_EYE_LEFT] = ENTRY("eye/left"),
   [DEVICE_EYE_RIGHT] = ENTRY("eye/right"),
   [DEVICE_EYE_GAZE] = ENTRY("eye/gaze"),
+  [DEVICE_BODY] = ENTRY("body"),
   { 0 }
 };
 
@@ -139,6 +140,7 @@ static int l_lovrHeadsetGetFeatures(lua_State* L) {
   lua_pushboolean(L, features.eyeTracking), lua_setfield(L, -2, "eyeTracking");
   lua_pushboolean(L, features.handTracking), lua_setfield(L, -2, "handTracking");
   lua_pushboolean(L, features.handTrackingElbow), lua_setfield(L, -2, "handTrackingElbow");
+  lua_pushboolean(L, features.bodyTracking), lua_setfield(L, -2, "bodyTracking");
   lua_pushboolean(L, features.keyboardTracking), lua_setfield(L, -2, "keyboardTracking");
   lua_pushboolean(L, features.viveTrackers), lua_setfield(L, -2, "viveTrackers");
   lua_pushboolean(L, features.handModel), lua_setfield(L, -2, "handModel");
@@ -584,16 +586,17 @@ static int l_lovrHeadsetGetAxis(lua_State* L) {
 
 static int l_lovrHeadsetGetSkeleton(lua_State* L) {
   Device device = luax_optdevice(L, 1);
-  float poses[HAND_JOINT_COUNT * 8];
+  uint32_t jointCount = (device == DEVICE_BODY) ? BODY_JOINT_COUNT : HAND_JOINT_COUNT;
+  float poses[MAX(BODY_JOINT_COUNT, HAND_JOINT_COUNT) * 8];
   SkeletonSource source = SOURCE_UNKNOWN;
   if (lovrHeadsetGetSkeleton(device, poses, &source)) {
     if (!lua_istable(L, 2)) {
-      lua_createtable(L, HAND_JOINT_COUNT, 0);
+      lua_createtable(L, jointCount, 0);
     } else {
       lua_settop(L, 2);
     }
 
-    for (uint32_t i = 0; i < HAND_JOINT_COUNT; i++) {
+    for (uint32_t i = 0; i < jointCount; i++) {
       lua_createtable(L, 8, 0);
 
       float angle, ax, ay, az;

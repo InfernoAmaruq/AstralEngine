@@ -5,6 +5,7 @@
 #pragma once
 
 #define HAND_JOINT_COUNT 26
+#define BODY_JOINT_COUNT 24
 #define MAX_LAYERS 10
 
 struct Model;
@@ -44,6 +45,7 @@ typedef struct {
   bool eyeTracking;
   bool handTracking;
   bool handTrackingElbow;
+  bool bodyTracking;
   bool keyboardTracking;
   bool viveTrackers;
   bool handModel;
@@ -103,6 +105,7 @@ typedef enum {
   DEVICE_EYE_LEFT,
   DEVICE_EYE_RIGHT,
   DEVICE_EYE_GAZE,
+  DEVICE_BODY,
   MAX_DEVICES
 } Device;
 

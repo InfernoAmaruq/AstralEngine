@@ -27,6 +27,7 @@ local Functions = {
 
         if Parameters.GetFirst then
             local Obj = Parameters.__OUT or Physics.QueryData.New()
+            Parameters.__OUT = nil
             ReleaseFunc(Obj)
             return Obj
         else

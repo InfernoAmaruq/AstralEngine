@@ -29,6 +29,19 @@ end
 
 -- INPUT SYSTEM
 
+local Lookup = {
+    [0] = 'zero',
+    [1] = 'one',
+    [2] = 'two',
+    [3] = 'three',
+    [4] = 'four',
+    [5] = 'five',
+    [6] = 'six',
+    [7] = 'seven',
+    [8] = 'eight',
+    [9] = 'nine'
+}
+
 LVRB.ConnectDevices = function()
     local InputService = GetService "InputService"
 
@@ -52,6 +65,9 @@ LVRB.ConnectDevices = function()
             MKeys[n] = v
             MouseLookUp[i] = n
         else
+            if tonumber(i) and Lookup[tonumber(i)] then
+                i = Lookup[tonumber(i)]
+            end
             KBKeys[i] = v
         end
         Size = Size + 1
@@ -65,7 +81,7 @@ LVRB.ConnectDevices = function()
         return KeyArray
     end
     InputService.IsDown = function(e)
-        return KeyArray[e.Value]
+        return KeyArray[e.RawValue]
     end
 
     local KBE = ENUM(KBKeys, "KeyCode")
@@ -118,6 +134,11 @@ LVRB.ConnectDevices = function()
         DATA.__INUSE = true
 
         local ID = CAS.__KEYMAP[CODE]
+
+        local tn = IsKB and tonumber(CODE)
+        if tn and Lookup[tn] then
+            CODE = Lookup[tn]
+        end
 
         DATA.State = ST
         DATA.UserInputType = not IsKB and ME[MouseLookUp[CODE]]

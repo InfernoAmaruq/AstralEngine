@@ -10,7 +10,7 @@ vec4 astral_main(){
     if (a < 0.001) discard;
 
     if (Transparent){
-        if (a > 0.999) discard;
+        if (a > 0.999 && !IsSprite) discard;
 
         SecondColor = vec4(a,0,0,1);
         terminate vec4(CurrentColor.rgb * a, a);

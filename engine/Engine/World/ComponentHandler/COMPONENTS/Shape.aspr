@@ -71,15 +71,15 @@ end
 @macro<L,!USEBRACK>:WRITECOLOR(&C) = Comp[5], Comp[6], Comp[7], Comp[8] = color.unpack(&C);
 
 Shape.Metadata = {}
-Shape.Metadata.__create = function(DATA, e)
+Shape.Metadata.__create = function(DATA, e, ShouldSink)
     local Proxy = {}
 
-    local Size = DATA.Size or Vec3(1)
+    local Size = Vec3(DATA.Size or 1)
 
     local ShapeEnum = (DATA.Shape or E.Box)
-    local S = ENUM.GetValue(ShapeEnum.Value)
+    local S = ShapeEnum.RawValue
 
-    local FRESHV = ENUM.Splice(REnum.__HEADER,ENUM.GetValue(S+OFFSET))
+    FRESHV = S + OFFSET
 
     local Color = DATA.Color or 0xffffffff
 
@@ -91,7 +91,7 @@ Shape.Metadata.__create = function(DATA, e)
     local Alpha = select(4,color.unpack(Color))
 
     local RT = Component.AddComponent(e, "RenderTarget", {Value = FRESHV, Solid = Alpha == 1})
-    if not Component.HasComponent(e, "Transform") then
+    if not Component.HasComponent(e, "Transform") and not ShouldSink then
         Component.AddComponent(e, "Transform")
     end
 

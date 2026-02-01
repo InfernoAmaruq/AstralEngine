@@ -252,7 +252,7 @@ function AssetMapLoader.LoadAssetMap(Map)
             continue
         end
         for Name, Data in pairs(Val.Components) do
-            Ent:AddComponent(Name, Data)
+            Ent:AddComponent(Name, Data, true)
         end
     end
 

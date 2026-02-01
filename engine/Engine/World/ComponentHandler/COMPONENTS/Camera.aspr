@@ -135,10 +135,10 @@ local function Rebuild(V, IsPass, w, h)
     end
 end
 
-Camera.Metadata.__create = function(Data, Entity)
+Camera.Metadata.__create = function(Data, Entity, Sink)
     local Comps = Component.GetComponents(Entity)
 
-    if not Comps.Transform then
+    if not Comps.Transform and not Sink then
         Component.AddComponent(Entity, "Transform", { Position = Vec3(0), Orientation = Quat() })
     end
 

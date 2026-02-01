@@ -10,7 +10,7 @@ ENUM.RenderType.__Append("Skybox", 1)
 
 local SHADERRESETFLAG = Renderer.Flags.SHADER_RESET
 
-Renderer.AppendRenderTTP(ENUM.RenderType.Skybox, function(pass, _, comp, solid)
+Renderer.AppendRenderTTP(ENUM.RenderType.Skybox, function(pass, _, comp)
     if comp.Skybox.Visible == false then
         return
     end
@@ -22,7 +22,7 @@ end)
 
 Skybox.Metadata = {}
 Skybox.Metadata.__create = function(DATA, e)
-    Component.AddComponent(e, "RenderTarget", { Solid = true, Value = ENUM.RenderType.Skybox.Value })
+    Component.AddComponent(e, "RenderTarget", { Solid = true, Value = ENUM.RenderType.Skybox.RawValue })
 
     if DATA.Visible == nil then
         DATA.Visible = true

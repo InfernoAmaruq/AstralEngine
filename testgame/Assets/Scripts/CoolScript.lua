@@ -9,12 +9,25 @@ local World = RES["WORLD"].World
 
 local T = World:Overlap(ENUM.ColliderType.Sphere, vec3(100, 100, 100), vec3(), vec3(), nil, nil, {})
 
-print("OVERLAP:", T, #T)
+local CAM = RES["CAMERA"]
 
-for i, v in pairs(T) do
-    print("GOT SHAPE:", i, v)
-end
+local CamSpeed = 3
 
-GetService("RunService").BindToStep("CAST", 350, function()
-    --   local CastData = World:Shapecast(ENUM.ColliderType.Sphere, vec3(30, 30, 30), vec3(0, 0, 0), vec3(), vec3(0, 0, 100))
+local InpService = GetService("InputService")
+
+local KeyArr = InpService.__GetKeyArr()
+
+local KeyEnum = ENUM.KeyCode
+local W = KeyEnum.w.RawValue
+local D = KeyEnum.d.RawValue
+local A = KeyEnum.a.RawValue
+local S = KeyEnum.s.RawValue
+local E = KeyEnum.e.RawValue
+local Q = KeyEnum.q.RawValue
+
+GetService("RunService").BindToStep("CAM_STEP", 450, function(dt)
+    local F = KeyArr[W] and 1 or (KeyArr[S] and -1) or 0
+    local R = KeyArr[D] and 1 or (KeyArr[A] and -1) or 0
+
+    CAM.Transform.Position = CAM.Transform.Position + vec3(F * CamSpeed * dt, 0, R * CamSpeed * dt)
 end)

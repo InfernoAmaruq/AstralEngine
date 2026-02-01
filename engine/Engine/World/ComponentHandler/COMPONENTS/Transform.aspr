@@ -20,16 +20,12 @@ Transform.Pattern = {
 Transform.Metadata = {}
 
 @flag{
-    LOCALOFFSET = 4,
-
     PosIdx = 1,
     OriIdx = 2,
     MatIdx = 3,
     RotIdx = 4,
 
     Self = 9,
-
-    ParentMatrix = 10
 }
 
 local FIELDS = {
@@ -37,11 +33,12 @@ local FIELDS = {
     Orientation = 2,
     Matrix = 3,
     Rotation = 4,
-    LocalPosition = 5, LocalOrientation = 6, LocalMatrix = 7, LocalRotation = 8,
 }
 
 local function GetOrientation(Comp)
-    Comp[2]:setEuler(Comp[4].yxz:unpack())
+    local O = Comp[4]
+    local x,y,z = math.rad(O.x),math.rad(O.y),math.rad(O.z)
+    Comp[2]:setEuler(y,x,z)
     return Comp[2]
 end
 
@@ -63,10 +60,18 @@ local BaseMethods = {
     FromPose = FromPose,
     GetOrientation = GetOrientation,
     GetMatrix = GetMatrix,
-    LocalFromMatrix = LocalFromMatrix,
 }
 
+local function GetVector(self,Type)
+    local V = Type == "UpVector" and vec3.up or (Type == "RightVector" and vec3.right) or vec3.forward
+
+    return (self[2] * V):normalize()
+end
+
 local function __INDEX(T, k)
+    if k == "UpVector" or k == "RightVector" or k == "ForwardVector" then
+        return GetVector(T,k)
+    end
     local KEY = FIELDS[k]
     if KEY then
         return T[KEY]
@@ -123,7 +128,9 @@ Transform.Metadata.__create = function(DATA, Entity)
                 continue
             end
             if FIELDS[i] then
-                Ret[FIELDS[i]] = v
+                local Type = typeof(v)
+                local Wrap = Type == "Vec3" or Type == "Quat" or Type == "Mat"
+                Ret[FIELDS[i]] = Wrap and Transform.Pattern[i](v) or v
             end
         end
     end
@@ -137,8 +144,8 @@ Transform.Metadata.__create = function(DATA, Entity)
         end
     end
 
-    GetMatrix(Ret)
     GetOrientation(Ret)
+    GetMatrix(Ret)
 
     return setmetatable(Ret,MT)
 end

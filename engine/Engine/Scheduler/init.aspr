@@ -254,9 +254,7 @@ function Scheduler:Update()
 
     local TEMP = self.__TEMP
     local j = 0
-    for i = 1, #self.Queue do
-        local v = self.Queue[i]
-        if v == nil then continue end
+    for i,v in pairs(self.Queue) do
         j++
         TEMP[j] = v
         self.Queue[i] = nil

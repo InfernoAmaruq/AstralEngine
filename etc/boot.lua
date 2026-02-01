@@ -170,6 +170,8 @@ function lovr.boot()
         "./",
     }
 
+    arg.game = arg.game or "./GAMEFILE"
+
     local game = arg.game
     local path = arg.engine
 

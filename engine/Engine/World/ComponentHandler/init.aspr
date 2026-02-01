@@ -14,7 +14,6 @@ local MTCACHE = setmetatable({},{__mode = "v"})
 local CBaseMT = {__type = "ComponentPrefab"}
 
 function Component.NewComponent(Name, Pattern, Metadata, FastFetch)
-    print("ATTACHING:",Name)
     assert(not Component.Components[Name], "Component already exists: " .. Name)
     Component.Components[Name] = setmetatable(
         { Storage = {}, Name = Name, Pattern = Pattern, Metadata = Metadata },

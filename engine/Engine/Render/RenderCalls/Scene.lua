@@ -27,6 +27,10 @@ local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
     Include = {}
 })
 
+print("COMPILED")
+print(V)
+print(F)
+
 local MAINSHADER = lovr.graphics.newShader(V,F)
 
 local OITCOMPOSITE = lovr.graphics.newShader('fill',[[
@@ -98,7 +102,7 @@ local TYPETOPROCESS = {}
 
 function Renderer.AppendRenderTTP(Enum, Func)
     assert(typeof(Enum) == "__ENUM_RenderType", "Enum passed not a render type enum")
-    local Val = Enum.Value
+    local Val = Enum.RawValue
 
     TYPETOPROCESS[Val] = Func
 end
@@ -202,6 +206,7 @@ function Renderer.DrawScene(Frame)
         pass:fill()
 
         if not DrawnToScreen and CAMERA[10] then
+            Frame:setDepthWrite(false)
             Frame:setSampler(CAMERA[16] and 'nearest' or 'linear')
             Frame:fill(CAMERA[12][1])
             DrawnToScreen = true

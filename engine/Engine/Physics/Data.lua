@@ -34,6 +34,7 @@ do
     local function GetTab()
         if Top > 0 then
             local t = DATAPOOL[Top]
+            t.Entity = nil
             Top = Top - 1
             return t
         end

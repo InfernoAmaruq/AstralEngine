@@ -35,7 +35,7 @@ return function(D)
         end
 
         local ConfT = type(Conf)
-        local Raw = (ConfT == "table" and Conf.Raw) or (ConfT == "string" and Conf:find("Raw"))
+        local Raw = (ConfT == "table" and Conf.Raw) or (ConfT == "string" and Conf:find("Raw")) or nil
         local Contextless = (ConfT == "table" and Conf.Contextless)
             or (ConfT == "string" and Conf:find("Contextless"))
             or false

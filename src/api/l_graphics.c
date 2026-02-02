@@ -385,37 +385,40 @@ static int l_lovrGraphicsInitialize(lua_State* L) {
   bool shaderCache = true;
 
   luax_pushconf(L);
-  lua_getfield(L, -1, "graphics");
   if (lua_istable(L, -1)) {
-    lua_getfield(L, -1, "debug");
-    config.debug = lua_toboolean(L, -1);
+    lua_getfield(L, -1, "graphics");
+    if (lua_istable(L, -1)) {
+      lua_getfield(L, -1, "debug");
+      config.debug = lua_toboolean(L, -1);
+      lua_pop(L, 1);
+
+      lua_getfield(L, -1, "vsync");
+      config.vsync = lua_toboolean(L, -1);
+      lua_pop(L, 1);
+
+      lua_getfield(L, -1, "stencil");
+      config.stencil = lua_toboolean(L, -1);
+      lua_pop(L, 1);
+
+      lua_getfield(L, -1, "antialias");
+      config.antialias = lua_toboolean(L, -1);
+      lua_pop(L, 1);
+
+      lua_getfield(L, -1, "hdr");
+      config.hdr = lua_toboolean(L, -1);
+      lua_pop(L, 1);
+
+      lua_getfield(L, -1, "shadercache");
+      shaderCache = lua_toboolean(L, -1);
+      lua_pop(L, 1);
+    }
     lua_pop(L, 1);
 
-    lua_getfield(L, -1, "vsync");
-    config.vsync = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-
-    lua_getfield(L, -1, "stencil");
-    config.stencil = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-
-    lua_getfield(L, -1, "antialias");
-    config.antialias = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-
-    lua_getfield(L, -1, "hdr");
-    config.hdr = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-
-    lua_getfield(L, -1, "shadercache");
-    shaderCache = lua_toboolean(L, -1);
-    lua_pop(L, 1);
+    if (shaderCache) {
+      config.cacheData = luax_readfile(".lovrshadercache", &config.cacheSize);
+    }
   }
-  lua_pop(L, 2);
-
-  if (shaderCache) {
-    config.cacheData = luax_readfile(".lovrshadercache", &config.cacheSize);
-  }
+  lua_pop(L, 1);
 
   bool success = lovrGraphicsInit(&config);
   lovrFree(config.cacheData);

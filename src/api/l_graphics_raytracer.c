@@ -72,7 +72,7 @@ static int l_lovrRaytracerSet(lua_State* L) {
 
 static int l_lovrRaytracerBuild(lua_State* L) {
   Raytracer* raytracer = luax_checktype(L, 1, Raytracer);
-  lovrRaytracerBuild(raytracer);
+  luax_assert(L, lovrRaytracerBuild(raytracer));
   return 0;
 }
 

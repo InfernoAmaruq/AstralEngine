@@ -151,6 +151,7 @@ typedef struct {
 } gpu_alloc_entry;
 
 typedef struct {
+  mtx_t lock;
   gpu_memory* block;
   uint32_t pageCount;
   uint32_t heapIndex;
@@ -171,6 +172,7 @@ typedef struct {
   gpu_victim* head;
   gpu_victim* tail;
   gpu_victim* pool;
+  mtx_t lock;
 } gpu_morgue;
 
 typedef struct {
@@ -3345,6 +3347,8 @@ bool gpu_init(gpu_config* config) {
           }
         }
       }
+
+      mtx_init(&allocator->lock, mtx_plain);
     }
 
     // Textures
@@ -3417,6 +3421,7 @@ bool gpu_init(gpu_config* config) {
 
       if (!merged) {
         uint32_t index = allocatorCount++;
+        mtx_init(&state.allocators[index].lock, mtx_plain);
         state.allocators[index].memoryFlags = memoryFlags;
         state.allocators[index].heapIndex = memoryTypes[memoryType].heapIndex;
         state.allocators[index].fallbackMemoryType = memoryType;
@@ -3457,6 +3462,8 @@ bool gpu_init(gpu_config* config) {
 
   VK(vkCreatePipelineCache(state.device, &cacheInfo, NULL, &state.pipelineCache), "vkCreatePipelineCache") goto fail;
 
+  mtx_init(&state.morgue.lock, mtx_plain);
+
   return true;
 fail:
   gpu_destroy();
@@ -3482,6 +3489,12 @@ void gpu_destroy(void) {
   for (gpu_victim* victim = state.morgue.pool, *next; victim; victim = next) {
     next = victim->next;
     state.config.fnFree(victim);
+  }
+  mtx_destroy(&state.morgue.lock);
+  for (uint32_t i = 0; i < COUNTOF(state.allocators); i++) {
+    if (state.allocators[i].memoryFlags) {
+      mtx_destroy(&state.allocators[i].lock);
+    }
   }
   if (state.pipelineCache) vkDestroyPipelineCache(state.device, state.pipelineCache, NULL);
   if (state.semaphore) vkDestroySemaphore(state.device, state.semaphore, NULL);
@@ -3671,6 +3684,8 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
   uint32_t align = MAX(info.alignment, GPU_PAGE_SIZE);
   uint32_t requiredPages = ALIGN(info.size, align) / GPU_PAGE_SIZE;
 
+  mtx_lock(&allocator->lock);
+
   if (allocator->block) {
     // Search through regions for a free region of sufficient size
     for (uint32_t i = 0; i < allocator->pageCount; i += allocator->regions[i].pageCount) {
@@ -3704,6 +3719,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 
         allocator->block->refs++;
         *offset = (i + offsetPages) * GPU_PAGE_SIZE;
+        mtx_unlock(&allocator->lock);
         return allocator->block;
       }
     }
@@ -3742,6 +3758,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 
         VK(result, "vkAllocateMemory") {
           allocator->block = NULL;
+          mtx_unlock(&allocator->lock);
           return NULL;
         }
       }
@@ -3750,6 +3767,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
         VK(vkMapMemory(state.device, memory->handle, 0, VK_WHOLE_SIZE, 0, &memory->pointer), "vkMapMemory") {
           vkFreeMemory(state.device, memory->handle, NULL);
           memory->handle = NULL;
+          mtx_unlock(&allocator->lock);
           return NULL;
         }
       } else {
@@ -3776,64 +3794,74 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
       }
 
       *offset = 0;
+      mtx_unlock(&allocator->lock);
       return memory;
     }
   }
 
   error("Out of GPU memory blocks");
+  mtx_unlock(&allocator->lock);
   return NULL;
 }
 
 static void release(gpu_memory* memory, VkDeviceSize offset) {
-  if (memory) {
-    gpu_allocator* allocator = &state.allocators[state.allocatorLookup[memory->type]];
+  if (!memory) {
+    return;
+  }
 
-    if (--memory->refs == 0) {
-      // If the allocator manages this block, reset it, otherwise free the memory
-      if (allocator->block == memory) {
-        gpu_alloc_entry* region = &allocator->regions[0];
-        region->allocated = false;
-        region->pageCount = allocator->pageCount;
-      } else {
-        condemn(memory->handle, VK_OBJECT_TYPE_DEVICE_MEMORY);
-        memory->handle = NULL;
-      }
-    } else if (allocator->block == memory) {
-      // Mark the region for this allocation as free
-      uint32_t pageOffset = offset / GPU_PAGE_SIZE;
-      gpu_alloc_entry* region = &allocator->regions[pageOffset];
+  gpu_allocator* allocator = &state.allocators[state.allocatorLookup[memory->type]];
+
+  mtx_lock(&allocator->lock);
+
+  if (--memory->refs == 0) {
+    // If the allocator manages this block, reset it, otherwise free the memory
+    if (allocator->block == memory) {
+      gpu_alloc_entry* region = &allocator->regions[0];
       region->allocated = false;
+      region->pageCount = allocator->pageCount;
+    } else {
+      condemn(memory->handle, VK_OBJECT_TYPE_DEVICE_MEMORY);
+      memory->handle = NULL;
+    }
+  } else if (allocator->block == memory) {
+    // Mark the region for this allocation as free
+    uint32_t pageOffset = offset / GPU_PAGE_SIZE;
+    gpu_alloc_entry* region = &allocator->regions[pageOffset];
+    region->allocated = false;
 
-      // See if we can coalesce this region with the next region
-      uint32_t nextOffset = pageOffset + region->pageCount;
-      if (nextOffset < allocator->pageCount) {
-        gpu_alloc_entry* nextRegion = &allocator->regions[nextOffset];
-        if (!nextRegion->allocated) {
-          region->pageCount += nextRegion->pageCount;
-        }
+    // See if we can coalesce this region with the next region
+    uint32_t nextOffset = pageOffset + region->pageCount;
+    if (nextOffset < allocator->pageCount) {
+      gpu_alloc_entry* nextRegion = &allocator->regions[nextOffset];
+      if (!nextRegion->allocated) {
+        region->pageCount += nextRegion->pageCount;
       }
+    }
 
-      // See if we can coalesce with the previous region. We have to loop
-      // through regions from the beginning because we don't know where the
-      // last region started
-      for (uint32_t i = 0; i < pageOffset; i += allocator->regions[i].pageCount) {
-        gpu_alloc_entry* previousRegion = &allocator->regions[i];
-        if (i + previousRegion->pageCount == pageOffset) {
-          // We found the previous region, coalesce if it's free
-          if (!previousRegion->allocated) {
-            previousRegion->pageCount += region->pageCount;
-          }
+    // See if we can coalesce with the previous region. We have to loop
+    // through regions from the beginning because we don't know where the
+    // last region started
+    for (uint32_t i = 0; i < pageOffset; i += allocator->regions[i].pageCount) {
+      gpu_alloc_entry* previousRegion = &allocator->regions[i];
+      if (i + previousRegion->pageCount == pageOffset) {
+        // We found the previous region, coalesce if it's free
+        if (!previousRegion->allocated) {
+          previousRegion->pageCount += region->pageCount;
         }
       }
     }
   }
+
+  mtx_unlock(&allocator->lock);
 }
 
 static void condemn(void* handle, VkObjectType type) {
   if (!handle) return;
-  gpu_morgue* morgue = &state.morgue;
 
+  gpu_morgue* morgue = &state.morgue;
   gpu_victim* victim = morgue->pool;
+
+  mtx_lock(&morgue->lock);
 
   if (victim) {
     morgue->pool = victim->next;
@@ -3853,10 +3881,14 @@ static void condemn(void* handle, VkObjectType type) {
   }
 
   morgue->tail = victim;
+
+  mtx_unlock(&morgue->lock);
 }
 
 static void expunge(uint64_t tick) {
   gpu_morgue* morgue = &state.morgue;
+
+  mtx_lock(&morgue->lock);
 
   while (morgue->head && tick >= morgue->head->tick) {
     gpu_victim* victim = morgue->head;
@@ -3886,6 +3918,8 @@ static void expunge(uint64_t tick) {
     victim->next = morgue->pool;
     morgue->pool = victim;
   }
+
+  mtx_unlock(&morgue->lock);
 }
 
 static uint64_t getFinishedTick(void) {

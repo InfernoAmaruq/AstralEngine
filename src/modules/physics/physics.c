@@ -2090,8 +2090,8 @@ void lovrShapeGetAABB(Shape* shape, float aabb[6]) {
 static void inverseTransformPoint(float* point, float* position, float* orientation) {
   float inverse[4];
   quat_conjugate(quat_init(inverse, orientation));
-  quat_rotate(inverse, point);
   vec3_sub(point, position);
+  quat_rotate(inverse, point);
 }
 
 static void inverseTransformRay(float* origin, float* direction, float* position, float* orientation) {

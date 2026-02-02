@@ -86,6 +86,7 @@ dev
 - Fix `dt` to use delta time from `lovr.timer` when headset is idle.
 - Fix `lovr.filesystem.newFile` to search all mounted archives properly.
 - Fix `Texture:setPixels` when copying from an `Image` with an offset.
+- Fix issue with `Shape:containsPoint`.
 
 ### Deprecate
 

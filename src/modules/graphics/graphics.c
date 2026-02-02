@@ -655,7 +655,7 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
   initAllocator(&thread.stack);
 
   if (atomic_fetch_add(&state.ref, 1)) {
-    return false;
+    return true;
   }
 
   gpu_config gpu = {

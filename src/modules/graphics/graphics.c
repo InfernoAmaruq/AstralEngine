@@ -2188,8 +2188,6 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
     }
   }
 
-  mtx_lock(&state.lock);
-
   gpu_buffer_info bufferInfo = {
     .type = GPU_BUFFER_STATIC,
     .size = size,
@@ -2204,9 +2202,11 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
   }
 
   if (data && *data == NULL) {
+    mtx_lock(&state.lock);
     BufferView staging = getBuffer(GPU_BUFFER_UPLOAD, size, 4);
     if (!staging.buffer) return lovrBufferDestroy(buffer), mtx_unlock(&state.lock), NULL;
     gpu_copy_buffers(state.stream, staging.buffer, buffer->gpu, staging.offset, 0, size);
+    mtx_unlock(&state.lock);
     buffer->sync->writePhase = GPU_PHASE_COPY;
     buffer->sync->pendingWrite = GPU_CACHE_TRANSFER_WRITE;
     buffer->sync->lastStreamWrite = state.tick;
@@ -2214,8 +2214,7 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
   }
 
   buffer->sync->barrier = &state.barrier;
-  state.stats.bufferMemory += size;
-  mtx_unlock(&state.lock);
+  atomic_fetch_add(&state.stats.bufferMemory, size);
   return buffer;
 }
 
@@ -2242,10 +2241,8 @@ Buffer* lovrBufferCreateView(Buffer* parent, uint32_t offset, uint32_t extent) {
 void lovrBufferDestroy(void* ref) {
   Buffer* buffer = ref;
   if (buffer->root == buffer) {
-    state.stats.bufferMemory -= MIN(state.stats.bufferMemory, buffer->info.size);
-    mtx_lock(&state.lock);
+    atomic_fetch_sub(&state.stats.bufferMemory, buffer->info.size);
     gpu_buffer_destroy(buffer->gpu);
-    mtx_unlock(&state.lock);
     lovrFree(buffer->sync);
   } else {
     lovrRelease(buffer->root, lovrBufferDestroy);
@@ -2532,8 +2529,6 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
   // Render targets with mipmaps get transfer usage for automipmapping
   bool transfer = (info->usage & TEXTURE_TRANSFER) || ((info->usage & TEXTURE_RENDER) && texture->info.mipmaps > 1);
 
-  mtx_lock(&state.lock);
-
   if (!gpu_texture_init(texture->gpu, &(gpu_texture_info) {
     .type = (gpu_texture_type) info->type,
     .format = (gpu_texture_format) info->format,
@@ -2562,9 +2557,6 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
     lovrTextureDestroy(texture);
     return NULL;
   }
-
-  // Texture view creation doesn't need lock
-  mtx_unlock(&state.lock);
 
   // Depth-stencil textures use a different depth-only view for sampling, otherwise default view can be used
   if (info->usage & TEXTURE_SAMPLE) {
@@ -2630,15 +2622,13 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
     texture->storageView = texture->gpu;
   }
 
-  mtx_lock(&state.lock);
-
   // Sample-only textures are exempt from sync tracking to reduce overhead.  Instead, they are
   // manually synchronized with a single barrier after the upload stream.
   if (info->usage == TEXTURE_SAMPLE) {
-    state.barrier.prev |= GPU_PHASE_COPY | GPU_PHASE_BLIT;
-    state.barrier.next |= GPU_PHASE_SHADER_VERTEX | GPU_PHASE_SHADER_FRAGMENT | GPU_PHASE_SHADER_COMPUTE;
-    state.barrier.flush |= GPU_CACHE_TRANSFER_WRITE;
-    state.barrier.clear |= GPU_CACHE_TEXTURE;
+    atomic_fetch_or(&state.barrier.prev, GPU_PHASE_COPY | GPU_PHASE_BLIT);
+    atomic_fetch_or(&state.barrier.next, GPU_PHASE_SHADER_VERTEX | GPU_PHASE_SHADER_FRAGMENT | GPU_PHASE_SHADER_COMPUTE);
+    atomic_fetch_or(&state.barrier.flush, GPU_CACHE_TRANSFER_WRITE);
+    atomic_fetch_or(&state.barrier.clear, GPU_CACHE_TEXTURE);
   } else if (levelCount > 0) {
     texture->sync->writePhase = GPU_PHASE_COPY | GPU_PHASE_BLIT;
     texture->sync->pendingWrite = GPU_CACHE_TRANSFER_WRITE;
@@ -2653,8 +2643,7 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
   }
 
   texture->sync->barrier = &state.barrier;
-  state.stats.textureMemory += texture->memorySize;
-  mtx_unlock(&state.lock);
+  atomic_fetch_add(&state.stats.textureMemory, texture->memorySize);
   return texture;
 }
 
@@ -2804,15 +2793,11 @@ void lovrTextureDestroy(void* ref) {
     if (texture->renderView && texture->renderView != texture->gpu) gpu_texture_destroy(texture->renderView), lovrFree(texture->renderView);
     if (texture->storageView && texture->storageView != texture->gpu) gpu_texture_destroy(texture->storageView), lovrFree(texture->storageView);
     if (texture->gpu) {
-      mtx_lock(&state.lock);
       gpu_texture_destroy(texture->gpu);
-      mtx_unlock(&state.lock);
     }
   }
   if (texture->root == texture) {
-    mtx_lock(&state.lock);
-    state.stats.textureMemory -= texture->memorySize;
-    mtx_unlock(&state.lock);
+    atomic_fetch_sub(&state.stats.textureMemory, texture->memorySize);
     lovrFree(texture->sync);
   }
   lovrFree(texture);
@@ -4764,9 +4749,7 @@ Mesh* lovrMeshCreate(const MeshInfo* info, void** vertices) {
 
 void lovrMeshDestroy(void* ref) {
   Mesh* mesh = ref;
-  mtx_lock(&state.lock);
   if (mesh->tree) gpu_tree_destroy(mesh->tree);
-  mtx_unlock(&state.lock);
   lovrRelease(mesh->vertexBuffer, lovrBufferDestroy);
   lovrRelease(mesh->indexBuffer, lovrBufferDestroy);
   lovrRelease(mesh->material, lovrMaterialDestroy);
@@ -5023,17 +5006,14 @@ bool lovrMeshBuildRaytracer(Mesh* mesh) {
       }
     };
 
-    mtx_lock(&state.lock);
-
     if (!gpu_tree_init(mesh->tree, &info)) {
-      mtx_unlock(&state.lock);
       lovrSetError("Could not create mesh raytracing data: %s", gpu_get_error());
       lovrFree(mesh->tree);
       return false;
     }
-  } else {
-    mtx_lock(&state.lock);
   }
+
+  mtx_lock(&state.lock);
 
   gpu_barrier barriers[3];
   uint32_t count = 0;
@@ -5391,9 +5371,7 @@ void lovrModelDestroy(void* ref) {
       lovrRelease(model->meshes[i], lovrMeshDestroy);
     }
   }
-  mtx_lock(&state.lock);
   if (model->tree) gpu_tree_destroy(model->tree);
-  mtx_unlock(&state.lock);
   lovrRelease(model->rawVertexBuffer, lovrBufferDestroy);
   lovrRelease(model->vertexBuffer, lovrBufferDestroy);
   lovrRelease(model->indexBuffer, lovrBufferDestroy);
@@ -5907,17 +5885,13 @@ bool lovrModelBuildRaytracer(Model* model) {
       .geometries = geometries
     };
 
-    mtx_lock(&state.lock);
-
     if (!gpu_tree_init(model->tree, &info)) {
-      mtx_unlock(&state.lock);
       lovrSetError("Could not create model raytracing data: %s", gpu_get_error());
       lovrFree(model->tree);
       lovrFree(geometries);
       return false;
     }
 
-    mtx_unlock(&state.lock);
     lovrFree(geometries);
   }
 
@@ -6005,16 +5979,11 @@ Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
     .capacity = info->capacity
   };
 
-  mtx_lock(&state.lock);
-
   if (!gpu_tree_init(raytracer->gpu, &gpuinfo)) {
-    mtx_unlock(&state.lock);
     lovrSetError("Failed to create raytracer: %s", gpu_get_error());
     lovrFree(raytracer);
     return NULL;
   }
-
-  mtx_unlock(&state.lock);
 
   raytracer->sync.barrier = &state.barrier;
   return raytracer;
@@ -6023,9 +5992,7 @@ Raytracer* lovrRaytracerCreate(const RaytracerInfo* info) {
 void lovrRaytracerDestroy(void* ref) {
   Raytracer* raytracer = ref;
   lovrRaytracerClear(raytracer);
-  mtx_lock(&state.lock);
   gpu_tree_destroy(raytracer->gpu);
-  mtx_unlock(&state.lock);
   lovrFree(raytracer->instances);
   lovrFree(raytracer->refs);
   lovrFree(raytracer);
@@ -9150,13 +9117,7 @@ static void pollReadbacks(void) {
   while (state.readbacks && lovrReadbackPoll(state.readbacks)) {
     Readback* readback = state.readbacks;
     state.readbacks = readback->next;
-
-    // Awkward: we have to release the lock to destroy the readback, because destroying a
-    // buffer/texture takes out the lock.  It may be worth just adding a lock to the core/gpu
-    // morgue/allocator to eliminate this class of deadlocks
-    mtx_unlock(&state.lock);
     lovrRelease(readback, lovrReadbackDestroy);
-    mtx_lock(&state.lock);
   }
   mtx_unlock(&state.lock);
 }
@@ -9297,15 +9258,11 @@ static gpu_texture* createTemporaryTexture(const TextureInfo* size, TextureForma
 
   gpu_texture* texture = lovrMalloc(gpu_sizeof_texture());
 
-  mtx_lock(&state.lock);
-
   if (!gpu_texture_init(texture, &info)) {
-    mtx_unlock(&state.lock);
     lovrFree(texture);
     return NULL;
   }
 
-  mtx_unlock(&state.lock);
   return texture;
 }
 

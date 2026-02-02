@@ -174,6 +174,7 @@ end
 
 setmetatable(vector, {
   __call = function(self, x, y, z)
+    assert(type(x) == 'number', 'vector components must be numbers')
     local instance = { x = x, y = y or x, z = z or (y and 0 or x) }
     setmetatable(instance, self)
     return instance
@@ -212,6 +213,9 @@ function quaternion.conjugate(q)
 end
 
 function quaternion.angleaxis(angle, ax, ay, az)
+  assert(type(angle) == 'number', 'quaternion angle must be a number')
+  assert(type(ax) == 'number' and type(ay) == 'number' and type(az) == 'number', 'quaternion axis components must be numbers')
+
   local s = sin(angle * .5)
   local c = cos(angle * .5)
 

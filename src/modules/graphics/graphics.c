@@ -5909,7 +5909,7 @@ bool lovrModelBuildRaytracer(Model* model) {
 
   // Write the transforms
   BufferView transforms = getBuffer(GPU_BUFFER_STREAM, transformCount * 12 * sizeof(float), 16);
-  if (!transforms.buffer) return false;
+  if (!transforms.buffer) return mtx_unlock(&state.lock), false;
 
   float* dst = transforms.pointer;
   for (uint32_t i = 0; i < meta->nodeCount; i++) {

@@ -4,53 +4,92 @@ local REND = GetService("Renderer")
 local SpriteRenderer = {}
 
 local ProcessorFunc = function(p, _, c)
-    if not c.SpriteRenderer[1] then
+    local SR = c.SpriteRenderer
+    if not SR[1] then
         return
     end
-    p:setColor(1, 1, 1, 1)
+    p:setColor(SR[3],SR[4],SR[5],SR[6])
     local TRANSFORM = c.Transform
-    p:send("IsSprite", true)
-    p:draw(c.SpriteRenderer[1][1], TRANSFORM[1], c.SpriteRenderer.Size, TRANSFORM[2])
-    p:send("IsSprite", false)
+    p:draw(SR[1][1] or SR[1], TRANSFORM[1], SR[2], TRANSFORM[2])
 end
 
 local REnum = ENUM.RenderType
-REnum.__Append("SpriteRenderer", 7)
--- NTS: ENUM.GetTop()
+local Top = REnum:GetTop()
+REnum.__Append("SpriteRenderer", Top)
 REND.AppendRenderTTP(REnum["SpriteRenderer"], ProcessorFunc)
 
 local SRMT = {
     __index = function(self, k)
         if k == "Texture" then
             return self[1]
+        elseif k == "Size" then
+            return self[2].xy
+        elseif k == "Color" then
+            return self.__ClrVal
         end
     end,
-    __newindex = function(self, k, v)
+    __newindex = function(SR, k, v)
         if k == "Texture" then
-            rawset(self, 1, v)
+            rawset(SR, 1, v)
+        elseif k == "Size" then
+            SR[2]:set(v.x,v.y,1e-9)
+            if COMP.HasComponent(SR.__Ent,"Collider") then
+                -- SET SIZE
+            end
+        elseif k == "Color" then
+            assert(color.validate(v), v.." IS NOT A VALID COLOR")
+            SR.__ClrVal = v
+            local OldAlpha = SR[6]
+            WRITECOLOR(v)
+            local NewAlpha = SR[6]
+            local RT = self.__RenderTypePtr
+            if OldAlpha == 1 and NewAlpha < 1 then
+                RT[".ToStack"](RT,true)
+            elseif NewAlpha == 1 and OldAlpha < 1 then
+                RT[".FromStack"](RT,true)
+            end
         end
     end,
 }
+
+@macro<L,!USEBRACK>:WRITECOLOR(&C) = SR[3], SR[4], SR[5], SR[6] = color.unpack(&C);
 
 SpriteRenderer.Name = "SpriteRenderer"
 SpriteRenderer.Pattern = {}
 SpriteRenderer.Metadata = {}
 SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
+    AstralEngine.Assert(not COMP.HasComponent(e,"RenderTarget"), "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!")
+
     local Image = DATA.Texture
 
     local SR = {}
-    SR.Size = DATA.Size or 1
+    local RawVec = DATA.Size or vec2(1,1)
+    local RealSize = Vec3(RawVec.x,RawVec.y,1e-9) -- make Z incredibly thin so collider can read from it
 
-    local RT = COMP.AddComponent(Entity, "RenderTarget", { Value = 7, Solid = false })
+    local RT = COMP.AddComponent(Entity, "RenderTarget", { Value = Top, Solid = false })
     if not COMP.HasComponent(Entity, "Transform") and not ShouldSink then
         COMP.AddComponent(Entity, "Transform")
     end
 
+    local Color = DATA.Color or color.fromRGBA(255,255,255,255)
+    WRITECOLOR(Color)
+
+    if SR[6] == 1 then
+        RT[".ToStack"](RT,true)
+    end
+
+    SR.__ClrVal = Color
+    SR[2] = RealSize
     SR[1] = Image
+    SR.__Ent = e
+    SR.__RenderTypePtr = RT
     setmetatable(SR, SRMT)
 
     return SR
 end
-SpriteRenderer.Metadata.__remove = function(self, Entity) end
+
+SpriteRenderer.FinalProcessing = function()
+    GetService"Physics".BindSizeComponent("SpriteRenderer",2)
+end
 
 return SpriteRenderer

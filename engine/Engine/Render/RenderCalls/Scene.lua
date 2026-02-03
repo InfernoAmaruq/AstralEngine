@@ -85,14 +85,23 @@ function Renderer.AddToStack(Solid,Entity) -- number
     Stack[#Stack + 1] = Entity
 end
 
-function Renderer.RemoveFromStack(Entity) -- number
-    for i = 1, 2 do
-        local Stack = i == 1 and SolidStack or TransparentStack
-        local Idx = table.find(Stack, Entity)
-        if not Idx then continue end
-        local Last = Stack[#Stack]
-        Stack[Idx] = Last
+function Renderer.RemoveFromStack(Entity, Bool) -- number
+    if Bool ~= nil then
+        local Stack = Bool and SolidStack or TransparentStack
+        local Idx = table.find(Stack,Entity)
+        if not Idx then return end
+        local Top = Stack[#Stack]
+        Stack[Idx] = Top
         Stack[#Stack] = nil
+    else
+        for i = 1, 2 do
+            local Stack = i == 1 and SolidStack or TransparentStack
+            local Idx = table.find(Stack, Entity)
+            if not Idx then continue end
+            local Last = Stack[#Stack]
+            Stack[Idx] = Last
+            Stack[#Stack] = nil
+        end
     end
 end
 

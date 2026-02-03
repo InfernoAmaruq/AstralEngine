@@ -28,6 +28,13 @@ local function SwapStacks(self, bool)
     Renderer.AddToStack(bool, self.__E)
 end
 
+local function AddToStack(self, bool)
+    Renderer.AddToStack(bool, self.__E)
+end
+local function RemoveFromStack(self, bool)
+    SpriteRenderer.RemoveFromStack(self.__E, bool)
+end
+
 RendTarget.Metadata.__create = function(Type, Entity)
     Renderer.AddToStack(Type.Solid == nil and true or Type.Solid, Entity)
 
@@ -40,6 +47,8 @@ RendTarget.Metadata.__create = function(Type, Entity)
         __PROXY = Proxy,
         __E = Entity,
         [".SwapStacks"] = SwapStacks,
+        [".ToStack"] = AddToStack,
+        [".FromStack"] = RemoveFromStack,
     }, mt)
 
     for i, v in pairs(Proxy) do

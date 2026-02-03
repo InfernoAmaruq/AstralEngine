@@ -70,8 +70,40 @@ end
 
 @macro<L,!USEBRACK>:WRITECOLOR(&C) = Comp[5], Comp[6], Comp[7], Comp[8] = color.unpack(&C);
 
+local MT = {
+    __index = function(_,k)
+        return _.__PROXY[k]
+    end,
+    __pairs = function() return next, Proxy, nil end,
+    __newindex = function(_, k, v)
+        local Comp = _
+        local Proxy = _.__PROXY
+        local RT = _.__RenderTypePtr
+        if k == "Shape" then
+            assert(typeof(v) == "__ENUM_ShapeType",
+                "Attempt to set 'Shape' field of component " .. tostring(Comp) .. ": " .. debug.getaddress(Comp) .. " to non-enum")
+            Proxy.Shape = v
+            RT.__RenderType = v.RawValue
+        elseif k == "Size" then
+            if Component.HasComponent(Comp.__Ent,"Collider") then
+                -- GET SIZE
+            end
+        elseif k == "Color" then
+            assert(color.validate(v), v .. " IS NOT A VALID COLOR")
+            rawset(Proxy, "Color", v)
+            local OldAlpha = Comp[8]
+            WRITECOLOR(v)
+            local nc = Comp[8]
+            if OldAlpha ~= nc then
+                RT[".SwapStacks"](RT,nc == 1)
+            end
+        end
+    end
+}
+
 Shape.Metadata = {}
 Shape.Metadata.__create = function(DATA, e, ShouldSink)
+    AstralEngine.Assert(not Component.HasComponent(e,"RenderTarget"), "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!")
     local Proxy = {}
 
     local Size = Vec3(DATA.Size or 1)
@@ -81,7 +113,7 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
 
     FRESHV = S + OFFSET
 
-    local Color = DATA.Color or 0xffffffff
+    local Color = DATA.Color or color.fromRGBA(255,255,255,255)
 
     Proxy.Shape = ShapeEnum
 
@@ -101,28 +133,9 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
     }
 
     WRITECOLOR(Color)
+    Comp.__RenderTypePtr = RT
 
-    return setmetatable(Comp, {
-        __index = Proxy,
-        __pairs = function() return next, Proxy, nil end,
-        __newindex = function(_, k, v)
-            if k == "Shape" then
-                assert(typeof(v) == "__ENUM_ShapeType",
-                    "Attempt to set 'Shape' field of component " .. tostring(Comp) .. ": " .. debug.getaddress(Comp) .. " to non-enum")
-                Proxy.Shape = v
-                RT.__RenderType = v.Value + OFFSET
-            elseif k == "Color" then
-                assert(color.validate(v), v .. " IS NOT A VALID COLOR")
-                rawset(Proxy, "Color", v)
-                local OldAlpha = Comp[8]
-                WRITECOLOR(v)
-                local nc = Comp[8]
-                if OldAlpha ~= nc then
-                    RT[".SwapStacks"](RT,nc == 1)
-                end
-            end
-        end
-    })
+    return setmetatable(Comp,MT)
 end
 
 Shape.FinalProcessing = function()

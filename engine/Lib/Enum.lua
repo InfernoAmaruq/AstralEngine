@@ -21,6 +21,23 @@ local function Add(a, b)
     return (TYPE(a) == "table" and a.RawValue or a) + (TYPE(b) == "table" and b.RawValue or b)
 end
 
+local Funcs = {
+    GetTop = function(self)
+        local n = 0
+        local Val
+        local Name
+        for N, V in pairs(self) do
+            local Idx = V.RawValue
+            if Idx > n then
+                n = Idx
+                Val = V
+                Name = N
+            end
+        end
+        return n, Name, Val
+    end,
+}
+
 local function ProcessMember(K, V, EnumName, Header)
     local DATA = {
         Name = K,
@@ -87,6 +104,9 @@ local function NewEnum(_, t, Name, Options, Header)
     Name = Name or "__UNNAMED"
     return setmetatable(Proxy, {
         __index = function(_, k)
+            if Funcs[k] then
+                return Funcs[k]
+            end
             if k == "__Append" and Opt.CanAppend then
                 return Append
             elseif k == "__HEADER" then

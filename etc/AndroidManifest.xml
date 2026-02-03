@@ -26,7 +26,7 @@
     <provider android:name="org.khronos.openxr.runtime_broker" android:authorities="org.khronos.openxr.runtime_broker;org.khronos.openxr.system_runtime_broker"/>
   </queries>
 
-  <application android:allowBackup="false" android:label="LÖVR" android:extractNativeLibs="false" android:debuggable="true">
+  <application android:allowBackup="false" android:label="LÖVR" android:icon="@drawable/ic_launcher" android:extractNativeLibs="false" android:debuggable="true">
     <meta-data android:name="pvr.app.type" android:value="vr"/> <!-- Pico -->
     <meta-data android:name="com.samsung.android.vr.application.mode" android:value="vr_only"/>
     <meta-data android:name="com.oculus.supportedDevices" android:value="quest2|questpro|quest3|quest3s"/>

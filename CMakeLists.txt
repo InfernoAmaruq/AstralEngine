@@ -756,6 +756,7 @@ elseif(ANDROID)
   string(REPLACE "." "_" ANDROID_PACKAGE_C ${ANDROID_PACKAGE})
   string(REPLACE "." "/" ANDROID_PACKAGE_JAVA ${ANDROID_PACKAGE})
   configure_file(${PROJECT_SOURCE_DIR}/etc/Activity.java ${PROJECT_BINARY_DIR}/Activity.java)
+  configure_file(${PROJECT_SOURCE_DIR}/etc/ic_launcher.xml ${PROJECT_BINARY_DIR}/res/drawable/ic_launcher.xml)
   target_compile_definitions(lovr PRIVATE "LOVR_JAVA_PACKAGE=${ANDROID_PACKAGE_C}")
 
   set(ANDROID_MIN_SDK_VERSION ${ANDROID_NATIVE_API_LEVEL})
@@ -810,6 +811,7 @@ elseif(ANDROID)
         package -f
         -0 so
         -M AndroidManifest.xml
+        -S res
         --min-sdk-version ${ANDROID_MIN_SDK_VERSION}
         --target-sdk-version ${ANDROID_TARGET_SDK_VERSION}
         -I ${ANDROID_JAR}

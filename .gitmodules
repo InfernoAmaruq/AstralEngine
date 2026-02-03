@@ -34,3 +34,6 @@
 [submodule "deps/luau"]
 	path = deps/luau
 	url = https://github.com/bjornbytes/luau.git
+[submodule "deps/phonon"]
+	path = deps/phonon
+	url = https://github.com/bjornbytes/steam-audio

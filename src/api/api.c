@@ -605,8 +605,15 @@ void luax_readcolor(lua_State* L, int index, float color[4]) {
   color[0] = color[1] = color[2] = color[3] = 1.f;
 
   if (lua_istable(L, index)) {
-    for (int i = 1; i <= 4; i++) {
-      lua_rawgeti(L, index, i);
+    if (luax_len(L, index) > 0) {
+      for (int i = 1; i <= 4; i++) {
+        lua_rawgeti(L, index, i);
+      }
+    } else {
+      lua_getfield(L, index, "x");
+      lua_getfield(L, index, "y");
+      lua_getfield(L, index, "z");
+      lua_getfield(L, index, "w");
     }
     color[0] = luax_checkfloat(L, -4);
     color[1] = luax_checkfloat(L, -3);
@@ -649,8 +656,15 @@ void luax_optcolor(lua_State* L, int index, float color[4]) {
     }
     case LUA_TTABLE:
       index = index > 0 ? index : (index + lua_gettop(L) + 1);
-      for (int i = 1; i <= 4; i++) {
-        lua_rawgeti(L, index, i);
+      if (luax_len(L, index) > 0) {
+        for (int i = 1; i <= 4; i++) {
+          lua_rawgeti(L, index, i);
+        }
+      } else {
+        lua_getfield(L, index, "x");
+        lua_getfield(L, index, "y");
+        lua_getfield(L, index, "z");
+        lua_getfield(L, index, "w");
       }
       color[0] = luax_checkfloat(L, -4);
       color[1] = luax_checkfloat(L, -3);

@@ -6,6 +6,11 @@ local Signal = require("../../../Lib/Signal.lua")
 
 local mt = {}
 
+local INHM = ENUM({
+    None = 0b00,
+    Root = 0b01,
+},"ColliderSizeInheritance")
+
 local Collider = {
     Name = "Collider",
     Pattern = {},
@@ -77,13 +82,17 @@ local SHAREDT = {
     end,
 
     -- shapes
-    IterateShapes = function(self)
+    RemoveShape = function(self,Shape)
+        self.ConRef:removeShape(Shape.__ShapePtr)
     end,
-    RemoveShape = function(self,v)
+    AddShape = function(self,Shape)
+        self.ColRef:addShape(Shape.__ShapePtr)
     end,
-    AddShape = function(self,ShapeType,Position,Orientation,Size)
+    GetRootShape = function(self)
+        return self.ShapeList[1]
     end,
-    GetMainShape = function(self)
+    GetShapes = function(self)
+        return self.ShapeList
     end,
 
     -- phys
@@ -107,6 +116,12 @@ local SHAREDT = {
     end,
 
     OnDrawComponentResize = function(self,v)
+        if self.OnResize then
+            self:OnResize(v)
+        end
+        if self.InheritanceMethod & INHM.Root then
+            self.ShapeList[1]:SetSize(v)
+        end
     end
 }
 
@@ -155,13 +170,6 @@ local METATAB = {
     end
 }
 
-local INHM = ENUM({
-    None = 0b00,
-    Root = 0b01,
-    All = 0b11,
-    AllNoRoot = 0b10
-},"ColliderSizeInheritance")
-
 function mt.__create(DATA, e)
     local Transform = assert(Component.HasComponent(e, "Transform"), "NO COMPONENT TYPE OF 'Transform' PRESENT, CANNOT ADD COLLIDER!")
 
@@ -187,12 +195,11 @@ function mt.__create(DATA, e)
     COLLIDER:setTag(DATA.Tag or WorldComp.DefaultTag)
 
     local InheritanceMethod = DATA.InheritanceMethod or INHM.Root
-    local InheritSize = DATA.InheritSize == nil and true or DATA.InheritSize
 
     local Shapes = DATA.Shapes or {DATA.Shape or Physics.Shapes.NewShape(ENUM.ColliderShape.Box)}
     local Size = DATA.Size or Physics.GetObjSize(e)
 
-    if InheritSize then
+    if InheritanceMethod.RawValue & INHM.Root.RawValue ~= 0 then
         Shapes[1]:SetSize(Size)
     end
 
@@ -216,7 +223,7 @@ function mt.__create(DATA, e)
         Touched = Signal.new(Signal.Type.Default),
         TouchEnded = Signal.new(Signal.Type.Default),
         Entity = EntPtr,
-        InheritSize = InheritSize
+        InheritanceMethod = InheritanceMethod
     }
 
     if not IsStatic then

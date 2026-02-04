@@ -14,6 +14,20 @@ print("OVERLAP:", T[1])
 
 local CAM = RES["CAMERA"]
 
+print("\n\n\n\n\nCAM TEST:")
+
+local Comp = CAM:GetComponent("Camera")
+print(Comp.W, Comp.H)
+print(Comp.FOV)
+print(Comp.Aspect)
+print(Comp.OITTex)
+
+print("\n\n\n\n\n")
+
+AstralEngine.Signals.OnWindowResize:Connect(function(w, h)
+    print(Comp.W, Comp.H, Comp.Aspect, w, h)
+end)
+
 local CamSpeed = 3
 
 local InpService = GetService("InputService")

@@ -17,8 +17,8 @@ Camera.Pattern = {
     Aspect = function()
         return AstralEngine.Window.W / AstralEngine.Window.H
     end,
-    W = 100,
-    H = 100,
+    W = nil,
+    H = nil,
     CameraMask = math.rmap,
     Lighting = ENUM.LightingTechnology.Cel,
     DrawToScreen = false,
@@ -48,7 +48,9 @@ local FIELDS = {
     Near = 5,
     FOV = 6,
     W = 7,
+    Width = 7,
     H = 8,
+    Height = 8,
     Lighting = 9,
     DrawToScreen = 10,
     CameraPass = 11,
@@ -67,8 +69,12 @@ local FIELDS = {
     DepthTexture = 24,
 }
 
+local function RawViewToRay(self, Vector) end
+
+local function RawWorldToView() end
+
 local METHODS = {
-    SetResizeCallback = function(V1, V2)
+    SetResizeCallback = function(self, V1, V2)
         local TV1 = rtype(V1)
         local TV2 = rtype(V2)
         if TV1 == "function" then
@@ -77,14 +83,37 @@ local METHODS = {
             AstralEngine.Log("Invalid type parameter passed to `SetResizeCallback`", "error", "CAMERA")
         end
     end,
+    Resize = function(self, NewSize) end,
+    ScreenPointToRay = function(self, V1, V2)
+        local Vector = typeof(V1) == "Vec2" and V1 or vec2(V1, V2)
+        Vector = vec2(Vector.x / self.W, Vector.y / self.H)
+
+        RawViewToRay(self, Vector)
+    end,
+    ViewpointToRay = function(self, V1, V2)
+        local Vector = typeof(V1) == "Vec2" and V1 or vec2(V1, V2)
+        RawViewToRay(self, Vector)
+    end,
+}
+
+local READ_ONLY = {
+    Width = true,
+    Height = true,
+    Aspect = true,
 }
 
 local mt = {
     __index = function(self, k)
-        return self.__PROXY[k] or METHODS[k]
+        local Val = FIELDS[k]
+        if Val then
+            return self[Val]
+        end
+        return METHODS[k]
     end,
     __newindex = function(self, k, v)
-        self.__PROXY[k] = v
+        if READ_ONLY[k] then
+            AstralEngine.Error("Attempt to write to Read Only value on Camera component", "CAMERA")
+        end
         rawset(self, FIELDS[k] or k, v)
     end,
 }
@@ -110,6 +139,7 @@ local function RebuildTexture(V, w, h)
     OldV:release()
     return v
 end
+
 local function RebuildPasses(CameraRef)
     CameraRef.__REBUILT_TEX = 0
 
@@ -126,36 +156,44 @@ local function RebuildPasses(CameraRef)
         samples = 1,
     })
 end
+
 local function Rebuild(V, IsPass, w, h)
     if not IsPass then
         local PassesReady = RebuildTexture(V, w, h)
         if PassesReady then
             RebuildPasses(V.CREF)
+            V.CREF[FIELDS.W] = w
+            V.CREF[FIELDS.H] = h
+            V.CREF[FIELDS.Aspect] = w / h
         end
     end
 end
 
-Camera.Metadata.__create = function(Data, Entity, Sink)
-    local Comps = Component.GetComponents(Entity)
-
-    if not Comps.Transform and not Sink then
-        Component.AddComponent(Entity, "Transform", { Position = Vec3(0), Orientation = Quat() })
+Camera.Metadata.__create = function(Input, Entity, Sink)
+    if not Sink and not Component.HasComponent(Entity, "Transform") then
+        Component.AddComponent(Entity, "Transform", { Position = vec3(), Orientation = quat() })
     end
 
-    local REBUILD_CALLBACK = Data.Rebuild or Rebuild
+    local REBUILD_CALLBACK = Input.RebuildCallback or Rebuild
 
-    local W, H = (Data.Resolution or vec2(AstralEngine.Window.W, AstralEngine.Window.H)):unpack()
+    local Data = {}
+
+    local W, H = (Input.Resolution or vec2(AstralEngine.Window.W, AstralEngine.Window.H)):unpack()
     local Texture = AstralEngine.Graphics.NewTexture(W, H, TextureConfig)
     local OITTex = AstralEngine.Graphics.NewTexture(W, H, TexConf2)
     local OITDepth = AstralEngine.Graphics.NewTexture(W, H, OIT_CONF)
     local SolidTex = AstralEngine.Graphics.NewTexture(W, H, TextureConfig)
     local DepthTexture = AstralEngine.Graphics.NewTexture(W, H, DEPTH_CONF)
 
-    Texture.ResizeCallback = REBUILD_CALLBACK
+    Data.W = W
+    Data.H = H
+    Data.Aspect = W / H
+
     OITTex.ResizeCallback = REBUILD_CALLBACK
     OITDepth.ResizeCallback = REBUILD_CALLBACK
     SolidTex.ResizeCallback = REBUILD_CALLBACK
     DepthTexture.ResizeCallback = REBUILD_CALLBACK
+    Texture.ResizeCallback = REBUILD_CALLBACK
 
     Data.CameraPass = AstralEngine.Graphics.NewPass({ Texture[1] })
     Data.CameraTex = Texture
@@ -173,19 +211,16 @@ Camera.Metadata.__create = function(Data, Entity, Sink)
     Data.CameraPass.ResizeCallback = REBUILD_CALLBACK
     Data.SolidPass.ResizeCallback = REBUILD_CALLBACK
 
-    Data.OITDepth.CREF = Data
-    Data.OITPass.CREF = Data
-    Data.OITTex.CREF = Data
-    Data.SolidPass.CREF = Data
-    Data.SolidTex.CREF = Data
-    Data.CameraPass.CREF = Data
-    Data.CameraTex.CREF = Data
-    Data.DepthTexture.CREF = Data
-
     Renderer.AddCamera(Entity)
     Renderer.PassStorage.AddPass(false, Data.SolidPass, BasePriority + BoundCameras, true)
     Renderer.PassStorage.AddPass(false, Data.OITPass, BasePriority + BoundCameras + 1, true)
     Renderer.PassStorage.AddPass(false, Data.CameraPass, BasePriority + BoundCameras + 2, true)
+
+    for i, v in pairs(Input) do
+        if not Data[i] then
+            Data[i] = v
+        end
+    end
 
     for i, v in pairs(Camera.Pattern) do
         if not Data[i] then
@@ -193,15 +228,23 @@ Camera.Metadata.__create = function(Data, Entity, Sink)
         end
     end
 
-    local D = setmetatable({
-        __PROXY = Data,
-    }, mt)
+    local D = setmetatable({}, mt)
+
+    Data.OITDepth.CREF = D
+    Data.OITPass.CREF = D
+    Data.OITTex.CREF = D
+    Data.SolidPass.CREF = D
+    Data.SolidTex.CREF = D
+    Data.CameraPass.CREF = D
+    Data.CameraTex.CREF = D
+    Data.DepthTexture.CREF = D
 
     for i, v in pairs(Data) do
         if not FIELDS[i] then
             continue
         end
         rawset(D, FIELDS[i], v)
+        print("CAM: SET FIELD:", i, FIELDS[i], v)
     end
 
     BoundCameras = BoundCameras + 3
@@ -209,7 +252,7 @@ Camera.Metadata.__create = function(Data, Entity, Sink)
     return D
 end
 
-Camera.Metadata.__remove = function(_, Entity)
+Camera.Metadata.__remove = function(self, Entity)
     Renderer.RemoveCamera(Entity)
 end
 

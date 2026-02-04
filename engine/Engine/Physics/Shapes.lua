@@ -1,8 +1,6 @@
 local RawPhys = lovr.physics
 local Shapes = {}
 
-local Cache = setmetatable({}, { __mode = "k" })
-
 local ST = ENUM({
     Box = 1,
     Sphere = 2,
@@ -29,18 +27,64 @@ local StrToFunc = {
             error("SHAPES: INCOMPLETE API")
         end
     end,
-    SetRotation = function(self, Rotation) end,
-    SetOffset = function(self, Rotation, Position) end,
-    SetPosition = function(self, Position) end,
-    SetMass = function(self, NewMass) end,
-    SetDensity = function(self, Density) end,
+    SetRotation = function(self, Rotation)
+        local x, y, z = self.__ShapePtr:getOffset()
+
+        local Quat = nil
+        if typeof(Rotation) == "Vec3" then
+            Quat = quat():setEuler(Rotation:unpack())
+        else
+            Quat = Rotation
+        end
+
+        self.__ShapePtr:setOffset(x, y, z, Quat:unpack())
+    end,
+    SetOffset = function(self, Position, Rotation)
+        local Quat = nil
+        if typeof(Rotation) == "Vec3" then
+            Quat = quat():setEuler(Rotation:unpack())
+        else
+            Quat = Rotation
+        end
+
+        self.__ShapePtr:setOffset(Position:unpack(), Quat:unpack())
+    end,
+    SetPosition = function(self, Position)
+        local _, _, _, a, ax, ay, az = self.__ShapePtr:getOffset()
+        self.__ShapePtr:setOffset(Position:unpack(), a, ax, ay, az)
+    end,
+    SetMass = function(self, NewMass)
+        self.__ShapePtr:setMass(NewMass)
+    end,
+    SetDensity = function(self, Density)
+        self.__ShapePtr:setDensity(Density)
+    end,
 
     -- getters
-    GetMass = function(self) end,
-    GetDensity = function(self) end,
-    GetWorldTransform = function(self) end,
-    GetOffset = function(self) end,
-    GetSize = function(self) end,
+    GetMass = function(self)
+        return self.__ShapePtr:getMass()
+    end,
+    GetDensity = function(self)
+        return self.__ShapePtr:getDensity()
+    end,
+    GetWorldTransform = function(self)
+        local x, y, z, a, ax, ay, az = self.__ShapePtr:getPose()
+        local Q = quat(a, ax, ay, ax)
+        return vec3(x, y, z), vec3(Q:getEuler()), Q
+    end,
+    GetOffset = function(self)
+        local x, y, z, a, ax, ay, az = self.__ShapePtr:getOffset()
+        local Q = quat(a, ax, ay, ax)
+        return vec3(x, y, z), vec3(Q:getEuler()), Q
+    end,
+    GetSize = function(self)
+        return self.__ShapePtr:getMass()
+    end,
+
+    Destroy = function(self)
+        self.__ShapePtr:destroy()
+        self.__ShapePtr:setUserData(nil)
+    end,
 }
 
 local IdxResolve = {
@@ -68,7 +112,9 @@ local UDMeta = {
     __newindex = function(self, k, v)
         if NIdxResolve[k] then
             NIdxResolve[k](v)
+            return
         end
+        rawset(self, k, v)
     end,
 }
 

@@ -13,6 +13,7 @@ return {
         Window = {
             Width = nil,
             Height = nil,
+            Resizable = true,
         },
     },
     Filesystem = {

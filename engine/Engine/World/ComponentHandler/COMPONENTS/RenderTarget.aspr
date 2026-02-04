@@ -40,7 +40,7 @@ RendTarget.Metadata.__create = function(Type, Entity)
 
     local Proxy = {
         __RenderType = (type(Type) == "number" and Type or Type.Value),
-        __RenderMask = type(Type) ~= "number" and Type.Layer or math.rmap,
+        __RenderMask = type(Type) ~= "number" and Type.Layer or Renderer.CamMask,
     }
 
     local Data = setmetatable({

@@ -14,12 +14,7 @@ Camera.Pattern = {
     Far = 0,
     Near = 0.05,
     Orthographic = false,
-    Aspect = function()
-        return AstralEngine.Window.W / AstralEngine.Window.H
-    end,
-    W = nil,
-    H = nil,
-    CameraMask = math.rmap,
+    CameraMask = Renderer.CamMask,
     Lighting = ENUM.LightingTechnology.Cel,
     DrawToScreen = false,
     CameraPass = nil,

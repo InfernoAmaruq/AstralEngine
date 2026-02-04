@@ -1,10 +1,9 @@
-math.rmap = ~0
-
 local Component = GetService("Component", "Component")
 
 local ShaderService = require("ShaderService")
 
 local Renderer = {}
+Renderer.CamMask = ~0
 local Stack = {}
 local Cams = {}
 local PassTable = {}

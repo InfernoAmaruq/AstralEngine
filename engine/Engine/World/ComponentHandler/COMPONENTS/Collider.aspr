@@ -43,6 +43,7 @@ local CT = ENUM({
 @macro<L,!USEBRACK>{VALIDATEDOF(&OBJ) = local RDOF, TDOF = &OBJ[&IDX_R_DOF], &OBJ[&IDX_T_DOF]; if (RDOF == nil or RDOF == "") and (TDOF == nil or TDOF == "") then error("CANNOT SET ALL DEGREES OF FREEDOM TO NIL. USE STATIC OR ANCHORED COLLIDER") end}
 
 local SHAREDT = {
+    -- states
     SetKinematic = function(self, State)
         if self[&IDX_KIN] == State then return end
 
@@ -77,6 +78,22 @@ local SHAREDT = {
         Physics.UpdateSyncField(w.WorldId,self.ColRef,"Static",IsStatic)
         self.IsStatic = IsStatic
     end,
+    SetEnabled = function(self,v)
+        self[&ENABLED] = v
+        self.ColRef:setEnabled(v)
+    end,
+
+    -- shapes
+    IterateShapes = function(self)
+    end,
+    RemoveShape = function(self,v)
+    end,
+    AddShape = function(self,ShapeType,Position,Orientation,Size)
+    end,
+    GetMainShape = function(self)
+    end,
+
+    -- phys
     SetAngularVelocity = function(self, v)
         AstralEngine.Assert(not self.IsStatic,"Cannot set Angular Velocity on static collider!","COLLIDER")
     end,
@@ -94,6 +111,13 @@ local SHAREDT = {
     end,
     ApplyAngularImpulse = function(self, v)
         AstralEngine.Assert(not self.IsStatic,"Cannot apply impulse to static collider!","COLLIDER")
+    end,
+
+    -- private
+    __DrawComponentSizeChanged = function(self,NewSize)
+        if not self.InheritSize then return false end
+
+        return true
     end
 }
 
@@ -102,7 +126,7 @@ local function CALLFUNC(self, ...)
 end
 
 local LIST = {
-    Kinematic = &IDX_KIN, Static = &IDX_STATIC, RotationDOF = &IDX_R_DOF, TranslationDOF = &IDX_T_DOF, IsTrigger = &IDX_TRIGGER, Tag = &TAG
+    Kinematic = &IDX_KIN, Static = &IDX_STATIC, RotationDOF = &IDX_R_DOF, TranslationDOF = &IDX_T_DOF, IsTrigger = &IDX_TRIGGER, Tag = &TAG, Enabled = &ENABLED
 }
 
 local FIELDTOFUNC = {
@@ -111,6 +135,7 @@ local FIELDTOFUNC = {
     RotationDOF = SHAREDT.SetRotationDOF,
     TranslationDOF = SHAREDT.SetTranslationDOF,
     IsTrigger = SHAREDT.SetTrigger,
+    Enabled = SHAREDT.SetEnabled,
     Tag = SHAREDT.SetTag
 }
 
@@ -189,6 +214,7 @@ function mt.__create(DATA, e)
         WId = WorldComp.WorldId,
         ColliderType = ColliderType,
         ColRef = COLLIDER,
+        ShapeList = {},
         Tags = 0,
         IsStatic = IsStatic,
         [&IDX_T_DOF] = DATA.TranslationDOF or "xyz",
@@ -197,6 +223,7 @@ function mt.__create(DATA, e)
         Touched = Signal.new(Signal.Type.Default),
         TouchEnded = Signal.new(Signal.Type.Default),
         Entity = EntPtr,
+        InheritSize = DATA.InheritSize == nil and true or DATA.InheritSize
     }
 
     if not IsStatic then

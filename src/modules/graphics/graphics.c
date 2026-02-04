@@ -5272,7 +5272,7 @@ Model* lovrModelCreate(const ModelInfo* info) {
 
   // Visibility
   model->nodeVisibility = lovrMalloc(meta->nodeCount * sizeof(bool));
-  memset(model->nodeVisibility, 0xff, meta->nodeCount * sizeof(bool));
+  memset(model->nodeVisibility, true, meta->nodeCount * sizeof(bool));
 
   // Transforms
   model->localTransforms = lovrMalloc(sizeof(NodeTransform) * meta->nodeCount);
@@ -5333,7 +5333,7 @@ Model* lovrModelClone(Model* parent) {
   lovrModelResetBlendShapes(model);
 
   model->nodeVisibility = lovrMalloc(meta->nodeCount * sizeof(bool));
-  memset(model->nodeVisibility, 0xff, meta->nodeCount * sizeof(bool));
+  memset(model->nodeVisibility, true, meta->nodeCount * sizeof(bool));
 
   model->localTransforms = lovrMalloc(sizeof(NodeTransform) * meta->nodeCount);
   model->globalTransforms = lovrMalloc(16 * sizeof(float) * meta->nodeCount);

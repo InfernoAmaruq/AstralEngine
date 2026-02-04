@@ -2326,13 +2326,12 @@ ConvexShape* lovrConvexShapeCreate(float points[], uint32_t count, float* scale)
   return shape;
 }
 
-ConvexShape* lovrConvexShapeClone(ConvexShape* parent, float scale) {
+ConvexShape* lovrConvexShapeClone(ConvexShape* parent, float* scale) {
   ConvexShape* shape = lovrCalloc(sizeof(ConvexShape));
   shape->ref = 1;
   shape->type = SHAPE_CONVEX;
-  float scale3[3] = { scale, scale, scale };
   const JPH_Shape* hull = JPH_DecoratedShape_GetInnerShape((const JPH_DecoratedShape*) parent->handle);
-  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(hull, vec3_toJolt(scale3));
+  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(hull, vec3_toJolt(scale));
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
   quat_identity(shape->rotation);
   return shape;
@@ -2404,13 +2403,12 @@ MeshShape* lovrMeshShapeCreate(uint32_t vertexCount, float* vertices, uint32_t i
   return shape;
 }
 
-MeshShape* lovrMeshShapeClone(MeshShape* parent, float scale) {
+MeshShape* lovrMeshShapeClone(MeshShape* parent, float* scale) {
   MeshShape* shape = lovrCalloc(sizeof(MeshShape));
   shape->ref = 1;
   shape->type = SHAPE_MESH;
-  float scale3[3] = { scale, scale, scale };
   const JPH_Shape* mesh = JPH_DecoratedShape_GetInnerShape((const JPH_DecoratedShape*) parent->handle);
-  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(mesh, vec3_toJolt(scale3));
+  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(mesh, vec3_toJolt(scale));
   lovrCheck(shape->handle, "Invalid mesh data!");
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
   quat_identity(shape->rotation);

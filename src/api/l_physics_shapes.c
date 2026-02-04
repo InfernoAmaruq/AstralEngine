@@ -84,7 +84,8 @@ Shape* luax_newconvexshape(lua_State* L, int index) {
   ConvexShape* parent = luax_totype(L, index, ConvexShape);
 
   if (parent) {
-    float scale = luax_optfloat(L, index + 1, 1.f);
+    float scale[3];
+    luax_readscale(L, index + 1, scale, 3, NULL);
     return lovrConvexShapeClone(parent, scale);
   }
 
@@ -103,7 +104,8 @@ Shape* luax_newmeshshape(lua_State* L, int index) {
   MeshShape* parent = luax_totype(L, index, MeshShape);
 
   if (parent) {
-    float scale = luax_optfloat(L, index + 1, 1.f);
+    float scale[3];
+    luax_readscale(L, index + 1, scale, 3, NULL);
     return lovrMeshShapeClone(parent, scale);
   }
 

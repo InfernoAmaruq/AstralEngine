@@ -310,6 +310,7 @@ target_link_libraries(lovr
   ${LOVR_LUA}
   ${LOVR_MSDF}
   ${LOVR_JOLT}
+  ${LOVR_PHONON}
   ${LOVR_GLSLANG}
   ${LOVR_OPENXR}
   ${LOVR_PTHREADS}
@@ -769,6 +770,7 @@ elseif(ANDROID)
     ${LOVR_MSDF}
     ${LOVR_LUA}
     ${LOVR_GLSLANG}
+    ${LOVR_PHONON}
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/raw/lib/${ANDROID_ABI}"
   )
 
@@ -789,11 +791,6 @@ elseif(ANDROID)
     )
 
     configure_file("${ANDROID_NDK}/toolchains/llvm/prebuilt/${ANDROID_HOST_TAG}/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "raw/lib/${ANDROID_ABI}/libc++_shared.so" COPYONLY)
-
-    if(LOVR_USE_STEAM_AUDIO)
-      get_target_property(PHONON_LIB ${LOVR_PHONON} IMPORTED_LOCATION)
-      file(COPY ${PHONON_LIB} DESTINATION raw/lib/${ANDROID_ABI})
-    endif()
 
     # Make an apk
     add_custom_target(

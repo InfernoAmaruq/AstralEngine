@@ -644,10 +644,18 @@ static struct {
 } phonon;
 
 bool lovrSpatializerInit(void) {
+  IPLContextSettings settings = {
+    .version = STEAMAUDIO_VERSION,
+    .simdLevel = IPL_SIMDLEVEL_AVX512
+  };
+
+  lovrAssert(iplContextCreate(&settings, &phonon.context), "Failed to create spatializer context");
+
   return true;
 }
 
 void lovrSpatializerDestroy(void) {
+  iplContextRelease(&phonon.context);
   memset(&phonon, 0, sizeof(phonon));
 }
 

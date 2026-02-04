@@ -63,7 +63,7 @@ typedef enum {
 
 typedef void AudioDeviceCallback(AudioDevice* device, void* userdata);
 
-bool lovrAudioInit(const char* spatializer, uint32_t sampleRate);
+bool lovrAudioInit(uint32_t sampleRate);
 void lovrAudioDestroy(void);
 void lovrAudioEnumerateDevices(AudioType type, AudioDeviceCallback* callback, void* userdata);
 bool lovrAudioGetDevice(AudioType type, AudioDevice* device);
@@ -76,7 +76,6 @@ void lovrAudioSetVolume(float volume, VolumeUnit units);
 void lovrAudioGetPose(float position[3], float orientation[4]);
 void lovrAudioSetPose(float position[3], float orientation[4]);
 bool lovrAudioSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial material);
-const char* lovrAudioGetSpatializer(void);
 uint32_t lovrAudioGetSampleRate(void);
 void lovrAudioGetAbsorption(float absorption[3]);
 void lovrAudioSetAbsorption(float absorption[3]);
@@ -110,3 +109,13 @@ void lovrSourceGetDirectivity(Source* source, float* weight, float* power);
 void lovrSourceSetDirectivity(Source* source, float weight, float power);
 bool lovrSourceIsEffectEnabled(Source* source, Effect effect);
 bool lovrSourceSetEffectEnabled(Source* Source, Effect effect, bool enabled);
+
+// Spatializer
+
+bool lovrSpatializerInit(void);
+void lovrSpatializerDestroy(void);
+uint32_t lovrSpatializerApply(Source* source, const float* input, float* output, uint32_t framesIn);
+uint32_t lovrSpatializerApplyTail(float* scratch, float* output, uint32_t frames);
+bool lovrSpatializerSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial material);
+void lovrSpatializerAdd(Source* source);
+void lovrSpatializerRemove(Source* source);

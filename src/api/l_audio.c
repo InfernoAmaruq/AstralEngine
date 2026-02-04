@@ -202,11 +202,6 @@ static int l_lovrAudioSetGeometry(lua_State* L) {
   return 1;
 }
 
-static int l_lovrAudioGetSpatializer(lua_State *L) {
-  lua_pushstring(L, lovrAudioGetSpatializer());
-  return 1;
-}
-
 static int l_lovrAudioGetSampleRate(lua_State *L) {
   lua_pushinteger(L, lovrAudioGetSampleRate());
   return 1;
@@ -304,7 +299,6 @@ static const luaL_Reg lovrAudio[] = {
   { "getPose", l_lovrAudioGetPose },
   { "setPose", l_lovrAudioSetPose },
   { "setGeometry", l_lovrAudioSetGeometry },
-  { "getSpatializer", l_lovrAudioGetSpatializer },
   { "getSampleRate", l_lovrAudioGetSampleRate },
   { "getAbsorption", l_lovrAudioGetAbsorption },
   { "setAbsorption", l_lovrAudioSetAbsorption },
@@ -316,16 +310,12 @@ extern const luaL_Reg lovrSource[];
 
 int luaopen_lovr_audio(lua_State* L) {
   bool start = true;
-  const char *spatializer = NULL;
-  uint32_t sampleRate = 48000; // Set default here
+  uint32_t sampleRate = 48000;
+
   luax_pushconf(L);
   if (lua_istable(L, -1)) {
     lua_getfield(L, -1, "audio");
     if (lua_istable(L, -1)) {
-      lua_getfield(L, -1, "spatializer");
-      spatializer = lua_tostring(L, -1);
-      lua_pop(L, 1);
-
       lua_getfield(L, -1, "samplerate");
       sampleRate = lua_isnil(L, -1) ? sampleRate : luax_checku32(L, -1);
       lua_pop(L, 1);
@@ -338,7 +328,7 @@ int luaopen_lovr_audio(lua_State* L) {
   }
   lua_pop(L, 1);
 
-  luax_assert(L, lovrAudioInit(spatializer, sampleRate));
+  luax_assert(L, lovrAudioInit(sampleRate));
   luax_atexit(L, lovrAudioDestroy);
 
   if (start) {

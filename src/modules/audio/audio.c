@@ -1,5 +1,4 @@
 #include "audio/audio.h"
-#include "audio/spatializer.h"
 #include "data/sound.h"
 #include "core/maf.h"
 #include "util.h"
@@ -52,7 +51,6 @@ static struct {
   uint64_t sourceMask;
   float position[3];
   float orientation[4];
-  Spatializer* spatializer;
   float absorption[3];
   ma_data_converter playbackConverter;
   uint32_t sampleRate;
@@ -91,7 +89,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
     if (!source->playing) {
       state.sources[source->index] = NULL;
       state.sourceMask &= ~(1ull << source->index);
-      state.spatializer->sourceDestroy(source);
+      lovrSpatializerRemove(source);
       source->index = ~0u;
       lovrRelease(source, lovrSourceDestroy);
       continue;
@@ -146,7 +144,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
 
     // Spatialize
     if (source->spatial) {
-      state.spatializer->apply(source, buf, mix, BUFFER_SIZE, BUFFER_SIZE);
+      lovrSpatializerApply(source, buf, mix, BUFFER_SIZE);
       buf = mix;
     }
 
@@ -158,7 +156,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
   }
 
   // Tail
-  uint32_t tailCount = state.spatializer->tail(aux, mix, BUFFER_SIZE);
+  uint32_t tailCount = lovrSpatializerApplyTail(aux, mix, BUFFER_SIZE);
   for (uint32_t i = 0; i < tailCount * OUTPUT_CHANNELS; i++) {
     dst[i] += mix[i];
   }
@@ -184,16 +182,9 @@ static void onCapture(ma_device* device, void* output, const void* input, uint32
 
 static const ma_device_data_proc callbacks[] = { onPlayback, onCapture };
 
-static Spatializer* spatializers[] = {
-#ifdef LOVR_ENABLE_PHONON_SPATIALIZER
-  &phononSpatializer,
-#endif
-  &simpleSpatializer
-};
-
 // Entry
 
-bool lovrAudioInit(const char* spatializer, uint32_t sampleRate) {
+bool lovrAudioInit(uint32_t sampleRate) {
   if (!lovrModuleAcquire(&ref)) return true;
 
   ma_result result = ma_context_init(NULL, 0, NULL, &state.context);
@@ -210,18 +201,7 @@ bool lovrAudioInit(const char* spatializer, uint32_t sampleRate) {
     return lovrSetError("Failed to create audio mutex: %s", ma_result_description(result));
   }
 
-  for (size_t i = 0; i < COUNTOF(spatializers); i++) {
-    if (spatializer && strcmp(spatializer, spatializers[i]->name)) {
-      continue;
-    }
-
-    if (spatializers[i]->init()) {
-      state.spatializer = spatializers[i];
-      break;
-    }
-  }
-
-  if (!state.spatializer) {
+  if (!lovrSpatializerInit()) {
     ma_context_uninit(&state.context);
     ma_mutex_uninit(&state.lock);
     lovrModuleReset(&ref);
@@ -251,8 +231,8 @@ void lovrAudioDestroy(void) {
   ma_context_uninit(&state.context);
   lovrRelease(state.sinks[AUDIO_PLAYBACK], lovrSoundDestroy);
   lovrRelease(state.sinks[AUDIO_CAPTURE], lovrSoundDestroy);
-  if (state.spatializer) state.spatializer->destroy();
   ma_data_converter_uninit(&state.playbackConverter, NULL);
+  lovrSpatializerDestroy();
   memset(&state, 0, sizeof(state));
   lovrModuleReset(&ref);
 }
@@ -395,18 +375,15 @@ void lovrAudioGetPose(float position[3], float orientation[4]) {
 }
 
 void lovrAudioSetPose(float position[3], float orientation[4]) {
-  state.spatializer->setListenerPose(position, orientation);
+  vec3_init(state.position, position);
+  quat_init(state.orientation, orientation);
 }
 
 bool lovrAudioSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial material) {
   ma_mutex_lock(&state.lock);
-  bool success = state.spatializer->setGeometry(vertices, indices, vertexCount, indexCount, material);
+  bool success = lovrSpatializerSetGeometry(vertices, indices, vertexCount, indexCount, material);
   ma_mutex_unlock(&state.lock);
   return success;
-}
-
-const char* lovrAudioGetSpatializer(void) {
-  return state.spatializer->name;
 }
 
 uint32_t lovrAudioGetSampleRate(void) {
@@ -535,7 +512,7 @@ bool lovrSourcePlay(Source* source) {
     state.sources[index] = source;
     source->index = index;
     lovrRetain(source);
-    state.spatializer->sourceCreate(source);
+    lovrSpatializerAdd(source);
   }
 
   ma_mutex_unlock(&state.lock);
@@ -658,6 +635,42 @@ bool lovrSourceSetEffectEnabled(Source* source, Effect effect, bool enabled) {
   return true;
 }
 
-uint32_t lovrSourceGetIndex(Source* source) {
-  return source->index;
+// Spatializer
+
+#include <phonon.h>
+
+static struct {
+  IPLContext context;
+} phonon;
+
+bool lovrSpatializerInit(void) {
+  return true;
+}
+
+void lovrSpatializerDestroy(void) {
+  memset(&phonon, 0, sizeof(phonon));
+}
+
+uint32_t lovrSpatializerApply(Source* source, const float* input, float* output, uint32_t frames) {
+  for (uint32_t i = 0; i < frames; i++) {
+    output[2 * i + 0] = input[i];
+    output[2 * i + 1] = input[i];
+  }
+  return frames;
+}
+
+uint32_t lovrSpatializerApplyTail(float* scratch, float* output, uint32_t frames) {
+  return 0;
+}
+
+bool lovrSpatializerSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial material) {
+  return true;
+}
+
+void lovrSpatializerAdd(Source* source) {
+  //
+}
+
+void lovrSpatializerRemove(Source* source) {
+  //
 }

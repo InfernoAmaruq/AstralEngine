@@ -351,13 +351,13 @@ endif()
 if(LOVR_ENABLE_AUDIO)
   target_sources(lovr PRIVATE
     src/modules/audio/audio.c
-    src/modules/audio/spatializer_simple.c
     src/api/l_audio.c
     src/api/l_audio_source.c
   )
 
   if(LOVR_USE_STEAM_AUDIO)
     target_include_directories(lovr PRIVATE deps/phonon/core/src/core)
+    target_include_directories(lovr PRIVATE "${PROJECT_BINARY_DIR}/phonon/src/core")
   endif()
 else()
   target_compile_definitions(lovr PRIVATE LOVR_DISABLE_AUDIO)

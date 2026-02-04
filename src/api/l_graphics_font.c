@@ -6,8 +6,8 @@
 
 ColoredString* luax_checkcoloredstrings(lua_State* L, int index, uint32_t* count, ColoredString* stack) {
   if (lua_istable(L, index)) {
-    lua_rawgeti(L, index, 1);
-    bool nested = lua_istable(L, -1);
+    lua_rawgeti(L, index, 2);
+    bool nested = lua_type(L, -1) == LUA_TNIL || lua_type(L, -1) == LUA_TTABLE;
     lua_pop(L, 1);
 
     *count = luax_len(L, index) / (nested ? 1 : 2);

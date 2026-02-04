@@ -9,7 +9,8 @@ BALL.Shape.Color = color.fromRGBA(255, 0, 255, 120)
 
 local World = RES["WORLD"].World
 
-local T = World:Overlap(ENUM.ColliderType.Sphere, vec3(100, 100, 100), vec3(), vec3(), nil, nil, {})
+local T = World:Overlap(ENUM.ColliderShape.Sphere, vec3(100, 100, 100), vec3(), vec3(), nil, nil, {})
+print("OVERLAP:", T[1])
 
 local CAM = RES["CAMERA"]
 

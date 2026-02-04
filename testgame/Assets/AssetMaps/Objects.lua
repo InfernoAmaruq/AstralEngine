@@ -29,10 +29,10 @@ return {
             Shape = {
                 Shape = ENUM.ShapeType.Sphere,
                 Color = color.fromHex("#0000ff99"),
-                Size = Vec3(0.5, 0.5, 0.5),
+                Size = Vec3(3, 3, 3),
             },
             Collider = {
-                ColliderType = ENUM.ColliderType.Sphere,
+                Shape = GetService("Physics").Shapes.NewShape(ENUM.ColliderShape.Sphere),
             },
         },
     },

@@ -16,7 +16,7 @@ end
 
 local function IDX(t, k)
     local Og = t[1]
-    local Val = Og and Og[k]
+    local Val = Og and Og[k] or Og[k:sub(1, 1):lower() .. k:sub(2)]
     if rtype(Val) == "function" then
         rawset(t, ".NEXTCALL", Val)
         return CAPTURE
@@ -64,7 +64,15 @@ end
 
 AstralEngine.Graphics = {
     NewRawPass = OgPass,
-    NewRawTexture = OgTex,
+    NewRawTexture = function(...)
+        local Args = { ... }
+
+        if type(Args[1]) == "string" then
+            Args[1] = ResolvePath(Args[1])
+        end
+
+        return OgTex(unpack(Args))
+    end,
     NewTexture = lovr.graphics.newTexture,
     NewPass = lovr.graphics.newPass,
 }

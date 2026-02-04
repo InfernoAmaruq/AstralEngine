@@ -12,13 +12,6 @@ local Collider = {
     Metadata = mt,
 }
 
-local CT = ENUM({
-    Box = 1,
-    Sphere = 2,
-    Cylinder = 3,
-    Capsule = 4,
-}, "ColliderType")
-
 -- FLAGS
 @flag:IDX_KIN = 1;
 @flag:IDX_STATIC = 2;
@@ -113,11 +106,7 @@ local SHAREDT = {
         AstralEngine.Assert(not self.IsStatic,"Cannot apply impulse to static collider!","COLLIDER")
     end,
 
-    -- private
-    __DrawComponentSizeChanged = function(self,NewSize)
-        if not self.InheritSize then return false end
-
-        return true
+    OnDrawComponentResize = function(self,v)
     end
 }
 
@@ -130,7 +119,7 @@ local LIST = {
 }
 
 local FIELDTOFUNC = {
-    SetKinematic = SHAREDT.SetKinematic,
+    Kinematic = SHAREDT.SetKinematic,
     Static = SHAREDT.SetStatic,
     RotationDOF = SHAREDT.SetRotationDOF,
     TranslationDOF = SHAREDT.SetTranslationDOF,
@@ -166,7 +155,12 @@ local METATAB = {
     end
 }
 
-local SphereVal = CT.Sphere.Value
+local INHM = ENUM({
+    None = 0b00,
+    Root = 0b01,
+    All = 0b11,
+    AllNoRoot = 0b10
+},"ColliderSizeInheritance")
 
 function mt.__create(DATA, e)
     local Transform = assert(Component.HasComponent(e, "Transform"), "NO COMPONENT TYPE OF 'Transform' PRESENT, CANNOT ADD COLLIDER!")
@@ -188,23 +182,23 @@ function mt.__create(DATA, e)
 
     local RawWorld = World:GetComponent("World").World
 
-    local ColliderType = DATA.ColliderType or CT.Box
-    local Size = DATA.Size or Physics.GetObjSize(e)
-
-    assert(Size, "NO SIZE VALUE PROVIDED!")
-
-    local FUNCNAME = "new" .. ColliderType.Name .. "Collider"
-
-    local ColliderVal = ColliderType.Value
-
-    local ConvertedSize = Size
-    if ColliderVal == SphereVal then
-        ConvertedSize = math.max(Size:unpack())
-    end
-
-    local COLLIDER = RawWorld[FUNCNAME](RawWorld, vec3(0,0,0), ConvertedSize)
+    local COLLIDER = RawWorld:newCollider(0,0,0)
     COLLIDER:setPose(Transform.Position,Transform.Orientation)
     COLLIDER:setTag(DATA.Tag or WorldComp.DefaultTag)
+
+    local InheritanceMethod = DATA.InheritanceMethod or INHM.Root
+    local InheritSize = DATA.InheritSize == nil and true or DATA.InheritSize
+
+    local Shapes = DATA.Shapes or {DATA.Shape or Physics.Shapes.NewShape(ENUM.ColliderShape.Box)}
+    local Size = DATA.Size or Physics.GetObjSize(e)
+
+    if InheritSize then
+        Shapes[1]:SetSize(Size)
+    end
+
+    for _,v in ipairs(Shapes) do
+        COLLIDER:addShape(v.__ShapePtr)
+    end
 
     local IsStatic = WorldComp:IsStaticTag(COLLIDER:getTag())
 
@@ -212,9 +206,8 @@ function mt.__create(DATA, e)
         World = World,
         WorldComp = WorldComp,
         WId = WorldComp.WorldId,
-        ColliderType = ColliderType,
         ColRef = COLLIDER,
-        ShapeList = {},
+        ShapeList = Shapes,
         Tags = 0,
         IsStatic = IsStatic,
         [&IDX_T_DOF] = DATA.TranslationDOF or "xyz",
@@ -223,7 +216,7 @@ function mt.__create(DATA, e)
         Touched = Signal.new(Signal.Type.Default),
         TouchEnded = Signal.new(Signal.Type.Default),
         Entity = EntPtr,
-        InheritSize = DATA.InheritSize == nil and true or DATA.InheritSize
+        InheritSize = InheritSize
     }
 
     if not IsStatic then
@@ -239,7 +232,7 @@ function mt.__create(DATA, e)
     if DATA.IsTrigger then
         SHAREDT.SetTrigger(T,true)
     end
-    if DATA.Kinematic then
+    if DATA.Kinematic and not IsStatic then
         SHAREDT.SetKinematic(T,true)
     end
 

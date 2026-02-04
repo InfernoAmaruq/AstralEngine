@@ -122,7 +122,7 @@ do
     local SC_BOX, SC_SPHERE, SC_CYLINDER, SC_CAPSULE
 
     function RT.GetTempShape(Shape, ShapeSize)
-        local CTENUM = ENUM.ColliderType
+        local CTENUM = ENUM.ColliderShape
         local RV = Shape.RawValue
         if RV < 1 or RV > 4 then
             AstralEngine.Error("Attempted to use illegal shape for RaycastParams.GetShape() : " .. Shape, "RAYCAST")

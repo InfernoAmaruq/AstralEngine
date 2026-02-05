@@ -1,4 +1,5 @@
 #include "audio/audio.h"
+#include "data/blob.h"
 #include "data/sound.h"
 #include "core/maf.h"
 #include "util.h"
@@ -61,7 +62,9 @@ static struct {
   uint32_t sampleRate;
 #ifdef LOVR_USE_PHONON
   IPLContext spatializer;
+  IPLAudioSettings audioSettings;
   IPLSimulator simulator;
+  IPLHRTF hrtf;
 #endif
 } state;
 
@@ -409,6 +412,25 @@ bool lovrAudioSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCou
   return success;
 }
 
+bool lovrAudioSetHRTF(Blob* hrtf) {
+#if LOVR_USE_PHONON
+  iplHRTFRelease(&state.hrtf);
+
+  IPLHRTFSettings settings = {
+    .type = IPL_HRTFTYPE_SOFA,
+    .sofaData = hrtf->data,
+    .sofaDataSize = hrtf->size,
+    .volume = 1.f,
+    .normType = IPL_HRTFNORMTYPE_NONE
+  };
+
+  if (iplHRTFCreate(state.spatializer, &state.audioSettings, &settings, &state.hrtf)) {
+    return lovrSetError("Failed to create HRTF");
+  }
+#endif
+  return true;
+}
+
 uint32_t lovrAudioGetSampleRate(void) {
   return state.sampleRate;
 }
@@ -680,7 +702,12 @@ bool lovrSpatializerInit(void) {
     .simdLevel = IPL_SIMDLEVEL_AVX512
   };
 
-  lovrAssert(!iplContextCreate(&contextSettings, &state.spatializer), "Failed to create SteamAudio context");
+  if (iplContextCreate(&contextSettings, &state.spatializer)) {
+    return lovrSetError("Failed to create SteamAudio context");
+  }
+
+  state.audioSettings.samplingRate = state.sampleRate;
+  state.audioSettings.frameSize = BUFFER_SIZE;
 
   IPLSimulationSettings simulationSettings = {
     .flags = IPL_SIMULATIONFLAGS_DIRECT | IPL_SIMULATIONFLAGS_REFLECTIONS,
@@ -693,19 +720,22 @@ bool lovrSpatializerInit(void) {
     .maxOrder = 1,
     .maxNumSources = MAX_SOURCES,
     .numThreads = 4,
-    .samplingRate = state.sampleRate,
-    .frameSize = BUFFER_SIZE
+    .samplingRate = state.audioSettings.samplingRate,
+    .frameSize = state.audioSettings.frameSize
   };
 
-  lovrAssert(!iplSimulatorCreate(state.spatializer, &simulationSettings, &state.simulator), "Failed to create SteamAudio simulator");
+  if (iplSimulatorCreate(state.spatializer, &simulationSettings, &state.simulator)) {
+    lovrSpatializerDestroy();
+    return lovrSetError("Failed to create SteamAudio simulator");
+  }
 
   return true;
 }
 
 void lovrSpatializerDestroy(void) {
-  iplSimulatorRelease(&state.simulator);
-  iplContextRelease(&state.spatializer);
-  memset(&phonon, 0, sizeof(phonon));
+  iplHRTFRelease(&state.hrtf), state.hrtf = NULL;
+  iplSimulatorRelease(&state.simulator), state.simulator = NULL;
+  iplContextRelease(&state.spatializer), state.spatializer = NULL;
 }
 
 uint32_t lovrSpatializerApply(Source* source, const float* input, float* output, uint32_t frames) {

@@ -202,6 +202,12 @@ static int l_lovrAudioSetGeometry(lua_State* L) {
   return 1;
 }
 
+static int l_lovrAudioSetHRTF(lua_State* L) {
+  Blob* blob = luax_readblob(L, 1, "HRTF");
+  luax_assert(L, lovrAudioSetHRTF(blob));
+  return 0;
+}
+
 static int l_lovrAudioGetSampleRate(lua_State *L) {
   lua_pushinteger(L, lovrAudioGetSampleRate());
   return 1;
@@ -299,6 +305,7 @@ static const luaL_Reg lovrAudio[] = {
   { "getPose", l_lovrAudioGetPose },
   { "setPose", l_lovrAudioSetPose },
   { "setGeometry", l_lovrAudioSetGeometry },
+  { "setHRTF", l_lovrAudioSetHRTF },
   { "getSampleRate", l_lovrAudioGetSampleRate },
   { "getAbsorption", l_lovrAudioGetAbsorption },
   { "setAbsorption", l_lovrAudioSetAbsorption },

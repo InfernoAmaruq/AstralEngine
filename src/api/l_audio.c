@@ -189,19 +189,6 @@ static int l_lovrAudioSetPose(lua_State *L) {
   return 0;
 }
 
-static int l_lovrAudioSetGeometry(lua_State* L) {
-  float* vertices;
-  uint32_t* indices;
-  uint32_t vertexCount, indexCount;
-  int index = luax_readmesh(L, 1, &vertices, &vertexCount, &indices, &indexCount);
-  AudioMaterial material = luax_checkenum(L, index, AudioMaterial, "generic");
-  bool success = lovrAudioSetGeometry(vertices, indices, vertexCount, indexCount, material);
-  lovrFree(vertices);
-  lovrFree(indices);
-  lua_pushboolean(L, success);
-  return 1;
-}
-
 static int l_lovrAudioSetHRTF(lua_State* L) {
   Blob* blob = luax_readblob(L, 1, "HRTF");
   luax_assert(L, lovrAudioSetHRTF(blob));
@@ -289,6 +276,35 @@ static int l_lovrAudioNewSource(lua_State* L) {
   return 1;
 }
 
+static int l_lovrAudioNewAudioMesh(lua_State* L) {
+  float* vertices;
+  uint32_t* indices;
+  uint32_t vertexCount, indexCount;
+  int index = luax_readmesh(L, 1, &vertices, &vertexCount, &indices, &indexCount);
+
+  AudioMaterial material;
+  AudioMaterial* materials = NULL;
+  if (lua_istable(L, index)) {
+    materials = lovrMalloc(indexCount / 3 * sizeof(AudioMaterial));
+    for (uint32_t i = 0; i < indexCount / 3; i++) {
+      lua_rawgeti(L, index, i + 1);
+      materials[i] = luax_checkenum(L, index, AudioMaterial, "generic");
+      lua_pop(L, 1);
+    }
+  } else {
+    material = luax_checkenum(L, index, AudioMaterial, "generic");
+  }
+
+  AudioMesh* mesh = lovrAudioMeshCreate(vertices, indices, vertexCount, indexCount, materials, material);
+  lovrFree(vertices);
+  lovrFree(indices);
+  lovrFree(materials);
+  luax_assert(L, mesh);
+  luax_pushtype(L, AudioMesh, mesh);
+  lovrRelease(mesh, lovrAudioMeshDestroy);
+  return 1;
+}
+
 static const luaL_Reg lovrAudio[] = {
   { "getDevices", l_lovrAudioGetDevices },
   { "getDevice", l_lovrAudioGetDevice },
@@ -304,16 +320,17 @@ static const luaL_Reg lovrAudio[] = {
   { "setOrientation", l_lovrAudioSetOrientation },
   { "getPose", l_lovrAudioGetPose },
   { "setPose", l_lovrAudioSetPose },
-  { "setGeometry", l_lovrAudioSetGeometry },
   { "setHRTF", l_lovrAudioSetHRTF },
   { "getSampleRate", l_lovrAudioGetSampleRate },
   { "getAbsorption", l_lovrAudioGetAbsorption },
   { "setAbsorption", l_lovrAudioSetAbsorption },
   { "newSource", l_lovrAudioNewSource },
+  { "newAudioMesh", l_lovrAudioNewAudioMesh },
   { NULL, NULL }
 };
 
 extern const luaL_Reg lovrSource[];
+extern const luaL_Reg lovrAudioMesh[];
 
 int luaopen_lovr_audio(lua_State* L) {
   bool debug = false;
@@ -351,5 +368,6 @@ int luaopen_lovr_audio(lua_State* L) {
   lua_newtable(L);
   luax_register(L, lovrAudio);
   luax_registertype(L, Source);
+  luax_registertype(L, AudioMesh);
   return 1;
 }

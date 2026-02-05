@@ -11,6 +11,7 @@ struct Blob;
 struct Sound;
 
 typedef struct Source Source;
+typedef struct AudioMesh AudioMesh;
 
 typedef enum {
   EFFECT_ABSORPTION,
@@ -76,7 +77,6 @@ float lovrAudioGetVolume(VolumeUnit units);
 void lovrAudioSetVolume(float volume, VolumeUnit units);
 void lovrAudioGetPose(float position[3], float orientation[4]);
 void lovrAudioSetPose(float position[3], float orientation[4]);
-bool lovrAudioSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial material);
 bool lovrAudioSetHRTF(struct Blob* hrtf);
 uint32_t lovrAudioGetSampleRate(void);
 void lovrAudioGetAbsorption(float absorption[3]);
@@ -111,6 +111,16 @@ void lovrSourceGetDirectivity(Source* source, float* weight, float* power);
 void lovrSourceSetDirectivity(Source* source, float weight, float power);
 bool lovrSourceIsEffectEnabled(Source* source, Effect effect);
 bool lovrSourceSetEffectEnabled(Source* Source, Effect effect, bool enabled);
+
+// AudioMesh
+
+AudioMesh* lovrAudioMeshCreate(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial* materials, AudioMaterial material);
+AudioMesh* lovrAudioMeshClone(AudioMesh* parent);
+void lovrAudioMeshDestroy(void* ref);
+bool lovrAudioMeshIsEnabled(AudioMesh* mesh);
+void lovrAudioMeshSetEnabled(AudioMesh* mesh, bool enable);
+void lovrAudioMeshGetTransform(AudioMesh* mesh, float* transform);
+void lovrAudioMeshSetTransform(AudioMesh* mesh, float* transform);
 
 // Spatializer
 

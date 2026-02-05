@@ -43,6 +43,18 @@ struct Source {
   bool spatial;
 };
 
+struct AudioMesh {
+  uint32_t ref;
+#ifdef LOVR_USE_PHONON
+  bool enabled;
+  AudioMesh* parent;
+  IPLInstancedMesh instancedMesh;
+  IPLStaticMesh staticMesh;
+  IPLScene scene;
+  float transform[16];
+#endif
+};
+
 static atomic_uint ref;
 
 static struct {
@@ -64,6 +76,8 @@ static struct {
   IPLContext spatializer;
   IPLAudioSettings audioSettings;
   IPLSimulator simulator;
+  IPLScene scene;
+  bool sceneDirty;
   IPLHRTF hrtf;
 #endif
 } state;
@@ -405,13 +419,6 @@ void lovrAudioSetPose(float position[3], float orientation[4]) {
   quat_init(state.orientation, orientation);
 }
 
-bool lovrAudioSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial material) {
-  ma_mutex_lock(&state.lock);
-  bool success = lovrSpatializerSetGeometry(vertices, indices, vertexCount, indexCount, material);
-  ma_mutex_unlock(&state.lock);
-  return success;
-}
-
 bool lovrAudioSetHRTF(Blob* hrtf) {
 #if LOVR_USE_PHONON
   iplHRTFRelease(&state.hrtf);
@@ -680,6 +687,167 @@ bool lovrSourceSetEffectEnabled(Source* source, Effect effect, bool enabled) {
   return true;
 }
 
+// AudioMesh
+
+static IPLMaterial materialData[] = {
+  [MATERIAL_GENERIC] = { .10f, .20f, .30f, .05f, .100f, .050f, .030f },
+  [MATERIAL_BRICK] = { .03f, .04f, .07f, .05f, .015f, .015f, .015f },
+  [MATERIAL_CARPET] = { .24f, .69f, .73f, .05f, .020f, .005f, .003f },
+  [MATERIAL_CERAMIC] = { .01f, .02f, .02f, .05f, .060f, .044f, .011f },
+  [MATERIAL_CONCRETE] = { .05f, .07f, .08f, .05f, .015f, .002f, .001f },
+  [MATERIAL_GLASS] = { .06f, .03f, .02f, .05f, .060f, .044f, .011f },
+  [MATERIAL_GRAVEL] = { .60f, .70f, .80f, .05f, .031f, .012f, .008f },
+  [MATERIAL_METAL] = { .20f, .07f, .06f, .05f, .200f, .025f, .010f },
+  [MATERIAL_PLASTER] = { .12f, .06f, .04f, .05f, .056f, .056f, .004f },
+  [MATERIAL_ROCK] = { .13f, .20f, .24f, .05f, .015f, .002f, .001f },
+  [MATERIAL_WOOD] = { .11f, .07f, .06f, .05f, .070f, .014f, .005f }
+};
+
+AudioMesh* lovrAudioMeshCreate(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial* materials, AudioMaterial material) {
+  AudioMesh* mesh = lovrCalloc(sizeof(AudioMesh));
+  mesh->ref = 1;
+  mesh->enabled = true;
+  mat4_identity(mesh->transform);
+
+  // Scene
+
+  IPLSceneSettings sceneSettings = {
+    .type = IPL_SCENETYPE_DEFAULT
+  };
+
+  if (iplSceneCreate(state.spatializer, &sceneSettings, &mesh->scene)) {
+    lovrSetError("Failed to create AudioMesh scene");
+    return NULL;
+  }
+
+  // StaticMesh
+
+  IPLStaticMeshSettings settings = {
+    .numVertices = vertexCount,
+    .numTriangles = indexCount / 3,
+    .numMaterials = COUNTOF(materialData),
+    .vertices = (IPLVector3*) vertices,
+    .materials = materialData
+  };
+
+  settings.triangles = lovrMalloc(settings.numTriangles * sizeof(IPLTriangle));
+
+  for (uint32_t i = 0; i < settings.numTriangles; i++) {
+    settings.triangles[i].indices[0] = indices[3 * i + 0];
+    settings.triangles[i].indices[1] = indices[3 * i + 1];
+    settings.triangles[i].indices[2] = indices[3 * i + 2];
+  }
+
+  if (materials) {
+    settings.materialIndices = (IPLint32*) materials;
+  } else {
+    settings.materialIndices = lovrMalloc(settings.numTriangles * sizeof(IPLint32));
+    for (uint32_t i = 0; i < settings.numTriangles; i++) {
+      settings.materialIndices[i] = material;
+    }
+  }
+
+  bool success = !iplStaticMeshCreate(mesh->scene, &settings, &mesh->staticMesh);
+  if (!materials) lovrFree(settings.materialIndices);
+  lovrFree(settings.triangles);
+
+  if (!success) {
+    iplSceneRelease(&mesh->scene);
+    lovrSetError("Failed to create AudioMesh");
+    return NULL;
+  }
+
+  iplStaticMeshAdd(mesh->staticMesh, mesh->scene);
+  iplSceneCommit(mesh->scene);
+
+  // InstancedMesh
+
+  IPLInstancedMeshSettings instancedMeshSettings = {
+    .subScene = mesh->scene,
+    .transform.elements = {
+      { 1.f, 0.f, 0.f, 0.f },
+      { 0.f, 1.f, 0.f, 0.f },
+      { 0.f, 0.f, 1.f, 0.f },
+      { 0.f, 0.f, 0.f, 1.f }
+    }
+  };
+
+  if (iplInstancedMeshCreate(state.scene, &instancedMeshSettings, &mesh->instancedMesh)) {
+    lovrSetError("Failed to clone AudioMesh");
+    lovrFree(mesh);
+    return NULL;
+  }
+
+  iplInstancedMeshAdd(mesh->instancedMesh, state.scene);
+  state.sceneDirty = true;
+
+  return mesh;
+}
+
+AudioMesh* lovrAudioMeshClone(AudioMesh* parent) {
+  AudioMesh* mesh = lovrCalloc(sizeof(AudioMesh));
+  mesh->ref = 1;
+  mesh->enabled = true;
+  mat4_init(mesh->transform, parent->transform);
+
+  IPLInstancedMeshSettings settings = {
+    .subScene = parent->scene
+  };
+
+  mat4_transpose(mat4_init(&settings.transform.elements[0][0], mesh->transform));
+
+  if (iplInstancedMeshCreate(state.scene, &settings, &mesh->instancedMesh)) {
+    lovrSetError("Failed to clone AudioMesh");
+    lovrFree(mesh);
+    return NULL;
+  }
+
+  iplInstancedMeshAdd(mesh->instancedMesh, state.scene);
+  state.sceneDirty = true;
+
+  mesh->staticMesh = parent->staticMesh;
+  mesh->scene = parent->scene;
+  lovrRetain(parent);
+  return mesh;
+}
+
+void lovrAudioMeshDestroy(void* ref) {
+  AudioMesh* mesh = ref;
+  iplInstancedMeshRelease(&mesh->instancedMesh);
+  iplSceneRelease(&mesh->scene);
+  iplStaticMeshRelease(&mesh->staticMesh);
+  lovrFree(mesh);
+}
+
+bool lovrAudioMeshIsEnabled(AudioMesh* mesh) {
+  return mesh->enabled;
+}
+
+void lovrAudioMeshSetEnabled(AudioMesh* mesh, bool enable) {
+  if (enable != mesh->enabled) {
+    if (enable) {
+      iplInstancedMeshAdd(mesh->instancedMesh, state.scene);
+    } else {
+      iplInstancedMeshRemove(mesh->instancedMesh, state.scene);
+    }
+
+    mesh->enabled = enable;
+    state.sceneDirty = true;
+  }
+}
+
+void lovrAudioMeshGetTransform(AudioMesh* mesh, float* transform) {
+  mat4_init(transform, mesh->transform);
+}
+
+void lovrAudioMeshSetTransform(AudioMesh* mesh, float* transform) {
+  IPLMatrix4x4 iplTransform;
+  mat4_transpose(mat4_init(&iplTransform.elements[0][0], mesh->transform));
+  iplInstancedMeshUpdateTransform(mesh->instancedMesh, state.scene, iplTransform);
+  mat4_init(mesh->transform, transform);
+  state.sceneDirty = true;
+}
+
 // Spatializer
 
 #ifdef LOVR_USE_PHONON
@@ -729,11 +897,21 @@ bool lovrSpatializerInit(void) {
     return lovrSetError("Failed to create SteamAudio simulator");
   }
 
+  IPLSceneSettings sceneSettings = {
+    .type = IPL_SCENETYPE_DEFAULT
+  };
+
+  if (iplSceneCreate(state.spatializer, &sceneSettings, &state.scene)) {
+    lovrSpatializerDestroy();
+    return lovrSetError("Failed to create SteamAudio scene");
+  }
+
   return true;
 }
 
 void lovrSpatializerDestroy(void) {
   iplHRTFRelease(&state.hrtf), state.hrtf = NULL;
+  iplSceneRelease(&state.scene), state.scene = NULL;
   iplSimulatorRelease(&state.simulator), state.simulator = NULL;
   iplContextRelease(&state.spatializer), state.spatializer = NULL;
 }

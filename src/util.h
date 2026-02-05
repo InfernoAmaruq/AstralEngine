@@ -146,6 +146,7 @@ float32 float16to32(float16 f);
 typedef enum {
   T_NONE,
   T_Source,
+  T_AudioMesh,
   T_Blob,
   T_Image,
   T_ModelData,

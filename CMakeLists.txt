@@ -354,6 +354,7 @@ if(LOVR_ENABLE_AUDIO)
     src/modules/audio/audio.c
     src/api/l_audio.c
     src/api/l_audio_source.c
+    src/api/l_audio_audioMesh.c
   )
 
   if(LOVR_USE_STEAM_AUDIO)

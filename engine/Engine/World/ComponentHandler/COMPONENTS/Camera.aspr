@@ -6,11 +6,11 @@ local Component = GetService("Component")
 local TextureConfig = { samples = 1, usage = { "render", "sample" }, mipmaps = false }
 local TexConf2 = { samples = 1, usage = { "render", "sample" }, mipmaps = false, format = "rgba16f" }
 
-local TEXCTR = 5 -- number of textures used in the camera
+local TEXCTR = 6 -- number of textures used in the camera
 
 Camera.Name = "Camera"
 Camera.Pattern = {
-    FOV = math.rad(70),
+    RadFOV = math.rad(70),
     Far = 0,
     Near = 0.05,
     Orthographic = false,
@@ -41,7 +41,7 @@ local FIELDS = {
     Aspect = 3,
     Far = 4,
     Near = 5,
-    FOV = 6,
+    RadFOV = 6,
     W = 7,
     Width = 7,
     H = 8,
@@ -62,6 +62,8 @@ local FIELDS = {
     SolidPass = 22,
     OITDepth = 23,
     DepthTexture = 24,
+    HistoryTexA = 25,
+    HistoryTexB = 26,
 }
 
 local function RawViewToRay(self, Vector) end
@@ -69,16 +71,11 @@ local function RawViewToRay(self, Vector) end
 local function RawWorldToView() end
 
 local METHODS = {
-    SetResizeCallback = function(self, V1, V2)
-        local TV1 = rtype(V1)
-        local TV2 = rtype(V2)
-        if TV1 == "function" then
-        elseif TV1 == "table" and (TV2 == "table" or TV2 == "nil") then
-        else
-            AstralEngine.Log("Invalid type parameter passed to `SetResizeCallback`", "error", "CAMERA")
+    Resize = function(self, NewSize)
+        for _, v in ipairs(self.__Resizables) do
+            v.ResizeCallback(v, v.__IsPass, NewSize.x, NewSize.y)
         end
     end,
-    Resize = function(self, NewSize) end,
     ScreenPointToRay = function(self, V1, V2)
         local Vector = typeof(V1) == "Vec2" and V1 or vec2(V1, V2)
         Vector = vec2(Vector.x / self.W, Vector.y / self.H)
@@ -97,8 +94,25 @@ local READ_ONLY = {
     Aspect = true,
 }
 
+local SETTER = {
+    FOV = function(self, FieldOfView)
+        rawset(self, FIELDS.RadFOV, math.rad(FieldOfView))
+    end,
+}
+local GETTER = {
+    FOV = function(self)
+        return math.deg(self[FIELDS.RadFOV])
+    end,
+    Resolution = function(self)
+        return vec2(self[FIELDS.W], self[FIELDS.H])
+    end,
+}
+
 local mt = {
     __index = function(self, k)
+        if GETTER[k] then
+            return GETTER[k](self)
+        end
         local Val = FIELDS[k]
         if Val then
             return self[Val]
@@ -106,6 +120,9 @@ local mt = {
         return METHODS[k]
     end,
     __newindex = function(self, k, v)
+        if SETTER[k] then
+            return SETTER[k](self, v)
+        end
         if READ_ONLY[k] then
             AstralEngine.Error("Attempt to write to Read Only value on Camera component", "CAMERA")
         end
@@ -116,7 +133,7 @@ local mt = {
 local BasePriority = 42069
 local BoundCameras = 0
 
-local OIT_CONF = { format = "r16f", samples = 1, usage = { "render", "sample" }, mipmaps = false }
+local OIT_CONF = { format = "rg16f", samples = 1, usage = { "render", "sample" }, mipmaps = false }
 local DEPTH_CONF = { format = "d32f", samples = 1, usage = { "render", "sample" }, mipmaps = false, linear = true }
 
 local function RebuildTexture(V, w, h)
@@ -138,7 +155,11 @@ end
 local function RebuildPasses(CameraRef)
     CameraRef.__REBUILT_TEX = 0
 
-    CameraRef.CameraPass[1] = AstralEngine.Graphics.NewRawPass({ CameraRef.CameraTex[1] })
+    CameraRef.CameraPass[1]:setCanvas({
+        CameraRef.CameraTex[1],
+        depth = CameraRef.CameraPass[1]:getCanvas().depth,
+        samples = 1,
+    })
     CameraRef.SolidPass[1]:setCanvas({
         CameraRef.SolidTex[1],
         depth = CameraRef.DepthTexture[1],
@@ -179,23 +200,30 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     local OITDepth = AstralEngine.Graphics.NewTexture(W, H, OIT_CONF)
     local SolidTex = AstralEngine.Graphics.NewTexture(W, H, TextureConfig)
     local DepthTexture = AstralEngine.Graphics.NewTexture(W, H, DEPTH_CONF)
+    local HistoryTextureA = AstralEngine.Graphics.NewTexture(W, H, TextureConfig)
+    local HistoryTextureB = AstralEngine.Graphics.NewTexture(W, H, TextureConfig)
 
     Data.W = W
     Data.H = H
     Data.Aspect = W / H
+    Data.RadFOV = Input.RadFOV or math.rad(Input.FOV)
 
     OITTex.ResizeCallback = REBUILD_CALLBACK
     OITDepth.ResizeCallback = REBUILD_CALLBACK
     SolidTex.ResizeCallback = REBUILD_CALLBACK
     DepthTexture.ResizeCallback = REBUILD_CALLBACK
     Texture.ResizeCallback = REBUILD_CALLBACK
+    HistoryTextureA.ResizeCallback = REBUILD_CALLBACK
+    HistoryTextureB.ResizeCallback = REBUILD_CALLBACK
 
-    Data.CameraPass = AstralEngine.Graphics.NewPass({ Texture[1] })
+    Data.CameraPass = AstralEngine.Graphics.NewPass({ Texture[1], HistoryTextureA[1], HistoryTextureB[1] })
     Data.CameraTex = Texture
     Data.OITTex = OITTex
     Data.OITDepth = OITDepth
     Data.SolidTex = SolidTex
     Data.DepthTexture = DepthTexture
+    Data.HistoryTexA = HistoryTextureA
+    Data.HistoryTexB = HistoryTextureB
     Data.OITPass =
         AstralEngine.Graphics.NewPass({ OITTex[1], OITDepth[1], depth = { texture = DepthTexture[1] }, samples = 1 })
     Data.SolidPass = AstralEngine.Graphics.NewPass({ SolidTex[1], depth = { texture = DepthTexture[1] }, samples = 1 })
@@ -205,6 +233,15 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.OITPass.ResizeCallback = REBUILD_CALLBACK
     Data.CameraPass.ResizeCallback = REBUILD_CALLBACK
     Data.SolidPass.ResizeCallback = REBUILD_CALLBACK
+
+    Data.__Resizables = setmetatable({
+        OITTex,
+        OITDepth,
+        SolidTex,
+        DepthTexture,
+        Texture,
+        HistoryTexture,
+    }, { __mode = "v" })
 
     Renderer.AddCamera(Entity)
     Renderer.PassStorage.AddPass(false, Data.SolidPass, BasePriority + BoundCameras, true)
@@ -235,11 +272,14 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.DepthTexture.CREF = D
 
     for i, v in pairs(Data) do
-        if not FIELDS[i] then
-            continue
+        if i == "__Resizables" then
+            rawset(D, i, v)
+        else
+            if not FIELDS[i] then
+                continue
+            end
+            rawset(D, FIELDS[i], v)
         end
-        rawset(D, FIELDS[i], v)
-        print("CAM: SET FIELD:", i, FIELDS[i], v)
     end
 
     BoundCameras = BoundCameras + 3

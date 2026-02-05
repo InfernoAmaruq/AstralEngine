@@ -10,6 +10,7 @@ local ProcessorFunc = function(p, _, c)
     end
     p:setColor(SR[3],SR[4],SR[5],SR[6])
     local TRANSFORM = c.Transform
+    --p:setSampler(SR[7] and 'nearest' or 'linear')
     p:draw(SR[1][1] or SR[1], TRANSFORM[1], SR[2], TRANSFORM[2])
 end
 
@@ -26,11 +27,15 @@ local SRMT = {
             return self[2].xy
         elseif k == "Color" then
             return self.__ClrVal
+        elseif k == "UseNearest" then
+            return self[7]
         end
     end,
     __newindex = function(SR, k, v)
         if k == "Texture" then
             rawset(SR, 1, v)
+        elseif k == "UseNearest" then
+            SR[7] = v
         elseif k == "Size" then
             SR[2]:set(v.x,v.y,1e-9)
             if COMP.HasComponent(SR.__Ent,"Collider") then
@@ -81,6 +86,7 @@ SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
     SR.__ClrVal = Color
     SR[2] = RealSize
     SR[1] = Image
+    SR[7] = DATA.UseNearest or false
     SR.__Ent = e
     SR.__RenderTypePtr = RT
     setmetatable(SR, SRMT)

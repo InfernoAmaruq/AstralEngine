@@ -29,22 +29,8 @@ local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
 
 local MAINSHADER = lovr.graphics.newShader(V,F)
 
-local TAASHADER = lovr.graphics.newShader('fill',[[
-    uniform sampler2D Curr;
-    uniform texture2D Hist;
-    layout(location = 1) out vec4 HistBuffer;
-
-    vec4 lovrmain(){
-        vec3 CurC = getPixel(Curr,UV).rgb;
-        vec3 HistC = getPixel(Hist,UV).rgb;
-
-        float Alpha = 0.1;
-        
-        vec4 Color = vec4(mix(HistC,CurC,Alpha),1);
-        HistBuffer = Color;
-        return Color;
-    }
-]])
+print"FRAG"
+print(F)
 
 local OITCOMPOSITE = lovr.graphics.newShader('fill',[[
     uniform texture2D TexSolid;
@@ -54,15 +40,15 @@ local OITCOMPOSITE = lovr.graphics.newShader('fill',[[
     vec4 lovrmain()
     {
         vec3 Solid = getPixel(TexSolid,UV).rgb;
-        vec3 Accum = getPixel(TexTransparent,UV).rgb;
+        vec4 Accum = getPixel(TexTransparent,UV);
 
-        vec4 Reveal = getPixel(TexReveal,UV);
+        float Reveal = getPixel(TexReveal,UV).a;
 
-        float Norm = max(Reveal.g, 1e-5);
-        vec3 TransColor = Accum / Norm;
-        float TransAlpha = 1.0 - exp(-Reveal.r);
+        float Norm = max(Accum.a, 1e-5);
+        vec3 TransColor = Accum.rgb / Norm;
+        float TransAlpha = 1.0 - exp(-Reveal);
 
-        return vec4(Solid * (1.0 - TransAlpha) + TransColor * TransAlpha,1.0);
+        return vec4(mix(Solid,TransColor,TransAlpha),1.0);
     }
 ]])
 
@@ -205,9 +191,8 @@ function Renderer.DrawScene(Frame)
         -- INITIAL PASSES
         PROCESSSTACK(SolidStack,SolidPass)
         TransPass:setDepthWrite(false)
-        TransPass:setDepthTest('gequal')
-        TransPass:setBlendMode(1,'add','premultiplied')
-        TransPass:setBlendMode(2,'add','premultiplied')
+        TransPass:setBlendMode(1,'alpha')
+        TransPass:setBlendMode(2,'add')
         TransPass:send('Transparent', true)
         PROCESSSTACK(TransparentStack,TransPass)
 
@@ -217,26 +202,17 @@ function Renderer.DrawScene(Frame)
         local Transparent = CAMERA[13][1]
         local Reveal = CAMERA[23][1]
 
+        pass:setFaceCull('front')
         pass:setShader(OITCOMPOSITE)
-        pass:setFaceCull()
         pass:setBlendMode("none")
         pass:send("TexSolid",Solid)
         pass:send("TexTransparent",Transparent)
         pass:send("TexReveal",Reveal)
-        pass:setDepthTest()
+        pass:setBlendMode('alpha')
         pass:setDepthWrite(false)
         pass:setSampler'nearest'
 
         pass:fill()
-
-        --[[ TAA : WIP
-        pass:setShader(TAASHADER)
-        pass:send("Curr",CAMERA[12][1])
-        pass:send("Hist",CAMERA[25][1])
-        pass:fill()
-
-        CAMERA[25], CAMERA[26] = CAMERA[26], CAMERA[25]
-        ]]
 
         if not DrawnToScreen and CAMERA[10] then
             Frame:setDepthWrite(false)

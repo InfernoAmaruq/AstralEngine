@@ -3,7 +3,7 @@ return {
         Name = "WorldCam",
         Components = {
             Transform = {},
-            Camera = { FOV = math.rad(90), DrawToScreen = true, NearestSampler = true },
+            Camera = { FOV = 90, DrawToScreen = true, NearestSampler = true, Resolution = vec2(1200, 1200) },
         },
     },
     [1] = {

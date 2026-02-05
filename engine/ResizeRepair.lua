@@ -5,7 +5,7 @@ local FS = lovr.filesystem
 local RefToRebuild = setmetatable({}, { __mode = "v" })
 
 local TOSTRING = function(self)
-    return "Wrapped " .. (self.__IsPass and "Pass" or "Texture") .. ": " .. tostring(self[1])
+    return "Wrapped " .. (self.__IsPass and "Pass" or "Texture") .. ": " .. debug.getaddress(self)
 end
 
 local function CAPTURE(t, ...)

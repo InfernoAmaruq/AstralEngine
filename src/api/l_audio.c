@@ -309,13 +309,18 @@ static const luaL_Reg lovrAudio[] = {
 extern const luaL_Reg lovrSource[];
 
 int luaopen_lovr_audio(lua_State* L) {
-  bool start = true;
+  bool debug = false;
   uint32_t sampleRate = 48000;
+  bool start = true;
 
   luax_pushconf(L);
   if (lua_istable(L, -1)) {
     lua_getfield(L, -1, "audio");
     if (lua_istable(L, -1)) {
+      lua_getfield(L, -1, "debug");
+      debug = lua_toboolean(L, -1);
+      lua_pop(L, 1);
+
       lua_getfield(L, -1, "samplerate");
       sampleRate = lua_isnil(L, -1) ? sampleRate : luax_checku32(L, -1);
       lua_pop(L, 1);
@@ -328,7 +333,7 @@ int luaopen_lovr_audio(lua_State* L) {
   }
   lua_pop(L, 1);
 
-  luax_assert(L, lovrAudioInit(sampleRate));
+  luax_assert(L, lovrAudioInit(debug, sampleRate));
   luax_atexit(L, lovrAudioDestroy);
 
   if (start) {

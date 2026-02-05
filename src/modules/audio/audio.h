@@ -63,7 +63,7 @@ typedef enum {
 
 typedef void AudioDeviceCallback(AudioDevice* device, void* userdata);
 
-bool lovrAudioInit(uint32_t sampleRate);
+bool lovrAudioInit(bool debug, uint32_t sampleRate);
 void lovrAudioDestroy(void);
 void lovrAudioEnumerateDevices(AudioType type, AudioDeviceCallback* callback, void* userdata);
 bool lovrAudioGetDevice(AudioType type, AudioDevice* device);

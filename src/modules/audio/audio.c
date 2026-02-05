@@ -42,6 +42,8 @@ struct Source {
 static atomic_uint ref;
 
 static struct {
+  bool debug;
+  ma_log log;
   ma_mutex lock;
   ma_context context;
   ma_device devices[2];
@@ -182,12 +184,27 @@ static void onCapture(ma_device* device, void* output, const void* input, uint32
 
 static const ma_device_data_proc callbacks[] = { onPlayback, onCapture };
 
+static void onLog(void* userdata, ma_uint32 level, const char* message) {
+  lovrLog(level, "MA", message);
+}
+
 // Entry
 
-bool lovrAudioInit(uint32_t sampleRate) {
+bool lovrAudioInit(bool debug, uint32_t sampleRate) {
   if (!lovrModuleAcquire(&ref)) return true;
 
-  ma_result result = ma_context_init(NULL, 0, NULL, &state.context);
+  state.debug = debug;
+  state.sampleRate = sampleRate;
+
+  ma_context_config config = ma_context_config_init();
+
+  if (debug) {
+    ma_log_init(NULL, &state.log);
+    ma_log_register_callback(&state.log, ma_log_callback_init(onLog, NULL));
+    config.pLog = &state.log;
+  }
+
+  ma_result result = ma_context_init(NULL, 0, &config, &state.context);
   if (result != MA_SUCCESS) {
     lovrModuleReset(&ref);
     return lovrSetError("Failed to initialize miniaudio context: %s", ma_result_description(result));
@@ -214,7 +231,6 @@ bool lovrAudioInit(uint32_t sampleRate) {
   state.absorption[2] = .0182f;
 
   quat_identity(state.orientation);
-  state.sampleRate = sampleRate;
   lovrModuleReady(&ref);
   return true;
 }
@@ -637,19 +653,33 @@ bool lovrSourceSetEffectEnabled(Source* source, Effect effect, bool enabled) {
 
 // Spatializer
 
+#ifdef LOVR_USE_PHONON
+
 #include <phonon.h>
 
 static struct {
   IPLContext context;
 } phonon;
 
+static void onSpatializerLog(IPLLogLevel iplLevel, const char* message) {
+  int level;
+  switch (iplLevel) {
+    case IPL_LOGLEVEL_INFO: level = LOG_INFO;
+    case IPL_LOGLEVEL_WARNING: level = LOG_WARN;
+    case IPL_LOGLEVEL_ERROR: level = LOG_ERROR;
+    case IPL_LOGLEVEL_DEBUG: level = LOG_DEBUG;
+  }
+  lovrLog(level, "SA", message);
+}
+
 bool lovrSpatializerInit(void) {
   IPLContextSettings settings = {
     .version = STEAMAUDIO_VERSION,
+    .logCallback = onSpatializerLog,
     .simdLevel = IPL_SIMDLEVEL_AVX512
   };
 
-  lovrAssert(iplContextCreate(&settings, &phonon.context), "Failed to create spatializer context");
+  lovrAssert(!iplContextCreate(&settings, &phonon.context), "Failed to create SteamAudio context");
 
   return true;
 }
@@ -682,3 +712,39 @@ void lovrSpatializerAdd(Source* source) {
 void lovrSpatializerRemove(Source* source) {
   //
 }
+
+#else
+
+bool lovrSpatializerInit(void) {
+  return true;
+}
+
+void lovrSpatializerDestroy(void) {
+  //
+}
+
+uint32_t lovrSpatializerApply(Source* source, const float* input, float* output, uint32_t frames) {
+  for (uint32_t i = 0; i < frames; i++) {
+    output[2 * i + 0] = input[i];
+    output[2 * i + 1] = input[i];
+  }
+  return frames;
+}
+
+uint32_t lovrSpatializerApplyTail(float* scratch, float* output, uint32_t frames) {
+  return 0;
+}
+
+bool lovrSpatializerSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial material) {
+  return true;
+}
+
+void lovrSpatializerAdd(Source* source) {
+  //
+}
+
+void lovrSpatializerRemove(Source* source) {
+  //
+}
+
+#endif

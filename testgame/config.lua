@@ -11,8 +11,8 @@ return {
         Version = "0",
         Identity = "ASTRL_TEST_GAME",
         Window = {
-            Width = nil,
-            Height = nil,
+            Width = 1000,
+            Height = 1000,
         },
     },
     Filesystem = {

@@ -4,6 +4,8 @@ local NewWorld = lovr.physics.newWorld
 
 local Physics = {}
 
+Physics.Shapes = require("Shapes")
+
 local N = 1
 Physics.Worlds = {}
 Physics.RawWorlds = {}

@@ -5,13 +5,26 @@ Collider.Touched:Connect(function(Col, Contact)
     print("TOUCHED:", Col, Contact)
 end)
 
-BALL.Shape.Color = color.fromRGBA(255, 0, 255, 120)
-
 local World = RES["WORLD"].World
 
-local T = World:Overlap(ENUM.ColliderType.Sphere, vec3(100, 100, 100), vec3(), vec3(), nil, nil, {})
+local T = World:Overlap(ENUM.ColliderShape.Sphere, vec3(100, 100, 100), vec3(), vec3(), nil, nil, {})
+print("OVERLAP:", T[1])
 
 local CAM = RES["CAMERA"]
+
+print("\n\n\n\n\nCAM TEST:")
+
+local Comp = CAM:GetComponent("Camera")
+print(Comp.W, Comp.H)
+print(Comp.FOV)
+print(Comp.Aspect)
+print(Comp.OITTex)
+
+print("\n\n\n\n\n")
+
+AstralEngine.Signals.OnWindowResize:Connect(function(w, h)
+    print(Comp.W, Comp.H, Comp.Aspect, w, h)
+end)
 
 local CamSpeed = 3
 
@@ -36,5 +49,9 @@ end)
 
 local png = AstralEngine.Graphics.NewTexture("../Img/cart.png")
 local NewE = GetService("Entity").New("TEXTURE")
-NewE:AddComponent("Transform", { Position = Vec3(-2, 0, -6) })
-NewE:AddComponent("SpriteRenderer", { Texture = png, Color = color.fromRGBA(255, 0, 0, 255), Size = Vec2(50, 4) })
+NewE:AddComponent("Transform", { Position = Vec3(1, 0, -9.5) })
+NewE:AddComponent("SpriteRenderer", { Texture = png, Color = color.fromRGBA(0, 255, 0, 255), Size = Vec2(2, 2) })
+
+print("RES:", CAM.Camera.Resolution)
+
+GetService("RunService").BindToStep("CAM", 950, function(pass) end)

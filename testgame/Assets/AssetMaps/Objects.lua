@@ -28,11 +28,24 @@ return {
             },
             Shape = {
                 Shape = ENUM.ShapeType.Sphere,
-                Color = color.fromHex("#0000ff99"),
-                Size = Vec3(0.5, 0.5, 0.5),
+                Color = color.fromRGBA(200, 0, 0, 200),
+                Size = Vec3(3, 3, 3),
             },
             Collider = {
-                ColliderType = ENUM.ColliderType.Sphere,
+                Shape = GetService("Physics").Shapes.NewShape(ENUM.ColliderShape.Sphere),
+            },
+        },
+    },
+    [RES["A"]] = {
+        Name = "BALL2",
+        Components = {
+            Transform = {
+                Position = Vec3(-3, 3, -4),
+            },
+            Shape = {
+                Shape = ENUM.ShapeType.Sphere,
+                Color = color.fromRGBA(0, 0, 200, 255 / 2),
+                Size = Vec3(3, 3, 3),
             },
         },
     },
@@ -44,7 +57,7 @@ return {
                 Position = Vec3(-3, 0, -4),
             },
             Shape = {
-                Color = color.fromHex("#AAAA0044"),
+                Color = color.fromRGBA(255, 255, 0, 255),
                 Size = Vec3(5, 0.25, 5),
             },
             Collider = {

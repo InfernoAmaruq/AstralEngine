@@ -3,6 +3,9 @@
 #include "core/maf.h"
 #include "util.h"
 #include "lib/miniaudio/miniaudio.h"
+#ifdef LOVR_USE_PHONON
+#include <phonon.h>
+#endif
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,6 +59,10 @@ static struct {
   float absorption[3];
   ma_data_converter playbackConverter;
   uint32_t sampleRate;
+#ifdef LOVR_USE_PHONON
+  IPLContext spatializer;
+  IPLSimulator simulator;
+#endif
 } state;
 
 static const ma_format miniaudioFormats[] = {
@@ -655,12 +662,6 @@ bool lovrSourceSetEffectEnabled(Source* source, Effect effect, bool enabled) {
 
 #ifdef LOVR_USE_PHONON
 
-#include <phonon.h>
-
-static struct {
-  IPLContext context;
-} phonon;
-
 static void onSpatializerLog(IPLLogLevel iplLevel, const char* message) {
   int level;
   switch (iplLevel) {
@@ -673,19 +674,37 @@ static void onSpatializerLog(IPLLogLevel iplLevel, const char* message) {
 }
 
 bool lovrSpatializerInit(void) {
-  IPLContextSettings settings = {
+  IPLContextSettings contextSettings = {
     .version = STEAMAUDIO_VERSION,
     .logCallback = onSpatializerLog,
     .simdLevel = IPL_SIMDLEVEL_AVX512
   };
 
-  lovrAssert(!iplContextCreate(&settings, &phonon.context), "Failed to create SteamAudio context");
+  lovrAssert(!iplContextCreate(&contextSettings, &state.spatializer), "Failed to create SteamAudio context");
+
+  IPLSimulationSettings simulationSettings = {
+    .flags = IPL_SIMULATIONFLAGS_DIRECT | IPL_SIMULATIONFLAGS_REFLECTIONS,
+    .sceneType = IPL_SCENETYPE_DEFAULT,
+    .reflectionType = IPL_REFLECTIONEFFECTTYPE_CONVOLUTION,
+    .maxNumOcclusionSamples = 16,
+    .maxNumRays = 4096,
+    .numDiffuseSamples = 1024,
+    .maxDuration = 1.f,
+    .maxOrder = 1,
+    .maxNumSources = MAX_SOURCES,
+    .numThreads = 4,
+    .samplingRate = state.sampleRate,
+    .frameSize = BUFFER_SIZE
+  };
+
+  lovrAssert(!iplSimulatorCreate(state.spatializer, &simulationSettings, &state.simulator), "Failed to create SteamAudio simulator");
 
   return true;
 }
 
 void lovrSpatializerDestroy(void) {
-  iplContextRelease(&phonon.context);
+  iplSimulatorRelease(&state.simulator);
+  iplContextRelease(&state.spatializer);
   memset(&phonon, 0, sizeof(phonon));
 }
 

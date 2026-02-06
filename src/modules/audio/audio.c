@@ -21,12 +21,13 @@
 #define FOREACH_SOURCE(s) for (uint64_t m = state.sourceMask; s = m ? state.sources[CTZL(m)] : NULL, m; m ^= (m & -m))
 #define OUTPUT_FORMAT SAMPLE_F32
 #define OUTPUT_CHANNELS 2
+#define BUFFER_SIZE 256
+#define MAX_SOURCES 64
 
 struct Source {
   atomic_uint ref;
   uint32_t index;
   Sound* sound;
-  // Note: Converter is written once in lovrSourceCreate and can never be changed.
   ma_data_converter* converter;
   uint32_t offset;
   float pitch;
@@ -41,17 +42,20 @@ struct Source {
   bool looping;
   bool pitchable;
   bool spatial;
+#ifdef LOVR_USE_PHONON
+  IPLSource handle;
+#endif
 };
 
 struct AudioMesh {
   uint32_t ref;
-#ifdef LOVR_USE_PHONON
   bool enabled;
   AudioMesh* parent;
+  float transform[16];
+#ifdef LOVR_USE_PHONON
   IPLInstancedMesh instancedMesh;
   IPLStaticMesh staticMesh;
   IPLScene scene;
-  float transform[16];
 #endif
 };
 
@@ -115,7 +119,6 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
     if (!source->playing) {
       state.sources[source->index] = NULL;
       state.sourceMask &= ~(1ull << source->index);
-      lovrSpatializerRemove(source);
       source->index = ~0u;
       lovrRelease(source, lovrSourceDestroy);
       continue;
@@ -170,7 +173,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
 
     // Spatialize
     if (source->spatial) {
-      lovrSpatializerApply(source, buf, mix, BUFFER_SIZE);
+      // lovrSpatializerApply(source, buf, mix, BUFFER_SIZE);
       buf = mix;
     }
 
@@ -182,10 +185,10 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
   }
 
   // Tail
-  uint32_t tailCount = lovrSpatializerApplyTail(aux, mix, BUFFER_SIZE);
-  for (uint32_t i = 0; i < tailCount * OUTPUT_CHANNELS; i++) {
-    dst[i] += mix[i];
-  }
+  // uint32_t tailCount = lovrSpatializerApplyTail(aux, mix, BUFFER_SIZE);
+  // for (uint32_t i = 0; i < tailCount * OUTPUT_CHANNELS; i++) {
+    // dst[i] += mix[i];
+  // }
 
   ma_mutex_unlock(&state.lock);
 
@@ -210,6 +213,17 @@ static const ma_device_data_proc callbacks[] = { onPlayback, onCapture };
 
 static void onLog(void* userdata, ma_uint32 level, const char* message) {
   lovrLog(level, "MA", message);
+}
+
+static void onSpatializerLog(IPLLogLevel iplLevel, const char* message) {
+  int level;
+  switch (iplLevel) {
+    case IPL_LOGLEVEL_INFO: level = LOG_INFO;
+    case IPL_LOGLEVEL_WARNING: level = LOG_WARN;
+    case IPL_LOGLEVEL_ERROR: level = LOG_ERROR;
+    case IPL_LOGLEVEL_DEBUG: level = LOG_DEBUG;
+  }
+  lovrLog(level, "SA", message);
 }
 
 // Entry
@@ -242,12 +256,44 @@ bool lovrAudioInit(bool debug, uint32_t sampleRate) {
     return lovrSetError("Failed to create audio mutex: %s", ma_result_description(result));
   }
 
-  if (!lovrSpatializerInit()) {
-    ma_context_uninit(&state.context);
-    ma_mutex_uninit(&state.lock);
-    lovrModuleReset(&ref);
-    return lovrSetError("Must have at least one spatializer");
+#ifdef LOVR_USE_PHONON
+  IPLContextSettings contextSettings = {
+    .version = STEAMAUDIO_VERSION,
+    .logCallback = onSpatializerLog,
+    .simdLevel = IPL_SIMDLEVEL_AVX512
+  };
+
+  if (iplContextCreate(&contextSettings, &state.spatializer)) {
+    return lovrAudioDestroy(), lovrSetError("Failed to create SteamAudio context");
   }
+
+  state.audioSettings.samplingRate = state.sampleRate;
+  state.audioSettings.frameSize = BUFFER_SIZE;
+
+  IPLSimulationSettings simulationSettings = {
+    .flags = IPL_SIMULATIONFLAGS_DIRECT | IPL_SIMULATIONFLAGS_REFLECTIONS,
+    .sceneType = IPL_SCENETYPE_DEFAULT,
+    .reflectionType = IPL_REFLECTIONEFFECTTYPE_CONVOLUTION,
+    .maxNumOcclusionSamples = 16,
+    .maxNumRays = 4096,
+    .numDiffuseSamples = 1024,
+    .maxDuration = 1.f,
+    .maxOrder = 1,
+    .maxNumSources = MAX_SOURCES,
+    .numThreads = 4,
+    .samplingRate = state.audioSettings.samplingRate,
+    .frameSize = state.audioSettings.frameSize
+  };
+
+  if (iplSimulatorCreate(state.spatializer, &simulationSettings, &state.simulator)) {
+    return lovrAudioDestroy(), lovrSetError("Failed to create SteamAudio simulator");
+  }
+
+  IPLSceneSettings sceneSettings = { .type = IPL_SCENETYPE_DEFAULT };
+  if (iplSceneCreate(state.spatializer, &sceneSettings, &state.scene)) {
+    return lovrAudioDestroy(), lovrSetError("Failed to create SteamAudio scene");
+  }
+#endif
 
   // SteamAudio's default frequency-dependent absorption coefficients for air
   state.absorption[0] = .0002f;
@@ -272,7 +318,12 @@ void lovrAudioDestroy(void) {
   lovrRelease(state.sinks[AUDIO_PLAYBACK], lovrSoundDestroy);
   lovrRelease(state.sinks[AUDIO_CAPTURE], lovrSoundDestroy);
   ma_data_converter_uninit(&state.playbackConverter, NULL);
-  lovrSpatializerDestroy();
+#ifdef LOVR_USE_PHONON
+  iplHRTFRelease(&state.hrtf), state.hrtf = NULL;
+  iplSceneRelease(&state.scene), state.scene = NULL;
+  iplSimulatorRelease(&state.simulator), state.simulator = NULL;
+  iplContextRelease(&state.spatializer), state.spatializer = NULL;
+#endif
   memset(&state, 0, sizeof(state));
   lovrModuleReset(&ref);
 }
@@ -454,13 +505,23 @@ void lovrAudioSetAbsorption(float absorption[3]) {
 
 // Source
 
+static bool lovrSourceInit(Source* source) {
+#ifdef LOVR_USE_PHONON
+  IPLSourceSettings settings = { .flags = IPL_SIMULATIONFLAGS_DIRECT | IPL_SIMULATIONFLAGS_REFLECTIONS };
+  if (iplSourceCreate(state.simulator, &settings, &source->handle)) {
+    return lovrSetError("Failed to add source to spatializer");
+  }
+#endif
+
+  return true;
+}
+
 Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial, uint32_t effects) {
   lovrCheck(lovrSoundGetChannelLayout(sound) != CHANNEL_AMBISONIC, "Ambisonic Sources are not currently supported");
 
   Source* source = lovrCalloc(sizeof(Source));
   source->ref = 1;
   source->index = ~0u;
-  source->sound = sound;
   source->pitch = 1.f;
   source->volume = 1.f;
   source->pitchable = pitchable;
@@ -478,17 +539,24 @@ Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial, uint32_t ef
   config.allowDynamicSampleRate = pitchable;
 
   if (pitchable || config.formatIn != config.formatOut || config.channelsIn != config.channelsOut || config.sampleRateIn != config.sampleRateOut) {
-    source->converter = lovrMalloc(sizeof(ma_data_converter));
-    ma_result status = ma_data_converter_init(&config, NULL, source->converter);
+    ma_data_converter* converter = lovrMalloc(sizeof(ma_data_converter));
+    ma_result status = ma_data_converter_init(&config, NULL, converter);
 
     if (status != MA_SUCCESS) {
       lovrSetError("Problem creating Source data converter: %s (%d)", ma_result_description(status), status);
-      lovrFree(source->converter);
-      lovrFree(source);
+      lovrSourceDestroy(source);
       return NULL;
     }
+
+    source->converter = converter;
   }
 
+  if (!lovrSourceInit(source)) {
+    lovrSourceDestroy(source);
+    return false;
+  }
+
+  source->sound = sound;
   lovrRetain(source->sound);
   return source;
 }
@@ -497,7 +565,6 @@ Source* lovrSourceClone(Source* source) {
   Source* clone = lovrCalloc(sizeof(Source));
   clone->ref = 1;
   clone->index = ~0u;
-  clone->sound = source->sound;
   clone->pitch = source->pitch;
   clone->volume = source->volume;
   vec3_init(clone->position, source->position);
@@ -520,23 +587,33 @@ Source* lovrSourceClone(Source* source) {
     config.sampleRateOut = source->converter->sampleRateOut;
     config.allowDynamicSampleRate = clone->pitchable;
 
-    clone->converter = lovrMalloc(sizeof(ma_data_converter));
-    ma_result status = ma_data_converter_init(&config, NULL, clone->converter);
+    ma_data_converter* converter = lovrMalloc(sizeof(ma_data_converter));
+    ma_result status = ma_data_converter_init(&config, NULL, converter);
 
     if (status != MA_SUCCESS) {
       lovrSetError("Problem creating Source data converter: %s (%d)", ma_result_description(status), status);
-      lovrFree(clone->converter);
-      lovrFree(clone);
+      lovrSourceDestroy(clone);
       return NULL;
     }
+
+    clone->converter = converter;
   }
 
+  if (!lovrSourceInit(clone)) {
+    lovrSourceDestroy(clone);
+    return false;
+  }
+
+  clone->sound = source->sound;
   lovrRetain(clone->sound);
   return clone;
 }
 
 void lovrSourceDestroy(void* ref) {
   Source* source = ref;
+#ifdef LOVR_USE_PHONON
+  iplSourceRelease(&source->handle);
+#endif
   lovrRelease(source->sound, lovrSoundDestroy);
   ma_data_converter_uninit(source->converter, NULL);
   lovrFree(source->converter);
@@ -564,7 +641,6 @@ bool lovrSourcePlay(Source* source) {
     state.sources[index] = source;
     source->index = index;
     lovrRetain(source);
-    lovrSpatializerAdd(source);
   }
 
   ma_mutex_unlock(&state.lock);
@@ -709,6 +785,7 @@ AudioMesh* lovrAudioMeshCreate(float* vertices, uint32_t* indices, uint32_t vert
   mesh->enabled = true;
   mat4_identity(mesh->transform);
 
+#ifdef LOVR_USE_PHONON
   // Scene
 
   IPLSceneSettings sceneSettings = {
@@ -780,6 +857,7 @@ AudioMesh* lovrAudioMeshCreate(float* vertices, uint32_t* indices, uint32_t vert
 
   iplInstancedMeshAdd(mesh->instancedMesh, state.scene);
   state.sceneDirty = true;
+#endif
 
   return mesh;
 }
@@ -790,6 +868,7 @@ AudioMesh* lovrAudioMeshClone(AudioMesh* parent) {
   mesh->enabled = true;
   mat4_init(mesh->transform, parent->transform);
 
+#ifdef LOVR_USE_PHONON
   IPLInstancedMeshSettings settings = {
     .subScene = parent->scene
   };
@@ -807,15 +886,23 @@ AudioMesh* lovrAudioMeshClone(AudioMesh* parent) {
 
   mesh->staticMesh = parent->staticMesh;
   mesh->scene = parent->scene;
+#endif
   lovrRetain(parent);
   return mesh;
 }
 
 void lovrAudioMeshDestroy(void* ref) {
   AudioMesh* mesh = ref;
+#ifdef LOVR_USE_PHONON
+  if (mesh->enabled) {
+    iplInstancedMeshRemove(mesh->instancedMesh, state.scene);
+    state.sceneDirty = true;
+  }
   iplInstancedMeshRelease(&mesh->instancedMesh);
   iplSceneRelease(&mesh->scene);
   iplStaticMeshRelease(&mesh->staticMesh);
+#endif
+  lovrRelease(mesh->parent, lovrAudioMeshDestroy);
   lovrFree(mesh);
 }
 
@@ -824,16 +911,17 @@ bool lovrAudioMeshIsEnabled(AudioMesh* mesh) {
 }
 
 void lovrAudioMeshSetEnabled(AudioMesh* mesh, bool enable) {
+#ifdef LOVR_USE_PHONON
   if (enable != mesh->enabled) {
     if (enable) {
       iplInstancedMeshAdd(mesh->instancedMesh, state.scene);
     } else {
       iplInstancedMeshRemove(mesh->instancedMesh, state.scene);
     }
-
-    mesh->enabled = enable;
     state.sceneDirty = true;
   }
+#endif
+  mesh->enabled = enable;
 }
 
 void lovrAudioMeshGetTransform(AudioMesh* mesh, float* transform) {
@@ -841,137 +929,12 @@ void lovrAudioMeshGetTransform(AudioMesh* mesh, float* transform) {
 }
 
 void lovrAudioMeshSetTransform(AudioMesh* mesh, float* transform) {
+#ifdef LOVR_USE_PHONON
   IPLMatrix4x4 iplTransform;
   mat4_transpose(mat4_init(&iplTransform.elements[0][0], mesh->transform));
   iplInstancedMeshUpdateTransform(mesh->instancedMesh, state.scene, iplTransform);
-  mat4_init(mesh->transform, transform);
   state.sceneDirty = true;
-}
-
-// Spatializer
-
-#ifdef LOVR_USE_PHONON
-
-static void onSpatializerLog(IPLLogLevel iplLevel, const char* message) {
-  int level;
-  switch (iplLevel) {
-    case IPL_LOGLEVEL_INFO: level = LOG_INFO;
-    case IPL_LOGLEVEL_WARNING: level = LOG_WARN;
-    case IPL_LOGLEVEL_ERROR: level = LOG_ERROR;
-    case IPL_LOGLEVEL_DEBUG: level = LOG_DEBUG;
-  }
-  lovrLog(level, "SA", message);
-}
-
-bool lovrSpatializerInit(void) {
-  IPLContextSettings contextSettings = {
-    .version = STEAMAUDIO_VERSION,
-    .logCallback = onSpatializerLog,
-    .simdLevel = IPL_SIMDLEVEL_AVX512
-  };
-
-  if (iplContextCreate(&contextSettings, &state.spatializer)) {
-    return lovrSetError("Failed to create SteamAudio context");
-  }
-
-  state.audioSettings.samplingRate = state.sampleRate;
-  state.audioSettings.frameSize = BUFFER_SIZE;
-
-  IPLSimulationSettings simulationSettings = {
-    .flags = IPL_SIMULATIONFLAGS_DIRECT | IPL_SIMULATIONFLAGS_REFLECTIONS,
-    .sceneType = IPL_SCENETYPE_DEFAULT,
-    .reflectionType = IPL_REFLECTIONEFFECTTYPE_CONVOLUTION,
-    .maxNumOcclusionSamples = 16,
-    .maxNumRays = 4096,
-    .numDiffuseSamples = 1024,
-    .maxDuration = 1.f,
-    .maxOrder = 1,
-    .maxNumSources = MAX_SOURCES,
-    .numThreads = 4,
-    .samplingRate = state.audioSettings.samplingRate,
-    .frameSize = state.audioSettings.frameSize
-  };
-
-  if (iplSimulatorCreate(state.spatializer, &simulationSettings, &state.simulator)) {
-    lovrSpatializerDestroy();
-    return lovrSetError("Failed to create SteamAudio simulator");
-  }
-
-  IPLSceneSettings sceneSettings = {
-    .type = IPL_SCENETYPE_DEFAULT
-  };
-
-  if (iplSceneCreate(state.spatializer, &sceneSettings, &state.scene)) {
-    lovrSpatializerDestroy();
-    return lovrSetError("Failed to create SteamAudio scene");
-  }
-
-  return true;
-}
-
-void lovrSpatializerDestroy(void) {
-  iplHRTFRelease(&state.hrtf), state.hrtf = NULL;
-  iplSceneRelease(&state.scene), state.scene = NULL;
-  iplSimulatorRelease(&state.simulator), state.simulator = NULL;
-  iplContextRelease(&state.spatializer), state.spatializer = NULL;
-}
-
-uint32_t lovrSpatializerApply(Source* source, const float* input, float* output, uint32_t frames) {
-  for (uint32_t i = 0; i < frames; i++) {
-    output[2 * i + 0] = input[i];
-    output[2 * i + 1] = input[i];
-  }
-  return frames;
-}
-
-uint32_t lovrSpatializerApplyTail(float* scratch, float* output, uint32_t frames) {
-  return 0;
-}
-
-bool lovrSpatializerSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial material) {
-  return true;
-}
-
-void lovrSpatializerAdd(Source* source) {
-  //
-}
-
-void lovrSpatializerRemove(Source* source) {
-  //
-}
-
-#else
-
-bool lovrSpatializerInit(void) {
-  return true;
-}
-
-void lovrSpatializerDestroy(void) {
-  //
-}
-
-uint32_t lovrSpatializerApply(Source* source, const float* input, float* output, uint32_t frames) {
-  for (uint32_t i = 0; i < frames; i++) {
-    output[2 * i + 0] = input[i];
-    output[2 * i + 1] = input[i];
-  }
-  return frames;
-}
-
-uint32_t lovrSpatializerApplyTail(float* scratch, float* output, uint32_t frames) {
-  return 0;
-}
-
-bool lovrSpatializerSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial material) {
-  return true;
-}
-
-void lovrSpatializerAdd(Source* source) {
-  //
-}
-
-void lovrSpatializerRemove(Source* source) {
-  //
-}
-
 #endif
+
+  mat4_init(mesh->transform, transform);
+}

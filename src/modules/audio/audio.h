@@ -4,9 +4,6 @@
 
 #pragma once
 
-#define BUFFER_SIZE 256
-#define MAX_SOURCES 64
-
 struct Blob;
 struct Sound;
 
@@ -121,13 +118,3 @@ bool lovrAudioMeshIsEnabled(AudioMesh* mesh);
 void lovrAudioMeshSetEnabled(AudioMesh* mesh, bool enable);
 void lovrAudioMeshGetTransform(AudioMesh* mesh, float* transform);
 void lovrAudioMeshSetTransform(AudioMesh* mesh, float* transform);
-
-// Spatializer
-
-bool lovrSpatializerInit(void);
-void lovrSpatializerDestroy(void);
-uint32_t lovrSpatializerApply(Source* source, const float* input, float* output, uint32_t framesIn);
-uint32_t lovrSpatializerApplyTail(float* scratch, float* output, uint32_t frames);
-bool lovrSpatializerSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial material);
-void lovrSpatializerAdd(Source* source);
-void lovrSpatializerRemove(Source* source);

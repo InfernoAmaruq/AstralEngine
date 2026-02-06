@@ -52,6 +52,8 @@ local NewE = GetService("Entity").New("TEXTURE")
 NewE:AddComponent("Transform", { Position = Vec3(1, 0, -9.5) })
 NewE:AddComponent("SpriteRenderer", { Texture = png, Color = color.fromRGBA(0, 255, 0, 255), Size = Vec2(2, 2) })
 
+print("GET RESOLUTION")
 print("RES:", CAM.Camera.Resolution)
+print("BIND")
 
 GetService("RunService").BindToStep("CAM", 950, function(pass) end)

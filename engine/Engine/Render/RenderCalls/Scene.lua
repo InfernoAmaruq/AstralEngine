@@ -39,7 +39,7 @@ local OITCOMPOSITE = lovr.graphics.newShader('fill',[[
     vec3 ResolveRGB(sampler2DMS InputSampler, ivec2 UV){
         vec3 AccumColor = vec3(0.0);
         for (int i = 0; i < Samples; ++i){
-            AccumColor += texelFetch(InputSampler,UV,i).rgb / 4;
+            AccumColor += texelFetch(InputSampler,UV,i).rgb * 0.25;
         }
         return AccumColor;
     }
@@ -47,7 +47,7 @@ local OITCOMPOSITE = lovr.graphics.newShader('fill',[[
     vec2 ResolveRG(sampler2DMS InputSampler, ivec2 UV){
         vec2 AccumColor = vec2(0.0);
         for (int i = 0; i < Samples; ++i){
-            AccumColor += texelFetch(InputSampler,UV,i).rg / 4;
+            AccumColor += texelFetch(InputSampler,UV,i).rg * 0.25;
         }
         return AccumColor;
     }

@@ -29,40 +29,48 @@ local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
 
 local MAINSHADER = lovr.graphics.newShader(V,F)
 
-local TAASHADER = lovr.graphics.newShader('fill',[[
-    uniform sampler2D Curr;
-    uniform texture2D Hist;
-    layout(location = 1) out vec4 HistBuffer;
-
-    vec4 lovrmain(){
-        vec3 CurC = getPixel(Curr,UV).rgb;
-        vec3 HistC = getPixel(Hist,UV).rgb;
-
-        float Alpha = 0.1;
-        
-        vec4 Color = vec4(mix(HistC,CurC,Alpha),1);
-        HistBuffer = Color;
-        return Color;
-    }
-]])
-
 local OITCOMPOSITE = lovr.graphics.newShader('fill',[[
-    uniform texture2D TexSolid;
-    uniform texture2D TexTransparent;
-    uniform texture2D TexReveal;
+    uniform sampler2DMS TexSolid;
+    uniform sampler2DMS TexTransparent;
+    uniform sampler2DMS TexReveal;
+
+    const int Samples = 4;
+
+    vec3 ResolveRGB(sampler2DMS InputSampler, ivec2 UV){
+        vec3 AccumColor = vec3(0.0);
+        for (int i = 0; i < Samples; ++i){
+            AccumColor += texelFetch(InputSampler,UV,i).rgb / 4;
+        }
+        return AccumColor;
+    }
+
+    vec2 ResolveRG(sampler2DMS InputSampler, ivec2 UV){
+        vec2 AccumColor = vec2(0.0);
+        for (int i = 0; i < Samples; ++i){
+            AccumColor += texelFetch(InputSampler,UV,i).rg / 4;
+        }
+        return AccumColor;
+    }
 
     vec4 lovrmain()
     {
-        vec3 Solid = getPixel(TexSolid,UV).rgb;
-        vec3 Accum = getPixel(TexTransparent,UV).rgb;
+        //vec3 Solid = getPixel(TexSolid,UV).rgb;
+        //vec3 Accum = getPixel(TexTransparent,UV).rgb;
+        //vec4 Reveal = getPixel(TexReveal,UV);
 
-        vec4 Reveal = getPixel(TexReveal,UV);
+        ivec2 iUV = ivec2(UV.xy * Resolution);
+
+        vec3 Solid = ResolveRGB(TexSolid,iUV);
+        vec3 Accum = ResolveRGB(TexTransparent,iUV);
+        vec2 Reveal = ResolveRG(TexReveal,iUV);
 
         float Norm = max(Reveal.g, 1e-5);
         vec3 TransColor = Accum / Norm;
         float TransAlpha = 1.0 - exp(-Reveal.r);
 
         return vec4(Solid * (1.0 - TransAlpha) + TransColor * TransAlpha,1.0);
+
+        //return vec4(vec3(UV.x/1.0),1.0);
     }
 ]])
 
@@ -228,15 +236,6 @@ function Renderer.DrawScene(Frame)
         pass:setSampler'nearest'
 
         pass:fill()
-
-        --[[ TAA : WIP
-        pass:setShader(TAASHADER)
-        pass:send("Curr",CAMERA[12][1])
-        pass:send("Hist",CAMERA[25][1])
-        pass:fill()
-
-        CAMERA[25], CAMERA[26] = CAMERA[26], CAMERA[25]
-        ]]
 
         if not DrawnToScreen and CAMERA[10] then
             Frame:setDepthWrite(false)

@@ -11,6 +11,23 @@ local PassTable = {}
 -- PASS STORAGE
 @execute<UNSAFE>{if lovr.headset then return "local CONSTOFFSET = 2" else return "local CONSTOFFSET = 1" end}
 
+-- Allocate an AO texture
+local SSAONoiseSize = 4
+local SSAOImage = lovr.data.newImage(SSAONoiseSize,SSAONoiseSize)
+
+for x = 1, SSAONoiseSize do
+    for y = 1, SSAONoiseSize do
+        local Angle = math.random() * math.pi * 2
+        local nx = math.cos(Angle) * 0.5 + 0.5
+        local ny = math.sin(Angle) * 0.5 + 0.5
+
+        SSAOImage:setPixel(x-1,y-1,nx,ny,0,1)
+    end
+end
+
+local AOTex = AstralEngine.Graphics.NewRawTexture(SSAOImage,{usage = {'sample'}, mipmaps = false})
+Renderer.Misc = {SSAOTexture = AOTex}
+
 Renderer.PassStorage = {
     __CORE = {},
     PassTable = PassTable,
@@ -42,16 +59,35 @@ function Renderer.PassStorage.RebuildPassTable()
         PassTable[i] = nil
     end
 
+    local Keys = {}
+
     local Top = 0
-    for i,v in pairs(Renderer.PassStorage.PreTable) do
+
+    for id in pairs(Renderer.PassStorage.PreTable) do
+        Keys[#Keys+1] = id
+    end
+
+    table.sort(Keys)
+
+    for _,Id in ipairs(Keys) do
         Top = Top + 1
+        local v = Renderer.PassStorage.PreTable[Id]
         PassTable[Top] = v[1] or v
     end
+
     Top = Top + CONSTOFFSET
-    for i,v in pairs(Renderer.PassStorage.PostTable) do
-        Top = Top + 1
-        PassTable[Top + i] = v[1] or v
+    Keys = {}
+
+    for id in pairs(Renderer.PassStorage.PostTable) do
+        Keys[#Keys+1] = id
     end
+    table.sort(Keys)
+    for _,Id in ipairs(Keys) do
+        Top = Top + 1
+        local v = Renderer.PassStorage.PreTable[Id]
+        PassTable[Top] = v[1] or v
+    end
+
 end
 
 function Renderer.GetPassTable() return PassTable end

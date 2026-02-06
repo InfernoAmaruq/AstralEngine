@@ -74,7 +74,13 @@ local function __INDEX(T, k)
     end
     local KEY = FIELDS[k]
     if KEY then
-        return T[KEY]
+        if KEY == 1 or KEY == 4 then
+            return vec3(T[KEY])
+        elseif KEY == 2 then
+            return quat(T[KEY])
+        elseif KEY == 3 then
+            return mat4(T[KEY])
+        end
     else
         return BaseMethods[k]
     end

@@ -70,7 +70,7 @@ local OITCOMPOSITE = lovr.graphics.newShader('fill',[[
 
         return vec4(Solid * (1.0 - TransAlpha) + TransColor * TransAlpha,1.0);
 
-        //return vec4(vec3(UV.x/1.0),1.0);
+        //return vec4(vec3(TransAlpha),1);
     }
 ]])
 
@@ -205,15 +205,16 @@ function Renderer.DrawScene(Frame)
         local MATRIX = TransStorage[e][3]
         local CULL = CAMERA[15] and 'back'
 
-        SETPASSPARAMS(pass)
+        pass:reset()
         SETPASSPARAMS(SolidPass)
         SETPASSPARAMS(TransPass)
+
         SolidPass:send('Transparent',false)
 
         -- INITIAL PASSES
         PROCESSSTACK(SolidStack,SolidPass)
         TransPass:setDepthWrite(false)
-        TransPass:setDepthTest('gequal')
+        TransPass:setDepthTest('>=')
         TransPass:setBlendMode(1,'add','premultiplied')
         TransPass:setBlendMode(2,'add','premultiplied')
         TransPass:send('Transparent', true)

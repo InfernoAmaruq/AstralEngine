@@ -38,8 +38,9 @@ local SRMT = {
             SR[7] = v
         elseif k == "Size" then
             SR[2]:set(v.x,v.y,1e-9)
-            if COMP.HasComponent(SR.__Ent,"Collider") then
-                -- SET SIZE
+            local ColComp = COMP.HasComponent(SR.__Ent,"Collider")
+            if ColComp then
+                ColComp:OnDrawComponentResize(vec3(SR[2]))
             end
         elseif k == "Color" then
             assert(color.validate(v), v.." IS NOT A VALID COLOR")

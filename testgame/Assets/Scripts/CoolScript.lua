@@ -49,7 +49,7 @@ end)
 
 local png = AstralEngine.Graphics.NewTexture("../Img/cart.png")
 local NewE = GetService("Entity").New("TEXTURE")
-NewE:AddComponent("Transform", { Position = Vec3(1, 0, -9.5) })
+NewE:AddComponent("Transform", { Position = Vec3(1, 0, -9.48) })
 NewE:AddComponent("SpriteRenderer", { Texture = png, Color = color.fromRGBA(0, 255, 0, 255), Size = Vec2(2, 2) })
 
 print("GET RESOLUTION")

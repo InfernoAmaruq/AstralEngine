@@ -13,7 +13,7 @@ vec4 astral_main(){
         if (a > 0.95) discard;
         
         float z = clamp(gl_FragCoord.z,0.0,1.0);
-        float DepthWeight = min(pow(z,2.0),0.8);
+        float DepthWeight = min(pow(z,1.5),0.8);
 
         float Weight = a * (0.2 + 1.5 * DepthWeight);
 

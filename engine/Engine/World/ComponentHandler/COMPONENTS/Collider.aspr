@@ -119,7 +119,7 @@ local SHAREDT = {
         if self.OnResize then
             self:OnResize(v)
         end
-        if self.InheritanceMethod & INHM.Root then
+        if self.InheritanceMethod.RawValue & INHM.Root.RawValue ~= 0 then
             self.ShapeList[1]:SetSize(v)
         end
     end

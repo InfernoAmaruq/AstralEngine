@@ -71,22 +71,26 @@ end
 @macro<L,!USEBRACK>:WRITECOLOR(&C) = Comp[5], Comp[6], Comp[7], Comp[8] = color.unpack(&C);
 
 local MT = {
-    __index = function(_,k)
-        return _.__PROXY[k]
+    __index = function(self,k)
+        if k == "Size" then
+            return vec3(self[9])
+        end
+        return self.__PROXY[k]
     end,
     __pairs = function() return next, Proxy, nil end,
-    __newindex = function(_, k, v)
-        local Comp = _
-        local Proxy = _.__PROXY
-        local RT = _.__RenderTypePtr
+    __newindex = function(Comp, k, v)
+        local Proxy = Comp.__PROXY
+        local RT = Comp.__RenderTypePtr
         if k == "Shape" then
             assert(typeof(v) == "__ENUM_ShapeType",
                 "Attempt to set 'Shape' field of component " .. tostring(Comp) .. ": " .. debug.getaddress(Comp) .. " to non-enum")
             Proxy.Shape = v
             RT.__RenderType = v.RawValue
         elseif k == "Size" then
-            if Component.HasComponent(Comp.__Ent,"Collider") then
-                -- GET SIZE
+            local ColComp = Component.HasComponent(Comp.__Ent,"Collider")
+            Comp[9]:set(v)
+            if ColComp then
+                ColComp:OnDrawComponentResize(v)
             end
         elseif k == "Color" then
             assert(color.validate(v), v .. " IS NOT A VALID COLOR")
@@ -118,7 +122,6 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
     Proxy.Shape = ShapeEnum
 
     Proxy.Color = Color
-    Proxy.Size = Size
 
     local Alpha = select(4,color.unpack(Color))
 

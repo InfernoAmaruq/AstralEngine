@@ -1,10 +1,13 @@
 local Camera = {}
 
+-- nts: add MSAA
+
 local Renderer = GetService("Renderer")
 local Component = GetService("Component")
 
+local MSAASolid = { samples = 4, usage = { "render", "sample" }, mipmaps = false }
 local TextureConfig = { samples = 1, usage = { "render", "sample" }, mipmaps = false }
-local TexConf2 = { samples = 1, usage = { "render", "sample" }, mipmaps = false, format = "rgba16f" }
+local TexConf2 = { samples = 4, usage = { "render", "sample" }, mipmaps = false, format = "rgba16f" }
 
 local TEXCTR = 5 -- number of textures used in the camera
 
@@ -148,7 +151,7 @@ Camera.Metadata.__create = function(Data, Entity)
     local Texture = AstralEngine.Graphics.NewTexture(W, H, TextureConfig)
     local OITTex = AstralEngine.Graphics.NewTexture(W, H, TexConf2)
     local OITDepth = AstralEngine.Graphics.NewTexture(W, H, OIT_CONF)
-    local SolidTex = AstralEngine.Graphics.NewTexture(W, H, TextureConfig)
+    local SolidTex = AstralEngine.Graphics.NewTexture(W, H, MSAASolid)
     local DepthTexture = AstralEngine.Graphics.NewTexture(W, H, DEPTH_CONF)
 
     Texture.ResizeCallback = REBUILD_CALLBACK
@@ -164,8 +167,8 @@ Camera.Metadata.__create = function(Data, Entity)
     Data.SolidTex = SolidTex
     Data.DepthTexture = DepthTexture
     Data.OITPass =
-        AstralEngine.Graphics.NewPass({ OITTex[1], OITDepth[1], depth = { texture = DepthTexture[1] }, samples = 1 })
-    Data.SolidPass = AstralEngine.Graphics.NewPass({ SolidTex[1], depth = { texture = DepthTexture[1] }, samples = 1 })
+        AstralEngine.Graphics.NewPass({ OITTex[1], OITDepth[1], depth = { texture = DepthTexture[1] }, samples = 4 })
+    Data.SolidPass = AstralEngine.Graphics.NewPass({ SolidTex[1], depth = { texture = DepthTexture[1] }, samples = 4 })
 
     Data.OITPass:setClear({ { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, depth = false })
 

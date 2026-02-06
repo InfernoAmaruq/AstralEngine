@@ -70,7 +70,7 @@ function Physics.NewWorld(Parameters)
     local W = NewWorld{
         tags = Tags,
         staticTags = StaticTags,
-        maxColliders = Parameters.MaxColliders,
+        maxColliders = Parameters.MaxColliders or DefaultParameters.MaxColliders,
         threadSafe = Parameters.ThreadSafe or DefaultParameters.ThreadSafe,
         allowSleep = Parameters.AllowSleep,
         stabilization = Parameters.Stabilization or DefaultParameters.Stabilization,

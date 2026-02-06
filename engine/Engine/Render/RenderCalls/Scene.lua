@@ -30,22 +30,47 @@ local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
 local MAINSHADER = lovr.graphics.newShader(V,F)
 
 local OITCOMPOSITE = lovr.graphics.newShader('fill',[[
-    uniform texture2D TexSolid;
-    uniform texture2D TexTransparent;
-    uniform texture2D TexReveal;
+    uniform sampler2DMS TexSolid;
+    uniform sampler2DMS TexTransparent;
+    uniform sampler2DMS TexReveal;
+
+    const int Samples = 4;
+
+    vec3 ResolveRGB(sampler2DMS InputSampler, ivec2 UV){
+        vec3 AccumColor = vec3(0.0);
+        for (int i = 0; i < Samples; ++i){
+            AccumColor += texelFetch(InputSampler,UV,i).rgb / 4;
+        }
+        return AccumColor;
+    }
+
+    vec2 ResolveRG(sampler2DMS InputSampler, ivec2 UV){
+        vec2 AccumColor = vec2(0.0);
+        for (int i = 0; i < Samples; ++i){
+            AccumColor += texelFetch(InputSampler,UV,i).rg / 4;
+        }
+        return AccumColor;
+    }
 
     vec4 lovrmain()
     {
-        vec3 Solid = getPixel(TexSolid,UV).rgb;
-        vec4 Accum = getPixel(TexTransparent,UV);
+        //vec3 Solid = getPixel(TexSolid,UV).rgb;
+        //vec3 Accum = getPixel(TexTransparent,UV).rgb;
+        //vec4 Reveal = getPixel(TexReveal,UV);
 
-        float Reveal = getPixel(TexReveal,UV).r;
+        ivec2 iUV = ivec2(UV.xy * Resolution);
 
-        float Norm = max(Accum.a, 1e-5);
-        vec3 TransColor = Accum.rgb / Norm;
-        float TransAlpha = 1.0 - exp(-2.0 * Reveal);
+        vec3 Solid = ResolveRGB(TexSolid,iUV);
+        vec3 Accum = ResolveRGB(TexTransparent,iUV);
+        vec2 Reveal = ResolveRG(TexReveal,iUV);
 
-        return vec4(mix(Solid,TransColor,TransAlpha),1.0);
+        float Norm = max(Reveal.g, 1e-5);
+        vec3 TransColor = Accum / Norm;
+        float TransAlpha = 1.0 - exp(-Reveal.r);
+
+        return vec4(Solid * (1.0 - TransAlpha) + TransColor * TransAlpha,1.0);
+
+        //return vec4(vec3(UV.x/1.0),1.0);
     }
 ]])
 
@@ -59,7 +84,13 @@ function Renderer.AddCamera(Entity)
 end
 
 function Renderer.RemoveCamera(Entity)
-    local Idx = table.find(Cams, Entity)
+    local Idx
+    for _,v in ipairs(Cams) do
+        if v == Entity then
+            Idx = v
+            break
+        end
+    end
     if not Idx then return end
     local Last = Cams[#Cams]
     Cams[Idx] = Last
@@ -75,14 +106,23 @@ function Renderer.AddToStack(Solid,Entity) -- number
     Stack[#Stack + 1] = Entity
 end
 
-function Renderer.RemoveFromStack(Entity) -- number
-    for i = 1, 2 do
-        local Stack = i == 1 and SolidStack or TransparentStack
-        local Idx = table.find(Stack, Entity)
-        if not Idx then continue end
-        local Last = Stack[#Stack]
-        Stack[Idx] = Last
+function Renderer.RemoveFromStack(Entity, Bool) -- number
+    if Bool ~= nil then
+        local Stack = Bool and SolidStack or TransparentStack
+        local Idx = table.find(Stack,Entity)
+        if not Idx then return end
+        local Top = Stack[#Stack]
+        Stack[Idx] = Top
         Stack[#Stack] = nil
+    else
+        for i = 1, 2 do
+            local Stack = i == 1 and SolidStack or TransparentStack
+            local Idx = table.find(Stack, Entity)
+            if not Idx then continue end
+            local Last = Stack[#Stack]
+            Stack[Idx] = Last
+            Stack[#Stack] = nil
+        end
     end
 end
 
@@ -92,7 +132,7 @@ local TYPETOPROCESS = {}
 
 function Renderer.AppendRenderTTP(Enum, Func)
     assert(typeof(Enum) == "__ENUM_RenderType", "Enum passed not a render type enum")
-    local Val = Enum.Value
+    local Val = Enum.RawValue
 
     TYPETOPROCESS[Val] = Func
 end
@@ -173,8 +213,9 @@ function Renderer.DrawScene(Frame)
         -- INITIAL PASSES
         PROCESSSTACK(SolidStack,SolidPass)
         TransPass:setDepthWrite(false)
-        TransPass:setBlendMode(1,'alpha')
-        TransPass:setBlendMode(2,'add')
+        TransPass:setDepthTest('gequal')
+        TransPass:setBlendMode(1,'add','premultiplied')
+        TransPass:setBlendMode(2,'add','premultiplied')
         TransPass:send('Transparent', true)
         PROCESSSTACK(TransparentStack,TransPass)
 
@@ -184,22 +225,23 @@ function Renderer.DrawScene(Frame)
         local Transparent = CAMERA[13][1]
         local Reveal = CAMERA[23][1]
 
-        pass:setFaceCull('front')
         pass:setShader(OITCOMPOSITE)
+        pass:setFaceCull()
         pass:setBlendMode("none")
         pass:send("TexSolid",Solid)
         pass:send("TexTransparent",Transparent)
         pass:send("TexReveal",Reveal)
-        pass:setBlendMode('alpha')
+        pass:setDepthTest()
         pass:setDepthWrite(false)
+        pass:setSampler'nearest'
 
         pass:fill()
 
         if not DrawnToScreen and CAMERA[10] then
+            Frame:setDepthWrite(false)
             Frame:setSampler(CAMERA[16] and 'nearest' or 'linear')
             Frame:fill(CAMERA[12][1])
             DrawnToScreen = true
-            Frame:setSampler()
         end
     end
 end

@@ -71,11 +71,6 @@ function lovr.load()
     Renderer.LateCall()
 end
 
-function lovr.update(dt)
-    ROOT.SCHEDULERS.MAIN:Update()
-    RunService.__TICK(0,500,dt)
-end
-
 lovr.textinput = nil
 
 local QuitSig = SIGNAL.new(SIGNAL.Type.RTC)
@@ -211,36 +206,40 @@ function lovr.run()
         ]===]
     }
 
+    @execute<UNSAFE>{
+        if lovr.headset then
+            return 'local H_UPD = lovr.headset.submit; @macro<L>{CALL_HEADSET() = H_UPD()}
+        end
+        return '@macro<L>{CALL_HEADSET() = -- NO HEADSET}
+    }
+
     @macro<L,!USEBRACK>{M_CPUTick(&DT) = 
         @ifdef<Physics.Interpolate & Physics.InterpolAtCPU>{
             PHYSICS_INTERPOLATE()
         }
         CURRENT_CPUTICK++;
+        @execute<UNSAFE>{
+            if lovr.headset then
+                return "if lovr.headset.isActive() then XRDT = lovr.headset.update() end"
+            end
+        }
+        ROOT.SCHEDULERS.MAIN:Update()
+        RunService.__TICK(0,500,&DT)
         Drain()
-        lovr.update(CpuTickrate)
     }
 
     local Graph = lovr.graphics
     local Head = lovr.headset
-    local Mirror = lovr.mirror
 
     local HGetPass = Head and Head.getPass
     local WGetPass = Graph and Graph.getWindowPass
     local Present = Graph and Graph.present
     local Submit = Graph and Graph.submit
+    local SubmitHead = Head and Head.submit
 
-    local GottenPass = nil
-
-    @ifdef<Extra.PinSystemPasses>{
-    -- PIN HEADSET PASS AND WINDOW PASS IN MEMORY
-        if WGetPass then
-            GottenPass = WGetPass()
-        end
-        if HGetPass then
-            GottenPass = HGetPass()
-        end
-        -- prevents lua GC-ing it and LOVR having to reallocate it each time
-        -- SHOULD be resize-safe, if not, well uh.. prolly this
+    @ifdef<Extra.PinPass>{
+        local REG = debug.getregistry()
+        REG.__PINNED_PASS = WGetPass()
     }
 
     local PassTable = Renderer.PassStorage.PassTable
@@ -266,7 +265,7 @@ function lovr.run()
 
             end
             if HASHEADSET then
-                RETURNFIELD = RETURNFIELD.."lovr.headset.submit()"
+                RETURNFIELD = RETURNFIELD.."SubmitHead()"
             end
             @ifdef<Physics.Interpolate & Physics.InterpolAtRender>{
                 RETURNFIELD = [[
@@ -275,20 +274,6 @@ function lovr.run()
             }
             return RETURNFIELD
         }
-    }
-
-    @execute<UNSAFE>{
-        local HASHEAD = not not lovr.headset
-        local RV = "local Wrap = function(...) return lovr.draw and lovr.draw(...) end \n local RS = GetService'RunService'\n"
-        local v = HASHEAD and "Mirror" or "Wrap"
-        if HASHEAD then
-            RV = RV..[[
-            RS.BindToStep("_CORE_RENDER_HEADSET",749,Wrap)
-            ]]
-        end
-        RV = RV..[[
-            RS.BindToStep("_CORE_RENDER",750,]]..v..")"
-        return RV
     }
 
     local LastTime = lovr.timer.getTime()
@@ -322,6 +307,10 @@ function lovr.run()
         local DT = TIME - LastTime
         LastTime = TIME
 
+        @execute<UNSAFE>{
+            if lovr.headset then return "local XRDT = DT" end
+        }
+
         TICK = TICK + DT
         COUNTER = COUNTER + 1
         if TICK > 1 then
@@ -338,10 +327,10 @@ function lovr.run()
         }
 
         -- CPU TICK
-        GETTICK(DT,TIME,CPUTime,CpuTickrate,M_CPUTick,CpuTickrate)
+        GETTICK(@execute<UNSAFE>{return lovr.headset and "XRDT" or "DT"},TIME,CPUTime,CpuTickrate,M_CPUTick,CpuTickrate)
 
         -- GPU TICK
-        GETTICK(DT,TIME,RenderTime,RenderTickrate,M_GPUTick,nil)
+        GETTICK(@execute<UNSAFE>{return lovr.headset and "XRDT" or "DT"},TIME,RenderTime,RenderTickrate,M_GPUTick,nil)
 
         @ifdef<Physics.BindMainWorld>{
         -- PHYS TICK

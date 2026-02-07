@@ -158,7 +158,9 @@ function lovr.conf(t)
     -- set lovr config from AstralConfig
     t.graphics.vsync = AstralEngine._CONFIG.Game.Window.Vsync
 
-    t.modules.headset = AstralEngine._CONFIG.Astral.Modules.Headset or false
+    t.modules.headset = true --AstralEngine._CONFIG.Astral.Modules.Headset or false
+
+    t.graphics.antialias = AstralEngine._CONFIG.Game.Window.AntiAliasing
 
     t.window = nil
 end

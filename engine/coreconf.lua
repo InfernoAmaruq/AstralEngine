@@ -1,5 +1,6 @@
 return {
     Define = {
+        -- table of compile-time defined values
         Sched = {
             "UseLua", -- "UseLua" | "UseAuto" | "UseNative"
             -- UseNative - C code, UseLua - Lua code, UseAuto - based on size of list
@@ -19,7 +20,7 @@ return {
             "InterpolAtRender", -- "InterpolAtCPU" | "InterpolAtRender". Interpolating at the Render Step or CPU step. Both CAN be used but it carries increased costs
         },
         Extra = {
-            "PinSystemPasses", -- whether or not to pin system (headset and window) passes so they cannot be GC-d by the lua runtime
+            "PinPass",
         },
         Runtime = {
             --"Sleep" -- sleep 0s after each runtime step
@@ -49,6 +50,8 @@ return {
     Game = {
         Identity = "Astral_Default",
         Window = {
+            AntiAliasing = false, -- windows AA options
+            -- NOT renderer AA, just output
             Vsync = false,
             Fullscreen = false,
             Width = 1700, -- or 0 for borderless fullscreen

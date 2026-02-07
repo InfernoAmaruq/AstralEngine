@@ -161,7 +161,7 @@ end
 }
 
 function Renderer.DrawScene(Frame)
-    if not Frame then print("RESIZING") return end
+    if not Frame then return end
     local Cams = Cams
     local TransparentStack = TransparentStack
     local SolidStack = SolidStack
@@ -180,8 +180,6 @@ function Renderer.DrawScene(Frame)
 
     local HalfH = H / 2
     local HalfW = W / 2
-
-    local DrawnToScreen = false
 
     for cind = 1, #Cams do
         local e = Cams[cind]
@@ -237,15 +235,12 @@ function Renderer.DrawScene(Frame)
         pass:setSampler'nearest'
 
         pass:fill()
-
-        if not DrawnToScreen and CAMERA[10] then
-            Frame:setDepthWrite(false)
-            Frame:setSampler(CAMERA[16] and 'nearest' or 'linear')
-            Frame:fill(CAMERA[12][1])
-            DrawnToScreen = true
-        end
     end
 end
 
 Renderer.Late[#Renderer.Late+1] = function()
+    local RS = GetService("RunService")
+    local Flag = RS.Flags.Raw | RS.Flags.Contextless
+
+    RS.BindToStep("_REND_SCENE",ENUM.StepPriority.RenderScene.RawValue,Renderer.DrawScene,Flag)
 end

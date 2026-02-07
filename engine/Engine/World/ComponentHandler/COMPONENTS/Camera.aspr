@@ -101,6 +101,13 @@ local SETTER = {
     FOV = function(self, FieldOfView)
         rawset(self, FIELDS.RadFOV, math.rad(FieldOfView))
     end,
+    DrawToScreen = function(self, Val)
+        if Renderer.SetPrimaryCamera then
+            Renderer.SetPrimaryCamera(Val and self or nil)
+        else
+            AstralEngine.Error("CANNOT SET PRIMARY CAMERA, FUNCTION MISSING", "CAMERA", 2)
+        end
+    end,
 }
 local GETTER = {
     FOV = function(self)
@@ -271,6 +278,8 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     for i, v in pairs(Data) do
         if i == "__Resizables" then
             rawset(D, i, v)
+        elseif i == "DrawToScreen" then
+            SETTER.DrawToScreen(D, v)
         else
             if not FIELDS[i] then
                 continue

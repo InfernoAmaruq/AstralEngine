@@ -99,6 +99,16 @@ Renderer.Assets.Meshes = {}
 Renderer.Assets.Textures = {}
 Renderer.Assets.Shaders = {}
 
+-- LATE INIT
+
+Renderer.Late = {}
+function Renderer.LateCall()
+    for i,v in pairs(Renderer.Late) do
+        v()
+    end
+    Renderer.Late = nil
+end
+
 -- RENDERING DATA
 
 local Component = GetService("Component", "Component")

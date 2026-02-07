@@ -67,6 +67,8 @@ function lovr.load()
     BRIDGE.LoadRandom()
     BRIDGE.LoadWindow()
     BRIDGE.Alias()
+
+    Renderer.LateCall()
 end
 
 function lovr.update(dt)
@@ -87,6 +89,9 @@ function lovr.quit(...)
 
     return true
 end
+
+lovr.mirror = nil
+lovr.draw = nil
 
 function lovr.run()
     if lovr.load then lovr.load() end
@@ -224,14 +229,15 @@ function lovr.run()
     local Present = Graph and Graph.present
     local Submit = Graph and Graph.submit
 
+    local GottenPass = nil
+
     @ifdef<Extra.PinSystemPasses>{
     -- PIN HEADSET PASS AND WINDOW PASS IN MEMORY
-        local REG = debug.getregistry()
         if WGetPass then
-            REG.__PINWINDOWPASS = WGetPass()
+            GottenPass = WGetPass()
         end
         if HGetPass then
-            REG.__PINHEADPASS = HGetPass()
+            GottenPass = HGetPass()
         end
         -- prevents lua GC-ing it and LOVR having to reallocate it each time
         -- SHOULD be resize-safe, if not, well uh.. prolly this

@@ -24,47 +24,46 @@ static int l_CAS_Call(lua_State* L){
 	int Len = (int) lua_objlen(L,-1);
 
 	for (int i = Len; i >= 1; i--){
-
 		lua_rawgeti(L,-1,i);
+
         int IsFunc = lua_isfunction(L,-1);
+        int IsThr = lua_isthread(L,-1);
 
-        int s;
-        lua_State* co;
-        
+        int Yielded, Err = 0;
+
         if (IsFunc){
-            co = lua_newthread(L);
-            lua_pushvalue(L,-2);
+            lua_pushvalue(L,-1);
             lua_pushvalue(L,2);
-            lua_xmove(L,co,2);
-            s = lua_resume(co,1);
-        } else {
-            co = lua_tothread(L,-1);
-            lua_pushvalue(L,2);
-            lua_xmove(L,co,2);
-            s = lua_resume(co,1);
-        }
+            int Base = lua_gettop(L);
 
-        if (s != 0 && s != LUA_YIELD)
-        {
-            fprintf(stderr,"Coroutine error: %s\n",lua_tostring(co,-1));
-        }
-        else
-        {
-            int NRes = lua_gettop(co);
-            int IsBool = lua_isboolean(co,-1);
-            int IsTrue = lua_toboolean(co,-1);
-
-            if (IsBool && IsTrue)
-            {
-                lua_pushboolean(L,1);
-                return 1;
+            if (lua_pcall(L,1,1,0) != 0){
+                fprintf(stderr, "Function error: %s\n", lua_tostring(L,-1));
+                lua_pop(L,1);
+                Err = 1;
             }
+
+            if (!Err){
+                int Consumed = 0;
+
+                if (lua_isboolean(L,-1)){
+                    Consumed = lua_toboolean(L,-1);
+                }
+
+                lua_pop(L,1);
+
+                if (Consumed){
+                    lua_pushboolean(L,1);
+                    return 1;
+                }
+            }
+        } else {
+            fprintf(stderr, "INVALID DATATYPE: %s\n",luaL_typename(L,-1));
         }
 
-		lua_pop(L,2);
+		lua_pop(L,1);
 	}
 
-	lua_pop(L,3);
+	lua_pop(L,2);
 
 	return 0;
 }

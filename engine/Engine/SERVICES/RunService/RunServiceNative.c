@@ -39,7 +39,7 @@ static int l_RunService_Tick(lua_State* L){
                 lua_State* Co;
 
                 if (IsFunc){
-                    Co = lua_newthread(L);
+                    /*Co = lua_newthread(L);
                     lua_pushvalue(L,-2);
                     lua_xmove(L,Co,1);
 
@@ -50,9 +50,17 @@ static int l_RunService_Tick(lua_State* L){
                         const char* Err = lua_tostring(Co,-1);
                         fprintf(stderr,"[RunService] Coroutine error: %s\n",Err ? Err : "(nil)");
                         lua_pop(Co,1);
+                    }*/
+
+                    lua_pushvalue(L,-1);
+                    if (HasPass) lua_pushvalue(L,3);
+                    if (lua_pcall(L,HasPass ? 1 : 0,0,0) != 0){
+        
+                        const char *err = lua_tostring(L,-1);
+                        printf("Lua error: %s\n",err);
+                        lua_pop(L,1);
                     }
 
-                    lua_pop(L,1);
                 } else {
                     Co = lua_tothread(L,-1);
                     int St = lua_status(Co);

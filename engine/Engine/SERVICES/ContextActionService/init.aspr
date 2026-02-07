@@ -1,5 +1,3 @@
-local Shared = require("../ServiceShared.aspr")
-
 return function(D)
     local DATA = {}
 
@@ -35,15 +33,10 @@ return function(D)
         end
 
         local ConfT = type(Conf)
-        local Raw = (ConfT == "table" and Conf.Raw) or (ConfT == "string" and Conf:find("Raw")) or nil
         local Contextless = (ConfT == "table" and Conf.Contextless)
             or (ConfT == "string" and Conf:find("Contextless"))
             or false
-
-        local IsBool = type(Raw) == "boolean"
-        if not IsBool or Raw == false then
-            FUNC = Shared.AllocRoutine(FUNC)
-        end
+        local IsConf = ConfT == "string" or ConfT == "table"
 
         DATA.__USEDNAMES[NAME] = PRIORITY
 
@@ -51,7 +44,7 @@ return function(D)
             N = NAME,
             P = PRIORITY,
             F = FUNC,
-            C = { not IsBool and Conf or nil, ... },
+            C = { not IsConf and Conf or nil, ... },
         }
 
         DATA.__BOUND[PRIORITY] = DATA.__BOUND[PRIORITY] or {}

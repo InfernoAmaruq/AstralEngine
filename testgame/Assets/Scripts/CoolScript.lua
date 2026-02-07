@@ -56,4 +56,13 @@ print("GET RESOLUTION")
 print("RES:", CAM.Camera.Resolution)
 print("BIND")
 
+GetService("ContextActionService").Bind("SPACE1", 100, function()
+    print("SPACE1")
+end, ENUM.KeyCode.z)
+
+GetService("ContextActionService").Bind("SPACE2", 50, function()
+    print("SPACE2")
+    return true
+end, ENUM.KeyCode.z)
+
 GetService("RunService").BindToStep("CAM", 950, function(pass) end)

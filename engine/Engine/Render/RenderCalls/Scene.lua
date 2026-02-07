@@ -246,3 +246,6 @@ function Renderer.DrawScene(Frame)
         end
     end
 end
+
+Renderer.Late[#Renderer.Late+1] = function()
+end

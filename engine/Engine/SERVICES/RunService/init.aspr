@@ -36,7 +36,10 @@ return function(D)
     if _G["ENUM"] then
         E = _G["ENUM"]({
             CPUUpdate = 250,
-            Render = 750,
+            RenderScene = 600,
+            RenderPost = 800,
+            RenderSubmit = 950,
+            RenderMirror = 970,
             Physics = 1250,
         }, ENUMNAME, { CanAppend = true })
         Processor = _G["ENUM"].__GETPROCESSOR(ENUMNAME, "RawValue")

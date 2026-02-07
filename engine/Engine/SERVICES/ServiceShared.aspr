@@ -2,7 +2,6 @@ local FENV = setmetatable({
     task = {
         spawn = task and task.spawn,
         defer = task and task.defer,
-        waitfor = task and task.waitfor,
         wait = function()
             error("CANNOT CALL 'wait' IN RUNSERVICE ROUTINE")
         end,
@@ -27,7 +26,6 @@ function SHARED.AllocRoutine(fn)
     if not FENV.task.spawn and task and task.spawn then
         FENV.task.spawn = task.spawn
         FENV.task.defer = task.defer
-        FENV.task.waitfor = task.waitfor
     end
 
     local YIELD = coroutine.yield

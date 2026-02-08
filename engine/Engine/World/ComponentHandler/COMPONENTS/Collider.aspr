@@ -18,39 +18,13 @@ local Collider = {
 }
 
 -- FLAGS
-@flag:IDX_KIN = 1;
-@flag:IDX_STATIC = 2;
-@flag:IDX_T_DOF = 3;
-@flag:IDX_R_DOF = 4;
-@flag:IDX_TRIGGER = 5;
-@flag:VEL_ANG = 6;
-@flag:VEL_MOV = 7;
-@flag:TAG = 8;
-@flag:MASS = 9;
-@flag:FRICTION = 10;
-@flag:RESTITUTION = 11;
-@flag:INERTIA = 12;
-@flag:GRAV_SCALE = 13;
-@flag:CAN_SLEEP = 14;
-@flag:ASLEEP = 15;
-@flag:DAMP_L = 16;
-@flag:DAMP_A = 17;
-@flag:CENTER_OF_MASS = 18;
-@flag:ENABLED = 19;
+@flag:IDX_T_DOF = 1;
+@flag:IDX_R_DOF = 2;
 
 @macro<L,!USEBRACK>{VALIDATEDOF(&OBJ) = local RDOF, TDOF = &OBJ[&IDX_R_DOF], &OBJ[&IDX_T_DOF]; if (RDOF == nil or RDOF == "") and (TDOF == nil or TDOF == "") then error("CANNOT SET ALL DEGREES OF FREEDOM TO NIL. USE STATIC OR ANCHORED COLLIDER") end}
 
 local SHAREDT = {
     -- states
-    SetKinematic = function(self, State)
-        if self[&IDX_KIN] == State then return end
-
-        self.ColRef:setKinematic(State)
-
-        self[&IDX_KIN] = State
-
-        Physics.UpdateSyncField(self.WorldComp.WorldId,self.ColRef,"Kinematic", State)
-    end,
     SetTranslationDOF = function(self, v)
         AstralEngine.Assert(not self.IsStatic,"Cannot change DOF on static collider!","COLLIDER")
         VALIDATEDOF(self)
@@ -63,30 +37,26 @@ local SHAREDT = {
         self.ColRef:setDegreesOfFreedom(self[&IDX_T_DOF],v)
         self[&IDX_R_DOF] = v
     end,
-    SetTrigger = function(self, v)
-        local ColRef = self.ColRef
-        ColRef:setSensor(v)
-        self[&IDX_TRIGGER] = ColRef:isSensor()
-    end,
     SetTag = function(self, v)
         self.ColRef:setTag(v)
-        self[&TAG] = v
 
         local IsStatic = self.WorldComp:IsStaticTag(v)
         Physics.UpdateSyncField(w.WorldId,self.ColRef,"Static",IsStatic)
-        self.IsStatic = IsStatic
     end,
-    SetEnabled = function(self,v)
-        self[&ENABLED] = v
-        self.ColRef:setEnabled(v)
+
+    ResetMass = function(self)
+        self.ColRef:resetMassData()
     end,
 
     -- shapes
     RemoveShape = function(self,Shape)
+        AstralEngine.Assert(#self.ShapeList <= 1,"CANNOT REMOVE SHAPE FROM COLLIDER. COLLIDER CANNOT HAVE ZERO SHAPES","COLLIDER")
         self.ConRef:removeShape(Shape.__ShapePtr)
+        table.remove(self.ShapeList,table.find(self.ShapeList,Shape))
     end,
     AddShape = function(self,Shape)
         self.ColRef:addShape(Shape.__ShapePtr)
+        table.insert(self.ShapeList(Shape))
     end,
     GetRootShape = function(self)
         return self.ShapeList[1]
@@ -96,23 +66,35 @@ local SHAREDT = {
     end,
 
     -- phys
-    SetAngularVelocity = function(self, v)
-        AstralEngine.Assert(not self.IsStatic,"Cannot set Angular Velocity on static collider!","COLLIDER")
-    end,
-    SetVelocity = function(self, v)
-        AstralEngine.Assert(not self.IsStatic,"Cannot set Velocity on static collider!","COLLIDER")
-    end,
     ApplyForce = function(self, v)
         AstralEngine.Assert(not self.IsStatic,"Cannot apply force to static collider!","COLLIDER")
+        self.ColRef:applyForce(v)
     end,
-    ApplyAngularForce = function(self, v)
+    ApplyTorque = function(self, v)
         AstralEngine.Assert(not self.IsStatic,"Cannot apply force to static collider!","COLLIDER")
+        self.ColRef:applyTorque(v)
     end,
     ApplyImpulse = function(self, v)
         AstralEngine.Assert(not self.IsStatic,"Cannot apply impulse to static collider!","COLLIDER")
+        self.ColRef:applyLinearImpulse(v)
     end,
     ApplyAngularImpulse = function(self, v)
         AstralEngine.Assert(not self.IsStatic,"Cannot apply impulse to static collider!","COLLIDER")
+        self.ColRef:applyAngularImpulse(v)
+    end,
+
+    MoveKinematic = function(self,Pos,Angle,dt)
+        local Quat
+
+        if dt <= 0.01 then return end
+
+        if typeof(Angle) == "Vec3" then
+            Quat = quat():setEuler(Angle:unpack())
+        else
+            Quat = Angle or quat.identity
+        end
+
+        self.ColRef:moveKinematic(Pos,Quat,dt)
     end,
 
     OnDrawComponentResize = function(self,v)
@@ -130,17 +112,69 @@ local function CALLFUNC(self, ...)
 end
 
 local LIST = {
-    Kinematic = &IDX_KIN, Static = &IDX_STATIC, RotationDOF = &IDX_R_DOF, TranslationDOF = &IDX_T_DOF, IsTrigger = &IDX_TRIGGER, Tag = &TAG, Enabled = &ENABLED
+    RotationDOF = &IDX_R_DOF, TranslationDOF = &IDX_T_DOF,
+}
+
+local DirectGetters = {
+    Continuous = "isContinuous",
+    Enabled = "isEnabled",
+    Tag = "getTag",
+    Trigger = "isSensor",
+    Kinematic = "isKinematic",
+    Awake = "isAwake",
+    GravityScale = "getGravityScale",
+    CanSleep = "isSleepingAllowed",
+    AutomaticMass = "getAutomaticMass",
+    Inertia = "getInertia",
+    Mass = "getMass",
+    Restitution = "getRestitution",
+    Friction = "getFriction",
+
+    AngularDamping = "getAngularDamping",
+    LinearDamping = "getLinearDamping",
+}
+
+local DirectSetters = {
+    Continuous = "setContinuous",
+    Enabled = "setEnabled",
+    Trigger = "setSensor",
+    Awake = "setAwake",
+    GravityScale = "setGravityScale",
+    CanSleep = "setSleepingAllowed",
+    CenterOfMass = "setCenterOfMass",
+    AutomaticMass = "setAutomaticMass",
+    Inertia = "setInertia",
+    Mass = "setMass",
+    Restitution = "setRestitution",
+    Friction = "setFriction",
+    Kinematic = "setKinematic",
+
+    AngularDamping = "setAngularDamping",
+    LinearDamping = "setLinearDamping",
+
+    AngularVelocity = "setAngularVelocity",
+    LinearVelocity = "setLinearVelocity"
 }
 
 local FIELDTOFUNC = {
-    Kinematic = SHAREDT.SetKinematic,
-    Static = SHAREDT.SetStatic,
     RotationDOF = SHAREDT.SetRotationDOF,
     TranslationDOF = SHAREDT.SetTranslationDOF,
-    IsTrigger = SHAREDT.SetTrigger,
-    Enabled = SHAREDT.SetEnabled,
-    Tag = SHAREDT.SetTag
+    Tag = SHAREDT.SetTag,
+}
+
+local GETTERS = {
+    Static = function(self)
+        return self.WorldComp:IsStaticTag(self.ColRef:getTag())
+    end,
+    AngularVelocity = function(self)
+        return vec3(self.ColRef:getAngularVelocity())
+    end,
+    LinearVelocity = function(self)
+        return vec3(self.ColRef:getLinearVelocity())
+    end,
+    CenterOfMass = function(self)
+        return vec3(self.ColRef:getCenterOfMass())
+    end,
 }
 
 local METATAB = {
@@ -155,17 +189,24 @@ local METATAB = {
             rawset(self, ".NEXTCALL", v)
             return CALLFUNC
         end
+        local DirectGetter = DirectGetters[k]
+        if DirectGetter then
+            return self.ColRef[DirectGetter](self.ColRef)
+        end
+        local Getter = GETTERS[k]
+        if Getter then return Getter(self) end
         return v or (LIST[k] and rawget(self,LIST[k])) or rawget(self, k)
     end,
     __newindex = function(self, k, v)
-        if rtype(k) == "string" and k:lower() == "position" then
-            error("CANNOT SET POSITION OF COMPONENT THROUGH <Component>.Position = <Val> -- USE TRANSFORM INSTEAD",2)
+        local DirectSetter = DirectSetters[k]
+        if DirectSetter then
+            return self.ColRef[DirectSetter](self.ColRef,v)
         end
         local Func = FIELDTOFUNC[k]
         if rtype(k) == "string" and Func then
             Func(self,v)
         else
-            rawset(self,k,v)
+            AstralEngine.Error("CANNOT WRITE TO COLLIDER FIELD: "..k,"COLLIDER",2)
         end
     end
 }
@@ -219,7 +260,6 @@ function mt.__create(DATA, e)
         IsStatic = IsStatic,
         [&IDX_T_DOF] = DATA.TranslationDOF or "xyz",
         [&IDX_R_DOF] = DATA.RotationDOF or "xyz",
-        [&TAG] = COLLIDER:getTag(),
         Touched = Signal.new(Signal.Type.Default),
         TouchEnded = Signal.new(Signal.Type.Default),
         Entity = EntPtr,
@@ -236,11 +276,11 @@ function mt.__create(DATA, e)
 
     Physics.BindCollider(WId, T, Transform)
 
-    if DATA.IsTrigger then
-        SHAREDT.SetTrigger(T,true)
+    if DATA.Trigger then
+        T.ColRef:setSensor(true)
     end
     if DATA.Kinematic and not IsStatic then
-        SHAREDT.SetKinematic(T,true)
+        T.ColRef:setKinematic(true)
     end
 
     return T

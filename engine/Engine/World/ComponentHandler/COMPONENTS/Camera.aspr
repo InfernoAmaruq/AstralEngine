@@ -65,29 +65,83 @@ local FIELDS = {
     SolidPass = 22,
     OITDepth = 23,
     DepthTexture = 24,
-    HistoryTexA = 25,
-    HistoryTexB = 26,
+    Density = 25,
 }
 
-local function RawViewToRay(self, Vector) end
+local function RawViewToRay(self, Vector)
+    local NDCx = Vector.x * 2 - 1
+    local NDCy = 1 - Vector.y * 2
 
-local function RawWorldToView() end
+    local Aspect = self[FIELDS.Aspect]
+
+    local FOV = self[FIELDS.RadFOV]
+    local TanHalf = math.tan(FOV * 0.5)
+
+    local x = NDCx * TanHalf * Aspect
+    local y = NDCy * TanHalf
+
+    local EntPtr = self.__EntityPtr
+    local Transform = EntPtr.Transform
+
+    local Forward, Right, Up = Transform.ForwardVector, Transform.RightVector, Transform.UpVector
+
+    local Dir = vec3(Forward + Right * x + Up * y):normalize()
+
+    return Transform.Position, Dir
+end
+
+local function RawWorldToView(self, Pos)
+    local Transform = self.__EntityPtr.Transform
+
+    local CamPos = Transform.Position
+    local CamRot = Transform.Orientation
+
+    local LocalPos = Pos - CamPos
+    local View = CamRot:conjugate() * LocalPos
+
+    if View.z >= 0 then
+        return nil
+    end
+
+    local Aspect = self[FIELDS.Aspect]
+    local TanHalf = math.tan(self[FIELDS.RadFOV] * 0.5)
+
+    local NDCx = (View.x / -View.z) / (TanHalf * Aspect)
+    local NDCy = (View.y / -View.z) / TanHalf
+
+    local UVX = NDCx * 0.5 + 0.5
+    local UVY = 1 - (NDCy * 0.5 + 0.5)
+    return vec2(UVX, UVY)
+end
 
 local METHODS = {
-    Resize = function(self, NewSize)
+    Resize = function(self, NewSize, Density)
+        Density = Density or lovr.system.getWindowDensity()
         for _, v in ipairs(self.__Resizables) do
-            v.ResizeCallback(v, v.__IsPass, NewSize.x, NewSize.y)
+            v.ResizeCallback(v, v.__IsPass, NewSize.x, NewSize.y, Density)
         end
     end,
     ScreenPointToRay = function(self, V1, V2)
         local Vector = typeof(V1) == "Vec2" and V1 or vec2(V1, V2)
-        Vector = vec2(Vector.x / self.W, Vector.y / self.H)
+        Vector = vec2(Vector.x / self.Resolution.x, Vector.y / self.Resolution.y)
 
-        RawViewToRay(self, Vector)
+        return RawViewToRay(self, Vector)
     end,
     ViewpointToRay = function(self, V1, V2)
         local Vector = typeof(V1) == "Vec2" and V1 or vec2(V1, V2)
-        RawViewToRay(self, Vector)
+        return RawViewToRay(self, Vector)
+    end,
+    WorldToViewpoint = function(self, Pos)
+        return RawWorldToView(self, Pos)
+    end,
+    WorldToScreenPoint = function(self, Pos)
+        local V = RawWorldToView(self, Pos)
+
+        if not V then
+            return nil
+        end
+
+        return V * self.Resolution
     end,
 }
 
@@ -95,6 +149,7 @@ local READ_ONLY = {
     Width = true,
     Height = true,
     Aspect = true,
+    Density = true,
 }
 
 local SETTER = {
@@ -114,6 +169,9 @@ local GETTER = {
         return math.deg(self[FIELDS.RadFOV])
     end,
     Resolution = function(self)
+        return vec2(self[FIELDS.W], self[FIELDS.H]) / self[FIELDS.Density]
+    end,
+    TrueResolution = function(self)
         return vec2(self[FIELDS.W], self[FIELDS.H])
     end,
 }
@@ -183,7 +241,10 @@ local function RebuildPasses(CameraRef)
     })
 end
 
-local function Rebuild(V, IsPass, w, h)
+local function Rebuild(V, IsPass, w, h, Density)
+    Density = Density or lovr.system.getWindowDensity()
+    w = w * Density
+    h = h * Density
     if not IsPass then
         local PassesReady = RebuildTexture(V, w, h)
         if PassesReady then
@@ -191,6 +252,7 @@ local function Rebuild(V, IsPass, w, h)
             V.CREF[FIELDS.W] = w
             V.CREF[FIELDS.H] = h
             V.CREF[FIELDS.Aspect] = w / h
+            V.CREF[FIELDS.Density] = Density
         end
     end
 end
@@ -205,11 +267,20 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     local Data = {}
 
     local W, H = (Input.Resolution or vec2(AstralEngine.Window.W, AstralEngine.Window.H)):unpack()
+
+    local Density = Input.Density or lovr.system.getWindowDensity()
+    Data.Density = Density
+
     local Texture = AstralEngine.Graphics.NewTexture(W, H, TextureConfig)
     local OITTex = AstralEngine.Graphics.NewTexture(W, H, TexConf2)
     local OITDepth = AstralEngine.Graphics.NewTexture(W, H, OIT_CONF)
     local SolidTex = AstralEngine.Graphics.NewTexture(W, H, MSAASolid)
     local DepthTexture = AstralEngine.Graphics.NewTexture(W, H, DEPTH_CONF)
+
+    W = W * Density
+    H = H * Density
+
+    print("CAMERA WITH DENSITY:", Density)
 
     Data.W = W
     Data.H = H
@@ -289,6 +360,8 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     end
 
     BoundCameras = BoundCameras + 3
+
+    rawset(D, "__EntityPtr", GetService("World").GetEntityFromId(Entity))
 
     return D
 end

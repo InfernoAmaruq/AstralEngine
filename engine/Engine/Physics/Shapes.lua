@@ -77,8 +77,15 @@ local StrToFunc = {
         local Q = quat(a, ax, ay, ax)
         return vec3(x, y, z), vec3(Q:getEuler()), Q
     end,
-    GetSize = function(self)
-        return self.__ShapePtr:getMass()
+    GetSize = function(Self)
+        local T = Self.Type
+        if T == ST.Box then
+            return vec3(self.__ShapePtr:getDimensions())
+        elseif T == ST.Sphere then
+            return vec3(self.__ShapePtr:getRadius())
+        else
+            error("SHAPE API INCOMPLETE")
+        end
     end,
 
     Destroy = function(self)

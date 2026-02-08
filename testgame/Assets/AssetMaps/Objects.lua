@@ -57,11 +57,11 @@ return {
                 Position = Vec3(-3, 0, -4),
             },
             Shape = {
-                Color = color.fromRGBA(255, 255, 0, 255),
+                Color = color.fromRGBA(255, 255, 0, 120),
                 Size = Vec3(5, 0.25, 5),
             },
             Collider = {
-                IsTrigger = true,
+                Trigger = true,
                 Tag = "STATIC_DEFAULT",
             },
         },

@@ -29,7 +29,6 @@ local LuaToJoltToSync = table.alloc(5, 0)
 @flag:F_Flags = 3;
 
 @flag:S_Static = 0b101100000001;
-@flag:S_Kinematic = 0b101100000010;
 
 @flag:SHOULD_MOVE = 0b101100000011;
 
@@ -148,7 +147,6 @@ end
 local FF_GetPose, FF_FromPose, CC_SetPose, CC_SetVel, CC_SetAngVel
 
 local FieldToFlag = {
-    Kinematic = &S_Kinematic,
     Static = &S_Static
 }
 

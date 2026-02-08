@@ -113,6 +113,15 @@ function lovr.boot()
     local FSType = package.config:sub(1, 1)
     FSType = FSType == "\\" and "Win" or "Unix"
     lovr.filesystem.filesystemType = FSType
+
+    lovr.filesystem.getCurrentPath = function(Level)
+        Level = Level or 2
+
+        local Info = debug.getinfo(Level, "S")
+        local CurPath = Info.source:sub(1, 1) == "@" and Info.source:sub(2) or Info.source
+        return CurPath
+    end
+
     OsType = FSType
 
     -- adding FS helpers

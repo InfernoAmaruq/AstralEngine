@@ -1,8 +1,6 @@
 lovr.filesystem.setRequirePath(package.path)
 
 -- set cpath
-local SavePath = lovr.filesystem.getSaveDirectory()
-
 local OgRequire = require
 local OgLoadfile = function(Path, Env)
     local Raw = lovr.filesystem.read(Path)

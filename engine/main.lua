@@ -56,6 +56,8 @@ function lovr.load()
     CURRENT_FRAME = 0
     CURRENT_CPUTICK = 0
 
+    require("Engine.AssetManager")
+
     World.Component.LoadComponents({GetDir = lovr.filesystem.getDirectoryItems})
 
     World.Component.__RunPostPass()

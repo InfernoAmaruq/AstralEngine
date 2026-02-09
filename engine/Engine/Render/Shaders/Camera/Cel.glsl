@@ -1,6 +1,6 @@
 @TYPE:FRAGMENT;
 @IDENTIFIER:CEL_SHADER;
-@PRIORITY:1;
+@PRIORITY:2;
 
 flagged const float BANDS = 5.0;
 

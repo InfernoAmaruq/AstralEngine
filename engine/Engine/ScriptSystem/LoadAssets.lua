@@ -1,0 +1,3 @@
+local AssetLoader = {}
+
+return AssetLoader

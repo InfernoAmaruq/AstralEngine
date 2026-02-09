@@ -14,6 +14,9 @@ return {
             "LoadShadowmap",
             "LoadCel",
         },
+        Asset = {
+            "StrictLoad", -- the asset manager will not load raw binary blobs or random types unless told to
+        },
         Physics = {
             "BindMainWorld", -- should the central Runtime loop process physics? If disabled. Tick.PhysicsRate will be ignored
             "Interpolate", -- interpolate automatically or not? Requires BindMainWorld

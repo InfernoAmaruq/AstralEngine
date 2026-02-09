@@ -10,7 +10,11 @@ AstralEngine.Callbacks = {}
 
 function lovr.load()
     -- INITIAL DECL
-    require("ResizeRepair")
+
+    print(AstralEngine.Graphics)
+    require("./Engine/Graphics")
+    print("CALLED GRAPHJICS MODULE")
+    print(AstralEngine.Graphics)
 
     _G.ENUM = require("Lib.Enum")
 
@@ -23,8 +27,6 @@ function lovr.load()
     local Entity = GetService"Entity"
 
     local SERIALIZER = require("Lib.Serialize")
-
-    local BRIDGE = require("LOVRBridge")
 
     ROOT = {
         SCHEDULERS = {},
@@ -46,6 +48,7 @@ function lovr.load()
 
     -- DEFINING EXTRA GLOBALS
 
+    local BRIDGE = require("LOVRBridge")
     BRIDGE.LoadGlobals({ SIGNAL = SIGNAL, ROOT = ROOT, ALLKEYS = require("ALLKEYS") })
 
     RunService = GetService"RunService"

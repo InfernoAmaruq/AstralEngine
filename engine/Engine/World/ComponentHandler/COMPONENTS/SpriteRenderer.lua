@@ -3,15 +3,25 @@ local REND = GetService("Renderer")
 
 local SpriteRenderer = {}
 
+local NULL_BUFFER = lovr.graphics.newBuffer("i32x4",{-1,-1,-1,-1})
 local ProcessorFunc = function(p, _, c)
     local SR = c.SpriteRenderer
     if not SR[1] then
         return
     end
     p:setColor(SR[3],SR[4],SR[5],SR[6])
+    local Sent = false
     local TRANSFORM = c.Transform
-    --p:setSampler(SR[7] and 'nearest' or 'linear')
+    if rawget(SR[1],2) then
+        p:send("AtlasData",SR[1][2])
+    else
+        Sent = true
+        p:send("AtlasData",NULL_BUFFER)
+    end
     p:draw(SR[1][1] or SR[1], TRANSFORM[1], SR[2], TRANSFORM[2])
+    if not Sent then
+        p:send("AtlasData",NULL_BUFFER)
+    end
 end
 
 local REnum = ENUM.RenderType

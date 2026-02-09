@@ -8,11 +8,8 @@ uniform AtlasData {
 
 vec4 astral_main(){
     if (Atlas.x >= 1){
-        vec2 TexSize = vec2(textureSize(ColorTexture,0));
-        vec2 UvMin = vec2(Atlas.xy - 1) / TexSize;
-        vec2 UvSize = vec2(Atlas.zw - 1) / TexSize;
-        vec2 duv = UvMin + UV * UvSize;
+        ivec2 Pixel = ivec2(floor(Atlas.xy - 1)) + ivec2(floor(UV * (Atlas.zw - 1)));
 
-        return Color * getPixel(ColorTexture,duv);
+        return Color * texelFetch(ColorTexture, Pixel,0);
     }
 }

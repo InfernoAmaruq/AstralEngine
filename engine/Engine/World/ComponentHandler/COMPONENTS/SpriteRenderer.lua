@@ -10,18 +10,23 @@ local ProcessorFunc = function(p, _, c)
         return
     end
     p:setColor(SR[3],SR[4],SR[5],SR[6])
-    local Sent = false
     local TRANSFORM = c.Transform
+    p:push('state')
     if rawget(SR[1],2) then
         p:send("AtlasData",SR[1][2])
     else
-        Sent = true
         p:send("AtlasData",NULL_BUFFER)
     end
-    p:draw(SR[1][1] or SR[1], TRANSFORM[1], SR[2], TRANSFORM[2])
-    if not Sent then
-        p:send("AtlasData",NULL_BUFFER)
+    local Sampler = SR[7]
+    if Sampler then p:setSampler"nearest" end
+
+    if SR[8] then
+        p:draw(SR[1][1] or SR[1], TRANSFORM[1], SR[2], TRANSFORM[2])
+    else
+        p:setMaterial(SR[1][1] or SR[1])
+        p:plane(TRANSFORM[1], SR[2], TRANSFORM[2])
     end
+    p:pop('state')
 end
 
 local REnum = ENUM.RenderType
@@ -39,6 +44,8 @@ local SRMT = {
             return self.__ClrVal
         elseif k == "UseNearest" then
             return self[7]
+        elseif k == "ScaleWithAspect" then
+            return self[8]
         end
     end,
     __newindex = function(SR, k, v)
@@ -47,7 +54,7 @@ local SRMT = {
         elseif k == "UseNearest" then
             SR[7] = v
         elseif k == "Size" then
-            SR[2]:set(v.x,v.y,1e-9)
+            SR[2]:set(v.x,v.y,1e-7)
             local ColComp = COMP.HasComponent(SR.__Ent,"Collider")
             if ColComp then
                 ColComp:OnDrawComponentResize(vec3(SR[2]))
@@ -64,6 +71,8 @@ local SRMT = {
             elseif NewAlpha == 1 and OldAlpha < 1 then
                 RT[".FromStack"](RT,true)
             end
+        elseif k == "ScaleWithAspect" then
+            SR[8] = v
         end
     end,
 }
@@ -80,7 +89,7 @@ SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
 
     local SR = {}
     local RawVec = DATA.Size or vec2(1,1)
-    local RealSize = Vec3(RawVec.x,RawVec.y,1e-9) -- make Z incredibly thin so collider can read from it
+    local RealSize = Vec3(RawVec.x,RawVec.y,1e-7) -- make Z incredibly thin so collider can read from it
 
     local RT = COMP.AddComponent(Entity, "RenderTarget", { Value = Top, Solid = false })
     if not COMP.HasComponent(Entity, "Transform") and not ShouldSink then
@@ -98,6 +107,7 @@ SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
     SR[2] = RealSize
     SR[1] = Image
     SR[7] = DATA.UseNearest or false
+    SR[8] = DATA.ScaleWithAspect or false
     SR.__Ent = e
     SR.__RenderTypePtr = RT
     setmetatable(SR, SRMT)

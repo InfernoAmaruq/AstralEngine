@@ -23,7 +23,6 @@ local TypeEnum = ENUM({
     RawBlob = 8,
 }, "AssetType")
 
--- Invariant: Blobs are IMMUTABLE raw data
 -- All offspin values are mutable and allocated individually
 -- So, NewImage gives you a NEW image, it is on YOU to cache it later if need be
 
@@ -31,6 +30,7 @@ local WT = { __mode = "v" }
 
 local Cache = {}
 local DeadCache = {}
+local RegToPath = setmetatable({}, { __mode = "k" })
 for _, v in pairs(TypeEnum) do
     Cache[v] = {}
     DeadCache[v] = setmetatable({}, WT)
@@ -47,59 +47,9 @@ local function SearchCache(CacheObj, Obj, FilterBy)
     return false, nil, nil
 end
 
---[[local function GetBlob(Hash, TypeHint)
-    local AliveResult
-    local DeadResult
-    local FileResult
-
-    if TypeHint then
-        AliveResult = Cache[TypeHint][Hash]
-        DeadResult = not AliveResult and Cache[TypeHint][Hash]
-
-        if DeadResult then
-            Cache[TypeHint][Hash], DeadCache[TypeHint][Hash] = DeadResult, nil
-        end
-
-        local Path = NormalizePath(Hash)
-        if not DeadResult and not AliveResult and lovr.filesystem.isFile(Path) then
-            local File = l_NewBlobFile(Path)
-            if File then
-                FileResult = File
-                Cache[TypeHint][Path] = File
-                -- cachy by path, not hash here
-                -- why? because this means a path was inputed and its valid, not a Name
-                -- besides if both paths are canonized, this wont do jack
-            end
-        end
-    else
-        local HasObj, Result, Type = SearchCache(Cache, Hash)
-        if HasObj then
-            -- we got alive obj
-            return Result
-        end
-
-        HasObj, Result, Type = SearchCache(DeadCache, Hash)
-        if HasObj then
-            Cache[Type][Hash], DeadCache[Type][Hash] = Result, nil
-            return Result
-        end
-
-        if STRICT_LOAD then
-            local Path = NormalizePath(Hash)
-            if lovr.filesystem.isFile(Path) then
-                local File = l_NewBlobFile(Path)
-                if File then
-                    FileResult = File
-                    Cache[TypeHint][Path] = File
-                end
-            end
-        else
-            AstralEngine.Error("Cannot load asset from file without typehint", "ASSET", 3)
-        end
-    end
-
-    return AliveResult or DeadResult or FileResult
-end]]
+local function GetObjPath(self)
+    return RegToPath[self]
+end
 
 -- CONSTRUCTORS
 -- cpu
@@ -107,7 +57,7 @@ end]]
 function AssetManager.NewBlob(Path, Type, Name)
     local InputType = typeof(Path)
 
-    if rtype(Path) == "string" then
+    if InputType == "string" then
         -- if string, it means its hashable
         local ConstPath = GetPath(Path)
         local Success, Res = pcall(GetBlob, ConstPath, Type) -- pcall because Type hint may be missing. We don't want an error here
@@ -128,6 +78,22 @@ end
 
 -- img
 
+local function NewImage(Path, ...)
+    local Image = lovr.data.newImage(select("#", ...) > 0 and ... or Path)
+
+    RegToPath[Image] = Path
+
+    local MT = getmetatable(Image)
+    if MT.__AstralTagged then
+        return Image
+    end
+
+    MT.__index.getPath = GetObjPath
+    MT.__AstralTagged = true
+
+    return Image
+end
+
 local function GetRawImageData(ImagePath)
     local Image = Cache[TypeEnum.ImageData][ImagePath]
 
@@ -142,7 +108,7 @@ local function GetRawImageData(ImagePath)
     end
 
     if not Image then
-        local ImgFromFile = lovr.data.newImage(ImagePath)
+        local ImgFromFile = NewImage(ImagePath)
 
         if ImgFromFile then
             -- ALLOCATE IMAGE DATA TABLE
@@ -159,7 +125,7 @@ function AssetManager.NewImage(ImagePath)
     local ReturnValue = nil
 
     if Image then
-        ReturnValue = lovr.data.newImage(Image)
+        ReturnValue = NewImage(CanonPath, Image)
     end
 
     return ReturnValue

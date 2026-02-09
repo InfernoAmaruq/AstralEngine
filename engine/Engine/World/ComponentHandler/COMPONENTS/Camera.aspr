@@ -280,8 +280,6 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     W = W * Density
     H = H * Density
 
-    print("CAMERA WITH DENSITY:", Density)
-
     Data.W = W
     Data.H = H
     Data.Aspect = W / H

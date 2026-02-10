@@ -1,3 +1,4 @@
+local SignalLib = AstralEngine.Plugins.SignalLib
 local Component = require("ComponentHandler")
 local InstMeta, Methods = require("Instance")(Component)
 local World = {}
@@ -12,6 +13,9 @@ local RESIZESTEP = 1.25
 World.Alive = {}
 World.Capacity = 0 -- points to highest id
 World.TopPtr = 0   -- points at highest alive object
+
+-- fires event on ancestry change in parent-child pairs
+World.OnAncestryChanged = SignalLib.new(SignalLib.Type.RTC)
 
 function World.GetEntityFromId(Id)
     local E = World.Alive[Id]

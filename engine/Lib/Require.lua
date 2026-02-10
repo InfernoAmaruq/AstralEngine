@@ -76,8 +76,8 @@ local function LoadFile(Path, Env, STACK)
 
     local PathsToTry = {
         Path,
-        not UseGlobalPath and "GAMEFILE/" .. Path or nil,
         CurDir and CurDir .. "/" .. Path or nil,
+        not UseGlobalPath and "GAMEFILE/" .. Path or nil,
     }
 
     local Data
@@ -120,9 +120,10 @@ local Methods = {
         local CurDir = CurPath:match(Match)
         local PathsToTry = {
             Path,
+            CurDir and CurDir .. "/" .. Path or nil,
+            "GAMEFILE/" .. Path,
             _G.package.ENG_PATH .. Path,
             _G.package.GAME_PATH .. Path,
-            CurDir and CurDir .. "/" .. Path or nil,
         }
         for _, v in ipairs(PathsToTry) do
             for _, ext in ipairs(LoadExtensionsToTry) do

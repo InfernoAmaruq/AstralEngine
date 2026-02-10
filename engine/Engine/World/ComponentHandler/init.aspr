@@ -158,16 +158,19 @@ function Component.__RunPostPass()
     end
 end
 
-function Component.LoadComponents(FileSystem)
-    local Files = FileSystem.GetDir("GAMEFILE/Assets/Components")
+function Component.LoadComponents()
+    local Files = lovr.filesystem.getAliasedFiles("Components")
 
     local AttemptedToLoad = {}
 
     for _, f in pairs(Files) do
-        if f:match("%.lua$") or f:match("%.aspr$") then
-            local File = loadfile("GAMEFILE/Assets/Components/" .. f)
 
-            AttemptedToLoad["GAMEFILE/Assets/Components/" .. f] = true
+        print("LOAD COMPONENT FILE:",f)
+
+        if f:match("%.lua$") or f:match("%.aspr$") then
+            local File = loadfile(f)
+
+            AttemptedToLoad[f] = true
 
             if File then
                 setfenv(File, SerializerFenv)

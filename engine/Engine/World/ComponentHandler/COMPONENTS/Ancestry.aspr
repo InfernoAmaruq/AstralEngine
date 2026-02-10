@@ -56,10 +56,16 @@ local FUNC = {
     -- CORE
     SetParent = function(self, Parent)
         -- Remove old reference
+
+        local TornDown
+        local Rebuilt
+
         if self[&ParentPtr] then
             local ParentAnc = Component.HasComponent(self[&ParentPtr],Ancestry.Name)
             if not ParentAnc then error("FATAL: STALE PARENT POINTER FROM E: "..self[&SelfPtr].." TO "..self[&ParentPtr],2) end
+            local Ref = World.GetEntityFromId(self[&ParentPtr])
             RemoveChild(ParentAnc[&ChildPtr],self[&SelfPtr])
+            TornDown = Ref
         end
 
         if Parent == nil then
@@ -80,6 +86,25 @@ local FUNC = {
 
             self[&ParentPtr] = Val
             FastAddChild(ParentAnc[&ChildPtr],self[&SelfPtr])
+
+            Rebuilt = Reference
+        end
+
+        local SelfRef = World.GetEntityFromId(self[&SelfPtr])
+
+        if TornDown and Rebuilt then
+            World.OnAncestryChanged:Fire(
+                TornDown,SelfRef,"remove",
+                Rebuilt,SelfRef,"add"
+            )
+        elseif TornDown then
+            World.OnAncestryChanged:Fire(
+                TornDown,SelfRef,"remove"
+            )
+        elseif Rebuilt then
+            World.OnAncestryChanged:Fire(
+                Rebuilt,SelfRef,"add"
+            )
         end
     end,
 
@@ -264,6 +289,42 @@ Ancestry.Metadata.__create = function(DATA, e)
     end
 
     return m
+end
+
+Ancestry.Metadata.__remove = function(self)
+    -- i owe the fucking Lua allocator money, it will not leave my family alone
+    -- i must fucking avoid it
+    local PtrSelf = self[&SelfPtr]
+    local PtrParent = self[&ParentPtr]
+    local PtrChild = self[&ChildPtr]
+
+    setmetatable(self,nil)
+    for i,_ in pairs(self) do
+        self[i] = nil
+    end
+
+    local ParentRef = PtrParent and World.GetEntityFromId(PtrParent)
+
+    local SelfR = World.GetEntityFromId(PtrSelf)
+    if ParentRef then
+        self[#self + 1] = ParentRef
+        self[#self + 1] = SelfR
+        self[#self + 1] = "remove"
+        local ChildArr = Component.HasComponent(PtrParent,"Ancestry")[&ChildPtr]
+        RemoveChild(ChildArr,PtrSelf)
+    end
+
+    for _,Child in pairs(PtrChild) do
+        local ChildRef = World.GetEntityFromId(Child)
+        local Anc = Component.HasComponent(Child,"Ancestry")
+
+        Anc[&ParentPtr] = false
+        self[#self + 1] = SelfR
+        self[#self + 1] = ChildRef
+        self[#self + 1] = "remove"
+    end
+
+    World.OnAncestryChanged:Fire(unpack(self))
 end
 
 return Ancestry

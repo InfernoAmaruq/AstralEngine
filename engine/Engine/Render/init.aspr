@@ -120,9 +120,9 @@ local LT = ENUM({
 
 local RT = ENUM({}, "RenderType", { CanAppend = true, Strict = true })
 
-processchildfiles("Engine/Render/RenderCalls",function(f)
-    loadfile(f)(Renderer)
-end,true)
+for _, File in ipairs(lovr.filesystem.getAliasedFiles("RenderCalls")) do
+    loadfile(File)(Renderer)
+end
 
 GetService.AddService("Renderer", Renderer)
 

@@ -27,7 +27,6 @@ local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
     Include = {}
 })
 
-print("SHADER:",F)
 local MAINSHADER = lovr.graphics.newShader(V,F)
 
 local OITCOMPOSITE = lovr.graphics.newShader('fill',[[

@@ -26,15 +26,26 @@ else
 end
 
 local Real = lovr.filesystem.getRealDirectory(package.ENG_PATH) .. "/"
-AstralEngine.EnginePath = Real
-AstralEngine.GamePath = PATH
-local Eq = {
-    Shaders = "GAMEFILE/Assets/Shaders",
-    COMPONENTS = "GAMEFILE/Assets/Components",
+local AliasMap = {
+    Shaders = "Shaders",
+    COMPONENTS = "Components",
+    RenderCalls = "RenderCalls",
 }
+
 -- mount core systems
-AstralEngine._MOUNT(Real, "", "", true, function(Name)
-    return Eq[Name]
+
+local ShaderPath
+
+AstralEngine._MOUNT(Real, "", "", true, function(Name, _, True)
+    if AliasMap[Name] then
+        if AliasMap[Name] == AliasMap.Shaders then
+            ShaderPath = True
+        end
+        lovr.filesystem.alias(True, AliasMap[Name])
+    elseif ShaderPath and True:find(ShaderPath) then
+        local Sub = True:gsub(ShaderPath, "")
+        lovr.filesystem.alias(True, AliasMap.Shaders .. Sub)
+    end
 end)
 
 -- initiate the globals and compiler
@@ -88,18 +99,35 @@ function AstralEngine.Error(Msg, Tag, Layer)
 end
 
 -- mount game folders
-local ResolveTable = {
-    Components = Eq.COMPONENTS,
-    Shaders = Eq.Shaders,
-    Globals = "/Global",
-    Scenes = "GAMEFILE/Assets/Scenes",
+local GameAliasTable = {
+    Components = AliasMap.COMPONENTS,
+    Shaders = AliasMap.Shaders,
+    Scenes = "Scenes",
 }
-AstralEngine._MOUNT(PATH, "GAMEFILE", "GAMEFILE", true, function(Name)
-    return ResolveTable[Name]
+
+AstralEngine._MOUNT(PATH, "GAMEFILE", "GAMEFILE", true, function(Name, _, VfsPath)
+    if GameAliasTable[Name] then
+        lovr.filesystem.alias(VfsPath, GameAliasTable[Name])
+    end
 end)
 
+-- time to mount the plugins
+
+local PluginHandler = require("./PluginHandler")
+
+for _, Dir in ipairs(lovr.filesystem.getDirectoryItems("/Plugins")) do
+    lovr.filesystem.alias("/Plugins/" .. Dir, "Plugins")
+end
+for _, Dir in ipairs(lovr.filesystem.getDirectoryItems("GAMEFILE/Plugins")) do
+    lovr.filesystem.alias("GAMEFILE/Plugins/" .. Dir, "Plugins")
+end
+
+for _, PluginFolder in ipairs(lovr.filesystem.getAliased("Plugins")) do
+    PluginHandler.Load(PluginFolder)
+end
+
 -- parse config
-local ok, ConfigFile = pcall(require, "config")
+local ok, ConfigFile = pcall(require, "GAMEFILE/config")
 
 if ok then
     ConfigFile = ConfigFile or {}

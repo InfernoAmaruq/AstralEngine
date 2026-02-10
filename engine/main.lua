@@ -1,6 +1,7 @@
 local CONFIG = CONF
 
 local SIGNAL = require("Lib.Signal")
+AstralEngine.Plugins.SignalLib = SIGNAL
 
 local ROOT, World, Renderer, RunService, SS
 
@@ -11,10 +12,7 @@ AstralEngine.Callbacks = {}
 function lovr.load()
     -- INITIAL DECL
 
-    print(AstralEngine.Graphics)
     require("./Engine/Graphics")
-    print("CALLED GRAPHJICS MODULE")
-    print(AstralEngine.Graphics)
 
     _G.ENUM = require("Lib.Enum")
 
@@ -61,7 +59,7 @@ function lovr.load()
 
     require("Engine.AssetManager")
 
-    World.Component.LoadComponents({GetDir = lovr.filesystem.getDirectoryItems})
+    World.Component.LoadComponents()
 
     World.Component.__RunPostPass()
 

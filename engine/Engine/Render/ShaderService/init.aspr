@@ -232,7 +232,7 @@ function ShaderService.ComposeShader(Type,Search,Params)
         [&ST_Compute] = {}
     }
 
-    processchildfiles("GAMEFILE/Assets/Shaders/"..Search, function(a)
+    for _,a in ipairs(lovr.filesystem.getAliasedFiles("Shaders/"..Search)) do
         if FileSystem.isFile(a) then
             local F = a:match("([^/\\]+)$")
             local _, ShaderType, FileType = F:match("([^.]+)%.?([^.]*)%.?([^.]*)")
@@ -255,7 +255,7 @@ function ShaderService.ComposeShader(Type,Search,Params)
             Buckets[Key][#Buckets[Key]+1] = Pragmas
 
         end
-    end)
+    end
 
     for i in pairs(Buckets) do
         if i & Type ~= Type then Buckets[i] = nil continue end

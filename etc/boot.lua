@@ -110,6 +110,65 @@ end
 function lovr.boot()
     lovr.filesystem = require("lovr.filesystem")
 
+    local Empty = {}
+    local Cache = {}
+    lovr.filesystem.__AliasCache = Cache
+
+    lovr.filesystem.alias = function(Path, Alias)
+        Alias = Alias:gsub("^/+", ""):gsub("/+$", ""):gsub("//+", "/")
+        -- assumes normalized path
+        Cache[Alias] = Cache[Alias] or {}
+        table.insert(Cache[Alias], Path)
+    end
+
+    lovr.filesystem.getAliasedFiles = function(Alias)
+        Alias = Alias:gsub("^/+", ""):gsub("/+$", ""):gsub("//+", "/")
+        local FilePaths = {}
+
+        if not Cache[Alias] then
+            return FilePaths
+        end
+
+        local Queue = {}
+        local Check = {}
+
+        for _, Path in ipairs(Cache[Alias]) do
+            if Check[Path] then
+                continue
+            end
+            Check[Path] = true
+            if lovr.filesystem.isDirectory(Path) then
+                table.insert(Queue, Path)
+            elseif lovr.filesystem.isFile(Path) then
+                table.insert(FilePaths, Path)
+            end
+        end
+
+        while #Queue > 0 do
+            local CurDir = table.remove(Queue, 1)
+
+            for _, Item in ipairs(lovr.filesystem.getDirectoryItems(CurDir)) do
+                local Path = CurDir .. "/" .. Item
+                if Check[Path] then
+                    continue
+                end
+                Check[Path] = true
+
+                if lovr.filesystem.isDirectory(Path) then
+                    table.insert(Queue, Path)
+                elseif lovr.filesystem.isFile(Path) then
+                    table.insert(FilePaths, Path)
+                end
+            end
+        end
+
+        return FilePaths
+    end
+
+    lovr.filesystem.getAliased = function(Alias)
+        return Cache[Alias] or Empty
+    end
+
     local FSType = package.config:sub(1, 1)
     FSType = FSType == "\\" and "Win" or "Unix"
     lovr.filesystem.filesystemType = FSType

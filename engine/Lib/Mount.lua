@@ -14,7 +14,7 @@ local function RecursiveMount(Path, Search, CoreMountPoint, Recurse, Handler)
 
             local MountAt = CoreMountPoint .. "/" .. v
             if Handler then
-                MountAt = Handler(v) or MountAt
+                MountAt = Handler(v, TruePath, Search .. "/" .. v) or MountAt
             end
 
             local MountAttempt, Err = FS.mount(TruePath, MountAt, true)

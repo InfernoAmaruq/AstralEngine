@@ -16,6 +16,8 @@ World.TopPtr = 0   -- points at highest alive object
 
 -- fires event on ancestry change in parent-child pairs
 World.OnAncestryChanged = SignalLib.new(SignalLib.Type.RTC)
+World.EntityAdded = SignalLib.new(SignalLib.Type.RTC)
+World.EntityRemoving = SignalLib.new(SignalLib.Type.RTC)
 
 function World.GetEntityFromId(Id)
     local E = World.Alive[Id]
@@ -106,6 +108,8 @@ function Entity.New(Name, ...)
 
     NewEntity.IsNull = false
 
+    World.EntityAdded:Fire(NewEntity)
+
     return NewEntity
 end
 
@@ -130,6 +134,8 @@ function Entity.CreateAtId(Id, Name, ...)
     if Obj.__id > World.TopPtr then
         World.TopPtr = Obj.__id
     end
+
+    World.EntityAdded:Fire(Obj)
 
     return Obj
 end
@@ -160,6 +166,8 @@ function Entity.Destroy(Ent, Recursive)
             Idx = Idx - 1
         end
     end
+
+    World.EntityRemoving:Fire(Ent)
 
     Component.__RemoveAllComponents(Ent)
     rawset(Ent, "IsNull", true)

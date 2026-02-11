@@ -21,11 +21,20 @@ local IdxGetter = {
     Texture = 2,
     DepthTexture = 3,
 }
-
-local Getters = {}
+local Getters = {
+    Resolution = function(self)
+        return vec2(self[6])
+    end,
+}
 local Setters = {}
 local Methods = {
-    SetRenderTarget = function(self, TargetTexture) end,
+    RebuildProjectionMatrix = function(self)
+        local CurMatrix = self[5] or Mat4()
+
+        CurMatrix:orthographic(0, self.Resolution.x, 0, self.Resolution.y, -10, 10)
+
+        self[5] = CurMatrix
+    end,
 }
 
 local MT = {
@@ -52,18 +61,48 @@ UICam.Metadata.__create = function(Input, Entity)
     local DoDepth = Input.Depth
     local DepthType = typeof(DoDepth)
 
-    -- alloc source tex
-    if not IOTexture then
-        local OutputResolution = Input.OutputResolution
-            or (vec2(AstralEngine.Window.W, AstralEngine.Window.H) * AstralEngine.Window.GetWindowDensity())
-        IOTexture = AstralEngin.Graphics.NewTexture(
-            OutputResolution.x,
-            OutputResolution.y,
-            { label = "VENEER_UI_TEXTURE", Input.Mipmaps or false }
-        )
-    end
-    -- alloc depth
+    local CamPtr
 
+    if Input.Camera then
+        -- construct from camera
+        CamPtr = Input.Camera
+        local TypeOf = typeof(CamPtr)
+
+        if TypeOf == "Entity" then
+            CamPtr = AstralEngine.Assert(
+                CamPtr:GetComponent("Camera"),
+                "PROVIDED ENTITY WITHOUT `Camera` COMPONENT",
+                "VENEER"
+            )
+        elseif TypeOf == "Component" and tostring(CamPtr) == "Camera" then
+            CamPtr = CamPtr
+        else
+            AstralEngine.Error("INVALID `Camera` PARAMETER PASSED!", "VENEER", 3)
+        end
+
+        -- we got camera, alloc texture
+
+        local TrueResolution = CamPtr.TrueResolution
+
+        IOTexture = AstralEngine.Graphics.NewTexture(
+            TrueResolution.x,
+            TrueResolution.y,
+            { label = "VENEER_UI_TEXTURE", mipmaps = Input.Mipmaps or false }
+        )
+    else -- construct tex
+        -- alloc source tex
+        if not IOTexture then
+            local OutputResolution = Input.OutputResolution
+                or (vec2(AstralEngine.Window.W, AstralEngine.Window.H) * AstralEngine.Window.GetWindowDensity())
+            IOTexture = AstralEngine.Graphics.NewTexture(
+                OutputResolution.x,
+                OutputResolution.y,
+                { label = "VENEER_UI_TEXTURE", mipmaps = Input.Mipmaps or false }
+            )
+        end
+    end -- finish construct
+
+    -- alloc depth
     local DepthTex
 
     if DepthType == "boolean" then
@@ -83,19 +122,30 @@ UICam.Metadata.__create = function(Input, Entity)
     end
 
     local Pass = AstralEngine.Graphics.NewRawPass({
-        [1] = IOTexture,
-        depth = {
-            texture = DepthTex,
-        },
+        (IOTexture[1] or IOTexture),
+        depth = DepthTex and {
+            texture = (DepthTex[1] or DepthTex),
+        } or false,
         samples = 1,
     })
 
+    Pass:setClear({ 0, 0, 0, 0 })
+
+    local ResVec = Vec2(IOTexture:getWidth(), IOTexture:getHeight())
+
     Data[1] = Pass
-    Data[2] = IOTexturea
+    Data[2] = IOTexture
     Data[3] = DepthTex
+    Data[4] = CamPtr or false
+    Data[5] = Mat4() -- proj matrix
+    Data[6] = ResVec
     Data.ResizeWithInputTexture = Input.ResizeWithInputTexture == nil and true or Input.ResizeWithInputTexture
 
+    RenderService.VeneerUI.BindUICamera(Data, Input.Priority)
+
     setmetatable(Data, MT)
+
+    Methods.RebuildProjectionMatrix(Data)
 
     return Data
 end

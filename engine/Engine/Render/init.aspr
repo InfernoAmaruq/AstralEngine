@@ -8,6 +8,27 @@ local Stack = {}
 local Cams = {}
 local PassTable = {}
 
+local DepthEnum = ENUM({
+    GreaterEqual = 0b110,
+    Equal = 0b100,
+    Greater = 0b010,
+    Less = 0b001,
+    LessEqual = 0b101,
+    None = 0
+},"DepthTest")
+
+local DepthTranslationTable = {
+    [DepthEnum.GreaterEqual.RawValue] = ">=",
+    [DepthEnum.Equal.RawValue] = "=",
+    [DepthEnum.Greater.RawValue] = ">",
+    [DepthEnum.Less.RawValue] = "<",
+    [DepthEnum.LessEqual.RawValue] = "<="
+}
+
+Renderer.TranslateDepthEnum = function(Enum)
+    return DepthTranslationTable[rtype(Enum) == "number" and Enum or Enum.RawValue]
+end
+
 -- PASS STORAGE
 @execute<UNSAFE>{if lovr.headset then return "local CONSTOFFSET = 2" else return "local CONSTOFFSET = 1" end}
 

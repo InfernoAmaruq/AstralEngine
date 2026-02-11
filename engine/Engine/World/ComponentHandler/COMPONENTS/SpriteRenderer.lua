@@ -9,15 +9,16 @@ local ProcessorFunc = function(p, _, c)
     if not SR[1] then
         return
     end
+    p:push('state')
     p:setColor(SR[3],SR[4],SR[5],SR[6])
     local TRANSFORM = c.Transform
-    p:push('state')
     if rawget(SR[1],2) then
         p:send("AtlasData",SR[1][2])
     else
         p:send("AtlasData",NULL_BUFFER)
     end
     local Sampler = SR[7]
+
     if Sampler then p:setSampler"nearest" end
 
     if SR[8] then

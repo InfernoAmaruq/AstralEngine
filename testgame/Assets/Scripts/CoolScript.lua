@@ -60,17 +60,6 @@ print("GET RESOLUTION")
 print("RES:", CAM.Camera.Resolution)
 print("BIND")
 
-GetService("ContextActionService").Bind("SPACE1", 100, function()
-    print("SPACE1")
-end, ENUM.KeyCode.z)
-
-GetService("ContextActionService").Bind("SPACE2", 50, function()
-    print("SPACE2")
-    return true
-end, ENUM.KeyCode.z)
-
 print(CAM.Camera:ScreenPointToRay(500, 500))
 task.wait(2)
 print(CAM.Camera:WorldToScreenPoint(RES["WALL"].Transform.Position))
-
-GetService("RunService").BindToStep("CAM", 950, function(pass) end)

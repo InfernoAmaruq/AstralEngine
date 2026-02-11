@@ -66,6 +66,7 @@ local FIELDS = {
     OITDepth = 23,
     DepthTexture = 24,
     Density = 25,
+    ProjectionMatrix = 26,
 }
 
 local function RawViewToRay(self, Vector)
@@ -142,6 +143,18 @@ local METHODS = {
         end
 
         return V * self.Resolution
+    end,
+    ReconstructProjectionMatrix = function(self)
+        local CurrentMatrix = self[26] or Mat4()
+
+        local State = self[2]
+
+        if State then
+            CurrentMatrix:orthographic(self.TrueResolution.x, self.TrueResolution.y, 0.01, 0)
+        else
+            CurrentMatrix:perspective(self.RadFOV, self.Aspect, 0.01, 0)
+        end
+        self[26] = CurrentMatrix
     end,
 }
 
@@ -253,6 +266,7 @@ local function Rebuild(V, IsPass, w, h, Density)
             V.CREF[FIELDS.H] = h
             V.CREF[FIELDS.Aspect] = w / h
             V.CREF[FIELDS.Density] = Density
+            METHODS.ReconstructProjectionMatrix(V.CREF)
         end
     end
 end
@@ -360,6 +374,8 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     BoundCameras = BoundCameras + 3
 
     rawset(D, "__EntityPtr", GetService("World").GetEntityFromId(Entity))
+
+    D:ReconstructProjectionMatrix()
 
     return D
 end

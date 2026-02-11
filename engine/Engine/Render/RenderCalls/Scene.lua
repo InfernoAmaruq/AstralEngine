@@ -188,18 +188,7 @@ function Renderer.DrawScene(Frame)
         local pass, SolidPass, TransPass = CAMERA[11][1], CAMERA[22][1], CAMERA[21][1]
 
         local CMASK = CAMERA[&Cam.Mask] -- cameramask
-
-        local Projection = CAMERA[&Cam.Orth]
-            and Orth(
-                Matrix(),
-                CAMERA[7] or -HalfW,
-                CAMERA[8] or HalfW,
-                HalfH,
-                -HalfH,
-                CAMERA[5],
-                CAMERA[4]
-            )                                                                 -- W, H, Near, Far
-            or Pers(Matrix(), CAMERA[6], CAMERA[3] or BaseRatio, CAMERA[5], CAMERA[4]) -- FOV, Aspect, Near, Far
+        local Projection = CAMERA[26]
         local MATRIX = TransStorage[e][3]
         local CULL = CAMERA[15] and 'back'
 
@@ -224,6 +213,7 @@ function Renderer.DrawScene(Frame)
         local Transparent = CAMERA[13][1]
         local Reveal = CAMERA[23][1]
 
+        pass:push('state')
         pass:setShader(OITCOMPOSITE)
         pass:setFaceCull()
         pass:setBlendMode("none")
@@ -233,8 +223,8 @@ function Renderer.DrawScene(Frame)
         pass:setDepthTest()
         pass:setDepthWrite(false)
         pass:setSampler'nearest'
-
         pass:fill()
+        pass:pop('state')
     end
 end
 

@@ -31,7 +31,7 @@ local Methods = {
     RebuildProjectionMatrix = function(self)
         local CurMatrix = self[5] or Mat4()
 
-        CurMatrix:orthographic(0, self.Resolution.x, 0, self.Resolution.y, -10, 10)
+        CurMatrix:orthographic(0, self.Resolution.x, 0, self.Resolution.y, -100, 100)
 
         self[5] = CurMatrix
     end,
@@ -44,6 +44,9 @@ local MT = {
         end
         if Getters[k] then
             return Getters[k](self)
+        end
+        if IdxGetter[k] then
+            return self[IdxGetter[k]]
         end
     end,
     __newindex = function(self, k, v)
@@ -139,7 +142,10 @@ UICam.Metadata.__create = function(Input, Entity)
     Data[4] = CamPtr or false
     Data[5] = Mat4() -- proj matrix
     Data[6] = ResVec
+    Data[7] = {}  -- UIChain
     Data.ResizeWithInputTexture = Input.ResizeWithInputTexture == nil and true or Input.ResizeWithInputTexture
+    Data.__RebuildCounter = 0
+    Data.__RebuildPoint = 10
 
     RenderService.VeneerUI.BindUICamera(Data, Input.Priority)
 

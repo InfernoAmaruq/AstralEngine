@@ -260,6 +260,7 @@ LVRB.LoadWindow = function()
         title = AstralEngine._CONFIG.Game.Window.Name,
         icon = AstralEngine._CONFIG.Game.Window.Icon,
     })
+    AstralEngine.Window.SetCursorIcon = lovr.system.setCursorIcon
 end
 
 LVRB.LoadRandom = function()

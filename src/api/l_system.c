@@ -5,6 +5,16 @@
 #include "util.h"
 #include <string.h>
 
+StringEntry lovrCursorType[] = {
+    [OS_ARROW_CURSOR] = ENTRY("default"),
+    [OS_HAND_CURSOR] = ENTRY("hand"),
+    [OS_CROSSHAIR_CURSOR] = ENTRY("crosshair"),
+    [OS_IBEAM_CURSOR] = ENTRY("ibeam"),
+    [OS_HRESIZE_CURSOR] = ENTRY("hresize"),
+    [OS_VRESIZE_CURSOR] = ENTRY("vresize"),
+    {0}
+};
+
 StringEntry lovrKeyboardKey[] = {
   [OS_KEY_A] = ENTRY("a"),
   [OS_KEY_B] = ENTRY("b"),
@@ -361,6 +371,14 @@ static int l_lovrSystemSetWindowSize(lua_State* L)
     return 0;
 }
 
+static int l_lovrSystemSetCursorIcon(lua_State* L){
+    int Type = luax_checkenum(L, 1, CursorType, "default");
+
+    lovrSystemSetCursorIcon(Type);
+
+    return 0;
+}
+
 static const luaL_Reg lovrSystem[] = {
   { "getOS", l_lovrSystemGetOS },
   { "getCoreCount", l_lovrSystemGetCoreCount },
@@ -392,6 +410,7 @@ static const luaL_Reg lovrSystem[] = {
   { "setClipboardText", l_lovrSystemSetClipboardText },
   { "_getScrollDelta", l_lovrSystemGetScrollDelta },
   { "setWindowSize", l_lovrSystemSetWindowSize },
+  { "setCursorIcon", l_lovrSystemSetCursorIcon },
   { NULL, NULL }
 };
 

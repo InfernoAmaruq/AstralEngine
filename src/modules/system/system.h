@@ -38,3 +38,4 @@ float lovrSystemGetScrollDelta(void);
 const char* lovrSystemGetClipboardText(void);
 void lovrSystemSetClipboardText(const char* text);
 void lovrSystemSetWindowSize(uint32_t w, uint32_t h);
+void lovrSystemSetCursorIcon(int Icon);

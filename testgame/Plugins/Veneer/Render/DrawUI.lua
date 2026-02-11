@@ -26,6 +26,8 @@ Renderer.Late[#Renderer.Late + 1] = function()
 
     local UICams = Renderer.VeneerUI.UICameras
 
+    local Font = lovr.graphics.newFont("GAMEFILE/Plugins/Veneer/RobotoMono.ttf")
+
     GetService("RunService").BindToStep("VENEER_UI_DRAW", Plugin.Config.BaseRenderBand, function(WorldPass)
         for i = 1, #UICams do
             local Cam = UICams[i]
@@ -33,11 +35,12 @@ Renderer.Late[#Renderer.Late + 1] = function()
             Pass:reset()
             Pass:setProjection(1, Cam[5])
             Pass:setDepthTest()
+            Pass:setDepthWrite()
             Pass:setColor(0.2, 0.2, 0.2, 1)
             Pass:plane(100, 500, 0, 200, 1000)
-            Pass:setColor(0, 1, 0, 1)
+            Pass:setColor(1, 0, 0, 1)
             Pass:setFont(lovr.graphics.getDefaultFont())
-            Pass:text("UI TEST", 100, 40, 0, 50)
+            Pass:text("sigma ui", 100, 150, 0, 30)
             if Cam[4] then
                 local CamPass = Cam[4][11][1]
                 CamPass:push("state")

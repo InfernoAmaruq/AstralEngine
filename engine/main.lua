@@ -72,6 +72,8 @@ function lovr.load()
     BRIDGE.Alias()
 
     Renderer.LateCall()
+
+    AstralEngine.Plugins.Finish()
 end
 
 lovr.textinput = nil

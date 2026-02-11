@@ -4,6 +4,8 @@ local PluginCache = {}
 AstralEngine.Plugins = PluginHandler
 PluginHandler.Cache = PluginCache
 
+local LateFuncs = {}
+
 PluginHandler.Load = function(Path)
     AstralEngine.Assert(lovr.filesystem.isDirectory(Path), "INVALID PLUGIN. PLUGIN MUST BE A DIRECTORY", "PLUGIN")
 
@@ -44,8 +46,19 @@ PluginHandler.Load = function(Path)
     if Tab.OnRead then
         Tab.OnRead()
     end
+    if Tab.OnLoad then
+        table.insert(LateFuncs, Tab.OnLoad)
+    end
 end
 
-PluginHandler.Finish = function() end
+PluginHandler.Finish = function()
+    PluginHandler.Finish = nil
+
+    for _, Func in ipairs(LateFuncs) do
+        Func()
+    end
+
+    LateFuncs = nil
+end
 
 return PluginHandler

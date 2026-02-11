@@ -110,7 +110,9 @@ uintptr_t os_get_xcb_window(void) {
   return 0;
 }
 
-void os_set_window_size(uint w, uint h){return;};
+void os_set_window_size(uint w, uint h){return;}
+
+void os_set_cursor_icon(os_cursor_icon Cursor){return;;}
 
 #else
 
@@ -148,6 +150,8 @@ static struct {
   fn_mousewheel_move* onMouseWheelMove;
   uint32_t width;
   uint32_t height;
+  GLFWcursor* cursors[OS_CURSOR_COUNT];
+  os_cursor_icon current_cursor;
 } glfwState;
 
 static void onError(int code, const char* description) {
@@ -156,6 +160,11 @@ static void onError(int code, const char* description) {
 
 static void onWindowClose(GLFWwindow* window) {
   if (glfwState.onQuitRequest) {
+
+    for (int i = 1; i < OS_CURSOR_COUNT; i++){
+        if (glfwState.cursors[i]) glfwDestroyCursor(glfwState.cursors[i]);
+    }
+
     glfwState.onQuitRequest();
   }
 }
@@ -411,6 +420,18 @@ bool os_window_open(const os_window_config* config) {
     });
   }
 
+  // alloc cursor pointers
+
+  glfwState.cursors[OS_ARROW_CURSOR] = NULL;
+  glfwState.cursors[OS_IBEAM_CURSOR] = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
+  glfwState.cursors[OS_CROSSHAIR_CURSOR] = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
+  glfwState.cursors[OS_HAND_CURSOR] = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
+  glfwState.cursors[OS_HRESIZE_CURSOR] = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
+  glfwState.cursors[OS_VRESIZE_CURSOR] = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
+  glfwState.current_cursor = OS_ARROW_CURSOR;
+
+  // callbacks n stuff
+
   glfwSetWindowCloseCallback(glfwState.window, onWindowClose);
   glfwSetWindowIconifyCallback(glfwState.window, onWindowVisible);
   glfwSetWindowFocusCallback(glfwState.window, onWindowFocus);
@@ -522,6 +543,11 @@ bool os_is_mouse_down(os_mouse_button button) {
 
 bool os_is_key_down(os_key key) {
   return glfwState.window ? glfwGetKey(glfwState.window, convertKey(key)) == GLFW_PRESS : false;
+}
+
+void os_set_cursor_icon(os_cursor_icon Cursor){
+    glfwSetCursor(glfwState.window, glfwState.cursors[Cursor]);
+    glfwState.current_cursor = Cursor;
 }
 
 #if defined(_WIN32)

@@ -1,4 +1,5 @@
 local Signal = {}
+
 Signal.__index = Signal
 Signal.SCHEDULER = nil
 Signal.CLOCK = os.clock
@@ -25,6 +26,10 @@ function Signal.new(Type, timeout)
     end
 
     return setmetatable(Tab, Signal)
+end
+
+function Signal:GetListenerCount()
+    return #self._connections
 end
 
 local DisconnectFunc = function(s)

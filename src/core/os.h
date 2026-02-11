@@ -135,6 +135,16 @@ typedef enum {
 } os_key;
 
 typedef enum {
+    OS_ARROW_CURSOR,
+    OS_IBEAM_CURSOR,
+    OS_CROSSHAIR_CURSOR,
+    OS_HAND_CURSOR,
+    OS_HRESIZE_CURSOR,
+    OS_VRESIZE_CURSOR,
+} os_cursor_icon;
+#define OS_CURSOR_COUNT 6
+
+typedef enum {
   BUTTON_PRESSED,
   BUTTON_RELEASED
 } os_button_action;
@@ -215,3 +225,4 @@ uintptr_t os_get_xcb_connection(void);
 uintptr_t os_get_xcb_window(void);
 
 void os_set_window_size(uint32_t width, uint32_t height);
+void os_set_cursor_icon(os_cursor_icon icon);

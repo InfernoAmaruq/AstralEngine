@@ -3,14 +3,21 @@ local Conf = loadfile("./config.lua")()
 
 Handle.Config = Conf
 
-return {
-    Name = "VeneerUI",
+local Name = "VeneerUI"
+local Ver = "0.0.1"
 
-    Version = "0.0.1",
+return {
+    Name = Name,
+
+    Version = Ver,
 
     AliasMap = {
         ["./Shader"] = "Shaders",
         ["./Components"] = "Components",
         ["./Render"] = "RenderCalls",
     },
+
+    OnLoad = function()
+        AstralEngine.Log(Name .. " version: " .. Ver .. " ready", "info", "VENEER")
+    end,
 }

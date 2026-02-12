@@ -1,7 +1,5 @@
 local Camera = {}
 
--- nts: add MSAA
-
 local Renderer = GetService("Renderer")
 local Component = GetService("Component")
 

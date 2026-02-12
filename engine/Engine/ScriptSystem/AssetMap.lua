@@ -163,6 +163,10 @@ local function ResolveParent(Child, Parent)
     ChildAnc:SetParent(Parent)
 end
 
+local LateComponentList = {
+    Collider = true,
+}
+
 function AssetMapLoader.LoadAssetMap(Map)
     local RESERVED = {}
 
@@ -174,6 +178,8 @@ function AssetMapLoader.LoadAssetMap(Map)
     local ENTITIES = {}
 
     -- SPAWNING ASSETS
+
+    local LateCache = {}
 
     for i = 1, #Map do
         local Val = Map[i]
@@ -251,7 +257,17 @@ function AssetMapLoader.LoadAssetMap(Map)
         if not Val.Components then
             continue
         end
+        -- we have late init components, like 'Colliders', which MUST have a transform present at build time (not optional, like with Camera transform)
         for Name, Data in pairs(Val.Components) do
+            if LateComponentList[Name] then
+                LateCache[Name] = Data
+                continue
+            end
+            Ent:AddComponent(Name, Data, true)
+        end
+
+        for Name, Data in pairs(LateCache) do
+            LateCache[Name] = nil
             Ent:AddComponent(Name, Data, true)
         end
     end

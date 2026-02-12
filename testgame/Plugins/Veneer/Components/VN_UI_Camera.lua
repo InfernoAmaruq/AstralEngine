@@ -1,21 +1,11 @@
 local RenderService = GetService("Renderer")
+local ComponentService = GetService("Component")
 
 local UICam = {}
 
 UICam.Name = "UICamera"
 
 UICam.Metadata = {}
-
---[[
-    Input pattern
-
-    >IO
-    .OutputTexture
-    .OutputResolution?
-
-    >Update rate (1-FrameRate(hz))
-
---]]
 
 local IdxGetter = {
     Texture = 2,
@@ -34,6 +24,9 @@ local Methods = {
         CurMatrix:orthographic(0, self.Resolution.x, 0, self.Resolution.y, -100, 100)
 
         self[5] = CurMatrix
+    end,
+    Rebuild = function(self)
+        self[7] = {} -- invalidate old one. I'd usually clear but re-alloc cost is amortized
     end,
 }
 
@@ -56,8 +49,12 @@ local MT = {
     end,
 }
 
-UICam.Metadata.__create = function(Input, Entity)
+UICam.Metadata.__create = function(Input, Entity, Skip)
     local Data = {}
+
+    if not Skip and not ComponentService.HasComponent(Entity, "Ancestry") then
+        ComponentService.AddComponent(Entity, "Ancestry")
+    end
 
     local IOTexture = Input.OutputTexture
 

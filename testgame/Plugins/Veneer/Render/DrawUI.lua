@@ -32,15 +32,22 @@ Renderer.Late[#Renderer.Late + 1] = function()
         for i = 1, #UICams do
             local Cam = UICams[i]
             local Pass = Cam[1]
+            local Objects = Cam[7]
+            local ObjCount = #Objects
+            if ObjCount == 0 then
+                --continue
+            end
             Pass:reset()
             Pass:setProjection(1, Cam[5])
             Pass:setDepthTest()
             Pass:setDepthWrite()
-            Pass:setColor(0.2, 0.2, 0.2, 1)
-            Pass:plane(100, 500, 0, 200, 1000)
-            Pass:setColor(1, 0, 0, 1)
-            Pass:setFont(lovr.graphics.getDefaultFont())
-            Pass:text("sigma ui", 100, 150, 0, 30)
+            -- iter and draw obj
+
+            for ObjIdx = 1, ObjCount do
+                local Obj = Objects[ObjIdx]
+            end
+
+            -- to cam
             if Cam[4] then
                 local CamPass = Cam[4][11][1]
                 CamPass:push("state")

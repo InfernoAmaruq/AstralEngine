@@ -4,8 +4,13 @@ local WorldCam = RES["CAMERA"]
 local CamComp = WorldCam.Camera
 
 WorldCam:AddComponent("UICamera", { Camera = CamComp })
+WorldCam:AddComponent("Ancestry")
 
-print("TEST")
+local UICanvas = EntityService.New("Canvas")
+UICanvas:AddComponent("UICanvas")
+UICanvas:AddComponent("Ancestry")
+UICanvas.Ancestry.Parent = WorldCam
+
 AstralEngine.Window.SetCursorIcon("crosshair")
 
 task.wait(2)

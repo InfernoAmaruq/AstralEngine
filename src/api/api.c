@@ -344,6 +344,8 @@ void luax_vlog(void* context, int level, const char* tag, const char* format, va
     lua_pushstring(L, levels[level]);
     lua_pushstring(L, tag);
     lua_call(L, 3, 0);
+  } else {
+    lua_pop(L, 1);
   }
   lua_pop(L, 1);
 }

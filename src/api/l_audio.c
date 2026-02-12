@@ -117,6 +117,11 @@ static int l_lovrAudioIsStarted(lua_State* L) {
   return 1;
 }
 
+static int l_lovrAudioUpdate(lua_State* L) {
+  lovrAudioUpdate();
+  return 0;
+}
+
 static int l_lovrAudioGetVolume(lua_State* L) {
   VolumeUnit units = luax_checkenum(L, 1, VolumeUnit, "linear");
   lua_pushnumber(L, lovrAudioGetVolume(units));
@@ -312,6 +317,7 @@ static const luaL_Reg lovrAudio[] = {
   { "start", l_lovrAudioStart },
   { "stop", l_lovrAudioStop },
   { "isStarted", l_lovrAudioIsStarted },
+  { "update", l_lovrAudioUpdate },
   { "getVolume", l_lovrAudioGetVolume },
   { "setVolume", l_lovrAudioSetVolume },
   { "getPosition", l_lovrAudioGetPosition },

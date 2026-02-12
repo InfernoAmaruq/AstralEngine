@@ -18,32 +18,43 @@
 #define CTZL __builtin_ctzl
 #endif
 
-#define FOREACH_SOURCE(s) for (uint64_t m = state.sourceMask; s = m ? state.sources[CTZL(m)] : NULL, m; m ^= (m & -m))
+#define FOREACH_SOURCE(s) for (uint64_t m = state.activeSourceMask; s = m ? state.activeSources[CTZL(m)] : NULL, m; m ^= (m & -m))
 #define OUTPUT_FORMAT SAMPLE_F32
-#define OUTPUT_CHANNELS 2
+#define MAX_OCCLUSION_SAMPLES 16
 #define BUFFER_SIZE 256
 #define MAX_SOURCES 64
 
 struct Source {
   atomic_uint ref;
-  uint32_t index;
+  uint32_t slot;
   Sound* sound;
   ma_data_converter* converter;
-  uint32_t offset;
-  float pitch;
   float volume;
+  float pitch;
   float position[3];
-  float orientation[4];
   float radius;
+  float orientation[4];
   float dipoleWeight;
   float dipolePower;
   uint8_t effects;
-  bool playing;
   bool looping;
   bool pitchable;
   bool spatial;
+  atomic_bool playing;
+  atomic_bool hasTail;
+  atomic_uint offset;
+  atomic_uint playRequest;
+  atomic_uint seekRequest;
 #ifdef LOVR_USE_PHONON
   IPLSource handle;
+  IPLHRTF hrtf;
+  IPLAudioBuffer stereoBuffer;
+  IPLSimulationInputs inputs;
+  IPLSimulationOutputs outputs[2];
+  IPLVector3 relativeDirection[2];
+  IPLDirectEffect directEffect;
+  IPLPanningEffect panningEffect;
+  IPLBinauralEffect binauralEffect;
 #endif
 };
 
@@ -62,23 +73,25 @@ struct AudioMesh {
 static atomic_uint ref;
 
 static struct {
-  bool debug;
+  uint32_t sampleRate;
   ma_log log;
-  ma_mutex lock;
   ma_context context;
   ma_device devices[2];
   ma_device_info* deviceInfo[2];
+  ma_data_converter playbackConverter;
   Sound* sinks[2];
-  Source* sources[MAX_SOURCES];
-  uint64_t sourceMask;
+  Source* activeSources[64];
+  atomic_ullong activeSourceMask;
+  uint64_t pendingSourceMask;
+  atomic_uint backbuffer;
   float position[3];
   float orientation[4];
   float absorption[3];
-  ma_data_converter playbackConverter;
-  uint32_t sampleRate;
+  bool debug;
 #ifdef LOVR_USE_PHONON
   IPLContext spatializer;
   IPLAudioSettings audioSettings;
+  IPLSimulationFlags simulationFlags;
   IPLSimulator simulator;
   IPLScene scene;
   bool sceneDirty;
@@ -99,98 +112,177 @@ static float linearToDb(float linear) {
   return 20.f * log10f(linear);
 }
 
+#ifdef LOVR_USE_PHONON
+static void poseToPhonon(float* position, float* orientation, IPLCoordinateSpace3* basis) {
+  float transform[16];
+  mat4_fromQuat(transform, orientation);
+  vec3_init(&basis->right.x, &transform[0]);
+  vec3_init(&basis->up.x, &transform[4]);
+  vec3_init(&basis->ahead.x, &transform[8]);
+  vec3_init(&basis->origin.x, position);
+}
+#endif
+
 // Device callbacks
 
 static void onPlayback(ma_device* device, void* out, const void* in, uint32_t count) {
-  if (count != BUFFER_SIZE) {
-    return;
-  }
-
+  Source* source;
   float raw[BUFFER_SIZE * 2];
   float aux[BUFFER_SIZE * 2];
   float mix[BUFFER_SIZE * 2];
   float* dst = out;
   float* buf = NULL; // The "current" buffer (used for fast paths)
 
-  ma_mutex_lock(&state.lock);
-
-  Source* source;
   FOREACH_SOURCE(source) {
-    if (!source->playing) {
-      state.sources[source->index] = NULL;
-      state.sourceMask &= ~(1ull << source->index);
-      source->index = ~0u;
-      lovrRelease(source, lovrSourceDestroy);
-      continue;
+    bool hasTail = false;
+
+    uint32_t play = atomic_exchange(&source->playRequest, ~0u);
+    if (play != ~0u) source->playing = !!play;
+
+    uint32_t seek = atomic_exchange(&source->seekRequest, ~0u);
+    if (seek != ~0u) source->offset = seek;
+
+    if (source->pitchable) {
+      float ratio = source->pitch * lovrSoundGetSampleRate(source->sound) / state.sampleRate;
+      ma_data_converter_set_rate_ratio(source->converter, ratio);
     }
 
-    // Read and convert raw frames until there's BUFFER_SIZE converted frames
-    // - No converter: just read frames into raw (it has enough space for BUFFER_SIZE frames).
-    // - Converter: keep reading as many frames as possible/needed into raw and convert into aux.
-    // - If EOF is reached, rewind and continue for looping sources, otherwise pad end with zero.
-    buf = source->converter ? aux : raw;
-    float* cursor = buf; // Edge of processed frames
-    uint32_t channelsOut = source->spatial ? 1 : 2; // If spatializer isn't converting to stereo, converter must do it
-    uint32_t framesRemaining = BUFFER_SIZE;
-    while (framesRemaining > 0) {
-      uint32_t framesRead;
+    if (source->playing) {
+      // Read and convert raw frames until there's BUFFER_SIZE converted frames
+      // - No converter: just read frames into raw (it has enough space for BUFFER_SIZE frames).
+      // - Converter: keep reading as many frames as possible/needed into raw and convert into aux.
+      // - If EOF is reached, rewind and continue for looping sources, otherwise pad end with zero.
+      buf = source->converter ? aux : raw;
+      float* cursor = buf; // Edge of processed frames
+      uint32_t channelsOut = source->spatial ? 1 : 2; // If spatializer isn't converting to stereo, converter must do it
+      uint32_t framesRemaining = BUFFER_SIZE;
 
-      if (source->converter) {
-        uint32_t channelsIn = lovrSoundGetChannelCount(source->sound);
-        uint32_t capacity = sizeof(raw) / (channelsIn * sizeof(float));
-        ma_uint64 chunk;
-        ma_data_converter_get_required_input_frame_count(source->converter, framesRemaining, &chunk);
-        framesRead = lovrSoundRead(source->sound, source->offset, MIN(chunk, capacity), raw);
-      } else {
-        framesRead = lovrSoundRead(source->sound, source->offset, framesRemaining, cursor);
+      while (framesRemaining > 0) {
+        uint32_t framesRead;
+
+        if (source->converter) {
+          uint32_t channelsIn = lovrSoundGetChannelCount(source->sound);
+          uint32_t capacity = sizeof(raw) / (channelsIn * sizeof(float));
+          ma_uint64 chunk;
+          ma_data_converter_get_required_input_frame_count(source->converter, framesRemaining, &chunk);
+          framesRead = lovrSoundRead(source->sound, source->offset, MIN(chunk, capacity), raw);
+        } else {
+          framesRead = lovrSoundRead(source->sound, source->offset, framesRemaining, cursor);
+        }
+
+        if (framesRead == 0) {
+          if (source->looping) {
+            source->offset = 0;
+            continue;
+          } else {
+            source->offset = 0;
+            source->playing = false;
+            memset(cursor, 0, framesRemaining * channelsOut * sizeof(float));
+            break;
+          }
+        } else {
+          source->offset += framesRead;
+        }
+
+        if (source->converter) {
+          ma_uint64 framesIn = framesRead;
+          ma_uint64 framesOut = framesRemaining;
+          ma_data_converter_process_pcm_frames(source->converter, raw, &framesIn, cursor, &framesOut);
+          cursor += framesOut * channelsOut;
+          framesRemaining -= framesOut;
+        } else {
+          cursor += framesRead * channelsOut;
+          framesRemaining -= framesRead;
+        }
       }
 
-      if (framesRead == 0) {
-        if (source->looping) {
-          source->offset = 0;
-          continue;
+#ifdef LOVR_USE_PHONON
+      // Spatializer
+      if (source->spatial) {
+        uint32_t index = !state.backbuffer;
+        IPLSimulationOutputs* outputs = &source->outputs[index];
+        IPLAudioBuffer monoBuffer = { .numChannels = 1, .numSamples = BUFFER_SIZE, .data = &buf };
+
+        // Direct effect
+        if (source->effects & (EFFECT_ABSORPTION | EFFECT_ATTENUATION | EFFECT_OCCLUSION | EFFECT_TRANSMISSION)) {
+          hasTail |= iplDirectEffectApply(source->directEffect, &outputs->direct, &monoBuffer, &monoBuffer) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
+        }
+
+        // Spatialization (either binaural, panning, or unspatialized mono => stereo conversion)
+        if (source->effects & EFFECT_SPATIALIZATION) {
+          if (source->hrtf) {
+            IPLBinauralEffectParams params = {
+              .direction = source->relativeDirection[index],
+              .interpolation = IPL_HRTFINTERPOLATION_BILINEAR,
+              .spatialBlend = 1.f,
+              .hrtf = source->hrtf
+            };
+
+            hasTail |= iplBinauralEffectApply(source->binauralEffect, &params, &monoBuffer, &source->stereoBuffer) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
+          } else {
+            IPLPanningEffectParams params = {
+              .direction = source->relativeDirection[index]
+            };
+
+            iplPanningEffectApply(source->panningEffect, &params, &monoBuffer, &source->stereoBuffer);
+          }
+
+          iplAudioBufferInterleave(state.spatializer, &source->stereoBuffer, mix);
         } else {
-          source->offset = 0;
-          source->playing = false;
-          memset(cursor, 0, framesRemaining * channelsOut * sizeof(float));
-          break;
+          for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+            mix[2 * i + 0] = buf[i];
+            mix[2 * i + 1] = buf[i];
+          }
+        }
+
+        buf = mix;
+      }
+#endif
+    } else if (source->spatial) {
+#ifdef LOVR_USE_PHONON
+      uint32_t directTailSize = iplDirectEffectGetTailSize(source->directEffect);
+
+      // Get mono tail from direct effect and convert to stereo, storing in mix
+      if (directTailSize > 0) {
+        buf = raw;
+        IPLAudioBuffer buffer = { .numChannels = 1, .numSamples = BUFFER_SIZE, .data = &buf };
+        hasTail |= iplDirectEffectGetTail(source->directEffect, &buffer) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
+      }
+
+      // Get stereo tail from binaural effect and mix with other tails, if any
+      if (source->hrtf && iplBinauralEffectGetTailSize(source->binauralEffect) > 0) {
+        hasTail |= iplBinauralEffectGetTail(source->binauralEffect, &source->stereoBuffer) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
+        if (directTailSize > 0) {
+          iplAudioBufferInterleave(state.spatializer, &source->stereoBuffer, aux);
+          for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+            mix[2 * i + 0] = raw[i] + aux[2 * i + 0];
+            mix[2 * i + 1] = raw[i] + aux[2 * i + 1];
+          }
+        } else {
+          iplAudioBufferInterleave(state.spatializer, &source->stereoBuffer, mix);
+        }
+      } else if (directTailSize > 0) {
+        for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+          mix[2 * i + 0] = raw[i];
+          mix[2 * i + 1] = raw[i];
         }
       } else {
-        source->offset += framesRead;
+        memset(mix, 0, BUFFER_SIZE * 2 * sizeof(float));
       }
 
-      if (source->converter) {
-        ma_uint64 framesIn = framesRead;
-        ma_uint64 framesOut = framesRemaining;
-        ma_data_converter_process_pcm_frames(source->converter, raw, &framesIn, cursor, &framesOut);
-        cursor += framesOut * channelsOut;
-        framesRemaining -= framesOut;
-      } else {
-        cursor += framesRead * channelsOut;
-        framesRemaining -= framesRead;
-      }
-    }
-
-    // Spatialize
-    if (source->spatial) {
-      // lovrSpatializerApply(source, buf, mix, BUFFER_SIZE);
       buf = mix;
+#endif
     }
 
     // Mix
     float volume = source->volume;
-    for (uint32_t i = 0; i < OUTPUT_CHANNELS * BUFFER_SIZE; i++) {
+    for (uint32_t i = 0; i < 2 * BUFFER_SIZE; i++) {
       dst[i] += buf[i] * volume;
     }
+
+    // Once we set this to false, the source could get destroyed (if it's not playing)
+    source->hasTail = hasTail;
   }
-
-  // Tail
-  // uint32_t tailCount = lovrSpatializerApplyTail(aux, mix, BUFFER_SIZE);
-  // for (uint32_t i = 0; i < tailCount * OUTPUT_CHANNELS; i++) {
-    // dst[i] += mix[i];
-  // }
-
-  ma_mutex_unlock(&state.lock);
 
   if (state.sinks[AUDIO_PLAYBACK]) {
     uint64_t capacity = sizeof(aux) / lovrSoundGetChannelCount(state.sinks[AUDIO_PLAYBACK]) / sizeof(float);
@@ -199,7 +291,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
       ma_uint64 framesWritten = capacity;
       ma_data_converter_process_pcm_frames(&state.playbackConverter, dst, &framesConsumed, aux, &framesWritten);
       lovrSoundWrite(state.sinks[AUDIO_PLAYBACK], 0, framesWritten, aux, NULL);
-      dst += framesConsumed * OUTPUT_CHANNELS;
+      dst += framesConsumed * 2;
       count -= framesConsumed;
     }
   }
@@ -211,20 +303,29 @@ static void onCapture(ma_device* device, void* output, const void* input, uint32
 
 static const ma_device_data_proc callbacks[] = { onPlayback, onCapture };
 
-static void onLog(void* userdata, ma_uint32 level, const char* message) {
+static void onLog(void* userdata, ma_uint32 maLevel, const char* message) {
+  int level;
+  switch (maLevel) {
+    case MA_LOG_LEVEL_DEBUG: level = LOG_DEBUG; break;
+    case MA_LOG_LEVEL_INFO: level = LOG_INFO; break;
+    case MA_LOG_LEVEL_WARNING: level = LOG_WARN; break;
+    case MA_LOG_LEVEL_ERROR: level = LOG_ERROR; break;
+  }
   lovrLog(level, "MA", message);
 }
 
+#ifdef LOVR_USE_PHONON
 static void onSpatializerLog(IPLLogLevel iplLevel, const char* message) {
   int level;
   switch (iplLevel) {
-    case IPL_LOGLEVEL_INFO: level = LOG_INFO;
-    case IPL_LOGLEVEL_WARNING: level = LOG_WARN;
-    case IPL_LOGLEVEL_ERROR: level = LOG_ERROR;
-    case IPL_LOGLEVEL_DEBUG: level = LOG_DEBUG;
+    case IPL_LOGLEVEL_INFO: level = LOG_INFO; break;
+    case IPL_LOGLEVEL_WARNING: level = LOG_WARN; break;
+    case IPL_LOGLEVEL_ERROR: level = LOG_ERROR; break;
+    case IPL_LOGLEVEL_DEBUG: level = LOG_DEBUG; break;
   }
   lovrLog(level, "SA", message);
 }
+#endif
 
 // Entry
 
@@ -248,14 +349,6 @@ bool lovrAudioInit(bool debug, uint32_t sampleRate) {
     return lovrSetError("Failed to initialize miniaudio context: %s", ma_result_description(result));
   }
 
-  result = ma_mutex_init(&state.lock);
-
-  if (result != MA_SUCCESS) {
-    ma_context_uninit(&state.context);
-    lovrModuleReset(&ref);
-    return lovrSetError("Failed to create audio mutex: %s", ma_result_description(result));
-  }
-
 #ifdef LOVR_USE_PHONON
   IPLContextSettings contextSettings = {
     .version = STEAMAUDIO_VERSION,
@@ -270,11 +363,13 @@ bool lovrAudioInit(bool debug, uint32_t sampleRate) {
   state.audioSettings.samplingRate = state.sampleRate;
   state.audioSettings.frameSize = BUFFER_SIZE;
 
+  state.simulationFlags = IPL_SIMULATIONFLAGS_DIRECT | IPL_SIMULATIONFLAGS_REFLECTIONS;
+
   IPLSimulationSettings simulationSettings = {
-    .flags = IPL_SIMULATIONFLAGS_DIRECT | IPL_SIMULATIONFLAGS_REFLECTIONS,
+    .flags = state.simulationFlags,
     .sceneType = IPL_SCENETYPE_DEFAULT,
     .reflectionType = IPL_REFLECTIONEFFECTTYPE_CONVOLUTION,
-    .maxNumOcclusionSamples = 16,
+    .maxNumOcclusionSamples = MAX_OCCLUSION_SAMPLES,
     .maxNumRays = 4096,
     .numDiffuseSamples = 1024,
     .maxDuration = 1.f,
@@ -293,6 +388,8 @@ bool lovrAudioInit(bool debug, uint32_t sampleRate) {
   if (iplSceneCreate(state.spatializer, &sceneSettings, &state.scene)) {
     return lovrAudioDestroy(), lovrSetError("Failed to create SteamAudio scene");
   }
+
+  iplSimulatorSetScene(state.simulator, state.scene);
 #endif
 
   // SteamAudio's default frequency-dependent absorption coefficients for air
@@ -313,7 +410,6 @@ void lovrAudioDestroy(void) {
   }
   Source* source;
   FOREACH_SOURCE(source) lovrRelease(source, lovrSourceDestroy);
-  ma_mutex_uninit(&state.lock);
   ma_context_uninit(&state.context);
   lovrRelease(state.sinks[AUDIO_PLAYBACK], lovrSoundDestroy);
   lovrRelease(state.sinks[AUDIO_CAPTURE], lovrSoundDestroy);
@@ -402,7 +498,7 @@ bool lovrAudioSetDevice(AudioType type, void* id, size_t size, Sound* sink, Audi
     config.playback.pDeviceID = (ma_device_id*) id;
     config.playback.shareMode = shareModes[shareMode];
     config.playback.format = ma_format_f32;
-    config.playback.channels = OUTPUT_CHANNELS;
+    config.playback.channels = 2;
     config.sampleRate = state.sampleRate;
     if (sink) {
       ma_data_converter_config converterConfig = ma_data_converter_config_init_default();
@@ -449,6 +545,64 @@ bool lovrAudioIsStarted(AudioType type) {
   return ma_device_is_started(&state.devices[type]);
 }
 
+void lovrAudioUpdate(void) {
+  Source* source;
+
+  FOREACH_SOURCE(source) {
+    if (!source->playing && source->playRequest != 1 && !source->hasTail) {
+#ifdef LOVR_USE_PHONON
+      iplSourceRemove(source->handle, state.simulator);
+      iplHRTFRelease(&source->hrtf);
+      source->hrtf = NULL;
+#endif
+      state.activeSourceMask &= ~(1ull << source->slot);
+      state.pendingSourceMask &= ~(1ull << source->slot);
+      state.activeSources[source->slot] = NULL;
+      source->slot = ~0u;
+      lovrRelease(source, lovrSourceDestroy);
+    }
+  }
+
+#ifdef LOVR_USE_PHONON
+  if (state.sceneDirty) {
+    iplSceneCommit(state.scene);
+    state.sceneDirty = false;
+  }
+
+  iplSimulatorCommit(state.simulator);
+
+  IPLSimulationSharedInputs sharedInputs;
+  poseToPhonon(state.position, state.orientation, &sharedInputs.listener);
+  sharedInputs.numRays = 4096;
+  sharedInputs.numBounces = 16;
+  sharedInputs.duration = 1.f;
+  sharedInputs.order = 1;
+  sharedInputs.irradianceMinDistance = .01f;
+
+  iplSimulatorSetSharedInputs(state.simulator, state.simulationFlags, &sharedInputs);
+
+  uint32_t backbuffer = state.backbuffer;
+
+  FOREACH_SOURCE(source) {
+    poseToPhonon(source->position, source->orientation, &source->inputs.source);
+    vec3_sub(vec3_init(&source->relativeDirection[backbuffer].x, source->position), state.position);
+    memcpy(source->inputs.airAbsorptionModel.coefficients, state.absorption, 3 * sizeof(float));
+    iplSourceSetInputs(source->handle, state.simulationFlags, &source->inputs);
+  }
+
+  iplSimulatorRunDirect(state.simulator);
+
+  FOREACH_SOURCE(source) {
+    iplSourceGetOutputs(source->handle, state.simulationFlags, &source->outputs[backbuffer]);
+  }
+
+  atomic_fetch_xor(&state.backbuffer, 0x1);
+#endif
+
+  atomic_fetch_or(&state.activeSourceMask, state.pendingSourceMask);
+  state.pendingSourceMask = 0;
+}
+
 float lovrAudioGetVolume(VolumeUnit units) {
   float volume = 0.f;
   ma_device_get_master_volume(&state.devices[AUDIO_PLAYBACK], &volume);
@@ -471,20 +625,24 @@ void lovrAudioSetPose(float position[3], float orientation[4]) {
 }
 
 bool lovrAudioSetHRTF(Blob* hrtf) {
-#if LOVR_USE_PHONON
+#ifdef LOVR_USE_PHONON
   iplHRTFRelease(&state.hrtf);
+  state.hrtf = NULL;
 
-  IPLHRTFSettings settings = {
-    .type = IPL_HRTFTYPE_SOFA,
-    .sofaData = hrtf->data,
-    .sofaDataSize = hrtf->size,
-    .volume = 1.f,
-    .normType = IPL_HRTFNORMTYPE_NONE
-  };
+  if (hrtf) {
+    IPLHRTFSettings settings = {
+      .type = IPL_HRTFTYPE_SOFA,
+      .sofaData = hrtf->data,
+      .sofaDataSize = hrtf->size,
+      .volume = 1.f,
+      .normType = IPL_HRTFNORMTYPE_NONE
+    };
 
-  if (iplHRTFCreate(state.spatializer, &state.audioSettings, &settings, &state.hrtf)) {
-    return lovrSetError("Failed to create HRTF");
+    if (iplHRTFCreate(state.spatializer, &state.audioSettings, &settings, &state.hrtf)) {
+      return lovrSetError("Failed to create HRTF");
+    }
   }
+
 #endif
   return true;
 }
@@ -498,22 +656,58 @@ void lovrAudioGetAbsorption(float absorption[3]) {
 }
 
 void lovrAudioSetAbsorption(float absorption[3]) {
-  ma_mutex_lock(&state.lock);
   memcpy(state.absorption, absorption, 3 * sizeof(float));
-  ma_mutex_unlock(&state.lock);
 }
 
 // Source
 
 static bool lovrSourceInit(Source* source) {
-#ifdef LOVR_USE_PHONON
+#ifndef LOVR_USE_PHONON
+  return true;
+#else
   IPLSourceSettings settings = { .flags = IPL_SIMULATIONFLAGS_DIRECT | IPL_SIMULATIONFLAGS_REFLECTIONS };
   if (iplSourceCreate(state.simulator, &settings, &source->handle)) {
     return lovrSetError("Failed to add source to spatializer");
   }
-#endif
+
+  source->inputs.flags = state.simulationFlags;
+  source->inputs.distanceAttenuationModel.type = IPL_DISTANCEATTENUATIONTYPE_DEFAULT;
+  source->inputs.distanceAttenuationModel.minDistance = 1.f;
+  source->inputs.airAbsorptionModel.type = IPL_AIRABSORPTIONTYPE_DEFAULT;
+  source->inputs.numOcclusionSamples = MAX_OCCLUSION_SAMPLES;
+  vec3_set(source->inputs.reverbScale, 1.f, 1.f, 1.f);
+
+  if (iplAudioBufferAllocate(state.spatializer, 2, BUFFER_SIZE, &source->stereoBuffer)) {
+    lovrSetError("Failed to allocate audio buffer");
+    goto fail;
+  }
+
+  IPLDirectEffectSettings directEffectSettings = {
+    .numChannels = 1
+  };
+
+  if (iplDirectEffectCreate(state.spatializer, &state.audioSettings, &directEffectSettings, &source->directEffect)) {
+    lovrSetError("Failed to create direct effect");
+    goto fail;
+  }
+
+  IPLPanningEffectSettings panningEffectSettings = {
+    .speakerLayout.type = IPL_SPEAKERLAYOUTTYPE_STEREO
+  };
+
+  if (iplPanningEffectCreate(state.spatializer, &state.audioSettings, &panningEffectSettings, &source->panningEffect)) {
+    lovrSetError("Failed to create panning effect");
+    goto fail;
+  }
 
   return true;
+fail:
+  iplPanningEffectRelease(&source->panningEffect);
+  iplDirectEffectRelease(&source->directEffect);
+  iplAudioBufferFree(state.spatializer, &source->stereoBuffer);
+  iplSourceRelease(&source->handle);
+  return false;
+#endif
 }
 
 Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial, uint32_t effects) {
@@ -521,7 +715,7 @@ Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial, uint32_t ef
 
   Source* source = lovrCalloc(sizeof(Source));
   source->ref = 1;
-  source->index = ~0u;
+  source->slot = ~0u;
   source->pitch = 1.f;
   source->volume = 1.f;
   source->pitchable = pitchable;
@@ -564,7 +758,7 @@ Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial, uint32_t ef
 Source* lovrSourceClone(Source* source) {
   Source* clone = lovrCalloc(sizeof(Source));
   clone->ref = 1;
-  clone->index = ~0u;
+  clone->slot = ~0u;
   clone->pitch = source->pitch;
   clone->volume = source->volume;
   vec3_init(clone->position, source->position);
@@ -612,6 +806,11 @@ Source* lovrSourceClone(Source* source) {
 void lovrSourceDestroy(void* ref) {
   Source* source = ref;
 #ifdef LOVR_USE_PHONON
+  iplHRTFRelease(&source->hrtf);
+  iplBinauralEffectRelease(&source->binauralEffect);
+  iplPanningEffectRelease(&source->panningEffect);
+  iplDirectEffectRelease(&source->directEffect);
+  iplAudioBufferFree(state.spatializer, &source->stereoBuffer);
   iplSourceRelease(&source->handle);
 #endif
   lovrRelease(source->sound, lovrSoundDestroy);
@@ -625,30 +824,42 @@ Sound* lovrSourceGetSound(Source* source) {
 }
 
 bool lovrSourcePlay(Source* source) {
-  // If too many sources already running, refuse to play
-  if (state.sourceMask == ~0ull) {
-    return false;
-  }
-
-  ma_mutex_lock(&state.lock);
-
-  source->playing = true;
-
-  // If the source isn't tracked, set its index to the right-most zero bit in the mask
-  if (source->index == ~0u) {
-    uint32_t index = state.sourceMask ? CTZL(~state.sourceMask) : 0;
-    state.sourceMask |= (1ull << index);
-    state.sources[index] = source;
-    source->index = index;
+  if (source->slot == ~0u) {
+    uint64_t mask = state.activeSourceMask | state.pendingSourceMask;
+    if (mask == ~0ull) return false;
+    uint32_t slot = mask ? CTZL(~mask) : 0;
+    state.pendingSourceMask |= (1ull << slot);
+    state.activeSources[slot] = source;
+    source->slot = slot;
     lovrRetain(source);
+#ifdef LOVR_USE_PHONON
+    iplSourceAdd(source->handle, state.simulator);
+
+    if (source->hrtf) lovrUnreachable();
+    source->hrtf = state.hrtf;
+    iplHRTFRetain(source->hrtf);
+
+    if (source->hrtf && !source->binauralEffect) {
+      IPLBinauralEffectSettings binauralEffectSettings = {
+        .hrtf = source->hrtf
+      };
+
+      iplBinauralEffectCreate(state.spatializer, &state.audioSettings, &binauralEffectSettings, &source->binauralEffect);
+    }
+#endif
   }
 
-  ma_mutex_unlock(&state.lock);
+  source->playRequest = 1;
+
   return true;
 }
 
 void lovrSourcePause(Source* source) {
-  source->playing = false;
+  if (source->slot == ~0u) {
+    source->playing = false;
+  } else {
+    source->playRequest = 0;
+  }
 }
 
 void lovrSourceStop(Source* source) {
@@ -657,7 +868,7 @@ void lovrSourceStop(Source* source) {
 }
 
 bool lovrSourceIsPlaying(Source* source) {
-  return source->playing;
+  return source->playing || source->playRequest == 1;
 }
 
 bool lovrSourceIsLooping(Source* source) {
@@ -677,15 +888,7 @@ float lovrSourceGetPitch(Source* source) {
 bool lovrSourceSetPitch(Source* source, float pitch) {
   lovrCheck(pitch > 0.f, "Source pitch must be positive");
   lovrCheck(source->pitchable, "Source must be created with the 'pitchable' flag to change its pitch");
-
-  if (source->pitch != pitch) {
-    source->pitch = pitch;
-    ma_mutex_lock(&state.lock);
-    float ratio = (float) lovrSoundGetSampleRate(source->sound) / state.sampleRate;
-    ma_data_converter_set_rate_ratio(source->converter, pitch * ratio);
-    ma_mutex_unlock(&state.lock);
-  }
-
+  source->pitch = pitch;
   return true;
 }
 
@@ -699,9 +902,7 @@ void lovrSourceSetVolume(Source* source, float volume, VolumeUnit units) {
 }
 
 void lovrSourceSeek(Source* source, double time, TimeUnit units) {
-  ma_mutex_lock(&state.lock);
-  source->offset = units == UNIT_SECONDS ? (uint32_t) (time * lovrSoundGetSampleRate(source->sound) + .5) : (uint32_t) time;
-  ma_mutex_unlock(&state.lock);
+  source->seekRequest = units == UNIT_SECONDS ? (uint32_t) (time * lovrSoundGetSampleRate(source->sound) + .5) : (uint32_t) time;
 }
 
 double lovrSourceTell(Source* source, TimeUnit units) {
@@ -723,10 +924,8 @@ void lovrSourceGetPose(Source* source, float position[3], float orientation[4]) 
 }
 
 void lovrSourceSetPose(Source* source, float position[3], float orientation[4]) {
-  ma_mutex_lock(&state.lock);
   if (position) vec3_init(source->position, position);
   if (orientation) quat_init(source->orientation, orientation);
-  ma_mutex_unlock(&state.lock);
 }
 
 float lovrSourceGetRadius(Source* source) {
@@ -735,6 +934,10 @@ float lovrSourceGetRadius(Source* source) {
 
 void lovrSourceSetRadius(Source* source, float radius) {
   source->radius = radius;
+#ifdef LOVR_USE_PHONON
+  source->inputs.occlusionRadius = radius;
+  source->inputs.occlusionType = radius > 0.f ? IPL_OCCLUSIONTYPE_VOLUMETRIC : IPL_OCCLUSIONTYPE_RAYCAST;
+#endif
 }
 
 void lovrSourceGetDirectivity(Source* source, float* weight, float* power) {
@@ -745,6 +948,10 @@ void lovrSourceGetDirectivity(Source* source, float* weight, float* power) {
 void lovrSourceSetDirectivity(Source* source, float weight, float power) {
   source->dipoleWeight = weight;
   source->dipolePower = power;
+#ifdef LOVR_USE_PHONON
+  source->inputs.directivity.dipoleWeight = weight;
+  source->inputs.directivity.dipolePower = power;
+#endif
 }
 
 bool lovrSourceIsEffectEnabled(Source* source, Effect effect) {
@@ -754,10 +961,25 @@ bool lovrSourceIsEffectEnabled(Source* source, Effect effect) {
 bool lovrSourceSetEffectEnabled(Source* source, Effect effect, bool enabled) {
   lovrCheck(source->spatial, "Sources must be created with the spatial flag to enable effects");
 
+  static const IPLDirectSimulationFlags phononEffectFlags[] = {
+    [EFFECT_ABSORPTION] = IPL_DIRECTSIMULATIONFLAGS_AIRABSORPTION,
+    [EFFECT_ATTENUATION] = IPL_DIRECTSIMULATIONFLAGS_DISTANCEATTENUATION,
+    [EFFECT_OCCLUSION] = IPL_DIRECTSIMULATIONFLAGS_OCCLUSION,
+    [EFFECT_REVERB] = 0,
+    [EFFECT_SPATIALIZATION] = 0,
+    [EFFECT_TRANSMISSION] = IPL_DIRECTSIMULATIONFLAGS_TRANSMISSION
+  };
+
   if (enabled) {
     source->effects |= (1 << effect);
+#ifdef LOVR_USE_PHONON
+    source->inputs.directFlags |= phononEffectFlags[effect];
+#endif
   } else {
     source->effects &= ~(1 << effect);
+#ifdef LOVR_USE_PHONON
+    source->inputs.directFlags &= ~phononEffectFlags[effect];
+#endif
   }
 
   return true;
@@ -888,6 +1110,7 @@ AudioMesh* lovrAudioMeshClone(AudioMesh* parent) {
   mesh->scene = parent->scene;
 #endif
   lovrRetain(parent);
+  mesh->parent = parent;
   return mesh;
 }
 
@@ -931,7 +1154,7 @@ void lovrAudioMeshGetTransform(AudioMesh* mesh, float* transform) {
 void lovrAudioMeshSetTransform(AudioMesh* mesh, float* transform) {
 #ifdef LOVR_USE_PHONON
   IPLMatrix4x4 iplTransform;
-  mat4_transpose(mat4_init(&iplTransform.elements[0][0], mesh->transform));
+  mat4_transpose(mat4_init(&iplTransform.elements[0][0], transform));
   iplInstancedMeshUpdateTransform(mesh->instancedMesh, state.scene, iplTransform);
   state.sceneDirty = true;
 #endif

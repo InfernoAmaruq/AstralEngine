@@ -70,6 +70,7 @@ bool lovrAudioSetDevice(AudioType type, void* id, size_t size, struct Sound* sin
 bool lovrAudioStart(AudioType type);
 bool lovrAudioStop(AudioType type);
 bool lovrAudioIsStarted(AudioType type);
+void lovrAudioUpdate(void);
 float lovrAudioGetVolume(VolumeUnit units);
 void lovrAudioSetVolume(float volume, VolumeUnit units);
 void lovrAudioGetPose(float position[3], float orientation[4]);
@@ -98,7 +99,6 @@ void lovrSourceSetVolume(Source* source, float volume, VolumeUnit units);
 void lovrSourceSeek(Source* source, double time, TimeUnit units);
 double lovrSourceTell(Source* source, TimeUnit units);
 double lovrSourceGetDuration(Source* source, TimeUnit units);
-bool lovrSourceIsPitchable(Source* source);
 bool lovrSourceIsSpatial(Source* source);
 void lovrSourceGetPose(Source* source, float position[3], float orientation[4]);
 void lovrSourceSetPose(Source* source, float position[3], float orientation[4]);

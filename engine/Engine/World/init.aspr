@@ -46,6 +46,9 @@ local function ALLOC(Use)
         UniqueId = Gen << SHIFT | ID,
         IsNull = true,
         __context = _G.CONTEXT and _G.CONTEXT.Gen or 0,
+        Destroying = SignalLib.new(SignalLib.Type.NoCtx | SignalLib.Type.RTC),
+        ComponentAdded = SignalLib.new(SignalLib.Type.NoCtx | SignalLib.Type.RTC),
+        ComponentRemoving = SignalLib.new(SignalLib.Type.NoCtx | SignalLib.Type.RTC),
     }, InstMeta)
 
     World.Alive[World.Capacity] = t
@@ -168,6 +171,11 @@ function Entity.Destroy(Ent, Recursive)
     end
 
     World.EntityRemoving:Fire(Ent)
+    Ent.Destroying:Fire()
+
+    Ent.Destroying:Clear()
+    Ent.ComponentAdded:Clear()
+    Ent.ComponentRemoving:Clear()
 
     Component.__RemoveAllComponents(Ent)
     rawset(Ent, "IsNull", true)

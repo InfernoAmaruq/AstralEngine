@@ -137,6 +137,7 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
 
     WRITECOLOR(Color)
     Comp.__RenderTypePtr = RT
+    Comp.__Ent = e
 
     return setmetatable(Comp,MT)
 end

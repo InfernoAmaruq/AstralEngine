@@ -103,10 +103,13 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
 
     Component.Components[id].Storage[e] = D
     Component.SetComponents[e][id] = D
+
+    GetService"World".GetEntityFromId(e).ComponentAdded:Fire(id,D)
+
     return D
 end
 
-function Component.RemoveComponent(e, id)
+function Component.RemoveComponent(e, id, Global)
     if type(e) == &TYPE then
         e = e.__id
     end
@@ -115,6 +118,10 @@ function Component.RemoveComponent(e, id)
 
     if not Component.SetComponents[e] or not Comp then
         return
+    end
+
+    if not Global then
+        GetService"World".GetEntityFromId(e).ComponentRemoving:Fire(id, Component.SetComponents[e][id])
     end
 
     local CompInst = Component.SetComponents[e][id]
@@ -141,7 +148,7 @@ function Component.__RemoveAllComponents(EntityHandle)
     end
 
     for CId in pairs(Component.SetComponents[Id]) do
-        Component.RemoveComponent(Id,CId)
+        Component.RemoveComponent(Id,CId,true)
     end
 end
 

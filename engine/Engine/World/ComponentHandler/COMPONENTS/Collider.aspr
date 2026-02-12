@@ -103,6 +103,7 @@ local SHAREDT = {
         end
         if self.InheritanceMethod.RawValue & INHM.Root.RawValue ~= 0 then
             self.ShapeList[1]:SetSize(v)
+            self.ColRef:setAwake(true)
         end
     end
 }

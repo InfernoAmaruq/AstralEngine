@@ -109,7 +109,7 @@ SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
     SR[1] = Image
     SR[7] = DATA.UseNearest or false
     SR[8] = DATA.ScaleWithAspect or false
-    SR.__Ent = e
+    SR.__Ent = Entity
     SR.__RenderTypePtr = RT
     setmetatable(SR, SRMT)
 

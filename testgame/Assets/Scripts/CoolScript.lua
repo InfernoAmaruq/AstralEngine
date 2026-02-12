@@ -40,9 +40,6 @@ local S = KeyEnum.s.RawValue
 local E = KeyEnum.e.RawValue
 local Q = KeyEnum.q.RawValue
 
-BALL.Collider.Kinematic = true
-BALL.Collider:MoveKinematic(vec3(0, 2, 0), nil, 5)
-
 GetService("RunService").BindToStep("CAM_STEP", 450, function(dt)
     local F = KeyArr[W] and 1 or (KeyArr[S] and -1) or 0
     local R = KeyArr[D] and 1 or (KeyArr[A] and -1) or 0

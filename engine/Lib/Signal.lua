@@ -32,6 +32,14 @@ function Signal:GetListenerCount()
     return #self._connections
 end
 
+function Signal:Clear()
+    local Size = #self._connections
+
+    for i = 1, Size do
+        self._connections[i] = nil
+    end
+end
+
 local DisconnectFunc = function(s)
     local self = s._self
     local Callback = s._callback

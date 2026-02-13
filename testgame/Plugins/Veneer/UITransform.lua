@@ -1,10 +1,10 @@
 local UITransformModule = {}
 
-local ZeroTwo = vec2.zero
+local ZeroTwo = Vec2(vec2.zero)
 
 AstralEngine.Plugins.VeneerUI.UITransformModule = UITransformModule
 
-UITransformModule.__index = UITransformModule
+local EmptySlot = 4 -- unused field in a transform matrix. Set 4 to 1 to invalidate
 
 UITransformModule.Pointers = {
     Matrix = 1,
@@ -14,11 +14,29 @@ UITransformModule.Pointers = {
     ScaleSize = 5,
     OffsetSize = 6,
 }
+
 local Pointers = UITransformModule.Pointers
 
-UITransformModule.__tostring = function(self)
-    return "UITransform: " .. debug.getaddress(self)
-end
+local Mt = {
+    __tostring = function(self)
+        return "UITransform: " .. debug.getaddress(self)
+    end,
+    __index = function(self, k)
+        local Ptr = UITransformModule.Pointers[k]
+
+        if Ptr then
+            if Ptr == UITransformModule.Pointers.Matrix then
+                return mat4(self[Ptr])
+            elseif Ptr == UITransformModule.Pointers.Rotation then
+                return self[Ptr]
+            else
+                return vec2(self[Ptr])
+            end
+        end
+
+        return UITransformModule[k]
+    end,
+}
 
 UITransformModule.__type = "UITransform"
 
@@ -51,7 +69,9 @@ function UITransformModule.New(InputTransform)
         [Pointers.ScaleSize] = Size_Scale,
     }
 
-    setmetatable(Data, UITransformModule)
+    Matrix[4] = 1
+
+    setmetatable(Data, Mt)
 
     return Data
 end
@@ -67,6 +87,12 @@ function UITransformModule:RebuildMatrix(ImageResolution)
     StorageQuat:set(1, 0, 0, math.rad(self[Pointers.Rotation]))
 
     Mat:set(vec3(Pos_Vec2Total.x, Pos_Vec2Total.y, 0), vec3(Size_Vec2Total.x, Size_Vec2Total.y, 0), StorageQuat)
+
+    Mat[4] = 0
+end
+
+function UITransformModule:IsValid()
+    return self[1][4] == true
 end
 
 return UITransformModule

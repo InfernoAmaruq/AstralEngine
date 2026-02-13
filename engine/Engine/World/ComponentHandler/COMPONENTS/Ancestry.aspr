@@ -1,7 +1,7 @@
 local Ancestry = {}
 
 local Component = GetService("Component")
-local World = GetService("World")
+local World = GetService("Entity")
 
 Ancestry.Name = "Ancestry"
 Ancestry.Pattern = { Parent = 0 }

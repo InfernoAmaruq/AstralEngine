@@ -169,7 +169,7 @@ local SETTER = {
     end,
     DrawToScreen = function(self, Val)
         if Renderer.SetPrimaryCamera then
-            Renderer.SetPrimaryCamera(Val and self or nil)
+            Renderer.SetPrimaryCamera(self, Val)
         else
             AstralEngine.Error("CANNOT SET PRIMARY CAMERA, FUNCTION MISSING", "CAMERA", 2)
         end
@@ -295,7 +295,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.W = W
     Data.H = H
     Data.Aspect = W / H
-    Data.RadFOV = Input.RadFOV or math.rad(Input.FOV)
+    Data.RadFOV = Input and (Input.RadFOV or math.rad(Input.FOV)) or math.rad(90)
 
     OITTex.ResizeCallback = REBUILD_CALLBACK
     OITDepth.ResizeCallback = REBUILD_CALLBACK

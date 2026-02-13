@@ -15,10 +15,6 @@ World.Capacity = 0 -- points to highest id
 World.TopPtr = 0   -- points at highest alive object
 
 -- fires event on ancestry change in parent-child pairs
-World.OnAncestryChanged = SignalLib.new(SignalLib.Type.RTC)
-World.EntityAdded = SignalLib.new(SignalLib.Type.RTC)
-World.EntityRemoving = SignalLib.new(SignalLib.Type.RTC)
-
 function World.GetEntityFromId(Id)
     local E = World.Alive[Id]
     if not E then
@@ -31,6 +27,10 @@ end
 local Entity = {}
 
 local SERIALIZER = require("Lib.Serialize")
+
+Entity.OnAncestryChanged = SignalLib.new(SignalLib.Type.RTC)
+Entity.EntityAdded = SignalLib.new(SignalLib.Type.RTC)
+Entity.EntityRemoving = SignalLib.new(SignalLib.Type.RTC)
 
 Entity.GetEntityFromId = World.GetEntityFromId
 
@@ -111,7 +111,7 @@ function Entity.New(Name, ...)
 
     NewEntity.IsNull = false
 
-    World.EntityAdded:Fire(NewEntity)
+    Entity.EntityAdded:Fire(NewEntity)
 
     return NewEntity
 end
@@ -138,7 +138,7 @@ function Entity.CreateAtId(Id, Name, ...)
         World.TopPtr = Obj.__id
     end
 
-    World.EntityAdded:Fire(Obj)
+    Entity.EntityAdded:Fire(Obj)
 
     return Obj
 end
@@ -170,7 +170,7 @@ function Entity.Destroy(Ent, Recursive)
         end
     end
 
-    World.EntityRemoving:Fire(Ent)
+    Entity.EntityRemoving:Fire(Ent)
     Ent.Destroying:Fire()
 
     Ent.Destroying:Clear()

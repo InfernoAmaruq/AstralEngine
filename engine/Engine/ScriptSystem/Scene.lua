@@ -26,6 +26,10 @@ return function(ScriptService, Ctx)
     end
 
     function SceneManager.LoadScene(Scene)
+        if Scene == nil or Scene == false or Scene == "N/A" then
+            return
+        end
+
         if LoadedScenes[Scene] then
             AstralEngine.Log("Scene " .. Scene .. " already loaded", "Warning", "SCENEMANAGER")
         end

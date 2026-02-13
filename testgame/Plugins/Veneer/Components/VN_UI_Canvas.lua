@@ -1,4 +1,5 @@
 local UITransform = require("../UITransform.lua")
+local UIDrawable = require("../UIDrawable.lua")
 local Canvas = {}
 
 Canvas.Name = "UICanvas"
@@ -9,9 +10,11 @@ local Meta = {}
 Canvas.Metadata.__create = function(Input)
     local Data = {}
 
-    Data.Transform = UITransform.New(Input)
+    local Transform = UITransform.New(Input)
 
     setmetatable(Data, Meta)
+
+    UIDrawable.Process(Data, 1, Transform)
 
     return Data
 end

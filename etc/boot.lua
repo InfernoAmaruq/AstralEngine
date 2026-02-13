@@ -200,7 +200,7 @@ function lovr.run()
       if not lovr.headset.isActive() then lovr.simulate(dt) end
     end
     if lovr.update then lovr.update(dt) end
-    if lovr.audio then lovr.audio.update() end
+    if lovr.audio then lovr.audio.update(dt) end
     if lovr.graphics then
       local window = lovr.graphics.getWindowPass()
       local headset = lovr.headset and lovr.headset.getPass()

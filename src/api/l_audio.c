@@ -124,7 +124,7 @@ static int l_lovrAudioIsStarted(lua_State* L) {
 }
 
 static int l_lovrAudioUpdate(lua_State* L) {
-  lovrAudioUpdate();
+  lovrAudioUpdate(luax_checkfloat(L, 1));
   return 0;
 }
 

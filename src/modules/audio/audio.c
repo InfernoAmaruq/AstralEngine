@@ -549,7 +549,7 @@ bool lovrAudioIsStarted(AudioType type) {
   return ma_device_is_started(&state.devices[type]);
 }
 
-void lovrAudioUpdate(void) {
+void lovrAudioUpdate(float dt) {
   Source* source;
 
   FOREACH_SOURCE(source) {

@@ -86,7 +86,7 @@ bool lovrAudioSetDevice(AudioType type, void* id, size_t size, struct Sound* sin
 bool lovrAudioStart(AudioType type);
 bool lovrAudioStop(AudioType type);
 bool lovrAudioIsStarted(AudioType type);
-void lovrAudioUpdate(void);
+void lovrAudioUpdate(float dt);
 float lovrAudioGetVolume(VolumeUnit units);
 void lovrAudioSetVolume(float volume, VolumeUnit units);
 void lovrAudioGetPose(float position[3], float orientation[4]);

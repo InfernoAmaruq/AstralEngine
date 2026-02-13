@@ -60,9 +60,25 @@ typedef enum {
   UNIT_DECIBELS
 } VolumeUnit;
 
+typedef enum {
+  REVERB_CONVOLUTION,
+  REVERB_PARAMETRIC
+} ReverbMode;
+
+typedef struct {
+  bool debug;
+  uint32_t sampleRate;
+  struct {
+    ReverbMode mode;
+    uint32_t rays;
+    uint32_t bounces;
+    float duration;
+  } reverb;
+} AudioConfig;
+
 typedef void AudioDeviceCallback(AudioDevice* device, void* userdata);
 
-bool lovrAudioInit(bool debug, uint32_t sampleRate);
+bool lovrAudioInit(AudioConfig* config);
 void lovrAudioDestroy(void);
 void lovrAudioEnumerateDevices(AudioType type, AudioDeviceCallback* callback, void* userdata);
 bool lovrAudioGetDevice(AudioType type, AudioDevice* device);

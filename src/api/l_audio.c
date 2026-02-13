@@ -55,6 +55,12 @@ StringEntry lovrVolumeUnit[] = {
   { 0 }
 };
 
+StringEntry lovrReverbMode[] = {
+  [REVERB_CONVOLUTION] = ENTRY("convolution"),
+  [REVERB_PARAMETRIC] = ENTRY("parametric"),
+  { 0 }
+};
+
 static void onDevice(AudioDevice* device, void* userdata) {
   lua_State* L = userdata;
   lua_createtable(L, 0, 3);
@@ -339,8 +345,15 @@ extern const luaL_Reg lovrSource[];
 extern const luaL_Reg lovrAudioMesh[];
 
 int luaopen_lovr_audio(lua_State* L) {
-  bool debug = false;
-  uint32_t sampleRate = 48000;
+  AudioConfig config = {
+    .debug = false,
+    .sampleRate = 48000,
+    .reverb.mode = REVERB_CONVOLUTION,
+    .reverb.rays = 4096,
+    .reverb.bounces = 4,
+    .reverb.duration = 1.f
+  };
+
   bool start = true;
 
   luax_pushconf(L);
@@ -348,22 +361,42 @@ int luaopen_lovr_audio(lua_State* L) {
     lua_getfield(L, -1, "audio");
     if (lua_istable(L, -1)) {
       lua_getfield(L, -1, "debug");
-      debug = lua_toboolean(L, -1);
+      config.debug = lua_toboolean(L, -1);
       lua_pop(L, 1);
 
       lua_getfield(L, -1, "samplerate");
-      sampleRate = lua_isnil(L, -1) ? sampleRate : luax_checku32(L, -1);
+      config.sampleRate = lua_isnil(L, -1) ? config.sampleRate : luax_checku32(L, -1);
       lua_pop(L, 1);
 
       lua_getfield(L, -1, "start");
       start = lua_isnil(L, -1) || lua_toboolean(L, -1);
+      lua_pop(L, 1);
+
+      lua_getfield(L, -1, "reverb");
+      if (lua_istable(L, -1)) {
+        lua_getfield(L, -1, "mode");
+        config.reverb.mode = luax_checkenum(L, -1, ReverbMode, NULL);
+        lua_pop(L, 1);
+
+        lua_getfield(L, -1, "rays");
+        config.reverb.rays = luax_checku32(L, -1);
+        lua_pop(L, 1);
+
+        lua_getfield(L, -1, "bounces");
+        config.reverb.bounces = luax_checku32(L, -1);
+        lua_pop(L, 1);
+
+        lua_getfield(L, -1, "duration");
+        config.reverb.duration = luax_checkfloat(L, -1);
+        lua_pop(L, 1);
+      }
       lua_pop(L, 1);
     }
     lua_pop(L, 1);
   }
   lua_pop(L, 1);
 
-  luax_assert(L, lovrAudioInit(debug, sampleRate));
+  luax_assert(L, lovrAudioInit(&config));
   luax_atexit(L, lovrAudioDestroy);
 
   if (start) {

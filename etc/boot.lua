@@ -19,7 +19,13 @@ local conf = {
     timer = true
   },
   audio = {
-    start = true
+    start = true,
+    reverb = {
+      mode = 'convolution',
+      rays = 4096,
+      bounces = 4,
+      duration = 2
+    }
   },
   graphics = {
     debug = false,

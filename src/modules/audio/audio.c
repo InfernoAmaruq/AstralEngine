@@ -73,7 +73,7 @@ struct AudioMesh {
 static atomic_uint ref;
 
 static struct {
-  uint32_t sampleRate;
+  AudioConfig config;
   ma_log log;
   ma_context context;
   ma_device devices[2];
@@ -87,10 +87,10 @@ static struct {
   float position[3];
   float orientation[4];
   float absorption[3];
-  bool debug;
 #ifdef LOVR_USE_PHONON
   IPLContext spatializer;
   IPLAudioSettings audioSettings;
+  IPLReflectionEffectType reflectionType;
   IPLSimulationFlags simulationFlags;
   IPLSimulator simulator;
   IPLScene scene;
@@ -143,7 +143,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
     if (seek != ~0u) source->offset = seek;
 
     if (source->pitchable) {
-      float ratio = source->pitch * lovrSoundGetSampleRate(source->sound) / state.sampleRate;
+      float ratio = source->pitch * lovrSoundGetSampleRate(source->sound) / state.config.sampleRate;
       ma_data_converter_set_rate_ratio(source->converter, ratio);
     }
 
@@ -329,21 +329,20 @@ static void onSpatializerLog(IPLLogLevel iplLevel, const char* message) {
 
 // Entry
 
-bool lovrAudioInit(bool debug, uint32_t sampleRate) {
+bool lovrAudioInit(AudioConfig* config) {
   if (!lovrModuleAcquire(&ref)) return true;
 
-  state.debug = debug;
-  state.sampleRate = sampleRate;
+  state.config = *config;
 
-  ma_context_config config = ma_context_config_init();
+  ma_context_config contextConfig = ma_context_config_init();
 
-  if (debug) {
+  if (config->debug) {
     ma_log_init(NULL, &state.log);
     ma_log_register_callback(&state.log, ma_log_callback_init(onLog, NULL));
-    config.pLog = &state.log;
+    contextConfig.pLog = &state.log;
   }
 
-  ma_result result = ma_context_init(NULL, 0, &config, &state.context);
+  ma_result result = ma_context_init(NULL, 0, &contextConfig, &state.context);
   if (result != MA_SUCCESS) {
     lovrModuleReset(&ref);
     return lovrSetError("Failed to initialize miniaudio context: %s", ma_result_description(result));
@@ -360,19 +359,24 @@ bool lovrAudioInit(bool debug, uint32_t sampleRate) {
     return lovrAudioDestroy(), lovrSetError("Failed to create SteamAudio context");
   }
 
-  state.audioSettings.samplingRate = state.sampleRate;
+  state.audioSettings.samplingRate = config->sampleRate;
   state.audioSettings.frameSize = BUFFER_SIZE;
+
+  switch (config->reverb.mode) {
+    case REVERB_CONVOLUTION: default: state.reflectionType = IPL_REFLECTIONEFFECTTYPE_CONVOLUTION; break;
+    case REVERB_PARAMETRIC: state.reflectionType = IPL_REFLECTIONEFFECTTYPE_PARAMETRIC; break;
+  }
 
   state.simulationFlags = IPL_SIMULATIONFLAGS_DIRECT | IPL_SIMULATIONFLAGS_REFLECTIONS;
 
   IPLSimulationSettings simulationSettings = {
     .flags = state.simulationFlags,
     .sceneType = IPL_SCENETYPE_DEFAULT,
-    .reflectionType = IPL_REFLECTIONEFFECTTYPE_CONVOLUTION,
+    .reflectionType = state.reflectionType,
     .maxNumOcclusionSamples = MAX_OCCLUSION_SAMPLES,
-    .maxNumRays = 4096,
+    .maxNumRays = config->reverb.rays,
     .numDiffuseSamples = 1024,
-    .maxDuration = 1.f,
+    .maxDuration = config->reverb.duration,
     .maxOrder = 1,
     .maxNumSources = MAX_SOURCES,
     .numThreads = 4,
@@ -469,7 +473,7 @@ bool lovrAudioSetDevice(AudioType type, void* id, size_t size, Sound* sink, Audi
 
   // If no sink is provided for a capture device, one is created internally
   if (type == AUDIO_CAPTURE && !sink) {
-    sink = lovrSoundCreateStream(state.sampleRate * 1., SAMPLE_F32, CHANNEL_MONO, state.sampleRate);
+    sink = lovrSoundCreateStream(state.config.sampleRate * 1., SAMPLE_F32, CHANNEL_MONO, state.config.sampleRate);
   } else {
     lovrRetain(sink);
   }
@@ -499,7 +503,7 @@ bool lovrAudioSetDevice(AudioType type, void* id, size_t size, Sound* sink, Audi
     config.playback.shareMode = shareModes[shareMode];
     config.playback.format = ma_format_f32;
     config.playback.channels = 2;
-    config.sampleRate = state.sampleRate;
+    config.sampleRate = state.config.sampleRate;
     if (sink) {
       ma_data_converter_config converterConfig = ma_data_converter_config_init_default();
       converterConfig.formatIn = config.playback.format;
@@ -648,7 +652,7 @@ bool lovrAudioSetHRTF(Blob* hrtf) {
 }
 
 uint32_t lovrAudioGetSampleRate(void) {
-  return state.sampleRate;
+  return state.config.sampleRate;
 }
 
 void lovrAudioGetAbsorption(float absorption[3]) {
@@ -729,7 +733,7 @@ Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial, uint32_t ef
   config.channelsIn = lovrSoundGetChannelCount(sound);
   config.channelsOut = spatial ? 1 : 2;
   config.sampleRateIn = lovrSoundGetSampleRate(sound);
-  config.sampleRateOut = state.sampleRate;
+  config.sampleRateOut = state.config.sampleRate;
   config.allowDynamicSampleRate = pitchable;
 
   if (pitchable || config.formatIn != config.formatOut || config.channelsIn != config.channelsOut || config.sampleRateIn != config.sampleRateOut) {

@@ -41,8 +41,6 @@ struct World {
   uint32_t tagLookup[MAX_TAGS];
   char* tags[MAX_TAGS];
   JPH_JobSystem* jobSystem;
-  uint32_t jobCount;
-  job* jobs[1024];
   mtx_t lock;
 };
 
@@ -299,16 +297,8 @@ static void queueJob(void* context, JPH_JobFunction* function, void* arg) {
 #ifdef LOVR_DISABLE_THREAD
   function(arg);
 #else
-  // If there are too many jobs, fall back to single threaded
-  if (atomic_load(&world->jobCount) >= COUNTOF(world->jobs)) {
+  if (!job_start(function, arg)) {
     function(arg);
-  } else {
-    job* job = job_start(function, arg);
-
-    if (job) {
-      uint32_t index = atomic_fetch_add(&world->jobCount, 1);
-      world->jobs[index] = job;
-    }
   }
 #endif
 }
@@ -557,15 +547,8 @@ void lovrWorldUpdate(World* world, float dt) {
 
   JPH_PhysicsSystem_Update(world->system, dt, 1, world->jobSystem);
 
-#ifndef LOVR_DISABLE_THREAD
-  for (uint32_t i = 0; i < world->jobCount; i++) {
-    job_wait(world->jobs[i]);
-  }
-#endif
-
   world->inverseDelta = 1.f / dt;
   world->interpolation = 0.f;
-  world->jobCount = 0;
 }
 
 void lovrWorldInterpolate(World* world, float alpha) {

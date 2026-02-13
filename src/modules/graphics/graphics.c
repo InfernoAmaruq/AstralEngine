@@ -559,10 +559,10 @@ struct Pass {
 
 typedef struct PipelineJob {
   struct PipelineJob* next;
-  job* handle;
   uint64_t hash;
   gpu_pipeline_info* info;
   gpu_pipeline* pipeline;
+  atomic_uint done;
   char* error;
 } PipelineJob;
 
@@ -1148,6 +1148,7 @@ static void compilePipeline(void* arg) {
     const char* error = gpu_get_error();
     job->error = lovrStrdup(error);
   }
+  atomic_store(&job->done, 1);
 }
 
 static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
@@ -1209,10 +1210,10 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
 
     PipelineJob* job = allocate(&thread.stack, sizeof(PipelineJob));
     job->next = NULL;
-    job->handle = NULL;
     job->hash = hash;
     job->info = draw->pipelineInfo;
     job->pipeline = getPipeline(index);
+    job->done = 0;
     job->error = NULL;
 
     bool slow;
@@ -1226,10 +1227,13 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
 #endif
 
     if (slow) {
-      // The pipeline is going to be slow to compile, offload it to a worker thread
-      job->handle = job_start(compilePipeline, job);
-      job->next = pipelineJobs;
-      pipelineJobs = job;
+      // The pipeline is going to be slow to compile, try to offload it to a worker thread
+      if (job_start(compilePipeline, job)) {
+        job->next = pipelineJobs;
+        pipelineJobs = job;
+      } else {
+        compilePipeline(job);
+      }
     } else {
       // Chain the new pipeline on to the list of new pipelines
       job->next = atomic_load(&state.newPipelines);
@@ -1488,7 +1492,10 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
   // Wait for any in-progress pipeline jobs to finish
   while (pipelineJobs) {
     PipelineJob* job = pipelineJobs;
-    job_wait(job->handle);
+
+    while (!atomic_load(&job->done)) {
+      job_spin();
+    }
 
     if (job->error) {
       if (!hasError) {

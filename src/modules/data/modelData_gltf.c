@@ -4,6 +4,7 @@
 #include "util.h"
 #include "core/job.h"
 #include "lib/jsmn/jsmn.h"
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -83,7 +84,7 @@ typedef struct {
 } gltfScene;
 
 typedef struct {
-  job* handle;
+  atomic_uint done;
   Image* result;
   gltfImage* image;
   gltfBufferView* buffers;
@@ -211,6 +212,7 @@ static void loadImage(void* arg) {
       void* data = decodeBase64(ctx->image->uri.data, ctx->image->uri.length, &size);
       if (!data) {
         ctx->error = lovrStrdup("Could not decode base64 image");
+        atomic_store(&ctx->done, 1);
         return;
       }
       blob = lovrBlobCreate(data, size, NULL);
@@ -220,6 +222,7 @@ static void loadImage(void* arg) {
 
       if (path[0] == '/') {
         ctx->error = lovrStrdup("Absolute paths in models are not supported");
+        atomic_store(&ctx->done, 1);
         return;
       }
 
@@ -251,6 +254,7 @@ static void loadImage(void* arg) {
         memcpy(ctx->error, message, messageLength);
         memcpy(ctx->error + messageLength, path, length);
         ctx->error[messageLength + length + 1] = '\0';
+        atomic_store(&ctx->done, 1);
         return;
       }
 
@@ -260,10 +264,12 @@ static void loadImage(void* arg) {
     ctx->result = lovrImageCreateFromFile(blob);
     lovrRelease(blob, lovrBlobDestroy);
   }
+
+  atomic_store(&ctx->done, 1);
 }
 
 static void startImageJob(ModelData* model, ImageJob* jobs, uint32_t index, gltfBufferView* buffers, gltfImage* images, ModelDataIO* io, char* basePath) {
-  if (jobs[index].handle) {
+  if (jobs[index].image) {
     return;
   }
 
@@ -271,7 +277,11 @@ static void startImageJob(ModelData* model, ImageJob* jobs, uint32_t index, gltf
   jobs[index].buffers = buffers;
   jobs[index].basePath = basePath;
   jobs[index].io = io;
-  jobs[index].handle = job_start(loadImage, &jobs[index]);
+
+  if (!job_start(loadImage, &jobs[index])) {
+    loadImage(&jobs[index]);
+    jobs[index].done = 1;
+  }
 }
 
 static uint32_t typeSizes[] = {
@@ -1357,18 +1367,21 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   }
 
   for (uint32_t i = 0; i < meta->imageCount; i++) {
-    ImageJob* task = &imageJobs[i];
+    ImageJob* job = &imageJobs[i];
 
-    if (task->handle) {
-      job_wait(task->handle);
-      task->handle = NULL;
+    if (job->image) {
+      while (!atomic_load(&job->done)) {
+        job_spin();
+      }
 
-      if (task->error) {
-        lovrSetError(task->error);
-        lovrFree(task->error);
+      if (job->error) {
+        lovrSetError(job->error);
+        lovrFree(job->error);
+        job->error = NULL;
         goto fail;
       } else {
-        model->images[i] = task->result;
+        model->images[i] = job->result;
+        job->result = NULL;
       }
     }
   }
@@ -1392,13 +1405,14 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
 
 fail:
   for (uint32_t i = 0; i < meta->imageCount; i++) {
-    ImageJob* task = &imageJobs[i];
+    ImageJob* job = &imageJobs[i];
 
-    if (task->handle) {
-      job_wait(task->handle);
-      lovrRelease(task->result, lovrImageDestroy);
-      lovrFree(task->error);
+    while (!atomic_load(&job->done)) {
+      job_spin();
     }
+
+    lovrRelease(job->result, lovrImageDestroy);
+    lovrFree(job->error);
   }
 
   lovrFree(imageJobs);

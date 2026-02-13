@@ -2529,6 +2529,8 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
   // Render targets with mipmaps get transfer usage for automipmapping
   bool transfer = (info->usage & TEXTURE_TRANSFER) || ((info->usage & TEXTURE_RENDER) && texture->info.mipmaps > 1);
 
+  mtx_lock(&state.lock);
+
   if (!gpu_texture_init(texture->gpu, &(gpu_texture_info) {
     .type = (gpu_texture_type) info->type,
     .format = (gpu_texture_format) info->format,
@@ -2557,6 +2559,8 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
     lovrTextureDestroy(texture);
     return NULL;
   }
+
+  mtx_unlock(&state.lock);
 
   // Depth-stencil textures use a different depth-only view for sampling, otherwise default view can be used
   if (info->usage & TEXTURE_SAMPLE) {

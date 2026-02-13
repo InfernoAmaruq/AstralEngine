@@ -24,7 +24,8 @@ local conf = {
       mode = 'convolution',
       rays = 4096,
       bounces = 4,
-      duration = 2
+      duration = 2,
+      rate = .1
     }
   },
   graphics = {

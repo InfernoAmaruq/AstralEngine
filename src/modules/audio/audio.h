@@ -73,6 +73,7 @@ typedef struct {
     uint32_t rays;
     uint32_t bounces;
     float duration;
+    float rate;
   } reverb;
 } AudioConfig;
 

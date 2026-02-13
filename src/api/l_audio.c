@@ -351,7 +351,8 @@ int luaopen_lovr_audio(lua_State* L) {
     .reverb.mode = REVERB_CONVOLUTION,
     .reverb.rays = 4096,
     .reverb.bounces = 4,
-    .reverb.duration = 1.f
+    .reverb.duration = 2.f,
+    .reverb.rate = .1f
   };
 
   bool start = true;
@@ -388,6 +389,10 @@ int luaopen_lovr_audio(lua_State* L) {
 
         lua_getfield(L, -1, "duration");
         config.reverb.duration = luax_checkfloat(L, -1);
+        lua_pop(L, 1);
+
+        lua_getfield(L, -1, "rate");
+        config.reverb.rate = luax_checkfloat(L, -1);
         lua_pop(L, 1);
       }
       lua_pop(L, 1);

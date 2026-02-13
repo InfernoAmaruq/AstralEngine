@@ -1,6 +1,7 @@
 #include "audio/audio.h"
 #include "data/blob.h"
 #include "data/sound.h"
+#include "core/job.h"
 #include "core/maf.h"
 #include "util.h"
 #include "lib/miniaudio/miniaudio.h"
@@ -83,7 +84,8 @@ static struct {
   Source* activeSources[64];
   atomic_ullong activeSourceMask;
   uint64_t pendingSourceMask;
-  atomic_uint backbuffer;
+  atomic_uint directBackbuffer;
+  atomic_uint indirectBackbuffer;
   float position[3];
   float orientation[4];
   float absorption[3];
@@ -96,6 +98,8 @@ static struct {
   IPLScene scene;
   bool sceneDirty;
   IPLHRTF hrtf;
+  atomic_bool reverbFinished;
+  float reverbTimer;
 #endif
 } state;
 
@@ -132,6 +136,9 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
   float mix[BUFFER_SIZE * 2];
   float* dst = out;
   float* buf = NULL; // The "current" buffer (used for fast paths)
+
+  uint32_t directIndex = !state.directBackbuffer;
+  uint32_t indirectIndex = !state.indirectBackbuffer;
 
   FOREACH_SOURCE(source) {
     bool hasTail = false;
@@ -199,8 +206,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
 #ifdef LOVR_USE_PHONON
       // Spatializer
       if (source->spatial) {
-        uint32_t index = !state.backbuffer;
-        IPLSimulationOutputs* outputs = &source->outputs[index];
+        IPLSimulationOutputs* outputs = &source->outputs[directIndex];
         IPLAudioBuffer monoBuffer = { .numChannels = 1, .numSamples = BUFFER_SIZE, .data = &buf };
 
         // Direct effect
@@ -212,7 +218,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
         if (source->effects & EFFECT_SPATIALIZATION) {
           if (source->hrtf) {
             IPLBinauralEffectParams params = {
-              .direction = source->relativeDirection[index],
+              .direction = source->relativeDirection[directIndex],
               .interpolation = IPL_HRTFINTERPOLATION_BILINEAR,
               .spatialBlend = 1.f,
               .hrtf = source->hrtf
@@ -221,7 +227,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
             hasTail |= iplBinauralEffectApply(source->binauralEffect, &params, &monoBuffer, &source->stereoBuffer) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
           } else {
             IPLPanningEffectParams params = {
-              .direction = source->relativeDirection[index]
+              .direction = source->relativeDirection[directIndex]
             };
 
             iplPanningEffectApply(source->panningEffect, &params, &monoBuffer, &source->stereoBuffer);
@@ -549,6 +555,13 @@ bool lovrAudioIsStarted(AudioType type) {
   return ma_device_is_started(&state.devices[type]);
 }
 
+#ifdef LOVR_USE_PHONON
+static void simulateIndirect(void* arg) {
+  iplSimulatorRunReflections(state.simulator);
+  atomic_store(&state.reverbFinished, true);
+}
+#endif
+
 void lovrAudioUpdate(float dt) {
   Source* source;
 
@@ -577,32 +590,57 @@ void lovrAudioUpdate(float dt) {
 
   IPLSimulationSharedInputs sharedInputs;
   poseToPhonon(state.position, state.orientation, &sharedInputs.listener);
-  sharedInputs.numRays = 4096;
-  sharedInputs.numBounces = 16;
-  sharedInputs.duration = 1.f;
+  sharedInputs.numRays = state.config.reverb.rays;
+  sharedInputs.numBounces = state.config.reverb.bounces;
+  sharedInputs.duration = state.config.reverb.duration;
   sharedInputs.order = 1;
   sharedInputs.irradianceMinDistance = .01f;
 
   iplSimulatorSetSharedInputs(state.simulator, state.simulationFlags, &sharedInputs);
 
-  uint32_t backbuffer = state.backbuffer;
+  uint32_t backbuffer = state.directBackbuffer;
 
   FOREACH_SOURCE(source) {
     poseToPhonon(source->position, source->orientation, &source->inputs.source);
     vec3_sub(vec3_init(&source->relativeDirection[backbuffer].x, source->position), state.position);
     memcpy(source->inputs.airAbsorptionModel.coefficients, state.absorption, 3 * sizeof(float));
-    iplSourceSetInputs(source->handle, state.simulationFlags, &source->inputs);
+    iplSourceSetInputs(source->handle, IPL_SIMULATIONFLAGS_DIRECT, &source->inputs);
   }
 
   iplSimulatorRunDirect(state.simulator);
 
   FOREACH_SOURCE(source) {
-    iplSourceGetOutputs(source->handle, state.simulationFlags, &source->outputs[backbuffer]);
+    iplSourceGetOutputs(source->handle, IPL_SIMULATIONFLAGS_DIRECT, &source->outputs[backbuffer]);
   }
 
-  atomic_fetch_xor(&state.backbuffer, 0x1);
+  atomic_fetch_xor(&state.directBackbuffer, 0x1);
+
+  if (true) {
+    state.reverbTimer += dt;
+
+    if (state.reverbTimer >= state.config.reverb.rate && atomic_load(&state.reverbFinished)) {
+      atomic_store(&state.reverbFinished, false);
+      state.reverbTimer = 0;
+
+      uint32_t index = state.indirectBackbuffer;
+
+      Source* source;
+      FOREACH_SOURCE(source) {
+        iplSourceGetOutputs(source->handle, IPL_SIMULATIONFLAGS_REFLECTIONS, &source->outputs[index]);
+        iplSourceSetInputs(source->handle, IPL_SIMULATIONFLAGS_REFLECTIONS, &source->inputs);
+      }
+
+      atomic_fetch_xor(&state.indirectBackbuffer, 0x1);
+
+      while (!job_start(simulateIndirect, NULL)) {
+        job_spin();
+      }
+    }
+  }
 #endif
 
+  // FIXME should do this earlier, FOREACH_SOURCE above is not iterating over pendingSourceMask sources!
+  // but make sure audio thread can't see it until ready
   atomic_fetch_or(&state.activeSourceMask, state.pendingSourceMask);
   state.pendingSourceMask = 0;
 }
@@ -679,6 +717,7 @@ static bool lovrSourceInit(Source* source) {
   source->inputs.distanceAttenuationModel.minDistance = 1.f;
   source->inputs.airAbsorptionModel.type = IPL_AIRABSORPTIONTYPE_DEFAULT;
   source->inputs.numOcclusionSamples = MAX_OCCLUSION_SAMPLES;
+  source->inputs.numTransmissionRays = 2;
   vec3_set(source->inputs.reverbScale, 1.f, 1.f, 1.f);
 
   if (iplAudioBufferAllocate(state.spatializer, 2, BUFFER_SIZE, &source->stereoBuffer)) {

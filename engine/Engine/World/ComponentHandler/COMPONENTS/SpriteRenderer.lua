@@ -117,7 +117,11 @@ SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
 end
 
 SpriteRenderer.FinalProcessing = function()
-    GetService"Physics".BindSizeComponent("SpriteRenderer",2)
+   GetService"Physics".BindSizeComponent("SpriteRenderer",2)
+
+    if Component.TransformRequired then
+        table.insert(Component.TransformRequired,SpriteRenderer.Name)
+    end
 end
 
 return SpriteRenderer

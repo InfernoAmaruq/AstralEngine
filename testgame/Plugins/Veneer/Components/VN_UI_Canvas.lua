@@ -1,18 +1,15 @@
-local UITransform = require("../UITransform.lua")
-local UIDrawable = require("../UIDrawable.lua")
+local Component = GetService("Component")
 local Canvas = {}
 
 Canvas.Name = "UICanvas"
 Canvas.Metadata = {}
 
-local Res = UIDrawable.Reserved
-
 local Indecies = {
-    R = Res + 1,
-    G = Res + 2,
-    B = Res + 3,
-    A = Res + 4,
-    ColorRaw = Res + 5,
+    R = 1,
+    G = 2,
+    B = 3,
+    A = 4,
+    ColorRaw = 5,
 }
 
 local Meta = {
@@ -34,15 +31,37 @@ local Meta = {
     end,
 }
 
-Canvas.Metadata.__create = function(Input, Entity)
-    AstralEngine.Assert(
-        not UIDrawable.EntityHasUIComponent(Entity),
-        "ENTITY " .. Entity .. " ALREADY HAS UI COMPONENT. CANNOT ADD ANOTHER!"
-    )
+local ToTransform = {
+    __HasUIElement = "UICanvas",
+}
+
+Canvas.Metadata.__create = function(Input, Entity, Sink)
+    local TransformComponent = Component.HasComponent(Entity, "UITransform")
+    if TransformComponent then
+        AstralEngine.Assert(
+            not TransformComponent.__HasUIElement,
+            "ENTITY " .. Entity .. " ALREADY HAS A DRAWABLE UI COMPONENT! CANNOT CREATE ANOTHER COMPONENT!",
+            "VENEER"
+        )
+        if Input and Input.Transform then
+            TransformComponent:Set(Input.Transform)
+        end
+    elseif not Sink and not TransformComponent then
+        local InputValue = Input and Input.Transform
+        local UD = false
+        if InputValue then
+            UD = true
+            InputValue.__HasUIElement = "UICanvas"
+        else
+            InputValue = ToTransform
+        end
+        Component.AddComponent(Entity, "UITransform", InputValue)
+        if UD then -- clear UD just incase
+            InputValue.__HasUIElement = nil
+        end
+    end
 
     local Data = {}
-
-    local Transform = UITransform.New(Input and Input.Transform, Data, Entity)
 
     local Color = Input and Input.Color or color.fromRGBA(255, 255, 255, 255)
 
@@ -55,8 +74,6 @@ Canvas.Metadata.__create = function(Input, Entity)
     Data[Indecies.ColorRaw] = Color
 
     setmetatable(Data, Meta)
-
-    UIDrawable.Process(Data, 1, Transform)
 
     return Data
 end

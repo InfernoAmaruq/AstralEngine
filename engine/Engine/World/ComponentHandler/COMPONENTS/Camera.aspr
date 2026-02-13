@@ -380,6 +380,10 @@ end
 
 Camera.Metadata.__remove = function(self, Entity)
     Renderer.RemoveCamera(Entity)
+
+    if Component.TransformRequired then
+        table.insert(Component.TransformRequired, Camera.Name)
+    end
 end
 
 return Camera

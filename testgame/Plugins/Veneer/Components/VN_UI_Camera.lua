@@ -1,6 +1,5 @@
 local RenderService = GetService("Renderer")
 local ComponentService = GetService("Component")
-local WorldService = GetService("World")
 
 local UICam = {}
 

@@ -303,4 +303,10 @@ function mt.__remove(self)
     end
 end
 
+Collider.FinalProcessing = function()
+    if Component.TransformRequired then
+        table.insert(Component.TransformRequired,Collider.Name)
+    end
+end
+
 return Collider

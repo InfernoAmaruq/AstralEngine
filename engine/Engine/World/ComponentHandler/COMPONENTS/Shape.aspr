@@ -144,6 +144,10 @@ end
 
 Shape.FinalProcessing = function()
     GetService"Physics".BindSizeComponent("Shape","Size")
+
+    if Component.TransformRequired then
+        table.insert(Component.TransformRequired,Shape.Name)
+    end
 end
 
 return Shape

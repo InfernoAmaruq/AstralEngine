@@ -19,6 +19,8 @@ Transform.Pattern = {
 }
 Transform.Metadata = {}
 
+Component.TransformRequired = {}
+
 @flag{
     PosIdx = 1,
     OriIdx = 2,
@@ -120,6 +122,13 @@ local MT = {__index = __INDEX, __newindex = __NEWINDEX}
 @macro<L>:HasCollider(&E) = Component.HasComponent(&E,"Collider")
 
 Transform.Metadata.__remove = function(self, EId)
+
+    if Component.TransformRequired then
+        for _, Name in ipairs(Component.TransformRequired) do
+            AstralEngine.Assert(not Component.HasComponent(EId,Name), "CANNOT REMOVE TRANSFORM COMPONENT. ENTITY HAS DEPENDENT COMPONENT", "TRANSFORM", 3)
+        end
+    end
+
     for i in pairs(self) do
         self[i] = nil
     end

@@ -4,8 +4,6 @@ local ZeroTwo = Vec2(vec2.zero)
 
 AstralEngine.Plugins.VeneerUI.UITransformModule = UITransformModule
 
-local EmptySlot = 4 -- unused field in a transform matrix. Set 4 to 1 to invalidate
-
 UITransformModule.Pointers = {
     Matrix = 1,
     ScalePosition = 2,
@@ -13,6 +11,8 @@ UITransformModule.Pointers = {
     Rotation = 4,
     ScaleSize = 5,
     OffsetSize = 6,
+    OwnerComponent = 7,
+    OwnerEntity = 8,
 }
 
 local Pointers = UITransformModule.Pointers
@@ -36,15 +36,31 @@ local Mt = {
 
         return UITransformModule[k]
     end,
+    __newindex = function(self, k, v)
+        if Pointers[k] then
+            local Val = Pointers[k]
+
+            if Val == Pointers.Rotation then
+                self[Val] = v
+            elseif Val == Pointers.Matrix then
+                AstralEngine.Log("UI MATRIX IS READ-ONLY!", "warn", "VENEER")
+                return
+            else
+                self[Val]:set(v)
+            end
+
+            UITransformModule.RebuildMatrix(self)
+        end
+    end,
 }
 
 UITransformModule.__type = "UITransform"
 
-function UITransformModule.New(InputTransform)
+function UITransformModule.New(InputTransform, Owner, Ent)
     local Rotation = InputTransform and InputTransform.Rotation or 0
 
-    local PosTable = InputTransform.Position
-    local SizeTable = InputTransform.Size
+    local PosTable = InputTransform and InputTransform.Position
+    local SizeTable = InputTransform and InputTransform.Size
 
     local Size_Scale, Size_Offset = Vec2(), Vec2()
     local Pos_Scale, Pos_Offset = Vec2(), Vec2()
@@ -67,9 +83,9 @@ function UITransformModule.New(InputTransform)
         [Pointers.Rotation] = Rotation,
         [Pointers.ScalePosition] = Pos_Scale,
         [Pointers.ScaleSize] = Size_Scale,
+        [Pointers.OwnerComponent] = Owner,
+        [Pointers.OwnerEntity] = Ent,
     }
-
-    Matrix[4] = 1
 
     setmetatable(Data, Mt)
 
@@ -78,7 +94,10 @@ end
 
 local StorageQuat = Quat()
 
-function UITransformModule:RebuildMatrix(ImageResolution)
+local Component = GetService("Component")
+local Entity = GetService("Entity")
+
+function UITransformModule:RebuildMatrix()
     local Mat = self[Pointers.Matrix]
 
     local Pos_Vec2Total = self[Pointers.ScalePosition] * ImageResolution + self[Pointers.OffsetPosition]
@@ -87,12 +106,12 @@ function UITransformModule:RebuildMatrix(ImageResolution)
     StorageQuat:set(1, 0, 0, math.rad(self[Pointers.Rotation]))
 
     Mat:set(vec3(Pos_Vec2Total.x, Pos_Vec2Total.y, 0), vec3(Size_Vec2Total.x, Size_Vec2Total.y, 0), StorageQuat)
-
-    Mat[4] = 0
 end
 
-function UITransformModule:IsValid()
-    return self[1][4] == true
+function UITransformModule:Destroy()
+    for i in pairs(self) do
+        self[i] = nil
+    end
 end
 
 return UITransformModule

@@ -121,9 +121,9 @@ local MT = {__index = __INDEX, __newindex = __NEWINDEX}
 
 @macro<L>:HasCollider(&E) = Component.HasComponent(&E,"Collider")
 
-Transform.Metadata.__remove = function(self, EId)
+Transform.Metadata.__remove = function(self, EId, Forced)
 
-    if Component.TransformRequired then
+    if Component.TransformRequired and not Forced then
         for _, Name in ipairs(Component.TransformRequired) do
             AstralEngine.Assert(not Component.HasComponent(EId,Name), "CANNOT REMOVE TRANSFORM COMPONENT. ENTITY HAS DEPENDENT COMPONENT", "TRANSFORM", 3)
         end
@@ -164,7 +164,5 @@ Transform.Metadata.__create = function(DATA, Entity)
 
     return setmetatable(Ret,MT)
 end
-
-Transform.Serializer = SERIALIZE.BASICMETHOD
 
 return Transform

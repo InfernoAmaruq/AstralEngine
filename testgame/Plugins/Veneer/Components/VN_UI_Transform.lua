@@ -105,8 +105,8 @@ UITransform.Metadata.__create = function(InputTransform, Ent)
     return Data
 end
 
-UITransform.Metadata.__remove = function(self)
-    if self[Pointers.HasDrawable] then
+UITransform.Metadata.__remove = function(self, _, Forced)
+    if self[Pointers.HasDrawable] and not Forced then
         AstralEngine.Error("CANNOT REMOVE UITRANSFORM COMPONENT WHILST HAVING A DEPENDENT COMPONENT!", "VENEER", 3)
     end
     for i in pairs(self) do

@@ -109,7 +109,7 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
     return D
 end
 
-function Component.RemoveComponent(e, id, Global)
+function Component.RemoveComponent(e, id, Force)
     if type(e) == &TYPE then
         e = e.__id
     end
@@ -120,13 +120,13 @@ function Component.RemoveComponent(e, id, Global)
         return
     end
 
-    if not Global then
+    if not Force then
         GetService"World".GetEntityFromId(e).ComponentRemoving:Fire(id, Component.SetComponents[e][id])
     end
 
     local CompInst = Component.SetComponents[e][id]
     if Comp.Metadata and Comp.Metadata.__remove then
-        Comp.Metadata.__remove(CompInst, e, true)
+        Comp.Metadata.__remove(CompInst, e, Force)
     end
 
     setmetatable(CompInst, DEADMT)

@@ -654,7 +654,7 @@ int l_lovrModelMetaGetAnimationNode(lua_State* L) {
   uint32_t index = luax_checku32(L, 3) - 1;
   luax_check(L, index < animation->channelCount, "Invalid channel index '%d'", index + 1);
   ModelAnimationChannel* channel = &animation->channels[index];
-  lua_pushinteger(L, channel->nodeIndex);
+  lua_pushinteger(L, channel->nodeIndex + 1);
   return 1;
 }
 
@@ -723,7 +723,7 @@ int l_lovrModelMetaGetSkinJoints(lua_State* L) {
   ModelSkin* skin = &meta->skins[index];
   lua_createtable(L, skin->jointCount, 0);
   for (uint32_t i = 0; i < skin->jointCount; i++) {
-    lua_pushinteger(L, skin->joints[i]);
+    lua_pushinteger(L, skin->joints[i] + 1);
     lua_rawseti(L, -2, i + 1);
   }
   return 1;

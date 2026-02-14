@@ -184,6 +184,7 @@ local FUNC = {
         self = GetSelf(self)
         local CurPtr = self[&ParentPtr]
         local SelfPtr = self[&SelfPtr]
+        if not CurPtr then return nil end
         while true do
             local ParentRef = World.GetEntityFromId(CurPtr)
             local AncComp = Component.SetComponents[CurPtr]["Ancestry"]

@@ -7,6 +7,30 @@ UICam.Name = "UICamera"
 
 UICam.Metadata = {}
 
+local ToRebuild = {}
+
+GetService("Entity").OnAncestryChanged:Connect(function(...)
+    local i = 1
+    local n = select("#", ...)
+    while i <= n do
+        for LocalI = 0, 1 do
+            local Object = select(i + LocalI, ...)
+            local HasEntityWithUICamera = Object
+                and Object:GetComponent("Ancestry"):FindFirstAncestorWithComponent("UICamera")
+            if HasEntityWithUICamera then
+                ToRebuild[HasEntityWithUICamera:GetComponent("UICamera")] = true
+            end
+        end
+
+        i = i + 3
+    end
+
+    for Ent in pairs(ToRebuild) do
+        ToRebuild[Ent] = nil
+        Ent:RebuildRenderChain()
+    end
+end)
+
 local IdxGetter = {
     Texture = 2,
     DepthTexture = 3,
@@ -24,6 +48,9 @@ local Methods = {
         CurMatrix:orthographic(0, self.Resolution.x, 0, self.Resolution.y, -100, 100)
 
         self[5] = CurMatrix
+    end,
+    RebuildRenderChain = function(self)
+        print("rebuild")
     end,
     Rebuild = function(self)
         self[7] = {} -- invalidate old one. I'd usually clear but re-alloc cost is amortized

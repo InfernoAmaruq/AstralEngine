@@ -37,6 +37,12 @@ local ToTransform = {
 
 Canvas.Metadata.__create = function(Input, Entity, Sink)
     local TransformComponent = Component.HasComponent(Entity, "UITransform")
+    local AncestryComponent = Component.HasComponent(Entity, "Ancestry")
+
+    if not AncestryComponent and not Sink then
+        Component.AddComponent(Entity, "Ancestry")
+    end
+
     if TransformComponent then
         AstralEngine.Assert(
             not TransformComponent.__HasUIElement,

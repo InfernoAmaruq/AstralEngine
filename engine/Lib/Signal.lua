@@ -82,7 +82,10 @@ function Signal:Fire(...)
     end
     if self._RTC then
         for _, f in ipairs(self._connections) do
-            f(...)
+            local s, err = pcall(f, ...)
+            if not s then
+                AstralEngine.Log("SIGNAL ERROR: " .. err, "warn", "SIGNAL")
+            end
         end
     elseif self._yielding then
         local Threads = {}

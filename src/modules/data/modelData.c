@@ -236,15 +236,15 @@ static void collectVertices(ModelData* model, uint32_t nodeIndex, float** vertic
 
         if (mesh->indexCount > 0) {
           if (model->meta.indexSize == 4) {
-            uint32_t* indexData = (uint32_t*) model->indices + part->start;
+            uint32_t* indexData = (uint32_t*) model->indices + mesh->indexOffset + part->start;
             for (uint32_t j = 0; j < part->count; j++) {
-              **indices = indexData[j] + *baseIndex;
+              **indices = indexData[j] + part->baseVertex + *baseIndex;
               *indices += 1;
             }
           } else if (model->meta.indexSize == 2) {
-            uint16_t* indexData = (uint16_t*) model->indices + part->start;
+            uint16_t* indexData = (uint16_t*) model->indices + mesh->indexOffset + part->start;
             for (uint32_t j = 0; j < part->count; j++) {
-              **indices = (uint32_t) indexData[j] + *baseIndex;
+              **indices = (uint32_t) indexData[j] + part->baseVertex + *baseIndex;
               *indices += 1;
             }
           } else {

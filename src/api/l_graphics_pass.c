@@ -621,7 +621,7 @@ static int l_lovrPassSetScissor(lua_State* L) {
     scissor[1] = luax_checku32(L, 3);
     scissor[2] = luax_checku32(L, 4);
     scissor[3] = luax_checku32(L, 5);
-    lovrPassSetScissor(pass, scissor);
+    luax_assert(L, lovrPassSetScissor(pass, scissor));
   }
   return 0;
 }

@@ -458,6 +458,16 @@ group('graphics', function()
       end)
     end)
 
+    group(':setScissor', function()
+      test('should fail if width/height are zero', function()
+        pass = lovr.graphics.newPass(lovr.graphics.newTexture(2, 2))
+        pass:setScissor()
+        expect(function() pass:setScissor(0, 0, 0, 0) end).to.fail()
+        expect(function() pass:setScissor(1, 1, 1, 0) end).to.fail()
+        expect(function() pass:setScissor(1, 1, 1, 1) end).to_not.fail()
+      end)
+    end)
+
     test(':send', function()
       -- First draw has uniforms, second draw does not, and first draw is culled
       shader1 = lovr.graphics.newShader('unlit', [[

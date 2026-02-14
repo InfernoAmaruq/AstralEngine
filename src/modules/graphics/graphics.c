@@ -7094,7 +7094,7 @@ void lovrPassSetSampler(Pass* pass, Sampler* sampler) {
   }
 }
 
-void lovrPassSetScissor(Pass* pass, uint32_t scissor[4]) {
+bool lovrPassSetScissor(Pass* pass, uint32_t scissor[4]) {
   if (~pass->flags & DIRTY_SCISSOR) {
     uint32_t* scissors = lovrPassAllocate(pass, (pass->scissorCount + 1) * 4 * sizeof(uint32_t));
     if (pass->scissors) memcpy(scissors, pass->scissors, pass->scissorCount * 4 * sizeof(uint32_t));
@@ -7106,7 +7106,12 @@ void lovrPassSetScissor(Pass* pass, uint32_t scissor[4]) {
   uint32_t* s = pass->scissors + (pass->scissorCount - 1) * 4;
 
   if (scissor) {
-    memcpy(s, scissor, 4 * sizeof(uint32_t));
+    lovrCheck(scissor[2] > 0, "Scissor %s must be positive", "width");
+    lovrCheck(scissor[3] > 0, "Scissor %s must be positive", "height");
+    s[0] = MIN(scissor[0], pass->width - 1);
+    s[1] = MIN(scissor[1], pass->height - 1);
+    s[2] = MIN(scissor[2], pass->width - s[0]);
+    s[3] = MIN(scissor[3], pass->height - s[1]);
   } else {
     s[0] = 0;
     s[1] = 0;

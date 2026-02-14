@@ -703,7 +703,7 @@ void lovrPassSetFont(Pass* pass, Font* font);
 void lovrPassSetMaterial(Pass* pass, Material* material);
 void lovrPassSetMeshMode(Pass* pass, DrawMode mode);
 void lovrPassSetSampler(Pass* pass, Sampler* sampler);
-void lovrPassSetScissor(Pass* pass, uint32_t scissor[4]);
+bool lovrPassSetScissor(Pass* pass, uint32_t scissor[4]);
 void lovrPassSetShader(Pass* pass, Shader* shader);
 bool lovrPassSetStencilTest(Pass* pass, CompareMode test, uint8_t value, uint8_t mask);
 bool lovrPassSetStencilWrite(Pass* pass, StencilAction actions[3], uint8_t value, uint8_t mask);

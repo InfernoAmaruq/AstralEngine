@@ -17,6 +17,8 @@ local Collider = {
     Metadata = mt,
 }
 
+Collider.Metadata.SceneLateLoad = true
+
 -- FLAGS
 @flag:IDX_T_DOF = 1;
 @flag:IDX_R_DOF = 2;

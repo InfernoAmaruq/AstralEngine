@@ -1,4 +1,4 @@
-local Component = GetService "Component"
+local Component = GetService("Component","Component")
 local Render = GetService "Renderer"
 
 local Shape = {}

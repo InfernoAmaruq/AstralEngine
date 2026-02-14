@@ -119,8 +119,8 @@ end
 SpriteRenderer.FinalProcessing = function()
    GetService"Physics".BindSizeComponent("SpriteRenderer",2)
 
-    if Component.TransformRequired then
-        table.insert(Component.TransformRequired,SpriteRenderer.Name)
+    if COMP.TransformRequired then
+        table.insert(COMP.TransformRequired,SpriteRenderer.Name)
     end
 end
 

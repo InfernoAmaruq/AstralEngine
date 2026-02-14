@@ -8,6 +8,7 @@ WorldCam:AddComponent("Ancestry")
 
 local UICanvas = EntityService.New("Canvas")
 UICanvas:AddComponent("UICanvas")
+UICanvas.UITransform.ScalePosition = vec2(0.5, 0.5)
 UICanvas:AddComponent("Ancestry")
 UICanvas.Ancestry.Parent = WorldCam
 

@@ -2,6 +2,7 @@ local AssetMapLoader = {}
 
 local PhysicsService = GetService("Physics", "PhysicsService")
 local EntityService = GetService("Entity", "EntityService")
+local ComponentService = GetService("Component", "ComponentService")
 
 local TAG_OFFSET = 40
 local TAG_UNSET = 0b00 << TAG_OFFSET
@@ -163,10 +164,6 @@ local function ResolveParent(Child, Parent)
     ChildAnc:SetParent(Parent)
 end
 
-local LateComponentList = {
-    Collider = true,
-}
-
 function AssetMapLoader.LoadAssetMap(Map)
     local RESERVED = {}
 
@@ -259,10 +256,12 @@ function AssetMapLoader.LoadAssetMap(Map)
         end
         -- we have late init components, like 'Colliders', which MUST have a transform present at build time (not optional, like with Camera transform)
         for Name, Data in pairs(Val.Components) do
-            if LateComponentList[Name] then
+            local COMPONENT_DATA = ComponentService.Components[Name]
+            if COMPONENT_DATA and COMPONENT_DATA.Metadata and COMPONENT_DATA.Metadata.SceneLateLoad then
                 LateCache[Name] = Data
                 continue
             end
+
             Ent:AddComponent(Name, Data, true)
         end
 

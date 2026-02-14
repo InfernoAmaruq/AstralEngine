@@ -7118,6 +7118,8 @@ bool lovrPassSetScissor(Pass* pass, uint32_t scissor[4]) {
     s[2] = pass->width;
     s[3] = pass->height;
   }
+
+  return true;
 }
 
 void lovrPassSetShader(Pass* pass, Shader* shader) {

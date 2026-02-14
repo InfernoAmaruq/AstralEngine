@@ -51,6 +51,22 @@ local Methods = {
     end,
     RebuildRenderChain = function(self)
         print("rebuild")
+        local Ancestry = AstralEngine.Assert(
+            ComponentService.HasComponent(self.__Entity, "Ancestry"),
+            "CANNOT REBUILD UI RENDER CHAIN! Ancestry COMPONENT MISSING",
+            "VENEER"
+        )
+
+        self[7] = {}         -- reallocate
+        local Queue = { Ancestry } -- start with own Ancestry. Cascade down, breadth wise
+
+        while #Queue > 0 do
+            local CurAnc = table.remove(Queue, 1)
+
+            for Child in CurAnc:IterChildren() do
+                print("CASCADE:", Child)
+            end
+        end
     end,
     Rebuild = function(self)
         self[7] = {} -- invalidate old one. I'd usually clear but re-alloc cost is amortized
@@ -168,8 +184,7 @@ UICam.Metadata.__create = function(Input, Entity, Skip)
     Data[6] = ResVec
     Data[7] = {}  -- UIChain
     Data.ResizeWithInputTexture = Input.ResizeWithInputTexture == nil and true or Input.ResizeWithInputTexture
-    Data.__RebuildCounter = 0
-    Data.__RebuildPoint = 10
+    Data.__Entity = Entity
 
     RenderService.VeneerUI.BindUICamera(Data, Input.Priority)
 

@@ -6364,6 +6364,13 @@ bool lovrGraphicsGetWindowPass(Pass** pass) {
     state.windowPass = lovrPassCreate("Window");
   }
 
+  // Ensure that lovrGraphicsGetWindowTexture resizes the swapchain, even if the swapchain texture
+  // has already been acquired
+  if (state.resized && state.window) {
+    state.window->gpu = NULL;
+    state.window->renderView = NULL;
+  }
+
   Texture* window = NULL;
   if (!lovrGraphicsGetWindowTexture(&window)) {
     *pass = NULL;

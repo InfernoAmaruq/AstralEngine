@@ -84,4 +84,11 @@ Canvas.Metadata.__create = function(Input, Entity, Sink)
     return Data
 end
 
+Canvas.Metadata.__remove = function(_, e)
+    local UITransform = Component.HasComponent(e, "UITransform")
+    if UITransform then
+        UITransform.__HasUIElement = nil
+    end
+end
+
 return Canvas

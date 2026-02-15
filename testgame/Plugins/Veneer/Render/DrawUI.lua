@@ -28,9 +28,15 @@ end
 
 Renderer.Late[#Renderer.Late + 1] = function()
     -- bind
+
+    local ComponentManager = GetService("Component")
+
     GetService("RunService").BindToStep("VENEER_UI_DRAW", Plugin.Config.BaseRenderBand, function()
         local UICams = Renderer.VeneerUI.UICameras
         local Stack = FuncStack
+
+        local Comp = ComponentManager
+        local SetComp = Comp.SetComponents
 
         for i = 1, #UICams do
             local Cam = UICams[i]
@@ -50,19 +56,13 @@ Renderer.Late[#Renderer.Late + 1] = function()
 
             for ObjIdx = 1, ObjCount do
                 local Obj = Objects[ObjIdx]
-                local Func = Stack[Obj[1]]
+                local Transform = SetComp[Obj]["UITransform"]
+                local Matrix = Transform[1]
 
-                -- commented out cause i unsure about this, since its meant to process objects ancestrally. Not globally
-                --[[local TransformMatrix = Obj[2][1]
+                local UICanvas = SetComp[Obj]["UICanvas"]
+                Pass:setColor(UICanvas[1], UICanvas[2], UICanvas[3], UICanvas[4])
 
-                if TransformMatrix[4] == 1 then
-                    -- 4 points to the 'invalid' flag, where 1 == true
-                    -- lazy-rebuild matrix with the correct resolution
-                    Obj[2]:RebuiltMatrix(Cam[6])
-                    -- 6 points to resolution
-                end]]
-
-                Func(TransformMatrix, Obj)
+                Pass:plane(Matrix)
             end
 
             -- to cam

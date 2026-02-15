@@ -1,5 +1,6 @@
 local RenderService = GetService("Renderer")
 local ComponentService = GetService("Component")
+local Entity = GetService("Entity")
 
 local UICam = {}
 
@@ -8,6 +9,14 @@ UICam.Name = "UICamera"
 UICam.Metadata = {}
 
 local ToRebuild = {}
+
+local function SortMethod(a, b)
+    -- we using IDs here so...
+
+    local ObjA, ObjB = Entity.GetEntityFromId(a), Entity.GetEntityFromId(b)
+
+    return ObjA.UITransform.EffectiveZIndex < ObjB.UITransform.EffectiveZIndex
+end
 
 GetService("Entity").OnAncestryChanged:Connect(function(...)
     local i = 1
@@ -34,13 +43,19 @@ end)
 local IdxGetter = {
     Texture = 2,
     DepthTexture = 3,
+    ZIndex = 8,
 }
 local Getters = {
     Resolution = function(self)
         return vec2(self[6])
     end,
 }
-local Setters = {}
+local Setters = {
+    ZIndex = function(self, v)
+        self[8] = v
+        self:RebuildRenderChain()
+    end,
+}
 local Methods = {
     RebuildProjectionMatrix = function(self)
         local CurMatrix = self[5] or Mat4()
@@ -50,26 +65,44 @@ local Methods = {
         self[5] = CurMatrix
     end,
     RebuildRenderChain = function(self)
-        print("rebuild")
-        local Ancestry = AstralEngine.Assert(
+        AstralEngine.Assert(
             ComponentService.HasComponent(self.__Entity, "Ancestry"),
             "CANNOT REBUILD UI RENDER CHAIN! Ancestry COMPONENT MISSING",
             "VENEER"
         )
 
-        self[7] = {}         -- reallocate
-        local Queue = { Ancestry } -- start with own Ancestry. Cascade down, breadth wise
+        print("REBUILD START")
+        local T1 = os.clock()
 
-        while #Queue > 0 do
-            local CurAnc = table.remove(Queue, 1)
+        self[7] = {}
 
-            for Child in CurAnc:IterChildren() do
-                print("CASCADE:", Child)
+        local SelfEnt = Entity.GetEntityFromId(self.__Entity)
+        local ZIndex = self[8]
+        local Stack = { SelfEnt }
+
+        while #Stack > 0 do
+            local Top = table.remove(Stack)
+
+            local OwnTransform = Top:GetComponent("UITransform")
+            local OwnIndex = OwnTransform and OwnTransform.EffectiveZIndex
+
+            for Child in Top.Ancestry:IterChildren() do
+                local UITransform = Child:GetComponent("UITransform")
+
+                if UITransform and UITransform.__HasUIElement then
+                    UITransform.EffectiveZIndex = (OwnIndex or ZIndex) + UITransform.ZIndex
+                    table.insert(self[7], Child.Id)
+                    table.insert(Stack, Child)
+                end
             end
         end
-    end,
-    Rebuild = function(self)
-        self[7] = {} -- invalidate old one. I'd usually clear but re-alloc cost is amortized
+
+        table.sort(self[7], SortMethod)
+
+        print("REBUILD END!", os.clock() - T1)
+        for i, v in ipairs(self[7]) do
+            print(Entity.GetEntityFromId(v))
+        end
     end,
 }
 
@@ -183,6 +216,7 @@ UICam.Metadata.__create = function(Input, Entity, Skip)
     Data[5] = Mat4() -- proj matrix
     Data[6] = ResVec
     Data[7] = {}  -- UIChain
+    Data[8] = Input.ZIndex or 0
     Data.ResizeWithInputTexture = Input.ResizeWithInputTexture == nil and true or Input.ResizeWithInputTexture
     Data.__Entity = Entity
 

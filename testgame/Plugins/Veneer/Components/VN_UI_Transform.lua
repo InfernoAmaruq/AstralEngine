@@ -4,7 +4,7 @@ local UITransform = {}
 UITransform.Name = "UITransform"
 UITransform.Metadata = {}
 
--- bind rebuil
+-- bind rebuild
 GetService("Entity").OnAncestryChanged:Connect(function(...)
     local i = 1
     local n = select("#", ...)
@@ -30,6 +30,8 @@ local Pointers = {
     AnchorPoint = 7,
     Owner = 8,
     HasDrawable = 9, -- string value telling if it has or does not have another Drawable in the same entity
+    ZIndex = 10,
+    EffectiveZIndex = 11,
 }
 
 local StorageQuat = Quat()
@@ -72,9 +74,8 @@ local Methods = {
         local Mat = self[Pointers.Matrix]
         local OldMatrix = mat4(Mat)
 
-        local AncestorPosition = AncestorTransform:getPosition()
-        local AncestorSize = AncestorTransform:getScale()
-        local Orientation = AncestorTransform:getOrientation()
+        local AncestorPosition = vec2(AncestorTransform:getPosition())
+        local AncestorSize = vec2(AncestorTransform:getScale())
 
         -- pixel sizes
         local Size_Vec2Total = self[Pointers.ScaleSize] * AncestorSize + self[Pointers.OffsetSize]
@@ -82,7 +83,7 @@ local Methods = {
             + self[Pointers.OffsetPosition]
             + AncestorPosition
 
-        if Pointers.AnchorPoint ~= CenterVec then
+        if self[Pointers.AnchorPoint] ~= CenterVec then
             -- now apply anchor point
             local AdditonalOffset = Size_Vec2Total * self[Pointers.AnchorPoint] -- pixel size offset
 
@@ -91,28 +92,38 @@ local Methods = {
             Pos_Vec2Total = Pos_Vec2Total - HalfSize + AdditonalOffset
         end
         -- quat
-        StorageQuat:setEuler(0, 0, math.rad(self[Pointers.Rotation]))
+
+        local OwnerRotation = AncestorTransform[8] -- use 8 to encode deg transform
+        local Rot = self[Pointers.Rotation] + OwnerRotation
+        StorageQuat:setEuler(0, 0, math.rad(Rot))
 
         --Mat:set(vec3(Pos_Vec2Total.x, Pos_Vec2Total.y, 0), vec3(Size_Vec2Total.x, Size_Vec2Total.y, 0), StorageQuat)
         Mat:identity()
         Mat:translate(Pos_Vec2Total.x, Pos_Vec2Total.y, 0)
         Mat:rotate(StorageQuat)
-        Mat:rotate(Orientation)
         Mat:scale(Size_Vec2Total.x, Size_Vec2Total.y, 1)
         Mat[4] = 0
+        Mat[8] = Rot
 
         if not Mat:equals(OldMatrix) then
             -- new matrix set! propagate!
             local SelfAncestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
             for Child in SelfAncestry:IterChildren() do
-                local ChildUITransform = Child:HasComponent("UITransform")
+                local ChildUITransform = Child:GetComponent("UITransform")
                 if ChildUITransform then
                     ChildUITransform:RebuildMatrix(Mat)
                 end
             end
         end
     end,
-    Set = function(self, Transform) end,
+    RequestChainRebuild = function(self)
+        local Ancestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
+
+        local CameraUI = Ancestry:FindFirstAncestorWithComponent("UICamera")
+        if CameraUI then
+            CameraUI.UICamera:RebuildRenderChain()
+        end
+    end,
 }
 
 local Mt = {
@@ -122,7 +133,7 @@ local Mt = {
         if Ptr then
             if Ptr == Pointers.Matrix then
                 return mat4(self[Ptr])
-            elseif Ptr == Pointers.Rotation then
+            elseif Ptr == Pointers.Rotation or Ptr == Pointers.ZIndex or Ptr == Pointers.EffectiveZIndex then
                 return self[Ptr]
             else
                 return vec2(self[Ptr])
@@ -139,11 +150,28 @@ local Mt = {
         if Pointers[k] then
             local Val = Pointers[k]
 
-            if Val == Pointers.Rotation then
+            if Val == Pointers.Rotation or Val == Pointers.EffectiveZIndex then
                 self[Val] = v
             elseif Val == Pointers.Matrix then
                 self[Val]:set(v)
                 return
+            elseif k == "__HasUIElement" then
+                local Cur = self[Pointers.HasDrawable]
+
+                if Cur and not v then
+                    self[Pointers.HasDrawable] = v
+                    self:RequestChainRebuild()
+                elseif not Cur and v then
+                    self[Pointers.HasDrawable] = v
+                    self:RequestChainRebuild()
+                elseif Cur and v then
+                    AstralEngine.Error("CANNOT SET SEVERAL DRAWABLE ELEMENTS ONTO ONE UI ENTITY", "VENEER", 3)
+                end
+            elseif Val == Pointers.ZIndex then
+                local Diff = v - self[Pointers.ZIndex]
+                self[Pointers.EffectiveZIndex] = self[Pointers.EffectiveZIndex] + Diff
+
+                self:RequestChainRebuild()
             else
                 self[Val]:set(v)
             end
@@ -187,6 +215,8 @@ UITransform.Metadata.__create = function(InputTransform, Ent)
         [Pointers.AnchorPoint] = AnchorPoint,
         [Pointers.Owner] = Ent,
         [Pointers.HasDrawable] = InputTransform and InputTransform.__HasUIElement or nil,
+        [Pointers.ZIndex] = InputTransform and InputTransform.ZIndex or 1,
+        [Pointers.EffectiveZIndex] = -1,
     }
 
     setmetatable(Data, Mt)

@@ -19,7 +19,7 @@
 #define CTZL __builtin_ctzl
 #endif
 
-#define FOREACH_SOURCE(s) for (uint64_t m = state.activeSourceMask; s = m ? state.activeSources[CTZL(m)] : NULL, m; m ^= (m & -m))
+#define FOREACH_SOURCE(mask, s) for (uint64_t m = mask; s = m ? state.activeSources[CTZL(m)] : NULL, m; m ^= (m & -m))
 #define OUTPUT_FORMAT SAMPLE_F32
 #define MAX_OCCLUSION_SAMPLES 16
 #define BUFFER_SIZE 256
@@ -56,6 +56,7 @@ struct Source {
   IPLDirectEffect directEffect;
   IPLPanningEffect panningEffect;
   IPLBinauralEffect binauralEffect;
+  IPLReflectionEffect reflectionEffect;
 #endif
 };
 
@@ -84,20 +85,23 @@ static struct {
   Source* activeSources[64];
   atomic_ullong activeSourceMask;
   uint64_t pendingSourceMask;
-  atomic_uint directBackbuffer;
-  atomic_uint indirectBackbuffer;
+  atomic_uint backbuffer;
   float position[3];
   float orientation[4];
   float absorption[3];
 #ifdef LOVR_USE_PHONON
   IPLContext spatializer;
   IPLAudioSettings audioSettings;
-  IPLReflectionEffectType reflectionType;
+  IPLReflectionEffectSettings reflectionSettings;
   IPLSimulationFlags simulationFlags;
   IPLSimulator simulator;
   IPLScene scene;
   bool sceneDirty;
   IPLHRTF hrtf;
+  IPLCoordinateSpace3 listenerBasis[2];
+  IPLReflectionMixer reflectionMixer;
+  IPLAudioBuffer reflectionBuffer;
+  IPLAmbisonicsDecodeEffect ambisonicsDecodeEffect;
   atomic_bool reverbFinished;
   float reverbTimer;
 #endif
@@ -122,7 +126,7 @@ static void poseToPhonon(float* position, float* orientation, IPLCoordinateSpace
   mat4_fromQuat(transform, orientation);
   vec3_init(&basis->right.x, &transform[0]);
   vec3_init(&basis->up.x, &transform[4]);
-  vec3_init(&basis->ahead.x, &transform[8]);
+  vec3_scale(vec3_init(&basis->ahead.x, &transform[8]), -1.f);
   vec3_init(&basis->origin.x, position);
 }
 #endif
@@ -137,12 +141,16 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
   float* dst = out;
   float* buf = NULL; // The "current" buffer (used for fast paths)
 
-  uint32_t directIndex = !state.directBackbuffer;
-  uint32_t indirectIndex = !state.indirectBackbuffer;
+#ifdef LOVR_USE_PHONON
+  uint32_t frontbuffer = !state.backbuffer;
+  bool hasReverb = false;
 
-  FOREACH_SOURCE(source) {
-    bool hasTail = false;
+  if (state.config.reverb.mode == REVERB_PARAMETRIC) {
+    memset(state.reflectionBuffer.data[0], 0, BUFFER_SIZE * sizeof(float));
+  }
+#endif
 
+  FOREACH_SOURCE(state.activeSourceMask, source) {
     uint32_t play = atomic_exchange(&source->playRequest, ~0u);
     if (play != ~0u) source->playing = !!play;
 
@@ -153,6 +161,8 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
       float ratio = source->pitch * lovrSoundGetSampleRate(source->sound) / state.config.sampleRate;
       ma_data_converter_set_rate_ratio(source->converter, ratio);
     }
+
+    bool hasTail = false;
 
     if (source->playing) {
       // Read and convert raw frames until there's BUFFER_SIZE converted frames
@@ -206,19 +216,37 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
 #ifdef LOVR_USE_PHONON
       // Spatializer
       if (source->spatial) {
-        IPLSimulationOutputs* outputs = &source->outputs[directIndex];
         IPLAudioBuffer monoBuffer = { .numChannels = 1, .numSamples = BUFFER_SIZE, .data = &buf };
 
-        // Direct effect
-        if (source->effects & (EFFECT_ABSORPTION | EFFECT_ATTENUATION | EFFECT_OCCLUSION | EFFECT_TRANSMISSION)) {
-          hasTail |= iplDirectEffectApply(source->directEffect, &outputs->direct, &monoBuffer, &monoBuffer) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
+        // Feed raw audio to reflection effect
+        // Note that the reflection mixer is only used for convolution reverb
+        // Parametric reverb uses `mix` as a temp buffer and mixes mono reverb into state.reflectionBuffer
+        if (source->effects & (1 << EFFECT_REVERB)) {
+          IPLSimulationOutputs outputs = { 0 };
+          iplSourceGetOutputs(source->handle, IPL_SIMULATIONFLAGS_REFLECTIONS, &outputs);
+
+          if (state.config.reverb.mode == REVERB_CONVOLUTION) {
+            hasTail |= iplReflectionEffectApply(source->reflectionEffect, &outputs.reflections, &monoBuffer, &state.reflectionBuffer, state.reflectionMixer) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
+          } else {
+            IPLAudioBuffer output = { .numChannels = 1, .numSamples = BUFFER_SIZE, .data = (float**) &mix };
+            hasTail |= iplReflectionEffectApply(source->reflectionEffect, &outputs.reflections, &monoBuffer, &output, NULL) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
+            iplAudioBufferMix(state.spatializer, &output, &state.reflectionBuffer);
+          }
+
+          hasReverb = true;
         }
 
-        // Spatialization (either binaural, panning, or unspatialized mono => stereo conversion)
-        if (source->effects & EFFECT_SPATIALIZATION) {
+        // Apply direct effects to raw audio, in-place
+        if (source->effects & ((1 << EFFECT_ABSORPTION) | (1 << EFFECT_ATTENUATION) | (1 << EFFECT_OCCLUSION) | (1 << EFFECT_TRANSMISSION))) {
+          IPLDirectEffectParams* params = &source->outputs[frontbuffer].direct;
+          hasTail |= iplDirectEffectApply(source->directEffect, params, &monoBuffer, &monoBuffer) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
+        }
+
+        // Convert to stereo (either binaural/panning spatialization, or upmix)
+        if (source->effects & (1 << EFFECT_SPATIALIZATION)) {
           if (source->hrtf) {
             IPLBinauralEffectParams params = {
-              .direction = source->relativeDirection[directIndex],
+              .direction = source->relativeDirection[frontbuffer],
               .interpolation = IPL_HRTFINTERPOLATION_BILINEAR,
               .spatialBlend = 1.f,
               .hrtf = source->hrtf
@@ -227,7 +255,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
             hasTail |= iplBinauralEffectApply(source->binauralEffect, &params, &monoBuffer, &source->stereoBuffer) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
           } else {
             IPLPanningEffectParams params = {
-              .direction = source->relativeDirection[directIndex]
+              .direction = source->relativeDirection[frontbuffer]
             };
 
             iplPanningEffectApply(source->panningEffect, &params, &monoBuffer, &source->stereoBuffer);
@@ -248,10 +276,9 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
 #ifdef LOVR_USE_PHONON
       uint32_t directTailSize = iplDirectEffectGetTailSize(source->directEffect);
 
-      // Get mono tail from direct effect and convert to stereo, storing in mix
+      // Get mono tail from direct effect and convert to stereo, storing in raw
       if (directTailSize > 0) {
-        buf = raw;
-        IPLAudioBuffer buffer = { .numChannels = 1, .numSamples = BUFFER_SIZE, .data = &buf };
+        IPLAudioBuffer buffer = { .numChannels = 1, .numSamples = BUFFER_SIZE, .data = (float**) raw };
         hasTail |= iplDirectEffectGetTail(source->directEffect, &buffer) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
       }
 
@@ -276,6 +303,18 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
         memset(mix, 0, BUFFER_SIZE * 2 * sizeof(float));
       }
 
+      // Reverb tail
+      if (iplReflectionEffectGetTailSize(source->reflectionEffect) > 0) {
+        IPLAudioBuffer output = { .numChannels = 1, .numSamples = BUFFER_SIZE, .data = (float**) &raw };
+        hasTail |= iplReflectionEffectGetTail(source->reflectionEffect, &output, state.reflectionMixer) == IPL_AUDIOEFFECTSTATE_TAILREMAINING;
+
+        if (state.config.reverb.mode == REVERB_PARAMETRIC) {
+          iplAudioBufferMix(state.spatializer, &output, &state.reflectionBuffer);
+        }
+
+        hasReverb = true;
+      }
+
       buf = mix;
 #endif
     }
@@ -289,6 +328,65 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
     // Once we set this to false, the source could get destroyed (if it's not playing)
     source->hasTail = hasTail;
   }
+
+#ifdef LOVR_USE_PHONON
+  if (hasReverb) {
+    // Convolution reverb: apply reflection mixer -> ambisonic buffer -> pan/spatialize to stereo
+    if (state.config.reverb.mode == REVERB_CONVOLUTION) {
+      IPLReflectionEffectParams reflectionMixerParams = { .numChannels = 4 };
+      iplReflectionMixerApply(state.reflectionMixer, &reflectionMixerParams, &state.reflectionBuffer);
+
+      IPLAmbisonicsDecodeEffectParams ambisonicsDecodeParams = {
+        .order = 1,
+        .hrtf = state.hrtf,
+        .orientation = state.listenerBasis[frontbuffer],
+        .binaural = !!state.hrtf
+      };
+
+      IPLAudioBuffer output = {
+        .numChannels = 2,
+        .numSamples = BUFFER_SIZE,
+        .data = (float*[2]) {
+          mix,
+          mix + BUFFER_SIZE
+        }
+      };
+
+      iplAmbisonicsDecodeEffectApply(state.ambisonicsDecodeEffect, &ambisonicsDecodeParams, &state.reflectionBuffer, &output);
+
+      // Interleave and mix
+      for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+        dst[2 * i + 0] += output.data[0][i];
+        dst[2 * i + 1] += output.data[1][i];
+      }
+    } else {
+      // Parametric reverb: just upmix mono reflection buffer to stereo and mix into output
+      for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+        dst[2 * i + 0] += state.reflectionBuffer.data[0][i];
+        dst[2 * i + 1] += state.reflectionBuffer.data[0][i];
+      }
+    }
+  }
+
+  if (!hasReverb && state.config.reverb.mode == REVERB_CONVOLUTION && iplAmbisonicsDecodeEffectGetTailSize(state.ambisonicsDecodeEffect) > 0) {
+    IPLAudioBuffer output = {
+      .numChannels = 2,
+      .numSamples = BUFFER_SIZE,
+      .data = (float*[2]) {
+        mix,
+        mix + BUFFER_SIZE
+      }
+    };
+
+    iplAmbisonicsDecodeEffectGetTail(state.ambisonicsDecodeEffect, &output);
+
+    // Interleave and mix
+    for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+      dst[2 * i + 0] += output.data[0][i];
+      dst[2 * i + 1] += output.data[1][i];
+    }
+  }
+#endif
 
   if (state.sinks[AUDIO_PLAYBACK]) {
     uint64_t capacity = sizeof(aux) / lovrSoundGetChannelCount(state.sinks[AUDIO_PLAYBACK]) / sizeof(float);
@@ -369,23 +467,26 @@ bool lovrAudioInit(AudioConfig* config) {
   state.audioSettings.frameSize = BUFFER_SIZE;
 
   switch (config->reverb.mode) {
-    case REVERB_CONVOLUTION: default: state.reflectionType = IPL_REFLECTIONEFFECTTYPE_CONVOLUTION; break;
-    case REVERB_PARAMETRIC: state.reflectionType = IPL_REFLECTIONEFFECTTYPE_PARAMETRIC; break;
+    case REVERB_CONVOLUTION: default: state.reflectionSettings.type = IPL_REFLECTIONEFFECTTYPE_CONVOLUTION; break;
+    case REVERB_PARAMETRIC: state.reflectionSettings.type = IPL_REFLECTIONEFFECTTYPE_PARAMETRIC; break;
   }
+
+  state.reflectionSettings.irSize = config->reverb.duration * config->sampleRate;
+  state.reflectionSettings.numChannels = config->reverb.mode == REVERB_CONVOLUTION ? 4 : 1;
 
   state.simulationFlags = IPL_SIMULATIONFLAGS_DIRECT | IPL_SIMULATIONFLAGS_REFLECTIONS;
 
   IPLSimulationSettings simulationSettings = {
     .flags = state.simulationFlags,
     .sceneType = IPL_SCENETYPE_DEFAULT,
-    .reflectionType = state.reflectionType,
+    .reflectionType = state.reflectionSettings.type,
     .maxNumOcclusionSamples = MAX_OCCLUSION_SAMPLES,
     .maxNumRays = config->reverb.rays,
     .numDiffuseSamples = 1024,
     .maxDuration = config->reverb.duration,
     .maxOrder = 1,
     .maxNumSources = MAX_SOURCES,
-    .numThreads = 4,
+    .numThreads = 8,
     .samplingRate = state.audioSettings.samplingRate,
     .frameSize = state.audioSettings.frameSize
   };
@@ -400,6 +501,28 @@ bool lovrAudioInit(AudioConfig* config) {
   }
 
   iplSimulatorSetScene(state.simulator, state.scene);
+
+  if (config->reverb.mode == REVERB_CONVOLUTION) {
+    if (iplReflectionMixerCreate(state.spatializer, &state.audioSettings, &state.reflectionSettings, &state.reflectionMixer)) {
+      return lovrAudioDestroy(), lovrSetError("Failed to create reverb mixer");
+    }
+
+    IPLAmbisonicsDecodeEffectSettings settings = {
+      .speakerLayout.type = IPL_SPEAKERLAYOUTTYPE_STEREO,
+      .hrtf = NULL,
+      .maxOrder = 1
+    };
+
+    if (iplAmbisonicsDecodeEffectCreate(state.spatializer, &state.audioSettings, &settings, &state.ambisonicsDecodeEffect)) {
+      return lovrAudioDestroy(), lovrSetError("Failed to create ambisonics decode effect");
+    }
+  }
+
+  if (iplAudioBufferAllocate(state.spatializer, state.reflectionSettings.numChannels, BUFFER_SIZE, &state.reflectionBuffer)) {
+    return lovrAudioDestroy(), lovrSetError("Failed to create reverb buffer");
+  }
+
+  atomic_store(&state.reverbFinished, true);
 #endif
 
   // SteamAudio's default frequency-dependent absorption coefficients for air
@@ -419,16 +542,20 @@ void lovrAudioDestroy(void) {
     lovrFree(state.deviceInfo[i]);
   }
   Source* source;
-  FOREACH_SOURCE(source) lovrRelease(source, lovrSourceDestroy);
+  uint64_t mask = state.activeSourceMask | state.pendingSourceMask;
+  FOREACH_SOURCE(mask, source) lovrRelease(source, lovrSourceDestroy);
   ma_context_uninit(&state.context);
   lovrRelease(state.sinks[AUDIO_PLAYBACK], lovrSoundDestroy);
   lovrRelease(state.sinks[AUDIO_CAPTURE], lovrSoundDestroy);
   ma_data_converter_uninit(&state.playbackConverter, NULL);
 #ifdef LOVR_USE_PHONON
-  iplHRTFRelease(&state.hrtf), state.hrtf = NULL;
-  iplSceneRelease(&state.scene), state.scene = NULL;
-  iplSimulatorRelease(&state.simulator), state.simulator = NULL;
-  iplContextRelease(&state.spatializer), state.spatializer = NULL;
+  iplAmbisonicsDecodeEffectRelease(&state.ambisonicsDecodeEffect);
+  iplAudioBufferFree(state.spatializer, &state.reflectionBuffer);
+  iplReflectionMixerRelease(&state.reflectionMixer);
+  iplHRTFRelease(&state.hrtf);
+  iplSceneRelease(&state.scene);
+  iplSimulatorRelease(&state.simulator);
+  iplContextRelease(&state.spatializer);
 #endif
   memset(&state, 0, sizeof(state));
   lovrModuleReset(&ref);
@@ -564,8 +691,9 @@ static void simulateIndirect(void* arg) {
 
 void lovrAudioUpdate(float dt) {
   Source* source;
+  uint64_t mask = state.activeSourceMask | state.pendingSourceMask;
 
-  FOREACH_SOURCE(source) {
+  FOREACH_SOURCE(mask, source) {
     if (!source->playing && source->playRequest != 1 && !source->hasTail) {
 #ifdef LOVR_USE_PHONON
       iplSourceRemove(source->handle, state.simulator);
@@ -586,7 +714,12 @@ void lovrAudioUpdate(float dt) {
     state.sceneDirty = false;
   }
 
-  iplSimulatorCommit(state.simulator);
+  // TODO maybe split into 2 simulators so we can have less latency on direct simulation commits
+  if (atomic_load(&state.reverbFinished)) {
+    iplSimulatorCommit(state.simulator);
+  }
+
+  uint32_t backbuffer = state.backbuffer;
 
   IPLSimulationSharedInputs sharedInputs;
   poseToPhonon(state.position, state.orientation, &sharedInputs.listener);
@@ -596,41 +729,42 @@ void lovrAudioUpdate(float dt) {
   sharedInputs.order = 1;
   sharedInputs.irradianceMinDistance = .01f;
 
-  iplSimulatorSetSharedInputs(state.simulator, state.simulationFlags, &sharedInputs);
+  iplSimulatorSetSharedInputs(state.simulator, IPL_SIMULATIONFLAGS_DIRECT, &sharedInputs);
 
-  uint32_t backbuffer = state.directBackbuffer;
+  state.listenerBasis[backbuffer] = sharedInputs.listener;
 
-  FOREACH_SOURCE(source) {
+  bool hasReverb = false;
+
+  FOREACH_SOURCE(mask, source) {
     poseToPhonon(source->position, source->orientation, &source->inputs.source);
     vec3_sub(vec3_init(&source->relativeDirection[backbuffer].x, source->position), state.position);
     memcpy(source->inputs.airAbsorptionModel.coefficients, state.absorption, 3 * sizeof(float));
     iplSourceSetInputs(source->handle, IPL_SIMULATIONFLAGS_DIRECT, &source->inputs);
+    hasReverb |= !!(source->effects & (1 << EFFECT_REVERB));
   }
 
   iplSimulatorRunDirect(state.simulator);
 
-  FOREACH_SOURCE(source) {
+  FOREACH_SOURCE(mask, source) {
     iplSourceGetOutputs(source->handle, IPL_SIMULATIONFLAGS_DIRECT, &source->outputs[backbuffer]);
+    source->outputs[backbuffer].direct.flags = source->inputs.directFlags;
   }
 
-  atomic_fetch_xor(&state.directBackbuffer, 0x1);
+  atomic_fetch_xor(&state.backbuffer, 0x1);
 
-  if (true) {
-    state.reverbTimer += dt;
+  if (hasReverb) {
+    state.reverbTimer -= dt;
 
-    if (state.reverbTimer >= state.config.reverb.rate && atomic_load(&state.reverbFinished)) {
+    if (state.reverbTimer <= 0.f && atomic_load(&state.reverbFinished)) {
       atomic_store(&state.reverbFinished, false);
-      state.reverbTimer = 0;
-
-      uint32_t index = state.indirectBackbuffer;
+      state.reverbTimer = state.config.reverb.rate;
 
       Source* source;
-      FOREACH_SOURCE(source) {
-        iplSourceGetOutputs(source->handle, IPL_SIMULATIONFLAGS_REFLECTIONS, &source->outputs[index]);
+      FOREACH_SOURCE(mask, source) {
         iplSourceSetInputs(source->handle, IPL_SIMULATIONFLAGS_REFLECTIONS, &source->inputs);
       }
 
-      atomic_fetch_xor(&state.indirectBackbuffer, 0x1);
+      iplSimulatorSetSharedInputs(state.simulator, IPL_SIMULATIONFLAGS_REFLECTIONS, &sharedInputs);
 
       while (!job_start(simulateIndirect, NULL)) {
         job_spin();
@@ -639,8 +773,6 @@ void lovrAudioUpdate(float dt) {
   }
 #endif
 
-  // FIXME should do this earlier, FOREACH_SOURCE above is not iterating over pendingSourceMask sources!
-  // but make sure audio thread can't see it until ready
   atomic_fetch_or(&state.activeSourceMask, state.pendingSourceMask);
   state.pendingSourceMask = 0;
 }
@@ -666,16 +798,16 @@ void lovrAudioSetPose(float position[3], float orientation[4]) {
   quat_init(state.orientation, orientation);
 }
 
-bool lovrAudioSetHRTF(Blob* hrtf) {
+bool lovrAudioSetHRTF(Blob* blob) {
 #ifdef LOVR_USE_PHONON
   iplHRTFRelease(&state.hrtf);
   state.hrtf = NULL;
 
-  if (hrtf) {
+  if (blob) {
     IPLHRTFSettings settings = {
       .type = IPL_HRTFTYPE_SOFA,
-      .sofaData = hrtf->data,
-      .sofaDataSize = hrtf->size,
+      .sofaData = blob->data,
+      .sofaDataSize = blob->size,
       .volume = 1.f,
       .normType = IPL_HRTFNORMTYPE_NONE
     };
@@ -683,6 +815,8 @@ bool lovrAudioSetHRTF(Blob* hrtf) {
     if (iplHRTFCreate(state.spatializer, &state.audioSettings, &settings, &state.hrtf)) {
       return lovrSetError("Failed to create HRTF");
     }
+
+    // TODO recreate AmbisonicsDecodeEffect (may need to double buffer this, and/or maybe the hrtf)
   }
 
 #endif
@@ -713,6 +847,11 @@ static bool lovrSourceInit(Source* source) {
   }
 
   source->inputs.flags = state.simulationFlags;
+  source->inputs.directFlags =
+    IPL_DIRECTSIMULATIONFLAGS_AIRABSORPTION |
+    IPL_DIRECTSIMULATIONFLAGS_DISTANCEATTENUATION |
+    IPL_DIRECTSIMULATIONFLAGS_OCCLUSION |
+    IPL_DIRECTSIMULATIONFLAGS_TRANSMISSION;
   source->inputs.distanceAttenuationModel.type = IPL_DISTANCEATTENUATIONTYPE_DEFAULT;
   source->inputs.distanceAttenuationModel.minDistance = 1.f;
   source->inputs.airAbsorptionModel.type = IPL_AIRABSORPTIONTYPE_DEFAULT;
@@ -743,8 +882,14 @@ static bool lovrSourceInit(Source* source) {
     goto fail;
   }
 
+  if (iplReflectionEffectCreate(state.spatializer, &state.audioSettings, &state.reflectionSettings, &source->reflectionEffect)) {
+    lovrSetError("Failed to create reflection effect");
+    goto fail;
+  }
+
   return true;
 fail:
+  iplReflectionEffectRelease(&source->reflectionEffect);
   iplPanningEffectRelease(&source->panningEffect);
   iplDirectEffectRelease(&source->directEffect);
   iplAudioBufferFree(state.spatializer, &source->stereoBuffer);
@@ -850,6 +995,7 @@ void lovrSourceDestroy(void* ref) {
   Source* source = ref;
 #ifdef LOVR_USE_PHONON
   iplHRTFRelease(&source->hrtf);
+  iplReflectionEffectRelease(&source->reflectionEffect);
   iplBinauralEffectRelease(&source->binauralEffect);
   iplPanningEffectRelease(&source->panningEffect);
   iplDirectEffectRelease(&source->directEffect);
@@ -1004,6 +1150,13 @@ bool lovrSourceIsEffectEnabled(Source* source, Effect effect) {
 bool lovrSourceSetEffectEnabled(Source* source, Effect effect, bool enabled) {
   lovrCheck(source->spatial, "Sources must be created with the spatial flag to enable effects");
 
+  if (enabled) {
+    source->effects |= (1 << effect);
+  } else {
+    source->effects &= ~(1 << effect);
+  }
+
+#ifdef LOVR_USE_PHONON
   static const IPLDirectSimulationFlags phononEffectFlags[] = {
     [EFFECT_ABSORPTION] = IPL_DIRECTSIMULATIONFLAGS_AIRABSORPTION,
     [EFFECT_ATTENUATION] = IPL_DIRECTSIMULATIONFLAGS_DISTANCEATTENUATION,
@@ -1014,35 +1167,32 @@ bool lovrSourceSetEffectEnabled(Source* source, Effect effect, bool enabled) {
   };
 
   if (enabled) {
-    source->effects |= (1 << effect);
-#ifdef LOVR_USE_PHONON
     source->inputs.directFlags |= phononEffectFlags[effect];
-#endif
   } else {
-    source->effects &= ~(1 << effect);
-#ifdef LOVR_USE_PHONON
     source->inputs.directFlags &= ~phononEffectFlags[effect];
-#endif
   }
+#endif
 
   return true;
 }
 
 // AudioMesh
 
+#ifdef LOVR_USE_PHONON
 static IPLMaterial materialData[] = {
-  [MATERIAL_GENERIC] = { .10f, .20f, .30f, .05f, .100f, .050f, .030f },
-  [MATERIAL_BRICK] = { .03f, .04f, .07f, .05f, .015f, .015f, .015f },
-  [MATERIAL_CARPET] = { .24f, .69f, .73f, .05f, .020f, .005f, .003f },
-  [MATERIAL_CERAMIC] = { .01f, .02f, .02f, .05f, .060f, .044f, .011f },
-  [MATERIAL_CONCRETE] = { .05f, .07f, .08f, .05f, .015f, .002f, .001f },
-  [MATERIAL_GLASS] = { .06f, .03f, .02f, .05f, .060f, .044f, .011f },
-  [MATERIAL_GRAVEL] = { .60f, .70f, .80f, .05f, .031f, .012f, .008f },
-  [MATERIAL_METAL] = { .20f, .07f, .06f, .05f, .200f, .025f, .010f },
-  [MATERIAL_PLASTER] = { .12f, .06f, .04f, .05f, .056f, .056f, .004f },
-  [MATERIAL_ROCK] = { .13f, .20f, .24f, .05f, .015f, .002f, .001f },
-  [MATERIAL_WOOD] = { .11f, .07f, .06f, .05f, .070f, .014f, .005f }
+  [MATERIAL_GENERIC] = { { .10f, .20f, .30f }, .05f, { .100f, .050f, .030f } },
+  [MATERIAL_BRICK] = { { .03f, .04f, .07f }, .05f, { .015f, .015f, .015f } },
+  [MATERIAL_CARPET] = { { .24f, .69f, .73f }, .05f, { .020f, .005f, .003f } },
+  [MATERIAL_CERAMIC] = { { .01f, .02f, .02f }, .05f, { .060f, .044f, .011f } },
+  [MATERIAL_CONCRETE] = { { .05f, .07f, .08f }, .05f, { .015f, .002f, .001f } },
+  [MATERIAL_GLASS] = { { .06f, .03f, .02f }, .05f, { .060f, .044f, .011f } },
+  [MATERIAL_GRAVEL] = { { .60f, .70f, .80f }, .05f, { .031f, .012f, .008f } },
+  [MATERIAL_METAL] = { { .20f, .07f, .06f }, .05f, { .200f, .25f, .010f } },
+  [MATERIAL_PLASTER] = { { .12f, .06f, .04f }, .05f, { .056f, .056f, .004f } },
+  [MATERIAL_ROCK] = { { .13f, .20f, .24f }, .05f, { .015f, .002f, .001f } },
+  [MATERIAL_WOOD] = { { .11f, .07f, .06f }, .05f, { .070f, .014f, .005f } }
 };
+#endif
 
 AudioMesh* lovrAudioMeshCreate(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial* materials, AudioMaterial material) {
   AudioMesh* mesh = lovrCalloc(sizeof(AudioMesh));

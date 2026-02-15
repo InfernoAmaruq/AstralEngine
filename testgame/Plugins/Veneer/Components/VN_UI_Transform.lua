@@ -1,4 +1,5 @@
 local Component = GetService("Component")
+local Renderer = GetService("Renderer")
 local UITransform = {}
 
 UITransform.Name = "UITransform"
@@ -32,6 +33,9 @@ local Pointers = {
     HasDrawable = 9, -- string value telling if it has or does not have another Drawable in the same entity
     ZIndex = 10,
     EffectiveZIndex = 11,
+    FuncId = 12,
+    ClipDescendantInstances = 13,
+    __ClipDepth = 14,
 }
 
 local StorageQuat = Quat()
@@ -83,27 +87,27 @@ local Methods = {
             + self[Pointers.OffsetPosition]
             + AncestorPosition
 
-        if self[Pointers.AnchorPoint] ~= CenterVec then
-            -- now apply anchor point
-            local AdditonalOffset = Size_Vec2Total * self[Pointers.AnchorPoint] -- pixel size offset
+        -- anchor
 
-            local HalfSize = Size_Vec2Total * CenterVec                -- half-size because our renderer draws it centerd
+        local AnchorOffset = Size_Vec2Total * self[Pointers.AnchorPoint]
+        local HalfSize = Size_Vec2Total * CenterVec
+        local CenterAdjustmentAnchor = AnchorOffset - HalfSize
 
-            Pos_Vec2Total = Pos_Vec2Total - HalfSize + AdditonalOffset
-        end
+        Pos_Vec2Total = Pos_Vec2Total + CenterAdjustmentAnchor
+
         -- quat
 
-        local OwnerRotation = AncestorTransform[8] -- use 8 to encode deg transform
-        local Rot = self[Pointers.Rotation] + OwnerRotation
+        local Rot = self[Pointers.Rotation]
         StorageQuat:setEuler(0, 0, math.rad(Rot))
 
         --Mat:set(vec3(Pos_Vec2Total.x, Pos_Vec2Total.y, 0), vec3(Size_Vec2Total.x, Size_Vec2Total.y, 0), StorageQuat)
         Mat:identity()
         Mat:translate(Pos_Vec2Total.x, Pos_Vec2Total.y, 0)
+        Mat:translate(CenterAdjustmentAnchor.x, CenterAdjustmentAnchor.y, 0)
         Mat:rotate(StorageQuat)
+        Mat:translate(-CenterAdjustmentAnchor.x, -CenterAdjustmentAnchor.y, 0)
         Mat:scale(Size_Vec2Total.x, Size_Vec2Total.y, 1)
         Mat[4] = 0
-        Mat[8] = Rot
 
         if not Mat:equals(OldMatrix) then
             -- new matrix set! propagate!
@@ -133,7 +137,13 @@ local Mt = {
         if Ptr then
             if Ptr == Pointers.Matrix then
                 return mat4(self[Ptr])
-            elseif Ptr == Pointers.Rotation or Ptr == Pointers.ZIndex or Ptr == Pointers.EffectiveZIndex then
+            elseif
+                Ptr == Pointers.Rotation
+                or Ptr == Pointers.ZIndex
+                or Ptr == Pointers.EffectiveZIndex
+                or Ptr == Pointers.ClipDescendantInstances
+                or Ptr == Pointers.__ClipDepth
+            then
                 return self[Ptr]
             else
                 return vec2(self[Ptr])
@@ -150,11 +160,14 @@ local Mt = {
         if Pointers[k] then
             local Val = Pointers[k]
 
-            if Val == Pointers.Rotation or Val == Pointers.EffectiveZIndex then
+            if Val == Pointers.Rotation or Val == Pointers.EffectiveZIndex or Val == Pointers.__ClipDepth then
                 self[Val] = v
             elseif Val == Pointers.Matrix then
                 self[Val]:set(v)
                 return
+            elseif Val == Pointers.ClipDescendantInstances then
+                self[Val] = v
+                self:RequestChainRebuild()
             elseif k == "__HasUIElement" then
                 local Cur = self[Pointers.HasDrawable]
 
@@ -163,6 +176,12 @@ local Mt = {
                     self:RequestChainRebuild()
                 elseif not Cur and v then
                     self[Pointers.HasDrawable] = v
+
+                    local Translated = Renderer.VeneerUI.GetStackIdFromName(v)
+                    if Translated then
+                        self[Pointers.FuncId] = Translated
+                    end
+
                     self:RequestChainRebuild()
                 elseif Cur and v then
                     AstralEngine.Error("CANNOT SET SEVERAL DRAWABLE ELEMENTS ONTO ONE UI ENTITY", "VENEER", 3)
@@ -217,6 +236,11 @@ UITransform.Metadata.__create = function(InputTransform, Ent)
         [Pointers.HasDrawable] = InputTransform and InputTransform.__HasUIElement or nil,
         [Pointers.ZIndex] = InputTransform and InputTransform.ZIndex or 1,
         [Pointers.EffectiveZIndex] = -1,
+        [Pointers.FuncId] = Renderer.VeneerUI.GetStackIdFromName(
+            InputTransform and InputTransform.__HasUIElement or nil
+        ),
+        [Pointers.ClipDescendantInstances] = InputTransform and InputTransform.ClipDescendantInstances or false,
+        [Pointers.__ClipDepth] = 0,
     }
 
     setmetatable(Data, Mt)

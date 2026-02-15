@@ -1,8 +1,17 @@
 local Component = GetService("Component")
+local Renderer = GetService("Renderer")
 local Canvas = {}
 
 Canvas.Name = "UICanvas"
 Canvas.Metadata = {}
+
+local SetComponents = Component.SetComponents
+Renderer.VeneerUI.AddToStack(Canvas.Name, function(Pass, Entity, Matrix)
+    local CanvasInst = SetComponents[Entity].UICanvas
+
+    Pass:setColor(CanvasInst[1], CanvasInst[2], CanvasInst[3], CanvasInst[4])
+    Pass:plane(Matrix)
+end)
 
 local Indecies = {
     R = 1,

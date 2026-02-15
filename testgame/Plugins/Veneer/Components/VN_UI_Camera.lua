@@ -12,7 +12,6 @@ local ToRebuild = {}
 
 local function SortMethod(a, b)
     -- we using IDs here so...
-
     local ObjA, ObjB = Entity.GetEntityFromId(a), Entity.GetEntityFromId(b)
 
     return ObjA.UITransform.EffectiveZIndex < ObjB.UITransform.EffectiveZIndex
@@ -71,7 +70,6 @@ local Methods = {
             "VENEER"
         )
 
-        print("REBUILD START")
         local T1 = os.clock()
 
         self[7] = {}
@@ -85,11 +83,26 @@ local Methods = {
 
             local OwnTransform = Top:GetComponent("UITransform")
             local OwnIndex = OwnTransform and OwnTransform.EffectiveZIndex
+            local ParentClipDepth = OwnTransform and OwnTransform.__ClipDepth or 0
+
+            local ToClip = false
+            if OwnTransform and OwnTransform.ClipDescendantInstances then
+                ToClip = true
+                ParentClipDepth = ParentClipDepth + 1
+                OwnTransform.__ClipDepth = ParentClipDepth
+            end
 
             for Child in Top.Ancestry:IterChildren() do
                 local UITransform = Child:GetComponent("UITransform")
 
                 if UITransform and UITransform.__HasUIElement then
+                    if ToClip or ParentClipDepth > 0 then
+                        local ClipDepth = ParentClipDepth
+                        UITransform.__ClipDepth = ClipDepth
+                    else
+                        UITransform.__ClipDepth = 0
+                    end
+
                     UITransform.EffectiveZIndex = (OwnIndex or ZIndex) + UITransform.ZIndex
                     table.insert(self[7], Child.Id)
                     table.insert(Stack, Child)
@@ -137,6 +150,11 @@ UICam.Metadata.__create = function(Input, Entity, Skip)
     local DoDepth = Input.Depth
     local DepthType = typeof(DoDepth)
 
+    if DepthType == "nil" then
+        DoDepth = true
+        DepthType = "boolean"
+    end
+
     local CamPtr
 
     if Input.Camera then
@@ -181,11 +199,11 @@ UICam.Metadata.__create = function(Input, Entity, Skip)
     -- alloc depth
     local DepthTex
 
-    if DepthType == "boolean" then
+    if DepthType == "boolean" and DepthType then
         DepthTex = AstralEngine.Graphics.NewTexture(
             IOTexture:getWidth(),
             IOTexture:getHeight(),
-            { format = "d32f", mipmaps = false, label = "VENEER_UI_TEXTURE_DEPTH" }
+            { format = "d32fs8", mipmaps = false, label = "VENEER_UI_TEXTURE_DEPTH" }
         ) -- use safe tex so the UI is fine with resizes
     elseif DepthType == "Texture" then
         DepthTex = DoDepth

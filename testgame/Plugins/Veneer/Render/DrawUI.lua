@@ -22,14 +22,34 @@ end
 
 Renderer.VeneerUI.FunctionStack = {}
 local FuncStack = Renderer.VeneerUI.FunctionStack
-Renderer.VeneerUI.GetFunctionStackTop = function()
-    return #FuncStack
+local Registry = {}
+
+function Renderer.VeneerUI.AddToStack(ComponentName, Function)
+    local Id = #FuncStack + 1
+    FuncStack[Id] = Function
+    Registry[ComponentName] = Id
+end
+
+function Renderer.VeneerUI.GetStackIdFromName(ComponentName)
+    return Registry[ComponentName]
 end
 
 Renderer.Late[#Renderer.Late + 1] = function()
     -- bind
 
+    print("COMPILE UI SHADER")
+
+    local ShaderService = GetService("ShaderService")
+    local V, F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics, "UIMain", {
+        Include = {},
+    })
+
+    print("COMPILED!", V, F)
+    local MainUIShader = lovr.graphics.newShader(V, F)
+
     local ComponentManager = GetService("Component")
+
+    local StencilActs = { "keep", "keep", "increment" }
 
     GetService("RunService").BindToStep("VENEER_UI_DRAW", Plugin.Config.BaseRenderBand, function()
         local UICams = Renderer.VeneerUI.UICameras
@@ -37,6 +57,7 @@ Renderer.Late[#Renderer.Late + 1] = function()
 
         local Comp = ComponentManager
         local SetComp = Comp.SetComponents
+        local SActs = StencilActs
 
         for i = 1, #UICams do
             local Cam = UICams[i]
@@ -47,22 +68,57 @@ Renderer.Late[#Renderer.Late + 1] = function()
                 continue
             end
             Pass:reset()
+            Pass:setShader(MainUIShader)
             Pass:setProjection(1, Cam[5])
             Pass:setDepthTest()
             Pass:setDepthWrite()
+
             -- iter and draw obj
 
             local ClipLayer = 0 -- used for 'stencils' (i use depth for them here)
+
+            local HighestTest = 0
 
             for ObjIdx = 1, ObjCount do
                 local Obj = Objects[ObjIdx]
                 local Transform = SetComp[Obj]["UITransform"]
                 local Matrix = Transform[1]
 
-                local UICanvas = SetComp[Obj]["UICanvas"]
-                Pass:setColor(UICanvas[1], UICanvas[2], UICanvas[3], UICanvas[4])
+                local ShouldClipChildren = Transform[13]
+                local ClipDepth = Transform[14]
 
-                Pass:plane(Matrix)
+                local Invalid = Matrix[4]
+                if Invalid == 1 then
+                    AstralEngine.Error("INVALID MATRIX FOUND IN UI OBJECT!", "VeneerUI", 1)
+                end
+
+                local FuncCall = FuncStack[Transform[12]]
+
+                if ShouldClipChildren then
+                    if HighestTest > ClipDepth then
+                        -- noting cause I WILL forget! We flush the stencil buffer on exit, since we cant just replace since we using increment
+                        Pass:setColorWrite()
+                        Pass:setStencilWrite("zero")
+                        Pass:fill()
+                        Pass:setStencilWrite()
+                        Pass:setColorWrite(true, true, true, true)
+                    end
+                    HighestTest = ClipDepth
+
+                    Pass:setStencilWrite(SActs, ClipDepth)
+
+                    if ClipDepth > 1 then
+                        Pass:setStencilTest("gequal", ClipDepth - 1)
+                    end
+                elseif ClipDepth > 0 then
+                    Pass:setStencilTest(">=", ClipDepth)
+                end
+
+                Pass:push("state")
+                FuncCall(Pass, Obj, Matrix)
+                Pass:pop("state")
+                Pass:setStencilWrite()
+                Pass:setStencilTest()
             end
 
             -- to cam

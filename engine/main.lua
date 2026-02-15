@@ -213,9 +213,9 @@ function lovr.run()
 
     @execute<UNSAFE>{
         if lovr.headset then
-            return 'local H_UPD = lovr.headset.submit; @macro<L>{CALL_HEADSET() = H_UPD()}
+            return 'local H_UPD = lovr.headset.submit; @macro<L>{CALL_HEADSET() = H_UPD()}'
         end
-        return '@macro<L>{CALL_HEADSET() = -- NO HEADSET}
+        return '@macro<L>{CALL_HEADSET() = -- NO HEADSET}'
     }
 
     @macro<L,!USEBRACK>{M_CPUTick(&DT) = 

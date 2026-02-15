@@ -12,7 +12,7 @@ return {
     Version = Ver,
 
     AliasMap = {
-        ["./Shader"] = "Shaders",
+        ["./Shader/UIShader"] = "Shaders/UIMain",
         ["./Components"] = "Components",
         ["./Render"] = "RenderCalls",
     },

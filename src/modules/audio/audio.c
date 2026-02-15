@@ -89,22 +89,6 @@ static struct {
   float position[3];
   float orientation[4];
   float absorption[3];
-#ifdef LOVR_USE_PHONON
-  IPLContext spatializer;
-  IPLAudioSettings audioSettings;
-  IPLReflectionEffectSettings reflectionSettings;
-  IPLSimulationFlags simulationFlags;
-  IPLSimulator simulator;
-  IPLScene scene;
-  bool sceneDirty;
-  IPLHRTF hrtf;
-  IPLCoordinateSpace3 listenerBasis[2];
-  IPLReflectionMixer reflectionMixer;
-  IPLAudioBuffer reflectionBuffer;
-  IPLAmbisonicsDecodeEffect ambisonicsDecodeEffect;
-  atomic_bool reverbFinished;
-  float reverbTimer;
-#endif
 } state;
 
 static const ma_format miniaudioFormats[] = {
@@ -120,16 +104,21 @@ static float linearToDb(float linear) {
   return 20.f * log10f(linear);
 }
 
-#ifdef LOVR_USE_PHONON
-static void poseToPhonon(float* position, float* orientation, IPLCoordinateSpace3* basis) {
-  float transform[16];
-  mat4_fromQuat(transform, orientation);
-  vec3_init(&basis->right.x, &transform[0]);
-  vec3_init(&basis->up.x, &transform[4]);
-  vec3_scale(vec3_init(&basis->ahead.x, &transform[8]), -1.f);
-  vec3_init(&basis->origin.x, position);
-}
-#endif
+static bool phonon_init(void);
+static void phonon_destroy(void);
+static bool phonon_update(float dt);
+static bool phonon_set_hrtf(Blob* blob);
+static void phonon_mix_source(Source* source, float* input, float* output, float* temp);
+static void phonon_mix_tail(float* output, float* temp);
+static bool phonon_source_init(Source* source);
+static void phonon_source_destroy(Source* source);
+static bool phonon_source_add(Source* source);
+static void phonon_source_remove(Source* source);
+static bool phonon_mesh_init(AudioMesh* mesh, float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial* materials, AudioMaterial material);
+static bool phonon_mesh_init_clone(AudioMesh* clone);
+static void phonon_mesh_destroy(AudioMesh* mesh);
+static void phonon_mesh_set_enabled(AudioMesh* mesh, bool enable);
+static void phonon_mesh_set_transform(AudioMesh* mesh, float* transform);
 
 // Device callbacks
 
@@ -405,8 +394,6 @@ static void onCapture(ma_device* device, void* output, const void* input, uint32
   lovrSoundWrite(state.sinks[AUDIO_CAPTURE], 0, count, input, NULL);
 }
 
-static const ma_device_data_proc callbacks[] = { onPlayback, onCapture };
-
 static void onLog(void* userdata, ma_uint32 maLevel, const char* message) {
   int level;
   switch (maLevel) {
@@ -637,6 +624,8 @@ bool lovrAudioSetDevice(AudioType type, void* id, size_t size, Sound* sink, Audi
     config.playback.format = ma_format_f32;
     config.playback.channels = 2;
     config.sampleRate = state.config.sampleRate;
+    config.periodSizeInFrames = BUFFER_SIZE;
+    config.dataCallback = onPlayback;
     if (sink) {
       ma_data_converter_config converterConfig = ma_data_converter_config_init_default();
       converterConfig.formatIn = config.playback.format;
@@ -656,10 +645,9 @@ bool lovrAudioSetDevice(AudioType type, void* id, size_t size, Sound* sink, Audi
     config.capture.format = miniaudioFormats[lovrSoundGetFormat(sink)];
     config.capture.channels = lovrSoundGetChannelCount(sink);
     config.sampleRate = lovrSoundGetSampleRate(sink);
+    config.periodSizeInFrames = BUFFER_SIZE;
+    config.dataCallback = onCapture;
   }
-
-  config.periodSizeInFrames = BUFFER_SIZE;
-  config.dataCallback = callbacks[type];
 
   result = ma_device_init(&state.context, &config, &state.devices[type]);
   lovrAssertGoto(fail, result == MA_SUCCESS, "Failed to initialize device: %s", ma_result_description(result));
@@ -696,13 +684,15 @@ void lovrAudioUpdate(float dt) {
   FOREACH_SOURCE(mask, source) {
     if (!source->playing && source->playRequest != 1 && !source->hasTail) {
 #ifdef LOVR_USE_PHONON
+      phonon_source_remove();
       iplSourceRemove(source->handle, state.simulator);
       iplHRTFRelease(&source->hrtf);
       source->hrtf = NULL;
 #endif
+      state.activeSources[source->slot] = NULL;
       state.activeSourceMask &= ~(1ull << source->slot);
       state.pendingSourceMask &= ~(1ull << source->slot);
-      state.activeSources[source->slot] = NULL;
+      mask &= ~(1ull << source->slot);
       source->slot = ~0u;
       lovrRelease(source, lovrSourceDestroy);
     }
@@ -738,6 +728,8 @@ void lovrAudioUpdate(float dt) {
   FOREACH_SOURCE(mask, source) {
     poseToPhonon(source->position, source->orientation, &source->inputs.source);
     vec3_sub(vec3_init(&source->relativeDirection[backbuffer].x, source->position), state.position);
+    source->inputs.directivity.dipoleWeight = source->dipoleWeight;
+    source->inputs.directivity.dipolePower = source->dipolePower;
     memcpy(source->inputs.airAbsorptionModel.coefficients, state.absorption, 3 * sizeof(float));
     iplSourceSetInputs(source->handle, IPL_SIMULATIONFLAGS_DIRECT, &source->inputs);
     hasReverb |= !!(source->effects & (1 << EFFECT_REVERB));
@@ -1138,8 +1130,6 @@ void lovrSourceSetDirectivity(Source* source, float weight, float power) {
   source->dipoleWeight = weight;
   source->dipolePower = power;
 #ifdef LOVR_USE_PHONON
-  source->inputs.directivity.dipoleWeight = weight;
-  source->inputs.directivity.dipolePower = power;
 #endif
 }
 
@@ -1178,41 +1168,134 @@ bool lovrSourceSetEffectEnabled(Source* source, Effect effect, bool enabled) {
 
 // AudioMesh
 
-#ifdef LOVR_USE_PHONON
-static IPLMaterial materialData[] = {
-  [MATERIAL_GENERIC] = { { .10f, .20f, .30f }, .05f, { .100f, .050f, .030f } },
-  [MATERIAL_BRICK] = { { .03f, .04f, .07f }, .05f, { .015f, .015f, .015f } },
-  [MATERIAL_CARPET] = { { .24f, .69f, .73f }, .05f, { .020f, .005f, .003f } },
-  [MATERIAL_CERAMIC] = { { .01f, .02f, .02f }, .05f, { .060f, .044f, .011f } },
-  [MATERIAL_CONCRETE] = { { .05f, .07f, .08f }, .05f, { .015f, .002f, .001f } },
-  [MATERIAL_GLASS] = { { .06f, .03f, .02f }, .05f, { .060f, .044f, .011f } },
-  [MATERIAL_GRAVEL] = { { .60f, .70f, .80f }, .05f, { .031f, .012f, .008f } },
-  [MATERIAL_METAL] = { { .20f, .07f, .06f }, .05f, { .200f, .25f, .010f } },
-  [MATERIAL_PLASTER] = { { .12f, .06f, .04f }, .05f, { .056f, .056f, .004f } },
-  [MATERIAL_ROCK] = { { .13f, .20f, .24f }, .05f, { .015f, .002f, .001f } },
-  [MATERIAL_WOOD] = { { .11f, .07f, .06f }, .05f, { .070f, .014f, .005f } }
-};
-#endif
-
 AudioMesh* lovrAudioMeshCreate(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial* materials, AudioMaterial material) {
   AudioMesh* mesh = lovrCalloc(sizeof(AudioMesh));
   mesh->ref = 1;
   mesh->enabled = true;
   mat4_identity(mesh->transform);
 
+  if (!phonon_mesh_init(mesh, vertices, indices, vertexCount, indexCount, materials, material)) {
+    lovrFree(mesh);
+    return NULL;
+  }
+
+  return mesh;
+}
+
+AudioMesh* lovrAudioMeshClone(AudioMesh* parent) {
+  AudioMesh* mesh = lovrCalloc(sizeof(AudioMesh));
+  mesh->ref = 1;
+  mesh->enabled = true;
+  mesh->parent = parent;
+  mat4_init(mesh->transform, parent->transform);
+
+  if (!phonon_mesh_init_clone(mesh)) {
+    lovrFree(mesh);
+    return NULL;
+  }
+
+  lovrRetain(parent);
+  return mesh;
+}
+
+void lovrAudioMeshDestroy(void* ref) {
+  AudioMesh* mesh = ref;
+  phonon_mesh_destroy(mesh);
+  lovrRelease(mesh->parent, lovrAudioMeshDestroy);
+  lovrFree(mesh);
+}
+
+bool lovrAudioMeshIsEnabled(AudioMesh* mesh) {
+  return mesh->enabled;
+}
+
+void lovrAudioMeshSetEnabled(AudioMesh* mesh, bool enable) {
+  phonon_mesh_set_enabled(mesh, enable);
+  mesh->enabled = enable;
+}
+
+void lovrAudioMeshGetTransform(AudioMesh* mesh, float* transform) {
+  mat4_init(transform, mesh->transform);
+}
+
+void lovrAudioMeshSetTransform(AudioMesh* mesh, float* transform) {
+  phonon_mesh_set_transform(mesh, transform);
+  mat4_init(mesh->transform, transform);
+}
+
+// Phonon
+
 #ifdef LOVR_USE_PHONON
+
+static struct {
+  IPLContext context;
+  IPLAudioSettings audioSettings;
+  IPLReflectionEffectSettings reflectionSettings;
+  IPLSimulationFlags simulationFlags;
+  IPLSimulator simulator;
+  IPLScene scene;
+  bool sceneDirty;
+  IPLHRTF hrtf;
+  IPLCoordinateSpace3 listenerBasis[2];
+  IPLReflectionMixer reflectionMixer;
+  IPLAudioBuffer reflectionBuffer;
+  IPLAmbisonicsDecodeEffect ambisonicsDecodeEffect;
+  atomic_bool reverbFinished;
+  float reverbTimer;
+} phonon;
+
+static void convertPose(float* position, float* orientation, IPLCoordinateSpace3* basis) {
+  float transform[16];
+  mat4_fromQuat(transform, orientation);
+  vec3_init(&basis->right.x, &transform[0]);
+  vec3_init(&basis->up.x, &transform[4]);
+  vec3_scale(vec3_init(&basis->ahead.x, &transform[8]), -1.f);
+  vec3_init(&basis->origin.x, position);
+}
+
+static bool phonon_init(void) { return true; }
+static void phonon_destroy(void) {}
+static bool phonon_update(float dt) { return true; }
+static bool phonon_set_hrtf(Blob* blob) { return true; }
+static void phonon_mix_source(Source* source, float* input, float* output, float* temp) {}
+static void phonon_mix_tail(float* output, float* temp) {}
+static bool phonon_source_init(Source* source) { return true; }
+static void phonon_source_destroy(Source* source) {}
+static bool phonon_source_add(Source* source) { return true; }
+
+static void phonon_source_remove(Source* source) {
+
+}
+
+static bool phonon_mesh_init(AudioMesh* mesh, float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial* materials, AudioMaterial material) {
+  lovrCheck(indexCount % 3 == 0, "AudioMesh index count must be a multiple of 3");
+
   // Scene
 
   IPLSceneSettings sceneSettings = {
     .type = IPL_SCENETYPE_DEFAULT
   };
 
-  if (iplSceneCreate(state.spatializer, &sceneSettings, &mesh->scene)) {
+  if (iplSceneCreate(phonon.context, &sceneSettings, &mesh->scene)) {
     lovrSetError("Failed to create AudioMesh scene");
     return NULL;
   }
 
   // StaticMesh
+
+  static const IPLMaterial materialData[] = {
+    [MATERIAL_GENERIC] = { { .10f, .20f, .30f }, .05f, { .100f, .050f, .030f } },
+    [MATERIAL_BRICK] = { { .03f, .04f, .07f }, .05f, { .015f, .015f, .015f } },
+    [MATERIAL_CARPET] = { { .24f, .69f, .73f }, .05f, { .020f, .005f, .003f } },
+    [MATERIAL_CERAMIC] = { { .01f, .02f, .02f }, .05f, { .060f, .044f, .011f } },
+    [MATERIAL_CONCRETE] = { { .05f, .07f, .08f }, .05f, { .015f, .002f, .001f } },
+    [MATERIAL_GLASS] = { { .06f, .03f, .02f }, .05f, { .060f, .044f, .011f } },
+    [MATERIAL_GRAVEL] = { { .60f, .70f, .80f }, .05f, { .031f, .012f, .008f } },
+    [MATERIAL_METAL] = { { .20f, .07f, .06f }, .05f, { .200f, .25f, .010f } },
+    [MATERIAL_PLASTER] = { { .12f, .06f, .04f }, .05f, { .056f, .056f, .004f } },
+    [MATERIAL_ROCK] = { { .13f, .20f, .24f }, .05f, { .015f, .002f, .001f } },
+    [MATERIAL_WOOD] = { { .11f, .07f, .06f }, .05f, { .070f, .014f, .005f } }
+  };
 
   IPLStaticMeshSettings settings = {
     .numVertices = vertexCount,
@@ -1244,9 +1327,9 @@ AudioMesh* lovrAudioMeshCreate(float* vertices, uint32_t* indices, uint32_t vert
   lovrFree(settings.triangles);
 
   if (!success) {
-    iplSceneRelease(&mesh->scene);
     lovrSetError("Failed to create AudioMesh");
-    return NULL;
+    iplSceneRelease(&mesh->scene);
+    return false;
   }
 
   iplStaticMeshAdd(mesh->staticMesh, mesh->scene);
@@ -1264,93 +1347,81 @@ AudioMesh* lovrAudioMeshCreate(float* vertices, uint32_t* indices, uint32_t vert
     }
   };
 
-  if (iplInstancedMeshCreate(state.scene, &instancedMeshSettings, &mesh->instancedMesh)) {
-    lovrSetError("Failed to clone AudioMesh");
-    lovrFree(mesh);
-    return NULL;
+  if (iplInstancedMeshCreate(phonon.scene, &instancedMeshSettings, &mesh->instancedMesh)) {
+    lovrSetError("Failed to add AudioMesh to scene");
+    iplStaticMeshRelease(&mesh->staticMesh);
+    iplSceneRelease(&mesh->scene);
+    return false;
   }
 
-  iplInstancedMeshAdd(mesh->instancedMesh, state.scene);
-  state.sceneDirty = true;
-#endif
+  iplInstancedMeshAdd(mesh->instancedMesh, phonon.scene);
+  phonon.sceneDirty = true;
 
-  return mesh;
+  return true;
 }
 
-AudioMesh* lovrAudioMeshClone(AudioMesh* parent) {
-  AudioMesh* mesh = lovrCalloc(sizeof(AudioMesh));
-  mesh->ref = 1;
-  mesh->enabled = true;
-  mat4_init(mesh->transform, parent->transform);
-
-#ifdef LOVR_USE_PHONON
+static bool phonon_mesh_init_clone(AudioMesh* mesh) {
   IPLInstancedMeshSettings settings = {
-    .subScene = parent->scene
+    .subScene = mesh->parent->scene
   };
 
   mat4_transpose(mat4_init(&settings.transform.elements[0][0], mesh->transform));
 
-  if (iplInstancedMeshCreate(state.scene, &settings, &mesh->instancedMesh)) {
-    lovrSetError("Failed to clone AudioMesh");
-    lovrFree(mesh);
-    return NULL;
+  if (iplInstancedMeshCreate(phonon.scene, &settings, &mesh->instancedMesh)) {
+    lovrSetError("Failed to create instanced audio mesh");
+    return false;
   }
 
-  iplInstancedMeshAdd(mesh->instancedMesh, state.scene);
-  state.sceneDirty = true;
+  iplInstancedMeshAdd(mesh->instancedMesh, phonon.scene);
+  phonon.sceneDirty = true;
 
-  mesh->staticMesh = parent->staticMesh;
-  mesh->scene = parent->scene;
-#endif
-  lovrRetain(parent);
-  mesh->parent = parent;
-  return mesh;
+  mesh->staticMesh = mesh->parent->staticMesh;
+  mesh->scene = mesh->parent->scene;
+  return true;
 }
 
-void lovrAudioMeshDestroy(void* ref) {
-  AudioMesh* mesh = ref;
-#ifdef LOVR_USE_PHONON
+static void phonon_mesh_destroy(AudioMesh* mesh) {
   if (mesh->enabled) {
-    iplInstancedMeshRemove(mesh->instancedMesh, state.scene);
-    state.sceneDirty = true;
+    iplInstancedMeshRemove(mesh->instancedMesh, phonon.scene);
+    phonon.sceneDirty = true;
   }
   iplInstancedMeshRelease(&mesh->instancedMesh);
-  iplSceneRelease(&mesh->scene);
   iplStaticMeshRelease(&mesh->staticMesh);
-#endif
-  lovrRelease(mesh->parent, lovrAudioMeshDestroy);
-  lovrFree(mesh);
+  iplSceneRelease(&mesh->scene);
 }
 
-bool lovrAudioMeshIsEnabled(AudioMesh* mesh) {
-  return mesh->enabled;
-}
-
-void lovrAudioMeshSetEnabled(AudioMesh* mesh, bool enable) {
-#ifdef LOVR_USE_PHONON
-  if (enable != mesh->enabled) {
+static void phonon_mesh_set_enabled(AudioMesh* mesh, bool enable) {
+  if (mesh->enabled == enable) {
     if (enable) {
-      iplInstancedMeshAdd(mesh->instancedMesh, state.scene);
+      iplInstancedMeshAdd(mesh->instancedMesh, phonon.scene);
     } else {
-      iplInstancedMeshRemove(mesh->instancedMesh, state.scene);
+      iplInstancedMeshRemove(mesh->instancedMesh, phonon.scene);
     }
-    state.sceneDirty = true;
+    phonon.sceneDirty = true;
   }
+}
+
+static void phonon_mesh_set_transform(AudioMesh* mesh, float* transform) {
+  IPLMatrix4x4 matrix;
+  mat4_transpose(mat4_init(&matrix.elements[0][0], transform));
+  iplInstancedMeshUpdateTransform(mesh->instancedMesh, phonon.scene, matrix);
+  phonon.sceneDirty = true;
+}
+
+#else
+static bool phonon_init(void) { return true; }
+static void phonon_destroy(void) {}
+static bool phonon_update(float dt) { return true; }
+static bool phonon_set_hrtf(Blob* blob) { return true; }
+static void phonon_mix_source(Source* source, float* input, float* output, float* temp) {}
+static void phonon_mix_tail(float* output, float* temp) {}
+static bool phonon_source_init(Source* source) { return true; }
+static void phonon_source_destroy(Source* source) {}
+static bool phonon_source_add(Source* source) { return true; }
+static void phonon_source_remove(Source* source) {}
+static bool phonon_mesh_init(AudioMesh* mesh, float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial* materials, AudioMaterial material) { return true; }
+static bool phonon_mesh_init_clone(AudioMesh* clone) { return true; }
+static void phonon_mesh_destroy(AudioMesh* mesh) {}
+static void phonon_mesh_set_enabled(AudioMesh* mesh, bool enable) {}
+static void phonon_mesh_set_transform(AudioMesh* mesh, float* transform) {}
 #endif
-  mesh->enabled = enable;
-}
-
-void lovrAudioMeshGetTransform(AudioMesh* mesh, float* transform) {
-  mat4_init(transform, mesh->transform);
-}
-
-void lovrAudioMeshSetTransform(AudioMesh* mesh, float* transform) {
-#ifdef LOVR_USE_PHONON
-  IPLMatrix4x4 iplTransform;
-  mat4_transpose(mat4_init(&iplTransform.elements[0][0], transform));
-  iplInstancedMeshUpdateTransform(mesh->instancedMesh, state.scene, iplTransform);
-  state.sceneDirty = true;
-#endif
-
-  mat4_init(mesh->transform, transform);
-}

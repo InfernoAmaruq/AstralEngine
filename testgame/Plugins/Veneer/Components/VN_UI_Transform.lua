@@ -107,7 +107,6 @@ local Methods = {
         Mat:rotate(StorageQuat)
         Mat:translate(-CenterAdjustmentAnchor.x, -CenterAdjustmentAnchor.y, 0)
         Mat:scale(Size_Vec2Total.x, Size_Vec2Total.y, 1)
-        Mat[4] = 0
 
         if not Mat:equals(OldMatrix) then
             -- new matrix set! propagate!
@@ -127,6 +126,37 @@ local Methods = {
         if CameraUI then
             CameraUI.UICamera:RebuildRenderChain()
         end
+    end,
+    ContainsPoint = function(self, V1, V2)
+        local ContSelf = self:ContainsPointIndividual(V1, V2)
+
+        if not ContSelf then
+            return ContSelf
+        end
+
+        -- QUERY ANCESTORS FROM HERE TO TEST CLIPPING!
+    end,
+    ContainsPointIndividual = function(self, V1, V2)
+        local x, y
+        if type(V1) == "number" then
+            x, y = V1, V2
+        else
+            x, y = V1:unpack()
+        end
+
+        local vec = vec4(x, y, 0, 1)
+
+        local Matrix = self[1]
+        local InvMatrix = mat4(Matrix):invert()
+
+        local LocalPoint = InvMatrix:mul(vec)
+
+        local Width, Height = Matrix:getScale()
+
+        local HalfW = Width * 0.5
+        local HalfH = Height * 0.5
+
+        return math.abs(LocalPoint.x) <= 0.5 and math.abs(LocalPoint.y) <= 0.5
     end,
 }
 

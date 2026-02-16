@@ -8,6 +8,12 @@ UICam.Name = "UICamera"
 
 UICam.Metadata = {}
 
+local TotalCameraEntities = {}
+
+-- PROCESSING INPUT
+
+-- PROCESSING CAMERA
+
 local ToRebuild = {}
 
 local function SortMethod(a, b)
@@ -70,8 +76,6 @@ local Methods = {
             "VENEER"
         )
 
-        local T1 = os.clock()
-
         self[7] = {}
 
         local SelfEnt = Entity.GetEntityFromId(self.__Entity)
@@ -111,11 +115,6 @@ local Methods = {
         end
 
         table.sort(self[7], SortMethod)
-
-        print("REBUILD END!", os.clock() - T1)
-        for i, v in ipairs(self[7]) do
-            print(Entity.GetEntityFromId(v))
-        end
     end,
 }
 
@@ -237,6 +236,7 @@ UICam.Metadata.__create = function(Input, Entity, Skip)
     Data[8] = Input.ZIndex or 0
     Data.ResizeWithInputTexture = Input.ResizeWithInputTexture == nil and true or Input.ResizeWithInputTexture
     Data.__Entity = Entity
+    Data.ProcessInputs = Input.ProcessInputs
 
     RenderService.VeneerUI.BindUICamera(Data, Input.Priority)
 
@@ -244,9 +244,14 @@ UICam.Metadata.__create = function(Input, Entity, Skip)
 
     Methods.RebuildProjectionMatrix(Data)
 
+    table.insert(TotalCameraEntities, Entity)
+
     return Data
 end
 
-UICam.Metadata.__remove = function(self, Entity) end
+UICam.Metadata.__remove = function(self, Ent)
+    RenderService.VeneerUI.UnbindUICamera(self)
+    table.remove(TotalCameraEntities, table.find(TotalCameraEntities, Ent))
+end
 
 return UICam

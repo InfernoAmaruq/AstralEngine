@@ -3,7 +3,7 @@ local EntityService = GetService("Entity")
 local WorldCam = RES["CAMERA"]
 local CamComp = WorldCam.Camera
 
-WorldCam:AddComponent("UICamera", { Camera = CamComp })
+WorldCam:AddComponent("UICamera", { Camera = CamComp, ProcessInputs = true })
 WorldCam:AddComponent("Ancestry")
 
 local UICanvas = EntityService.New("Canvas")
@@ -54,3 +54,14 @@ AstralEngine.Window.SetCursorIcon("crosshair")
 task.wait(2)
 
 AstralEngine.Window.SetCursorIcon()
+
+local InputSer = GetService("InputService")
+local Mouse = InputSer.GetMouse()
+
+Loose.UITransform.OffsetSize = vec2(200, 100)
+Loose.UITransform.Rotation = 23
+
+while true do
+    task.wait(0.2)
+    print("POINT:", pcall(Loose.UITransform.ContainsPoint, Loose.UITransform, Mouse.GetPosition()))
+end

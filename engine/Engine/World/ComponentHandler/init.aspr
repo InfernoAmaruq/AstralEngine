@@ -69,6 +69,8 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
     local D
     local t = Component.Components[id]
 
+    AstralEngine.Assert(t,"No component "..id.." found!","COMPONENT")
+
     if t.Metadata and t.Metadata.__mt then
         setmetatable(D, t.Metadata.__mt)
     end

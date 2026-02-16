@@ -131,10 +131,39 @@ local Methods = {
         local ContSelf = self:ContainsPointIndividual(V1, V2)
 
         if not ContSelf then
-            return ContSelf
+            return false
         end
 
-        -- QUERY ANCESTORS FROM HERE TO TEST CLIPPING!
+        local ClippingParents = self[14]
+        if ClippingParents <= 0 then
+            return true
+        end
+
+        local CurClip = 0
+        local Ancestry = Component.HasComponent(self[8], "Ancestry")
+
+        if not Ancestry then
+            return false
+        end
+
+        while Ancestry and CurClip < ClippingParents do
+            local Parent = Ancestry.Parent
+            if not Parent then
+                return false
+            end -- ret false cause it means ClipDepth is invalid
+
+            local ParentTransform = Parent:GetComponent("UITransform")
+            if ParentTransform and ParentTransform[13] then
+                if not ParentTransform:ContainsPointIndividual(V1, V2) then
+                    return false
+                end
+                CurClip = CurClip + 1
+            end
+
+            Ancestry = Parent:GetComponent("Ancestry")
+        end
+
+        return true -- no clipping, gg
     end,
     ContainsPointIndividual = function(self, V1, V2)
         local x, y
@@ -147,6 +176,9 @@ local Methods = {
         local vec = vec4(x, y, 0, 1)
 
         local Matrix = self[1]
+        if Matrix[4] == 1 then
+            return false
+        end
         local InvMatrix = mat4(Matrix):invert()
 
         local LocalPoint = InvMatrix:mul(vec)

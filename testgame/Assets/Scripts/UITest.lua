@@ -63,5 +63,7 @@ Loose.UITransform.Rotation = 23
 
 while true do
     task.wait(0.2)
-    print("POINT:", pcall(Loose.UITransform.ContainsPoint, Loose.UITransform, Mouse.GetPosition()))
+    local s, err = pcall(Obj2.UITransform.ContainsPoint, Obj2.UITransform, Mouse.GetPosition())
+    print("POINT:", s, err)
+    --print("POINT:", Obj2.UITransform:ContainsPoint(Mouse.GetPosition()))
 end

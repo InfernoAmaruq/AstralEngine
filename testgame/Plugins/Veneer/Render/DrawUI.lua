@@ -81,7 +81,7 @@ Renderer.Late[#Renderer.Late + 1] = function()
 
             for ObjIdx = 1, ObjCount do
                 local Obj = Objects[ObjIdx]
-                local Transform = SetComp[Obj]["UITransform"]
+                local Transform = SetComp[Obj]["UIRoot"]
                 local Matrix = Transform[1]
 
                 local ShouldClipChildren = Transform[13]

@@ -45,7 +45,7 @@ local ToTransform = {
 }
 
 Canvas.Metadata.__create = function(Input, Entity, Sink)
-    local TransformComponent = Component.HasComponent(Entity, "UITransform")
+    local TransformComponent = Component.HasComponent(Entity, "UIRoot")
     local AncestryComponent = Component.HasComponent(Entity, "Ancestry")
 
     if not AncestryComponent and not Sink then
@@ -70,7 +70,7 @@ Canvas.Metadata.__create = function(Input, Entity, Sink)
         else
             InputValue = ToTransform
         end
-        Component.AddComponent(Entity, "UITransform", InputValue)
+        Component.AddComponent(Entity, "UIRoot", InputValue)
         if UD then -- clear UD just incase
             InputValue.__HasUIElement = nil
         end
@@ -94,9 +94,9 @@ Canvas.Metadata.__create = function(Input, Entity, Sink)
 end
 
 Canvas.Metadata.__remove = function(_, e)
-    local UITransform = Component.HasComponent(e, "UITransform")
-    if UITransform then
-        UITransform.__HasUIElement = nil
+    local UIRoot = Component.HasComponent(e, "UIRoot")
+    if UIRoot then
+        UIRoot.__HasUIElement = nil
     end
 end
 

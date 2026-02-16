@@ -1,9 +1,10 @@
+local Sig = AstralEngine.Plugins.SignalLib
 local Component = GetService("Component")
 local Renderer = GetService("Renderer")
-local UITransform = {}
+local UIRoot = {}
 
-UITransform.Name = "UITransform"
-UITransform.Metadata = {}
+UIRoot.Name = "UIRoot"
+UIRoot.Metadata = {}
 
 -- bind rebuild
 GetService("Entity").OnAncestryChanged:Connect(function(...)
@@ -12,7 +13,7 @@ GetService("Entity").OnAncestryChanged:Connect(function(...)
     while i <= n do
         local _, Child, _ = select(i, ...)
 
-        local Transform = Child and Child:GetComponent("UITransform")
+        local Transform = Child and Child:GetComponent("UIRoot")
         if Transform then
             Transform:RebuildMatrix()
         end
@@ -51,7 +52,7 @@ local function ResolveAncestorSize(self)
 
     local Parent = SelfAncestry.Parent
 
-    local ParentTransform = Parent and Parent:GetComponent("UITransform")
+    local ParentTransform = Parent and Parent:GetComponent("UIRoot")
     local ParentUICam = Parent and Parent:GetComponent("UICamera")
     if ParentTransform then
         return ParentTransform.Matrix
@@ -67,7 +68,7 @@ local Methods = {
 
         if not AncestorTransform then
             AstralEngine.Log(
-                "Cannot rebuild UITransform Matrix! No 'Ancestry' component found on entity! Invalidating matrix!",
+                "Cannot rebuild UIRoot Matrix! No 'Ancestry' component found on entity! Invalidating matrix!",
                 "warn",
                 "VENEER"
             )
@@ -112,9 +113,9 @@ local Methods = {
             -- new matrix set! propagate!
             local SelfAncestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
             for Child in SelfAncestry:IterChildren() do
-                local ChildUITransform = Child:GetComponent("UITransform")
-                if ChildUITransform then
-                    ChildUITransform:RebuildMatrix(Mat)
+                local ChildUIRoot = Child:GetComponent("UIRoot")
+                if ChildUIRoot then
+                    ChildUIRoot:RebuildMatrix(Mat)
                 end
             end
         end
@@ -152,7 +153,7 @@ local Methods = {
                 return false
             end -- ret false cause it means ClipDepth is invalid
 
-            local ParentTransform = Parent:GetComponent("UITransform")
+            local ParentTransform = Parent:GetComponent("UIRoot")
             if ParentTransform and ParentTransform[13] then
                 if not ParentTransform:ContainsPointIndividual(V1, V2) then
                     return false
@@ -262,7 +263,7 @@ local Mt = {
     end,
 }
 
-UITransform.Metadata.__create = function(InputTransform, Ent)
+UIRoot.Metadata.__create = function(InputTransform, Ent)
     local Rotation = InputTransform and InputTransform.Rotation or 0
 
     local PosTable = InputTransform and InputTransform.Position
@@ -305,20 +306,37 @@ UITransform.Metadata.__create = function(InputTransform, Ent)
         [Pointers.__ClipDepth] = 0,
     }
 
+    -- set signals
+
+    local Type = Sig.Type.NoCtx | Sig.Type.Default
+    Data.MouseEnter = Sig.new(Type)
+    Data.MouseLeave = Sig.new(Type)
+    Data.MouseButton = Sig.new(Type)
+    Data.MouseScroll = Sig.new(Type)
+    Data.Hovering = false
+
+    -- meta
+
     setmetatable(Data, Mt)
     Data[Pointers.Matrix][4] = 1
 
     return Data
 end
 
-UITransform.Metadata.__remove = function(self, _, Forced)
+UIRoot.Metadata.__remove = function(self, _, Forced)
     if self[Pointers.HasDrawable] and not Forced then
-        AstralEngine.Error("CANNOT REMOVE UITRANSFORM COMPONENT WHILST HAVING A DEPENDENT COMPONENT!", "VENEER", 3)
+        AstralEngine.Error("CANNOT REMOVE UIROOT COMPONENT WHILST HAVING A DEPENDENT COMPONENT!", "VENEER", 3)
     end
+
+    self.MouseEnter:Destroy()
+    self.MouseLeave:Destroy()
+    self.MouseButton:Destroy()
+    self.MouseScroll:Destroy()
+
     for i in pairs(self) do
         self[i] = nil
     end
     setmetatable(self, nil)
 end
 
-return UITransform
+return UIRoot

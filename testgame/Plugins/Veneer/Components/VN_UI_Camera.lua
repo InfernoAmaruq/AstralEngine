@@ -12,6 +12,67 @@ local TotalCameraEntities = {}
 
 -- PROCESSING INPUT
 
+local IS = GetService("InputService")
+local UserMouse = IS.GetMouse()
+
+UserMouse.MouseMoved:Connect(function(x, y)
+    for _, v in ipairs(TotalCameraEntities) do
+        local UICamComp = ComponentService.HasComponent(v, "UICamera")
+        if UICamComp.ProcessInputs then
+            for _, Object in ipairs(UICamComp[7]) do
+                local UIRoot = ComponentService.HasComponent(Object, "UIRoot")
+                if UIRoot.Hovering == false and UIRoot.MouseEnter:GetListenerCount() > 0 then
+                    local HasPoint = UIRoot:ContainsPoint(x, y)
+                    if HasPoint then
+                        UIRoot.MouseEnter:Fire(x, y)
+                        UIRoot.Hovering = true
+                    end
+                elseif UIRoot.Hovering and UIRoot.MouseLeave:GetListenerCount() > 0 then
+                    local HasPoint = UIRoot:ContainsPoint(x, y)
+                    if not HasPoint then
+                        UIRoot.MouseLeave:Fire(x, y)
+                        UIRoot.Hovering = false
+                    end
+                end
+            end
+        end
+    end
+end)
+
+local function GetMouseInpFunc(Event)
+    return function(b, x, y)
+        for _, v in ipairs(TotalCameraEntities) do
+            local UICamComp = ComponentService.HasComponent(v, "UICamera")
+            if UICamComp.ProcessInputs then
+                for _, Object in ipairs(UICamComp[7]) do
+                    local UIRoot = ComponentService.HasComponent(Object, "UIRoot")
+                    if
+                        UIRoot.MouseButton:GetListenerCount() > 0 and (UIRoot.Hovering or UIRoot:ContainsPoint(x, y))
+                    then
+                        UIRoot.MouseButton:Fire(Event, b, x, y)
+                    end
+                end
+            end
+        end
+    end
+end
+
+UserMouse.MouseButtonDown:Connect(GetMouseInpFunc(true))
+UserMouse.MouseButtonUp:Connect(GetMouseInpFunc(false))
+UserMouse.WheelMoved:Connect(function(dx, dy)
+    for _, v in ipairs(TotalCameraEntities) do
+        local UICamComp = ComponentService.HasComponent(v, "UICamera")
+        if UICamComp.ProcessInputs then
+            for _, Object in ipairs(UICamComp[7]) do
+                local UIRoot = ComponentService.HasComponent(Object, "UIRoot")
+                if UIRoot.MouseScroll:GetListenerCount() > 0 and (UIRoot.Hovering or UIRoot:ContainsPoint(dx, dy)) then
+                    UIRoot.MouseScroll:Fire(dx, dy)
+                end
+            end
+        end
+    end
+end)
+
 -- PROCESSING CAMERA
 
 local ToRebuild = {}
@@ -20,7 +81,7 @@ local function SortMethod(a, b)
     -- we using IDs here so...
     local ObjA, ObjB = Entity.GetEntityFromId(a), Entity.GetEntityFromId(b)
 
-    return ObjA.UITransform.EffectiveZIndex < ObjB.UITransform.EffectiveZIndex
+    return ObjA.UIRoot.EffectiveZIndex < ObjB.UIRoot.EffectiveZIndex
 end
 
 GetService("Entity").OnAncestryChanged:Connect(function(...)
@@ -85,7 +146,7 @@ local Methods = {
         while #Stack > 0 do
             local Top = table.remove(Stack)
 
-            local OwnTransform = Top:GetComponent("UITransform")
+            local OwnTransform = Top:GetComponent("UIRoot")
             local OwnIndex = OwnTransform and OwnTransform.EffectiveZIndex
             local ParentClipDepth = OwnTransform and OwnTransform.__ClipDepth or 0
 
@@ -97,17 +158,17 @@ local Methods = {
             end
 
             for Child in Top.Ancestry:IterChildren() do
-                local UITransform = Child:GetComponent("UITransform")
+                local UIRoot = Child:GetComponent("UIRoot")
 
-                if UITransform and UITransform.__HasUIElement then
+                if UIRoot and UIRoot.__HasUIElement then
                     if ToClip or ParentClipDepth > 0 then
                         local ClipDepth = ParentClipDepth
-                        UITransform.__ClipDepth = ClipDepth
+                        UIRoot.__ClipDepth = ClipDepth
                     else
-                        UITransform.__ClipDepth = 0
+                        UIRoot.__ClipDepth = 0
                     end
 
-                    UITransform.EffectiveZIndex = (OwnIndex or ZIndex) + UITransform.ZIndex
+                    UIRoot.EffectiveZIndex = (OwnIndex or ZIndex) + UIRoot.ZIndex
                     table.insert(self[7], Child.Id)
                     table.insert(Stack, Child)
                 end

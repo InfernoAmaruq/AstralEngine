@@ -10,7 +10,6 @@ StringEntry lovrEffect[] = {
   [EFFECT_ABSORPTION] = ENTRY("absorption"),
   [EFFECT_ATTENUATION] = ENTRY("attenuation"),
   [EFFECT_OCCLUSION] = ENTRY("occlusion"),
-  [EFFECT_REVERB] = ENTRY("reverb"),
   [EFFECT_SPATIALIZATION] = ENTRY("spatialization"),
   [EFFECT_TRANSMISSION] = ENTRY("transmission"),
   { 0 }
@@ -229,6 +228,18 @@ static int l_lovrAudioSetAbsorption(lua_State* L) {
   return 0;
 }
 
+static int l_lovrAudioGetReverb(lua_State* L) {
+  float reverb = lovrAudioGetReverb();
+  lua_pushnumber(L, reverb);
+  return 1;
+}
+
+static int l_lovrAudioSetReverb(lua_State* L) {
+  float reverb = luax_optfloat(L, 1, 0.f);
+  lovrAudioSetReverb(reverb);
+  return 0;
+}
+
 static int l_lovrAudioNewSource(lua_State* L) {
   Sound* sound = luax_totype(L, 1, Sound);
 
@@ -336,6 +347,8 @@ static const luaL_Reg lovrAudio[] = {
   { "getSampleRate", l_lovrAudioGetSampleRate },
   { "getAbsorption", l_lovrAudioGetAbsorption },
   { "setAbsorption", l_lovrAudioSetAbsorption },
+  { "getReverb", l_lovrAudioGetReverb },
+  { "setReverb", l_lovrAudioSetReverb },
   { "newSource", l_lovrAudioNewSource },
   { "newAudioMesh", l_lovrAudioNewAudioMesh },
   { NULL, NULL }

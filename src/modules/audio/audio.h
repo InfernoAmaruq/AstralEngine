@@ -14,7 +14,6 @@ typedef enum {
   EFFECT_ABSORPTION,
   EFFECT_ATTENUATION,
   EFFECT_OCCLUSION,
-  EFFECT_REVERB,
   EFFECT_SPATIALIZATION,
   EFFECT_TRANSMISSION
 } Effect;
@@ -96,6 +95,8 @@ bool lovrAudioSetHRTF(struct Blob* hrtf);
 uint32_t lovrAudioGetSampleRate(void);
 void lovrAudioGetAbsorption(float absorption[3]);
 void lovrAudioSetAbsorption(float absorption[3]);
+float lovrAudioGetReverb(void);
+void lovrAudioSetReverb(float reverb);
 
 // Source
 
@@ -113,6 +114,8 @@ float lovrSourceGetPitch(Source* source);
 bool lovrSourceSetPitch(Source* source, float pitch);
 float lovrSourceGetVolume(Source* source, VolumeUnit units);
 void lovrSourceSetVolume(Source* source, float volume, VolumeUnit units);
+float lovrSourceGetReverb(Source* source);
+void lovrSourceSetReverb(Source* source, float volume);
 void lovrSourceSeek(Source* source, double time, TimeUnit units);
 double lovrSourceTell(Source* source, TimeUnit units);
 double lovrSourceGetDuration(Source* source, TimeUnit units);

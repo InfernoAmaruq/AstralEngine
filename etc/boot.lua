@@ -23,7 +23,7 @@ local conf = {
     reverb = {
       mode = 'convolution',
       rays = 4096,
-      bounces = 4,
+      bounces = 16,
       duration = 2,
       rate = .1
     }

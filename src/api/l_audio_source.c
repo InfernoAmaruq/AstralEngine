@@ -83,6 +83,20 @@ static int l_lovrSourceSetVolume(lua_State* L) {
   return 0;
 }
 
+static int l_lovrSourceGetReverb(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  float reverb = lovrSourceGetReverb(source);
+  lua_pushnumber(L, reverb);
+  return 1;
+}
+
+static int l_lovrSourceSetReverb(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  float reverb = luax_optfloat(L, 2, 0.f);
+  lovrSourceSetReverb(source, reverb);
+  return 0;
+}
+
 static int l_lovrSourceSeek(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
   double seconds = luaL_checknumber(L, 2);
@@ -237,6 +251,8 @@ const luaL_Reg lovrSource[] = {
   { "setPitch", l_lovrSourceSetPitch },
   { "getVolume", l_lovrSourceGetVolume },
   { "setVolume", l_lovrSourceSetVolume },
+  { "getReverb", l_lovrSourceGetReverb },
+  { "setReverb", l_lovrSourceSetReverb },
   { "seek", l_lovrSourceSeek },
   { "tell", l_lovrSourceTell },
   { "getDuration", l_lovrSourceGetDuration },

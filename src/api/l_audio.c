@@ -254,7 +254,8 @@ static int l_lovrAudioNewSource(lua_State* L) {
     decode = lua_toboolean(L, -1);
     lua_pop(L, 1);
 
-    lua_getfield(L, 2, "pitchable");
+    lua_getfield(L, 2, "pitch");
+    if (lua_isnil(L, -1)) lua_pop(L, 1), lua_getfield(L, 2, "pitchable");
     if (!lua_isnil(L, -1)) pitchable = lua_toboolean(L, -1);
     lua_pop(L, 1);
 

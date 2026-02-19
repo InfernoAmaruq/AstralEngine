@@ -31,7 +31,7 @@ struct Source {
   uint32_t slot;
   Sound* sound;
   ma_data_converter* converter;
-  float pitch;
+  float pitchRatio;
   float volume;
   float reverb;
   float position[3];
@@ -44,6 +44,7 @@ struct Source {
   bool pitchable;
   bool spatial;
   atomic_bool playing;
+  atomic_bool pitchChanged;
   atomic_bool hasTail;
   atomic_uint offset;
   atomic_uint playRequest;
@@ -163,10 +164,8 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
     uint32_t seek = atomic_exchange(&source->seekRequest, ~0u);
     if (seek != ~0u) source->offset = seek;
 
-    if (source->pitchable) {
-      float ratio = source->pitch * lovrSoundGetSampleRate(source->sound) / state.config.sampleRate;
-      ma_data_converter_set_rate_ratio(source->converter, ratio);
-    }
+    bool pitchChanged = atomic_exchange(&source->pitchChanged, false);
+    if (pitchChanged) ma_data_converter_set_rate_ratio(source->converter, source->pitchRatio);
 
     bool hasTail = false;
 
@@ -520,8 +519,8 @@ Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial, uint32_t ef
   Source* source = lovrCalloc(sizeof(Source));
   source->ref = 1;
   source->slot = ~0u;
+  source->pitchRatio = 1.f;
   source->volume = 1.f;
-  source->pitch = 1.f;
   source->reverb = 0.f;
   source->pitchable = pitchable;
   source->spatial = spatial;
@@ -564,7 +563,7 @@ Source* lovrSourceClone(Source* source) {
   Source* clone = lovrCalloc(sizeof(Source));
   clone->ref = 1;
   clone->slot = ~0u;
-  clone->pitch = source->pitch;
+  clone->pitchRatio = source->pitchRatio;
   clone->volume = source->volume;
   vec3_init(clone->position, source->position);
   quat_init(clone->orientation, source->orientation);
@@ -666,13 +665,14 @@ bool lovrSourceSetLooping(Source* source, bool loop) {
 }
 
 float lovrSourceGetPitch(Source* source) {
-  return source->pitch;
+  return source->pitchRatio * ((float) state.config.sampleRate / lovrSoundGetSampleRate(source->sound));
 }
 
 bool lovrSourceSetPitch(Source* source, float pitch) {
   lovrCheck(pitch > 0.f, "Source pitch must be positive");
-  lovrCheck(source->pitchable, "Source must be created with the 'pitchable' flag to change its pitch");
-  source->pitch = pitch;
+  lovrCheck(source->pitchable, "Source must be created with the 'pitch' flag to change its pitch");
+  source->pitchRatio = pitch * ((float) lovrSoundGetSampleRate(source->sound) / state.config.sampleRate);
+  source->pitchChanged = true;
   return true;
 }
 

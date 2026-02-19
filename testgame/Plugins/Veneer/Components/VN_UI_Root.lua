@@ -1,6 +1,7 @@
 local Sig = AstralEngine.Plugins.SignalLib
 local Component = GetService("Component")
 local Renderer = GetService("Renderer")
+local Mouse = GetService("InputService").GetMouse()
 local UIRoot = {}
 
 UIRoot.Name = "UIRoot"
@@ -37,6 +38,7 @@ local Pointers = {
     FuncId = 12,
     ClipDescendantInstances = 13,
     __ClipDepth = 14,
+    HasLayout = 15,
 }
 
 local StorageQuat = Quat()
@@ -58,7 +60,8 @@ local function ResolveAncestorSize(self)
         return ParentTransform.Matrix
     elseif ParentUICam then
         local Res = ParentUICam.Resolution
-        return mat4(vec3(), vec3(Res.x, Res.y, 1), quat())
+        local m = mat4(vec3(), vec3(Res.x, Res.y, 1), quat())
+        return m
     end
 end
 
@@ -83,25 +86,33 @@ local Methods = {
         local AncestorSize = vec2(AncestorTransform:getScale())
 
         -- pixel sizes
+
         local Size_Vec2Total = self[Pointers.ScaleSize] * AncestorSize + self[Pointers.OffsetSize]
+
+        local ProcessedAncestorPosition = vec2(
+            math.max(0, AncestorPosition.x - AncestorSize.x / 2),
+            math.max(0, AncestorPosition.y - AncestorSize.y / 2)
+        )
+
         local Pos_Vec2Total = self[Pointers.ScalePosition] * AncestorSize
             + self[Pointers.OffsetPosition]
-            + AncestorPosition
+            + ProcessedAncestorPosition
 
         -- anchor
 
         local AnchorOffset = Size_Vec2Total * self[Pointers.AnchorPoint]
         local HalfSize = Size_Vec2Total * CenterVec
-        local CenterAdjustmentAnchor = AnchorOffset - HalfSize
+        local CenterAdjustmentAnchor = HalfSize - AnchorOffset
 
         Pos_Vec2Total = Pos_Vec2Total + CenterAdjustmentAnchor
+
+        -- FIX THIS ^^^
 
         -- quat
 
         local Rot = self[Pointers.Rotation]
         StorageQuat:setEuler(0, 0, math.rad(Rot))
 
-        --Mat:set(vec3(Pos_Vec2Total.x, Pos_Vec2Total.y, 0), vec3(Size_Vec2Total.x, Size_Vec2Total.y, 0), StorageQuat)
         Mat:identity()
         Mat:translate(Pos_Vec2Total.x, Pos_Vec2Total.y, 0)
         Mat:translate(CenterAdjustmentAnchor.x, CenterAdjustmentAnchor.y, 0)
@@ -109,9 +120,35 @@ local Methods = {
         Mat:translate(-CenterAdjustmentAnchor.x, -CenterAdjustmentAnchor.y, 0)
         Mat:scale(Size_Vec2Total.x, Size_Vec2Total.y, 1)
 
+        if self[Pointers.HasLayout] and not __Force then
+            -- signal re-position
+        end
+
+        -- now query point
+
+        local SelfAncestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
+
+        -- id query if parent component has inputs, but that will make SimulateClick() harder later
+
+        local HasListeners = self.MouseLeave:GetListenerCount() > 0 or self.MouseEnter:GetListenerCount() > 0
+        if self.Hovering and HasListeners then
+            local HasPoint = self:ContainsPoint(self.__LastHoverPoint)
+            if not HasPoint then
+                self.Hovering = false
+                self.MouseLeave:Fire(self.__LastHoverPoint.x, self.__LastHoverPoint.y)
+                self.__LastHoverPoint:set(-1, -1)
+            end
+        elseif not self.Hovering and HasListeners then
+            local x, y = Mouse.GetPosition()
+            if self:ContainsPoint(self.__LastHoverPoint) then
+                self.Hovering = true
+                self.MouseEnter:Fire(x, y)
+                self.__LastHoverPoint:set(x, y)
+            end
+        end
+
         if not Mat:equals(OldMatrix) then
             -- new matrix set! propagate!
-            local SelfAncestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
             for Child in SelfAncestry:IterChildren() do
                 local ChildUIRoot = Child:GetComponent("UIRoot")
                 if ChildUIRoot then
@@ -215,6 +252,8 @@ local Mt = {
 
         if k == "__HasUIElement" then
             return self[Pointers.HasDrawable]
+        elseif k == "__HasLayoutElement" then
+            return self[Pointers.HasLayout]
         end
 
         return Methods[k]
@@ -231,6 +270,31 @@ local Mt = {
             elseif Val == Pointers.ClipDescendantInstances then
                 self[Val] = v
                 self:RequestChainRebuild()
+            elseif k == "__HasLayoutElement" then
+                local Cur = self[Pointers.HasLayout]
+
+                local Ancestry = AstralEngine.Assert(
+                    Component.HasComponent(self[Pointers.Owner], "Ancestry"),
+                    "NO ANCESTRY AVAILABLE! CANNOT REBUILD MATRIX",
+                    "VENEER"
+                )
+
+                if Cur and not v then
+                    self[Pointers.HasLayout] = false
+
+                    -- default rebuild
+                    for Child in Ancestry:IterChildren() do
+                        local ChildRoot = Child:GetComponent("UIRoot")
+                        if ChildRoot then
+                            ChildRoot:RebuildMatrix(self[Pointers.Matrix])
+                        end
+                    end
+                elseif not Cur and v then
+                    self[Pointers.HasLayout] = v
+                    -- dont really need to rebuild here, cause the Layout_Vertical will handle it
+                else
+                    AstralEngine.Error("CANNOT SET SEVERAL UI ELEMENTS ONTO ONE UI ENTITY", "VENEER", 3)
+                end
             elseif k == "__HasUIElement" then
                 local Cur = self[Pointers.HasDrawable]
 
@@ -241,17 +305,14 @@ local Mt = {
                     self[Pointers.HasDrawable] = v
 
                     local Translated = Renderer.VeneerUI.GetStackIdFromName(v)
-                    if Translated then
-                        self[Pointers.FuncId] = Translated
-                    end
+                    self[Pointers.FuncId] = Translated
 
                     self:RequestChainRebuild()
                 elseif Cur and v then
                     AstralEngine.Error("CANNOT SET SEVERAL DRAWABLE ELEMENTS ONTO ONE UI ENTITY", "VENEER", 3)
                 end
             elseif Val == Pointers.ZIndex then
-                local Diff = v - self[Pointers.ZIndex]
-                self[Pointers.EffectiveZIndex] = self[Pointers.EffectiveZIndex] + Diff
+                self[Pointers.ZIndex] = v
 
                 self:RequestChainRebuild()
             else
@@ -269,13 +330,13 @@ UIRoot.Metadata.__create = function(InputTransform, Ent)
     local PosTable = InputTransform and InputTransform.Position
     local SizeTable = InputTransform and InputTransform.Size
 
-    local Size_Scale, Size_Offset = Vec2(), Vec2(100, 100)
+    local Size_Scale, Size_Offset = Vec2(), Vec2()
     local Pos_Scale, Pos_Offset = Vec2(), Vec2()
     local AnchorPoint = Vec2()
 
     if SizeTable then
         Size_Scale:set(SizeTable.Scale or ZeroTwo)
-        Size_Offset:set(SizeTable.Offset or vec2(100, 100))
+        Size_Offset:set(SizeTable.Offset or ZeroTwo)
     end
     if PosTable then
         Pos_Scale:set(PosTable.Scale or ZeroTwo)
@@ -296,15 +357,18 @@ UIRoot.Metadata.__create = function(InputTransform, Ent)
         [Pointers.ScaleSize] = Size_Scale,
         [Pointers.AnchorPoint] = AnchorPoint,
         [Pointers.Owner] = Ent,
-        [Pointers.HasDrawable] = InputTransform and InputTransform.__HasUIElement or nil,
+        [Pointers.HasDrawable] = InputTransform and InputTransform.__HasUIElement or false,
         [Pointers.ZIndex] = InputTransform and InputTransform.ZIndex or 1,
         [Pointers.EffectiveZIndex] = -1,
         [Pointers.FuncId] = Renderer.VeneerUI.GetStackIdFromName(
             InputTransform and InputTransform.__HasUIElement or nil
         ),
+        [Pointers.HasLayout] = false,
         [Pointers.ClipDescendantInstances] = InputTransform and InputTransform.ClipDescendantInstances or false,
         [Pointers.__ClipDepth] = 0,
     }
+
+    Data.TransparentToStencil = InputTransform and InputTransform.TransparentToStencil or false
 
     -- set signals
 
@@ -314,6 +378,7 @@ UIRoot.Metadata.__create = function(InputTransform, Ent)
     Data.MouseButton = Sig.new(Type)
     Data.MouseScroll = Sig.new(Type)
     Data.Hovering = false
+    Data.__LastHoverPoint = Vec2(-1, -1)
 
     -- meta
 
@@ -337,6 +402,12 @@ UIRoot.Metadata.__remove = function(self, _, Forced)
         self[i] = nil
     end
     setmetatable(self, nil)
+end
+
+UIRoot.FinalProcessing = function()
+    if Component.AncestryRequired then
+        table.insert(Component.AncestryRequired, UIRoot.Name)
+    end
 end
 
 return UIRoot

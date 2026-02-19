@@ -176,8 +176,6 @@ function AssetMapLoader.LoadAssetMap(Map)
 
     -- SPAWNING ASSETS
 
-    local LateCache = {}
-
     for i = 1, #Map do
         local Val = Map[i]
         if not Val then
@@ -254,20 +252,68 @@ function AssetMapLoader.LoadAssetMap(Map)
         if not Val.Components then
             continue
         end
-        -- we have late init components, like 'Colliders', which MUST have a transform present at build time (not optional, like with Camera transform)
+
+        local Cache = {}
+        local SoftDependencies = {}
+
+        -- first pass, resolve hard dependencies and exclusions
         for Name, Data in pairs(Val.Components) do
-            local COMPONENT_DATA = ComponentService.Components[Name]
-            if COMPONENT_DATA and COMPONENT_DATA.Metadata and COMPONENT_DATA.Metadata.SceneLateLoad then
-                LateCache[Name] = Data
-                continue
+            local COMPONENT_DATA = AstralEngine.Assert(
+                ComponentService.Components[Name],
+                "FAILED TO LOAD SCENE. CANNOT LOAD COMPONENT " .. Name .. " - NOT FOUND",
+                "SCENEMANAGER"
+            )
+
+            local HardDeps = COMPONENT_DATA.Metadata and COMPONENT_DATA.Metadata.HardDependency
+            local HardExclusion = COMPONENT_DATA.Metadata and COMPONENT_DATA.Metadata.HardExclusion
+            local SoftDeps = COMPONENT_DATA.Metadata and COMPONENT_DATA.Metadata.SoftDependency
+
+            if HardExclusion then
+                for Exclusion in pairs(HardExclusion) do
+                    AstralEngine.Assert(
+                        not Val.Components[Exclusion],
+                        "CANNOT LOAD SCENE! EXCLUSIVE COMPONENTS BOUND TO SINGLE OBJECT! " .. Exclusion
+                    )
+                end
             end
 
-            Ent:AddComponent(Name, Data, true)
+            if HardDeps then
+                Cache[Name] = Data
+            end
+
+            if SoftDeps then
+                SoftDependencies[Name] = SoftDeps
+            end
         end
 
-        for Name, Data in pairs(LateCache) do
-            LateCache[Name] = nil
-            Ent:AddComponent(Name, Data, true)
+        for Name, Data in pairs(Val.Components) do
+            if not Cache[Name] then
+                Ent:AddComponent(Name, Data, true)
+            end -- exclude defered ones
+        end
+
+        for Name, Data in pairs(Cache) do
+            local Meta = ComponentService.Components[Name].Metadata
+
+            for Dep in pairs(Meta.HardDependency) do
+                AstralEngine.Assert(
+                    Ent:GetComponent(Dep),
+                    Name .. " REQUIRES " .. Dep .. " (HARD DEPENDENCY) CANNOT CREATE COMPONENT",
+                    "SCENEMANAGER"
+                )
+            end
+
+            Ent:AddComponent(Name, Data, false)
+        end
+
+        for Name, Deps in pairs(SoftDependencies) do
+            for Dependency in pairs(Deps) do
+                AstralEngine.Assert(
+                    Ent:GetComponent(Dependency),
+                    Name .. " REQUIRES " .. Dep .. " (SOFT DEPENDENCY) CANNOT CREATE COMPONENT",
+                    "SCENEMANAGER"
+                )
+            end
         end
     end
 
@@ -324,5 +370,7 @@ function AssetMapLoader.LoadAssetMap(Map)
 
     return RT
 end
+
+GetService.AddService("AssetMapService", AssetMapLoader)
 
 return AssetMapLoader

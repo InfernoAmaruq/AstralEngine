@@ -12,32 +12,40 @@ local TotalCameraEntities = {}
 
 -- PROCESSING INPUT
 
+-- FLAME: NTS: RE-QUERY ENTERS ON REBUILD!
+-- INVALIDATE ON TRANSFORM CHANGE?
 local IS = GetService("InputService")
 local UserMouse = IS.GetMouse()
 
-UserMouse.MouseMoved:Connect(function(x, y)
+local function QueryHover(x, y)
     for _, v in ipairs(TotalCameraEntities) do
         local UICamComp = ComponentService.HasComponent(v, "UICamera")
         if UICamComp.ProcessInputs then
             for _, Object in ipairs(UICamComp[7]) do
                 local UIRoot = ComponentService.HasComponent(Object, "UIRoot")
-                if UIRoot.Hovering == false and UIRoot.MouseEnter:GetListenerCount() > 0 then
+                local HasListeners = UIRoot.MouseEnter:GetListenerCount() > 0
+                    or UIRoot.MouseLeave:GetListenerCount() > 0
+                if UIRoot.Hovering == false and HasListeners then
                     local HasPoint = UIRoot:ContainsPoint(x, y)
                     if HasPoint then
                         UIRoot.MouseEnter:Fire(x, y)
                         UIRoot.Hovering = true
+                        UIRoot.__LastHoverPoint:set(x, y)
                     end
-                elseif UIRoot.Hovering and UIRoot.MouseLeave:GetListenerCount() > 0 then
+                elseif UIRoot.Hovering and HasListeners then
                     local HasPoint = UIRoot:ContainsPoint(x, y)
                     if not HasPoint then
                         UIRoot.MouseLeave:Fire(x, y)
                         UIRoot.Hovering = false
+                        UIRoot.__LastHoverPoint:set(-1, -1)
                     end
                 end
             end
         end
     end
-end)
+end
+
+UserMouse.MouseMoved:Connect(QueryHover)
 
 local function GetMouseInpFunc(Event)
     return function(b, x, y)
@@ -47,7 +55,7 @@ local function GetMouseInpFunc(Event)
                 for _, Object in ipairs(UICamComp[7]) do
                     local UIRoot = ComponentService.HasComponent(Object, "UIRoot")
                     if
-                        UIRoot.MouseButton:GetListenerCount() > 0 and (UIRoot.Hovering or UIRoot:ContainsPoint(x, y))
+                        UIRoot.MouseButton:GetListenerCount() > 0 and (UIRoot.Hovering and UIRoot:ContainsPoint(x, y))
                     then
                         UIRoot.MouseButton:Fire(Event, b, x, y)
                     end
@@ -59,13 +67,16 @@ end
 
 UserMouse.MouseButtonDown:Connect(GetMouseInpFunc(true))
 UserMouse.MouseButtonUp:Connect(GetMouseInpFunc(false))
-UserMouse.WheelMoved:Connect(function(dx, dy)
+UserMouse.WheelMoved:Connect(function(dx, dy, a, b)
     for _, v in ipairs(TotalCameraEntities) do
         local UICamComp = ComponentService.HasComponent(v, "UICamera")
         if UICamComp.ProcessInputs then
             for _, Object in ipairs(UICamComp[7]) do
                 local UIRoot = ComponentService.HasComponent(Object, "UIRoot")
-                if UIRoot.MouseScroll:GetListenerCount() > 0 and (UIRoot.Hovering or UIRoot:ContainsPoint(dx, dy)) then
+                if
+                    UIRoot.MouseScroll:GetListenerCount() > 0
+                    and (UIRoot.Hovering or UIRoot:ContainsPoint(UserMouse.GetPosition()))
+                then
                     UIRoot.MouseScroll:Fire(dx, dy)
                 end
             end
@@ -176,6 +187,9 @@ local Methods = {
         end
 
         table.sort(self[7], SortMethod)
+        if self.ProcessInputs then
+            QueryHover(UserMouse.GetPosition())
+        end
     end,
 }
 
@@ -313,6 +327,12 @@ end
 UICam.Metadata.__remove = function(self, Ent)
     RenderService.VeneerUI.UnbindUICamera(self)
     table.remove(TotalCameraEntities, table.find(TotalCameraEntities, Ent))
+end
+
+UICam.FinalProcessing = function()
+    if ComponentService.AncestryRequired then
+        table.insert(ComponentService.AncestryRequired, UICam.Name)
+    end
 end
 
 return UICam

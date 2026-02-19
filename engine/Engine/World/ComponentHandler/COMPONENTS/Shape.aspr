@@ -142,6 +142,16 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
     return setmetatable(Comp,MT)
 end
 
+Shape.Metadata.__remove = function(_,e)
+    if Component.HasComponent(e,"RenderTarget") then
+        Component.RemoveComponent(e,"RenderTarget",true)
+    end
+end
+
+Shape.Metadata.HardExclusion = {
+    RenderTarget = true
+}
+
 Shape.FinalProcessing = function()
     GetService"Physics".BindSizeComponent("Shape","Size")
 

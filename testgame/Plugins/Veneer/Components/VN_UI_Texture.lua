@@ -1,19 +1,18 @@
 local Component = GetService("Component")
 local Renderer = GetService("Renderer")
-local Canvas = {}
 
-Canvas.Name = "UICanvas"
-Canvas.Metadata = {
+local UITexture = {}
+
+UITexture.Name = "UITexture"
+UITexture.Metadata = {
     SceneLateLoad = true,
 }
 
-local SetComponents = Component.SetComponents
-Renderer.VeneerUI.AddToStack(Canvas.Name, function(Pass, Entity, Matrix)
-    local CanvasInst = SetComponents[Entity].UICanvas
-
-    Pass:setColor(CanvasInst[1], CanvasInst[2], CanvasInst[3], CanvasInst[4])
-    Pass:plane(Matrix)
-end)
+local FitImage = ENUM({
+    Stretch = 1,
+    Crop = 2,
+    Fit = 3,
+}, "ImageFitMode")
 
 local Indecies = {
     R = 1,
@@ -21,32 +20,65 @@ local Indecies = {
     B = 3,
     A = 4,
     ColorRaw = 5,
+    Texture = 6,
+    FitMode = 7,
 }
 
-local Meta = {
-    __index = function(self, Key)
-        if Key == "Color" then
+local SetComponents = Component.SetComponents
+Renderer.VeneerUI.AddToStack(UITexture.Name, function(Pass, Entity, Matrix)
+    local Comp = SetComponents[Entity].UITexture
+    local Image = Comp[6]
+    if not Image then
+        return
+    end
+    Image = Image[1] or Image
+
+    local RectSize = vec2(Matrix:getScale())
+
+    Pass:send("UIImageFit", Comp[7].RawValue)
+    Pass:send("RectSize", RectSize)
+
+    -- for some reason sampling is weird so we gotta do this:
+
+    Pass:setColor(Comp[1], Comp[2], Comp[3], Comp[4])
+    Pass:setMaterial(Image)
+    Pass:plane(Matrix)
+
+    Pass:send("UIImageFit", 0) -- none
+end)
+
+local ToTransform = {
+    __HasUIElement = "UITexture",
+}
+
+local MT = {
+    __index = function(self, k)
+        if k == "Color" then
             return self[Indecies.ColorRaw]
+        elseif k == "Texture" then
+            return self[Indecies.Texture]
+        elseif k == "FitMode" then
+            return self[Indecies.FitMode]
         end
     end,
-    __newindex = function(self, Key, Value)
-        if Key == "Color" then
-            self[Indecies.ColorRaw] = Value
-            local R, G, B, A = Value:unpack()
+    __newindex = function(self, k, v)
+        if k == "Color" then
+            local R, G, B, A = v:unpack()
 
             self[Indecies.R] = R
             self[Indecies.G] = G
             self[Indecies.B] = B
             self[Indecies.A] = A
+            self[Indecies.ColorRaw] = v
+        elseif k == "Texture" then
+            self[Indecies.Texture] = v
+        elseif k == "FitMode" then
+            self[Indecies.FitMode] = v
         end
     end,
 }
 
-local ToTransform = {
-    __HasUIElement = "UICanvas",
-}
-
-Canvas.Metadata.__create = function(Input, Entity, Sink)
+UITexture.Metadata.__create = function(Input, Entity, Sink)
     local TransformComponent = Component.HasComponent(Entity, "UIRoot")
     local AncestryComponent = Component.HasComponent(Entity, "Ancestry")
 
@@ -89,23 +121,25 @@ Canvas.Metadata.__create = function(Input, Entity, Sink)
     Data[Indecies.B] = B
     Data[Indecies.A] = A
     Data[Indecies.ColorRaw] = Color
+    Data[Indecies.Texture] = Input and Input.Texture
+    Data[Indecies.FitMode] = Input and Input.FitMode or FitImage.Stretch
 
-    setmetatable(Data, Meta)
+    setmetatable(Data, MT)
 
     return Data
 end
 
-Canvas.Metadata.__remove = function(_, e)
-    local UIRoot = Component.HasComponent(e, "UIRoot")
+UITexture.Metadata.__remove = function(_, Entity)
+    local UIRoot = Component.HasComponent(Entity, "UIRoot")
     if UIRoot then
         UIRoot.__HasUIElement = nil
     end
 end
 
-Canvas.FinalProcessing = function()
+UITexture.FinalProcessing = function()
     if Component.AncestryRequired then
-        table.insert(Component.AncestryRequired, Canvas.Name)
+        table.insert(Component.AncestryRequired, UITexture.Name)
     end
 end
 
-return Canvas
+return UITexture

@@ -125,7 +125,7 @@ Transform.Metadata.__remove = function(self, EId, Forced)
 
     if Component.TransformRequired and not Forced then
         for _, Name in ipairs(Component.TransformRequired) do
-            AstralEngine.Assert(not Component.HasComponent(EId,Name), "CANNOT REMOVE TRANSFORM COMPONENT. ENTITY HAS DEPENDENT COMPONENT", "TRANSFORM", 3)
+            AstralEngine.Assert(not Component.HasComponent(EId,Name), "CANNOT REMOVE TRANSFORM COMPONENT. ENTITY HAS DEPENDENT COMPONENT: "..Name, "TRANSFORM")
         end
     end
 

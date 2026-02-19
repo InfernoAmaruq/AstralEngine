@@ -116,6 +116,12 @@ SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
     return SR
 end
 
+SpriteRenderer.Metadata.__remove = function(_,e)
+    if COMP.HasComponent(e,"RenderTarget") then
+        COMP.RemoveComponent(e,"RenderTarget",true)
+    end
+end
+
 SpriteRenderer.FinalProcessing = function()
    GetService"Physics".BindSizeComponent("SpriteRenderer",2)
 
@@ -123,5 +129,9 @@ SpriteRenderer.FinalProcessing = function()
         table.insert(COMP.TransformRequired,SpriteRenderer.Name)
     end
 end
+
+SpriteRenderer.Metadata.HardExclusison = {
+    RenderTarget = true
+}
 
 return SpriteRenderer

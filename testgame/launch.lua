@@ -18,6 +18,7 @@ local IMG2 = AS("./Assets/Img/cart.png")
 local HotDelta = os.clock() - T2 --debug.cpuclock() - T2
 
 local T3 = os.clock()
+print("MAKE")
 local Texture = GetService("AssetService").NewTexture("./Assets/Img/cart.png", { usage = { "transfer" } })
 local TexDelta = os.clock() - T3
 

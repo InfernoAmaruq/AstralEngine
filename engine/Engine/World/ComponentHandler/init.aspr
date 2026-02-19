@@ -71,9 +71,31 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
 
     AstralEngine.Assert(t,"No component "..id.." found!","COMPONENT")
 
-    if t.Metadata and t.Metadata.__mt then
-        setmetatable(D, t.Metadata.__mt)
+    -- check if can set
+
+    if not ShouldSink then
+        -- hard dep check
+
+        local HardDependency = t.Metadata and t.Metadata.HardDependency
+        if HardDependency then
+            for Name in pairs(HardDependency) do
+                AstralEngine.Assert(Component.SetComponents[e][Name],"CANNOT CREATE COMPONENT "..id.." HARD DEPENDENCY CHECK FAILED ON COMPONENT: "..Name,"COMPONENT")
+            end
+        end
+
+        -- exclusion check
+
+        local Exclusion = t.Metadata and t.Metadata.HardExclusion
+        if Exclusion then
+            for Name in pairs(Exclusion) do
+                AstralEngine.Assert(not Component.SetComponents[e][Name], "CANNOT CREATE COMPONENT "..id.." HARD EXCLUSION CHECK FAILED ON COMPONENT: "..Name,"COMPONENT")
+            end
+        end
     end
+
+    -- we do not do a soft dependency check here. It is used only when constructing!
+
+    -- set
 
     if t.Metadata and t.Metadata.__create then
         D = t.Metadata.__create(DATA or {}, e, ShouldSink)
@@ -84,6 +106,10 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
                 continue
             end
             D[i] = v
+        end
+
+        if t.Metadata and t.Metadata.__mt then
+            setmetatable(D, t.Metadata.__mt)
         end
     end
 
@@ -120,6 +146,17 @@ function Component.RemoveComponent(e, id, Force)
 
     if not Component.SetComponents[e] or not Comp then
         return
+    end
+
+    if not Force then
+        for Name, UserComp in pairs(Component.SetComponents[e]) do
+            if v == UserComp then continue end
+
+            local UCMeta = Component.Components[Name].Metadata
+            if UCMeta and UCMeta.HardDependency and UCMeta.HardDependency[id] then
+                AstralEngine.Error("CANNOT REMOVE COMPONENT "..id.." BECAUSE COMPONENT "..Name.." DEPENDS ON IT!","COMPONENT",2)
+            end
+        end
     end
 
     if not Force then

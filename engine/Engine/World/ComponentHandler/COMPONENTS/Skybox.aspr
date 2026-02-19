@@ -22,6 +22,10 @@ end)
 
 Skybox.Metadata = {}
 Skybox.Metadata.__create = function(DATA, e)
+    AstralEngine.Assert(
+        not Component.HasComponent(e, "RenderTarget"),
+        "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!"
+    )
     Component.AddComponent(e, "RenderTarget", { Solid = true, Value = ENUM.RenderType.Skybox.RawValue })
 
     if DATA.Visible == nil then
@@ -30,5 +34,15 @@ Skybox.Metadata.__create = function(DATA, e)
 
     return DATA
 end
+
+Skybox.Metadata.__remove = function(_, e)
+    if Component.HasComponent(e, "RenderTarget") then
+        Component.RemoveComponent(e, "RenderTarget", true)
+    end
+end
+
+Skybox.Metadata.HardExclusion = {
+    RenderTarget = true,
+}
 
 return Skybox

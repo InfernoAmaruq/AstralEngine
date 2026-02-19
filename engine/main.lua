@@ -48,6 +48,7 @@ function lovr.load()
 
     local BRIDGE = require("LOVRBridge")
     BRIDGE.LoadGlobals({ SIGNAL = SIGNAL, ROOT = ROOT, ALLKEYS = require("ALLKEYS") })
+    BRIDGE.Alias()
 
     RunService = GetService"RunService"
     require("Engine.Physics")
@@ -69,7 +70,6 @@ function lovr.load()
     BRIDGE.ConnectDevices()
     BRIDGE.LoadRandom()
     BRIDGE.LoadWindow()
-    BRIDGE.Alias()
 
     Renderer.LateCall()
 

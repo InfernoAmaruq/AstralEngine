@@ -31,20 +31,19 @@ function Renderer.VeneerUI.AddToStack(ComponentName, Function)
 end
 
 function Renderer.VeneerUI.GetStackIdFromName(ComponentName)
-    return Registry[ComponentName]
+    return Registry[ComponentName] or -1
 end
 
 Renderer.Late[#Renderer.Late + 1] = function()
     -- bind
-
-    print("COMPILE UI SHADER")
 
     local ShaderService = GetService("ShaderService")
     local V, F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics, "UIMain", {
         Include = {},
     })
 
-    print("COMPILED!", V, F)
+    print("SHADER:", V, F)
+
     local MainUIShader = lovr.graphics.newShader(V, F)
 
     local ComponentManager = GetService("Component")
@@ -69,6 +68,7 @@ Renderer.Late[#Renderer.Late + 1] = function()
             end
             Pass:reset()
             Pass:setShader(MainUIShader)
+            Pass:setWinding("clockwise")
             Pass:setProjection(1, Cam[5])
             Pass:setDepthTest()
             Pass:setDepthWrite()
@@ -82,6 +82,12 @@ Renderer.Late[#Renderer.Late + 1] = function()
             for ObjIdx = 1, ObjCount do
                 local Obj = Objects[ObjIdx]
                 local Transform = SetComp[Obj]["UIRoot"]
+                local FuncCall = Stack[Transform[12]]
+
+                if FuncCall == -1 then
+                    continue
+                end
+
                 local Matrix = Transform[1]
 
                 local ShouldClipChildren = Transform[13]
@@ -91,8 +97,6 @@ Renderer.Late[#Renderer.Late + 1] = function()
                 if Invalid == 1 then
                     AstralEngine.Error("INVALID MATRIX FOUND IN UI OBJECT!", "VeneerUI", 1)
                 end
-
-                local FuncCall = FuncStack[Transform[12]]
 
                 if ShouldClipChildren then
                     if HighestTest > ClipDepth then
@@ -106,6 +110,7 @@ Renderer.Late[#Renderer.Late + 1] = function()
                     HighestTest = ClipDepth
 
                     Pass:setStencilWrite(SActs, ClipDepth)
+                    Pass:send("TransparentToStencil", Transform.TransparentToStencil)
 
                     if ClipDepth > 1 then
                         Pass:setStencilTest("gequal", ClipDepth - 1)

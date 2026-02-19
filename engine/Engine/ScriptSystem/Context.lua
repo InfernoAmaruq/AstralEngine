@@ -22,7 +22,6 @@ return function(ScriptService)
             RSBinds = {},                   -- {Name}
             CASBinds = {},
             Require = setmetatable({}, WMT),
-            Passes = {},                 -- {PassRef}
             AllocObjects = setmetatable({}, WMT), -- {Obj = Type}
             -- cache / scene allocated assets (meshes, images, sfx, whatevs)
         }

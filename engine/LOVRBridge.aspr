@@ -194,6 +194,10 @@ LVRB.ConnectDevices = function()
         Mouse.MouseButtonUp:Fire(c, x, y, Terminated)
     end
 
+    function lovr.textinput(Char, Code)
+        KB.TextInput:Fire(Char, Code)
+    end
+
     -- KB
 
     function lovr.keypressed(k, c, r)

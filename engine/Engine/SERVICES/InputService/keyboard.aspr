@@ -13,6 +13,7 @@ return function(D, SIGNAL)
 
     UserKB.KeyPressed = SIGNAL.new(SIGNAL.Type.RTC)
     UserKB.KeyReleased = SIGNAL.new(SIGNAL.Type.RTC)
+    UserKB.TextInput = SIGNAL.new(SIGNAL.Type.RTC)
 
     return DATA
 end

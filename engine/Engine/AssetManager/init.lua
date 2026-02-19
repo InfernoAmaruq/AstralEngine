@@ -112,8 +112,14 @@ local function GetRawImageData(ImagePath)
 
         if ImgFromFile then
             -- ALLOCATE IMAGE DATA TABLE
-            Cache[TypeEnum.ImageData][ImagePath] = ImgFromFile
-            return ImgFromFile
+
+            local Table = {
+                DATA = ImgFromFile,
+                CTX = _G.CONTEXT and _G.CONTEXT.Gen or 0,
+            }
+
+            Cache[TypeEnum.ImageData][ImagePath] = Table
+            return Table
         end
     end
 end
@@ -125,7 +131,7 @@ function AssetManager.NewImage(ImagePath)
     local ReturnValue = nil
 
     if Image then
-        ReturnValue = NewImage(CanonPath, Image)
+        ReturnValue = NewImage(CanonPath, Image.DATA)
     end
 
     return ReturnValue
@@ -142,7 +148,7 @@ function AssetManager.NewTexture(Path, Options)
     local ImageData = GetRawImageData(CanonPath)
 
     if ImageData then
-        return AstralEngine.Graphics.NewTexture(ImageData, Options)
+        return AstralEngine.Graphics.NewTexture(ImageData.DATA, Options)
     else
         return nil
     end

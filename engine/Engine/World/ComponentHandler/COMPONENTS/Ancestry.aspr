@@ -3,8 +3,6 @@ local Ancestry = {}
 local Component = GetService("Component")
 local World = GetService("Entity")
 
-Component.AncestryRequired = {}
-
 Ancestry.Name = "Ancestry"
 Ancestry.Pattern = { Parent = 0 }
 Ancestry.FastFetch = { "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById", "GetChildren", "GetChildrenIds", "IterChildren" }
@@ -295,15 +293,6 @@ Ancestry.Metadata.__create = function(DATA, e)
 end
 
 Ancestry.Metadata.__remove = function(self, EId, Forced)
-
-    -- test if theres dependencies
-
-    if Component.AncestryRequired and not Forced then
-        for _, Name in ipairs(Component.TransformRequired) do
-            AstralEngine.Assert(not Component.HasComponent(EId,Name),"CANNOT REMOVE ANCESTRY COMPONENT. ENTITY HAS DEPENDENT COMPONENT: "..Name, "ANCESTRY")
-        end
-    end
-
     -- i owe the fucking Lua allocator money, it will not leave my family alone
     -- i must fucking avoid it
     local PtrSelf = self[&SelfPtr]

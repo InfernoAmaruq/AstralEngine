@@ -151,13 +151,12 @@ end
 Shape.Metadata.HardExclusion = {
     RenderTarget = true
 }
+Shape.Metadata.SoftDependency = {
+    Transform = true
+}
 
 Shape.FinalProcessing = function()
     GetService"Physics".BindSizeComponent("Shape","Size")
-
-    if Component.TransformRequired then
-        table.insert(Component.TransformRequired,Shape.Name)
-    end
 end
 
 return Shape

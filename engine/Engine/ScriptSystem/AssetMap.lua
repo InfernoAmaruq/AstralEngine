@@ -310,7 +310,7 @@ function AssetMapLoader.LoadAssetMap(Map)
             for Dependency in pairs(Deps) do
                 AstralEngine.Assert(
                     Ent:GetComponent(Dependency),
-                    Name .. " REQUIRES " .. Dep .. " (SOFT DEPENDENCY) CANNOT CREATE COMPONENT",
+                    Name .. " REQUIRES " .. Dependency .. " (SOFT DEPENDENCY) CANNOT CREATE COMPONENT",
                     "SCENEMANAGER"
                 )
             end

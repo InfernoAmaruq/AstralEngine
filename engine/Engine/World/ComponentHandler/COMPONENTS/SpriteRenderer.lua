@@ -124,12 +124,11 @@ end
 
 SpriteRenderer.FinalProcessing = function()
    GetService"Physics".BindSizeComponent("SpriteRenderer",2)
-
-    if COMP.TransformRequired then
-        table.insert(COMP.TransformRequired,SpriteRenderer.Name)
-    end
 end
 
+SpriteRenderer.Metadata.SoftDependency = {
+    Transform = true
+}
 SpriteRenderer.Metadata.HardExclusison = {
     RenderTarget = true
 }

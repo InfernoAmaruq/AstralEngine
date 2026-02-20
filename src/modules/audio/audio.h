@@ -112,8 +112,6 @@ float lovrSourceGetPitch(Source* source);
 bool lovrSourceSetPitch(Source* source, float pitch);
 float lovrSourceGetVolume(Source* source, VolumeUnit units);
 void lovrSourceSetVolume(Source* source, float volume, VolumeUnit units);
-void lovrSourceGetReverb(Source* source, float* reverb, ReverbMode* mode);
-void lovrSourceSetReverb(Source* source, float volume, ReverbMode mode);
 void lovrSourceSeek(Source* source, double time, TimeUnit units);
 double lovrSourceTell(Source* source, TimeUnit units);
 double lovrSourceGetDuration(Source* source, TimeUnit units);
@@ -130,6 +128,8 @@ void lovrSourceGetFalloff(Source* source, float* innerDistance, float* outerDist
 void lovrSourceSetFalloff(Source* source, float innerDistance, float outerDistance, float outerVolume);
 void lovrSourceGetOcclusion(Source* source, uint32_t* occlusionRays, uint32_t* transmissionRays);
 void lovrSourceSetOcclusion(Source* source, uint32_t occlusionRays, uint32_t transmissionRays);
+void lovrSourceGetReverb(Source* source, float* reverb, ReverbMode* mode);
+void lovrSourceSetReverb(Source* source, float volume, ReverbMode mode);
 float lovrSourceGetSpatialization(Source* source);
 void lovrSourceSetSpatialization(Source* source, float spatialization);
 

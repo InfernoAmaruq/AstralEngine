@@ -101,7 +101,6 @@ static struct {
   float orientation[4];
   float absorption[3];
   float reverb;
-  float spatialization;
 #ifdef LOVR_USE_PHONON
   IPLContext phonon;
   IPLAudioSettings audioSettings;
@@ -1219,9 +1218,9 @@ static bool phonon_mix_source(Source* source, float* _src, float* dst, float* _t
   }
 
   // Direct effects, applied in-place
-  if (false) { // TODO if has any direct effect
-    IPLDirectEffectParams* params = &source->outputs[index].direct;
-    tail |= !iplDirectEffectApply(source->directEffect, params, &src, &src);
+  IPLDirectEffectParams* directParams = &source->outputs[index].direct;
+  if (directParams->flags) {
+    tail |= !iplDirectEffectApply(source->directEffect, directParams, &src, &src);
   }
 
   // Spatialization (either binaural, panning, or upmix)

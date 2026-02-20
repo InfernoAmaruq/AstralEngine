@@ -66,6 +66,7 @@ typedef enum {
 
 typedef struct {
   bool debug;
+  bool autostart;
   uint32_t sampleRate;
   struct {
     ReverbMode mode;

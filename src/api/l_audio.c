@@ -361,6 +361,7 @@ extern const luaL_Reg lovrAudioMesh[];
 int luaopen_lovr_audio(lua_State* L) {
   AudioConfig config = {
     .debug = false,
+    .autostart = true,
     .sampleRate = 48000,
     .reverb.mode = REVERB_CONVOLUTION,
     .reverb.rays = 4096,
@@ -368,8 +369,6 @@ int luaopen_lovr_audio(lua_State* L) {
     .reverb.duration = 2.f,
     .reverb.rate = .1f
   };
-
-  bool start = true;
 
   luax_pushconf(L);
   if (lua_istable(L, -1)) {
@@ -384,7 +383,7 @@ int luaopen_lovr_audio(lua_State* L) {
       lua_pop(L, 1);
 
       lua_getfield(L, -1, "start");
-      start = lua_isnil(L, -1) || lua_toboolean(L, -1);
+      config.autostart = lua_isnil(L, -1) || lua_toboolean(L, -1);
       lua_pop(L, 1);
 
       lua_getfield(L, -1, "reverb");
@@ -417,11 +416,6 @@ int luaopen_lovr_audio(lua_State* L) {
 
   luax_assert(L, lovrAudioInit(&config));
   luax_atexit(L, lovrAudioDestroy);
-
-  if (start) {
-    lovrAudioSetDevice(AUDIO_PLAYBACK, NULL, 0, NULL, AUDIO_SHARED);
-    lovrAudioStart(AUDIO_PLAYBACK);
-  }
 
   lua_newtable(L);
   luax_register(L, lovrAudio);

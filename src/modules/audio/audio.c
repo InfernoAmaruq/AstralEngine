@@ -621,6 +621,18 @@ Sound* lovrSourceGetSound(Source* source) {
 }
 
 bool lovrSourcePlay(Source* source) {
+  if (state.config.autostart) {
+    if (!state.devices[AUDIO_PLAYBACK].pContext) {
+      lovrAudioSetDevice(AUDIO_PLAYBACK, NULL, 0, NULL, AUDIO_SHARED);
+    }
+
+    if (!lovrAudioIsStarted(AUDIO_PLAYBACK)) {
+      lovrAudioStart(AUDIO_PLAYBACK);
+    }
+
+    state.config.autostart = false;
+  }
+
   if (source->slot == ~0u) {
     uint64_t mask = state.activeSourceMask | state.pendingSourceMask;
     if (mask == ~0ull) return false;

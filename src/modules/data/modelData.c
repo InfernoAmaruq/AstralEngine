@@ -271,7 +271,7 @@ void lovrModelDataGetTriangles(ModelData* model, float** vertices, uint32_t** in
   ModelMetadata* meta = &model->meta;
 
   *vertexCount = 0;
-  *indexCount = 0;
+  if (indexCount) *indexCount = 0;
 
   for (uint32_t i = 0; i < meta->nodeCount; i++) {
     if (meta->nodes[i].mesh != ~0u) {
@@ -280,7 +280,7 @@ void lovrModelDataGetTriangles(ModelData* model, float** vertices, uint32_t** in
 
       for (uint32_t j = 0; j < mesh->partCount; j++) {
         if (mesh->parts[j].mode == DRAW_TRIANGLE_LIST) {
-          *indexCount += mesh->parts[j].count;
+          if (indexCount) *indexCount += mesh->parts[j].count;
         }
       }
     }

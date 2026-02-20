@@ -1691,7 +1691,7 @@ bool lovrColliderSetPose(Collider* collider, float position[3], float orientatio
 }
 
 bool lovrColliderMoveKinematic(Collider* collider, float position[3], float orientation[4], float dt) {
-  if (lovrColliderIsKinematic(collider)) {
+  if (JPH_BodyInterface_GetMotionType(getBodyInterface(collider, READ), collider->id) == JPH_MotionType_Static) {
     return true;
   }
 

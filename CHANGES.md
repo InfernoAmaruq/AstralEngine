@@ -87,6 +87,7 @@ dev
 - Fix `lovr.filesystem.newFile` to search all mounted archives properly.
 - Fix `Texture:setPixels` when copying from an `Image` with an offset.
 - Fix issue with `Shape:containsPoint`.
+- Fix `Collider:moveKinematic` when called on a kinematic collider.
 
 ### Deprecate
 

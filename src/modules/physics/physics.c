@@ -1691,6 +1691,10 @@ bool lovrColliderSetPose(Collider* collider, float position[3], float orientatio
 }
 
 bool lovrColliderMoveKinematic(Collider* collider, float position[3], float orientation[4], float dt) {
+  if (lovrColliderIsKinematic(collider)) {
+    return true;
+  }
+
   lovrCheck(dt > 0.f, "dt must > 0");
   lovrCheck(collider->enabled, "Collider must be enabled");
   JPH_BodyInterface* interface = getBodyInterface(collider, WRITE);

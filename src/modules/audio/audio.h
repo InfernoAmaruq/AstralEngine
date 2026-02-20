@@ -11,14 +11,6 @@ typedef struct Source Source;
 typedef struct AudioMesh AudioMesh;
 
 typedef enum {
-  EFFECT_ABSORPTION,
-  EFFECT_ATTENUATION,
-  EFFECT_OCCLUSION,
-  EFFECT_SPATIALIZATION,
-  EFFECT_TRANSMISSION
-} Effect;
-
-typedef enum {
   MATERIAL_GENERIC,
   MATERIAL_BRICK,
   MATERIAL_CARPET,
@@ -60,16 +52,21 @@ typedef enum {
 } VolumeUnit;
 
 typedef enum {
+  REVERB_LISTENER,
+  REVERB_SOURCE
+} ReverbMode;
+
+typedef enum {
   REVERB_CONVOLUTION,
   REVERB_PARAMETRIC
-} ReverbMode;
+} ReverbType;
 
 typedef struct {
   bool debug;
   bool autostart;
   uint32_t sampleRate;
   struct {
-    ReverbMode mode;
+    ReverbType type;
     uint32_t rays;
     uint32_t bounces;
     float duration;
@@ -101,7 +98,7 @@ void lovrAudioSetReverb(float reverb);
 
 // Source
 
-Source* lovrSourceCreate(struct Sound* sound, bool pitch, bool spatial, uint32_t effects);
+Source* lovrSourceCreate(struct Sound* sound, bool pitch, bool spatial);
 Source* lovrSourceClone(Source* source);
 void lovrSourceDestroy(void* ref);
 struct Sound* lovrSourceGetSound(Source* source);
@@ -115,20 +112,26 @@ float lovrSourceGetPitch(Source* source);
 bool lovrSourceSetPitch(Source* source, float pitch);
 float lovrSourceGetVolume(Source* source, VolumeUnit units);
 void lovrSourceSetVolume(Source* source, float volume, VolumeUnit units);
-float lovrSourceGetReverb(Source* source);
-void lovrSourceSetReverb(Source* source, float volume);
+void lovrSourceGetReverb(Source* source, float* reverb, ReverbMode* mode);
+void lovrSourceSetReverb(Source* source, float volume, ReverbMode mode);
 void lovrSourceSeek(Source* source, double time, TimeUnit units);
 double lovrSourceTell(Source* source, TimeUnit units);
 double lovrSourceGetDuration(Source* source, TimeUnit units);
-bool lovrSourceIsSpatial(Source* source);
 void lovrSourceGetPose(Source* source, float position[3], float orientation[4]);
 void lovrSourceSetPose(Source* source, float position[3], float orientation[4]);
 float lovrSourceGetRadius(Source* source);
 void lovrSourceSetRadius(Source* source, float radius);
-void lovrSourceGetDirectivity(Source* source, float* weight, float* power);
-void lovrSourceSetDirectivity(Source* source, float weight, float power);
-bool lovrSourceIsEffectEnabled(Source* source, Effect effect);
-bool lovrSourceSetEffectEnabled(Source* Source, Effect effect, bool enabled);
+bool lovrSourceIsSpatial(Source* source);
+void lovrSourceGetAbsorption(Source* source, float absorption[3]);
+void lovrSourceSetAbsorption(Source* source, float absorption[3]);
+void lovrSourceGetCone(Source* source, float* innerAngle, float* outerAngle, float* outerVolume);
+void lovrSourceSetCone(Source* source, float innerAngle, float outerAngle, float outerVolume);
+void lovrSourceGetFalloff(Source* source, float* innerDistance, float* outerDistance, float* outerVolume);
+void lovrSourceSetFalloff(Source* source, float innerDistance, float outerDistance, float outerVolume);
+void lovrSourceGetOcclusion(Source* source, uint32_t* occlusionRays, uint32_t* transmissionRays);
+void lovrSourceSetOcclusion(Source* source, uint32_t occlusionRays, uint32_t transmissionRays);
+float lovrSourceGetSpatialization(Source* source);
+void lovrSourceSetSpatialization(Source* source, float spatialization);
 
 // AudioMesh
 

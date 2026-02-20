@@ -6,15 +6,6 @@
 #include "util.h"
 #include <stdlib.h>
 
-StringEntry lovrEffect[] = {
-  [EFFECT_ABSORPTION] = ENTRY("absorption"),
-  [EFFECT_ATTENUATION] = ENTRY("attenuation"),
-  [EFFECT_OCCLUSION] = ENTRY("occlusion"),
-  [EFFECT_SPATIALIZATION] = ENTRY("spatialization"),
-  [EFFECT_TRANSMISSION] = ENTRY("transmission"),
-  { 0 }
-};
-
 StringEntry lovrAudioMaterial[] = {
   [MATERIAL_GENERIC] = ENTRY("generic"),
   [MATERIAL_BRICK] = ENTRY("brick"),
@@ -55,6 +46,12 @@ StringEntry lovrVolumeUnit[] = {
 };
 
 StringEntry lovrReverbMode[] = {
+  [REVERB_LISTENER] = ENTRY("listener"),
+  [REVERB_SOURCE] = ENTRY("source"),
+  { 0 }
+};
+
+StringEntry lovrReverbType[] = {
   [REVERB_CONVOLUTION] = ENTRY("convolution"),
   [REVERB_PARAMETRIC] = ENTRY("parametric"),
   { 0 }
@@ -246,7 +243,6 @@ static int l_lovrAudioNewSource(lua_State* L) {
   bool decode = false;
   bool pitchable = true;
   bool spatial = true;
-  uint32_t effects = ~0u;
   if (lua_gettop(L) >= 2) {
     luaL_checktype(L, 2, LUA_TTABLE);
 
@@ -257,25 +253,6 @@ static int l_lovrAudioNewSource(lua_State* L) {
     lua_getfield(L, 2, "pitch");
     if (lua_isnil(L, -1)) lua_pop(L, 1), lua_getfield(L, 2, "pitchable");
     if (!lua_isnil(L, -1)) pitchable = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-
-    lua_getfield(L, 2, "effects");
-    if (!lua_isnil(L, -1)) {
-      effects = 0;
-      luax_check(L, lua_istable(L, -1), "Source effects must be a table");
-      lua_pushnil(L);
-      while (lua_next(L, -2) != 0) {
-        if (lua_type(L, -2) == LUA_TSTRING) {
-          Effect effect = luax_checkenum(L, -2, Effect, NULL);
-          bool enabled = lua_toboolean(L, -1);
-          effects |= enabled << effect;
-        } else if (lua_type(L, -2) == LUA_TNUMBER) {
-          Effect effect = luax_checkenum(L, -1, Effect, NULL);
-          effects |= 1 << effect;
-        }
-        lua_pop(L, 1);
-      }
-    }
     lua_pop(L, 1);
 
     lua_getfield(L, 2, "spatial");
@@ -291,7 +268,7 @@ static int l_lovrAudioNewSource(lua_State* L) {
     lovrRetain(sound);
   }
 
-  Source* source = lovrSourceCreate(sound, pitchable, spatial, effects);
+  Source* source = lovrSourceCreate(sound, pitchable, spatial);
   lovrRelease(sound, lovrSoundDestroy);
   luax_assert(L, source);
   luax_pushtype(L, Source, source);
@@ -363,7 +340,7 @@ int luaopen_lovr_audio(lua_State* L) {
     .debug = false,
     .autostart = true,
     .sampleRate = 48000,
-    .reverb.mode = REVERB_CONVOLUTION,
+    .reverb.type = REVERB_CONVOLUTION,
     .reverb.rays = 4096,
     .reverb.bounces = 4,
     .reverb.duration = 2.f,
@@ -388,8 +365,8 @@ int luaopen_lovr_audio(lua_State* L) {
 
       lua_getfield(L, -1, "reverb");
       if (lua_istable(L, -1)) {
-        lua_getfield(L, -1, "mode");
-        config.reverb.mode = luax_checkenum(L, -1, ReverbMode, NULL);
+        lua_getfield(L, -1, "type");
+        config.reverb.type = luax_checkenum(L, -1, ReverbType, NULL);
         lua_pop(L, 1);
 
         lua_getfield(L, -1, "rays");

@@ -242,25 +242,23 @@ static int l_lovrSourceSetCone(lua_State* L) {
 
 static int l_lovrSourceGetFalloff(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
-  float innerDistance, outerDistance, outerVolume;
-  lovrSourceGetFalloff(source, &innerDistance, &outerDistance, &outerVolume);
+  float innerDistance, minVolume;
+  lovrSourceGetFalloff(source, &innerDistance, &minVolume);
   lua_pushnumber(L, innerDistance);
-  lua_pushnumber(L, outerDistance);
-  lua_pushnumber(L, outerVolume);
+  lua_pushnumber(L, minVolume);
   return 3;
 }
 
 static int l_lovrSourceSetFalloff(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
   if (!lua_toboolean(L, 2)) {
-    lovrSourceSetFalloff(source, 0.f, 0.f, 1.f);
+    lovrSourceSetFalloff(source, 0.f, 1.f);
   } else if (lua_isboolean(L, 2)) {
-    lovrSourceSetFalloff(source, 0.f, FLT_MAX, 0.f);
+    lovrSourceSetFalloff(source, 0.f, 0.f);
   } else {
     float innerDistance = luax_checkfloat(L, 2);
-    float outerDistance = luax_checkfloat(L, 3);
-    float outerVolume = luax_optfloat(L, 4, 0.);
-    lovrSourceSetFalloff(source, innerDistance, outerDistance, outerVolume);
+    float minVolume = luax_optfloat(L, 3, 0.);
+    lovrSourceSetFalloff(source, innerDistance, minVolume);
   }
   return 0;
 }

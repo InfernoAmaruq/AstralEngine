@@ -41,8 +41,7 @@ struct Source {
   float outerAngle;
   float outerAngleVolume;
   float innerDistance;
-  float outerDistance;
-  float outerDistanceVolume;
+  float minFalloffVolume;
   uint32_t occlusionRays;
   uint32_t transmissionRays;
   float reverb;
@@ -582,8 +581,7 @@ Source* lovrSourceClone(Source* source) {
   clone->outerAngle = source->outerAngle;
   clone->outerAngleVolume = source->outerAngleVolume;
   clone->innerDistance = source->innerDistance;
-  clone->outerDistance = source->outerDistance;
-  clone->outerDistanceVolume = source->outerDistanceVolume;
+  clone->minFalloffVolume = source->minFalloffVolume;
   clone->occlusionRays = source->occlusionRays;
   clone->transmissionRays = source->transmissionRays;
   clone->reverb = source->reverb;
@@ -770,16 +768,14 @@ void lovrSourceSetCone(Source* source, float innerAngle, float outerAngle, float
   source->outerAngleVolume = outerVolume;
 }
 
-void lovrSourceGetFalloff(Source* source, float* innerDistance, float* outerDistance, float* outerVolume) {
+void lovrSourceGetFalloff(Source* source, float* innerDistance, float* minVolume) {
   *innerDistance = source->innerDistance;
-  *outerDistance = source->outerDistance;
-  *outerVolume = source->outerDistanceVolume;
+  *minVolume = source->minFalloffVolume;
 }
 
-void lovrSourceSetFalloff(Source* source, float innerDistance, float outerDistance, float outerVolume) {
+void lovrSourceSetFalloff(Source* source, float innerDistance, float minVolume) {
   source->innerDistance = innerDistance;
-  source->outerDistance = outerDistance;
-  source->outerDistanceVolume = outerVolume;
+  source->minFalloffVolume = minVolume;
 }
 
 void lovrSourceGetOcclusion(Source* source, uint32_t* occlusionRays, uint32_t* transmissionRays) {
@@ -882,12 +878,30 @@ static void convertPose(float* position, float* orientation, IPLCoordinateSpace3
 
 static float applyAttenuation(IPLfloat32 distance, void* userdata) {
   Source* source = userdata;
-  return 1.f; // TODO
+  if (distance <= source->innerDistance) {
+    return 1.f;
+  } else {
+    return MAX(source->innerDistance / distance, source->minFalloffVolume);
+  }
 }
 
-static float applyDirectivity(IPLVector3 direction, void* userdata) {
+static float applyDirectivity(IPLVector3 sourceDirection, void* userdata) {
   Source* source = userdata;
-  return 1.f; // TODO
+
+  float listenerDirection[3];
+  vec3_init(listenerDirection, &state.listenerBasis[state.backbuffer].origin.x);
+  vec3_sub(listenerDirection, source->position);
+  vec3_normalize(listenerDirection);
+  float angle = acosf(vec3_dot(&sourceDirection.x, listenerDirection));
+
+  if (angle < source->innerAngle) {
+    return 1.f;
+  } else if (angle >= source->outerAngle) {
+    return source->outerAngleVolume;
+  } else {
+    float t = (angle - source->innerAngle) / (source->outerAngle - source->innerAngle);
+    return source->outerAngleVolume + (1.f - source->outerAngleVolume) * t;
+  }
 }
 
 static void onSpatializerLog(IPLLogLevel iplLevel, const char* message) {
@@ -1054,9 +1068,9 @@ static void phonon_update(float dt) {
     vec3_sub(vec3_init(&source->relativeDirection[backbuffer].x, source->position), state.position);
 
     source->inputs.directFlags = 0;
-    if (source->outerDistanceVolume < 1.f) source->inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_AIRABSORPTION;
     if (vec3_dot(source->absorption, source->absorption) > 1e-5) source->inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_AIRABSORPTION;
     if (source->innerAngle < (float) M_PI) source->inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_DIRECTIVITY;
+    if (source->minFalloffVolume < 1.f) source->inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_DISTANCEATTENUATION;
     if (source->occlusionRays > 0) source->inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_OCCLUSION;
     if (source->occlusionRays > 0 && source->transmissionRays > 0) source->inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_TRANSMISSION;
 

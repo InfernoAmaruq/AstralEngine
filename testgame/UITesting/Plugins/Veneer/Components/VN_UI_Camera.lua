@@ -7,13 +7,12 @@ local UICam = {}
 UICam.Name = "UICamera"
 
 UICam.Metadata = {}
+UICam.Metadata.SoftDependency = { Ancestry = true }
 
 local TotalCameraEntities = {}
 
 -- PROCESSING INPUT
 
--- FLAME: NTS: RE-QUERY ENTERS ON REBUILD!
--- INVALIDATE ON TRANSFORM CHANGE?
 local IS = GetService("InputService")
 local UserMouse = IS.GetMouse()
 
@@ -95,7 +94,7 @@ local function SortMethod(a, b)
     return ObjA.UIRoot.EffectiveZIndex < ObjB.UIRoot.EffectiveZIndex
 end
 
-GetService("Entity").OnAncestryChanged:Connect(function(...)
+Entity.OnAncestryChanged:Connect(function(...)
     local i = 1
     local n = select("#", ...)
     while i <= n do
@@ -190,6 +189,13 @@ local Methods = {
         if self.ProcessInputs then
             QueryHover(UserMouse.GetPosition())
         end
+
+        for Child in SelfEnt.Ancestry:IterChildren() do
+            local Root = Child:GetComponent("UIRoot")
+            if Root then
+                Root:RebuildMatrix()
+            end
+        end
     end,
 }
 
@@ -211,6 +217,12 @@ local MT = {
         end
     end,
 }
+
+UICam.Metadata.__resolvesoft = function(_, Ent, Name)
+    if Name == "Ancestry" then
+        Ent:AddComponent("Ancestry")
+    end
+end
 
 UICam.Metadata.__create = function(Input, Entity, Skip)
     local Data = {}
@@ -327,12 +339,6 @@ end
 UICam.Metadata.__remove = function(self, Ent)
     RenderService.VeneerUI.UnbindUICamera(self)
     table.remove(TotalCameraEntities, table.find(TotalCameraEntities, Ent))
-end
-
-UICam.FinalProcessing = function()
-    if ComponentService.AncestryRequired then
-        table.insert(ComponentService.AncestryRequired, UICam.Name)
-    end
 end
 
 return UICam

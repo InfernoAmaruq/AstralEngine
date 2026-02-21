@@ -5,7 +5,7 @@ local UITexture = {}
 
 UITexture.Name = "UITexture"
 UITexture.Metadata = {
-    SceneLateLoad = true,
+    SoftDependency = { UIRoot = true },
 }
 
 local FitImage = ENUM({
@@ -133,12 +133,6 @@ UITexture.Metadata.__remove = function(_, Entity)
     local UIRoot = Component.HasComponent(Entity, "UIRoot")
     if UIRoot then
         UIRoot.__HasUIElement = nil
-    end
-end
-
-UITexture.FinalProcessing = function()
-    if Component.AncestryRequired then
-        table.insert(Component.AncestryRequired, UITexture.Name)
     end
 end
 

@@ -386,4 +386,6 @@ Camera.Metadata.__remove = function(self, Entity)
     end
 end
 
+Camera.Metadata.SoftDependency = { Transform = true }
+
 return Camera

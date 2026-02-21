@@ -28,6 +28,7 @@ local Entity = {}
 
 local SERIALIZER = require("Lib.Serialize")
 
+-- Parent, Child, "add"|"remove"
 Entity.OnAncestryChanged = SignalLib.new(SignalLib.Type.RTC)
 Entity.EntityAdded = SignalLib.new(SignalLib.Type.RTC)
 Entity.EntityRemoving = SignalLib.new(SignalLib.Type.RTC)

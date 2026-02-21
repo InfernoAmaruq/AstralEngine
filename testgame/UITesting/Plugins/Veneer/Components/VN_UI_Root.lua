@@ -4,8 +4,14 @@ local Renderer = GetService("Renderer")
 local Mouse = GetService("InputService").GetMouse()
 local UIRoot = {}
 
+local Plugin = AstralEngine.Plugins.VeneerUI
+local MatrixChangeEvent = Sig.new(Sig.Type.RTC | Sig.Type.NoCtx)
+Plugin.MatrixChanged = MatrixChangeEvent
+
 UIRoot.Name = "UIRoot"
-UIRoot.Metadata = {}
+UIRoot.Metadata = {
+    HardDependency = { Ancestry = true },
+}
 
 -- bind rebuild
 GetService("Entity").OnAncestryChanged:Connect(function(...)
@@ -23,6 +29,15 @@ GetService("Entity").OnAncestryChanged:Connect(function(...)
     end
 end)
 
+Component.ComponentAdded:Connect(function(Entity, ComponentName)
+    local Root = Entity:GetComponent("UIRoot")
+    local Metadata = Component.Components[ComponentName].Metadata
+    if Root and not Root.__HasUIElement and Metadata and Metadata.UIDrawableObject then
+        Root.__HasUIElement = ComponentName
+    end
+end)
+Component.ComponentRemoved:Connect(function() end)
+
 local Pointers = {
     Matrix = 1,
     ScalePosition = 2,
@@ -32,7 +47,7 @@ local Pointers = {
     OffsetSize = 6,
     AnchorPoint = 7,
     Owner = 8,
-    HasDrawable = 9, -- string value telling if it has or does not have another Drawable in the same entity
+    __HasUIElement = 9, -- string value telling if it has or does not have another Drawable in the same entity
     ZIndex = 10,
     EffectiveZIndex = 11,
     FuncId = 12,
@@ -70,11 +85,6 @@ local Methods = {
         AncestorTransform = AncestorTransform or ResolveAncestorSize(self)
 
         if not AncestorTransform then
-            AstralEngine.Log(
-                "Cannot rebuild UIRoot Matrix! No 'Ancestry' component found on entity! Invalidating matrix!",
-                "warn",
-                "VENEER"
-            )
             self[Pointers.Matrix][4] = 1
             return
         end
@@ -106,8 +116,6 @@ local Methods = {
 
         Pos_Vec2Total = Pos_Vec2Total + CenterAdjustmentAnchor
 
-        -- FIX THIS ^^^
-
         -- quat
 
         local Rot = self[Pointers.Rotation]
@@ -120,11 +128,9 @@ local Methods = {
         Mat:translate(-CenterAdjustmentAnchor.x, -CenterAdjustmentAnchor.y, 0)
         Mat:scale(Size_Vec2Total.x, Size_Vec2Total.y, 1)
 
-        if self[Pointers.HasLayout] and not __Force then
-            -- signal re-position
-        end
-
         -- now query point
+
+        MatrixChangeEvent:Fire(self[Pointers.Owner], Mat)
 
         local SelfAncestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
 
@@ -243,17 +249,13 @@ local Mt = {
                 or Ptr == Pointers.EffectiveZIndex
                 or Ptr == Pointers.ClipDescendantInstances
                 or Ptr == Pointers.__ClipDepth
+                or Ptr == Pointers.__HasUIElement
+                or Ptr == Pointers.HasLayout
             then
                 return self[Ptr]
             else
                 return vec2(self[Ptr])
             end
-        end
-
-        if k == "__HasUIElement" then
-            return self[Pointers.HasDrawable]
-        elseif k == "__HasLayoutElement" then
-            return self[Pointers.HasLayout]
         end
 
         return Methods[k]
@@ -296,13 +298,13 @@ local Mt = {
                     AstralEngine.Error("CANNOT SET SEVERAL UI ELEMENTS ONTO ONE UI ENTITY", "VENEER", 3)
                 end
             elseif k == "__HasUIElement" then
-                local Cur = self[Pointers.HasDrawable]
+                local Cur = self[Pointers.__HasUIElement]
 
                 if Cur and not v then
-                    self[Pointers.HasDrawable] = v
+                    self[Pointers.__HasUIElement] = v
                     self:RequestChainRebuild()
                 elseif not Cur and v then
-                    self[Pointers.HasDrawable] = v
+                    self[Pointers.__HasUIElement] = v
 
                     local Translated = Renderer.VeneerUI.GetStackIdFromName(v)
                     self[Pointers.FuncId] = Translated
@@ -357,7 +359,7 @@ UIRoot.Metadata.__create = function(InputTransform, Ent)
         [Pointers.ScaleSize] = Size_Scale,
         [Pointers.AnchorPoint] = AnchorPoint,
         [Pointers.Owner] = Ent,
-        [Pointers.HasDrawable] = InputTransform and InputTransform.__HasUIElement or false,
+        [Pointers.__HasUIElement] = InputTransform and InputTransform.__HasUIElement or false,
         [Pointers.ZIndex] = InputTransform and InputTransform.ZIndex or 1,
         [Pointers.EffectiveZIndex] = -1,
         [Pointers.FuncId] = Renderer.VeneerUI.GetStackIdFromName(
@@ -389,7 +391,7 @@ UIRoot.Metadata.__create = function(InputTransform, Ent)
 end
 
 UIRoot.Metadata.__remove = function(self, _, Forced)
-    if self[Pointers.HasDrawable] and not Forced then
+    if self[Pointers.__HasUIElement] and not Forced then
         AstralEngine.Error("CANNOT REMOVE UIROOT COMPONENT WHILST HAVING A DEPENDENT COMPONENT!", "VENEER", 3)
     end
 
@@ -402,12 +404,6 @@ UIRoot.Metadata.__remove = function(self, _, Forced)
         self[i] = nil
     end
     setmetatable(self, nil)
-end
-
-UIRoot.FinalProcessing = function()
-    if Component.AncestryRequired then
-        table.insert(Component.AncestryRequired, UIRoot.Name)
-    end
 end
 
 return UIRoot

@@ -4,7 +4,7 @@ local Canvas = {}
 
 Canvas.Name = "UICanvas"
 Canvas.Metadata = {
-    SceneLateLoad = true,
+    SoftDependency = { UIRoot = true },
 }
 
 local SetComponents = Component.SetComponents
@@ -99,12 +99,6 @@ Canvas.Metadata.__remove = function(_, e)
     local UIRoot = Component.HasComponent(e, "UIRoot")
     if UIRoot then
         UIRoot.__HasUIElement = nil
-    end
-end
-
-Canvas.FinalProcessing = function()
-    if Component.AncestryRequired then
-        table.insert(Component.AncestryRequired, Canvas.Name)
     end
 end
 

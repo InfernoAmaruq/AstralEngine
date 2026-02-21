@@ -1,3 +1,4 @@
+local SignalLib = AstralEngine.Plugins.SignalLib
 local Component = {}
 
 Component.Components = {}
@@ -12,6 +13,9 @@ local DEADMT = {
 
 local MTCACHE = setmetatable({},{__mode = "v"})
 local CBaseMT = {__type = "ComponentPrefab"}
+
+Component.ComponentAdded = SignalLib.new(SignalLib.Type.RTC | SignalLib.Type.NoCtx)
+Component.ComponentRemoved = SignalLib.new(SignalLib.Type.RTC | SignalLib.Type.NoCtx)
 
 function Component.NewComponent(Name, Pattern, Metadata, FastFetch)
     assert(not Component.Components[Name], "Component already exists: " .. Name)
@@ -132,7 +136,9 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
     Component.Components[id].Storage[e] = D
     Component.SetComponents[e][id] = D
 
-    GetService"World".GetEntityFromId(e).ComponentAdded:Fire(id,D)
+    local Ent = GetService"World".GetEntityFromId(e)
+    Component.ComponentAdded:Fire(Ent, id, D)
+    Ent.ComponentAdded:Fire(id,D)
 
     return D
 end
@@ -160,7 +166,9 @@ function Component.RemoveComponent(e, id, Force)
     end
 
     if not Force then
-        GetService"World".GetEntityFromId(e).ComponentRemoving:Fire(id, Component.SetComponents[e][id])
+        local Ent = GetService"World".GetEntityFromId(e)
+        Component.ComponentRemoved:Fire(Ent,id,Component.SetComponents[e][id])
+        Ent.ComponentRemoving:Fire(id, Component.SetComponents[e][id])
     end
 
     local CompInst = Component.SetComponents[e][id]

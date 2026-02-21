@@ -7,7 +7,8 @@ DefaultFont:setPixelDensity(1)
 
 Text.Name = "UIText"
 Text.Metadata = {
-    SceneLateLoad = true,
+    UIDrawableObject = true,
+    HardDependency = { UIRoot = true },
 }
 
 local AlignPos = ENUM.TextAlignPosition
@@ -187,12 +188,6 @@ Text.Metadata.__remove = function(_, Entity)
     local UIRoot = Component.HasComponent(Entity, "UIRoot")
     if UIRoot then
         UIRoot.__HasUIElement = nil
-    end
-end
-
-Text.FinalProcessing = function()
-    if Component.AncestryRequired then
-        table.insert(Component.AncestryRequired, Text.Name)
     end
 end
 

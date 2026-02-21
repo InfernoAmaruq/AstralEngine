@@ -92,6 +92,73 @@ local function LoadAssetFile(Path)
     return f and f() or error("Failed to load asset file at path: " .. Path)
 end
 
+function AssetMapLoader.AssetMapFromPath(Path)
+    RES_PTR = 0
+    RES_HASH = {}
+    INV_RES_HASH = {}
+
+    local IDs = {}
+
+    local Map = {}
+
+    Map.PATH = Path
+    Map.SMALLEST = math.huge
+    Map.LARGEST = -1
+
+    local RESERVE = {}
+
+    local CurrentPath = lovr.filesystem.folderFromPath(debug.getinfo(2, "S").source)
+    local LocalPath = CurrentPath and lovr.filesystem.normalize(CurrentPath .. "/" .. Path)
+    local GlobalFile, LocalFile = lovr.filesystem.isFile(Path), lovr.filesystem.isFile(LocalPath)
+
+    local UsedPath = AstralEngine.Assert(
+        GlobalFile and Path or (LocalFile and LocalPath),
+        "INVALID FILE TO LOAD FOR ASSETMAP: " .. LocalPath .. " " .. Path,
+        "SCENEMANAGER"
+    )
+
+    CURSHARED = {}
+
+    local S, Res = pcall(LoadAssetFile, UsedPath)
+
+    if not S then
+        AstralEngine.Log(
+            "Failed to load asset map at " .. UsedPath .. "\n > with error: " .. Res,
+            "fatal",
+            "SCENEMANAGER"
+        )
+    else
+        for i, Val in pairs(Res) do
+            local RawId = i
+            i = i & ID_MASK
+            local Tag = RawId & TAG_MASK
+
+            if Tag == TAG_RES then
+                AstralEngine.Assert(not RESERVE[i], "Slot " .. i .. " already reserved!", 1)
+                RESERVE[i] = true
+            elseif Tag == TAG_FORCE and IDs[i] then
+                AstralEngine.Log(
+                    "ID COLLISION: Id of "
+                    .. i
+                    .. " already defined in previous asset map. Error while loading: "
+                    .. UsePath,
+                    "Warning",
+                    "SCENEMANAGER"
+                )
+            else
+                IDs[i] = true
+            end
+
+            Map[#Map + 1] = Val
+            Val.Idx = i
+            Val.Ptr = RawId
+            Val.Map = UsedPath
+        end
+    end
+
+    return Map
+end
+
 function AssetMapLoader.GetAssetMap(AssetMapFS, Folder)
     RES_PTR = 0
     RES_HASH = {}
@@ -308,8 +375,10 @@ function AssetMapLoader.LoadAssetMap(Map)
 
         for Name, Deps in pairs(SoftDependencies) do
             for Dependency in pairs(Deps) do
+                local Comp = ComponentService.Components[Name].Metadata
                 AstralEngine.Assert(
-                    Ent:GetComponent(Dependency),
+                    Ent:GetComponent(Dependency)
+                    or (Comp and Comp.__resolvesoft and Comp.__resolvesoft(Ent:GetComponent(Name), Ent, Dependency)),
                     Name .. " REQUIRES " .. Dependency .. " (SOFT DEPENDENCY) CANNOT CREATE COMPONENT",
                     "SCENEMANAGER"
                 )

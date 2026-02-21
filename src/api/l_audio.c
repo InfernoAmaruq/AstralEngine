@@ -197,8 +197,9 @@ static int l_lovrAudioSetPose(lua_State *L) {
 }
 
 static int l_lovrAudioSetHRTF(lua_State* L) {
-  Blob* blob = luax_readblob(L, 1, "HRTF");
+  Blob* blob = lua_isnoneornil(L, 1) ? NULL : luax_readblob(L, 1, "HRTF");
   luax_assert(L, lovrAudioSetHRTF(blob));
+  lovrRelease(blob, lovrBlobDestroy);
   return 0;
 }
 

@@ -166,7 +166,17 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
 
   FOREACH_SOURCE(state.activeSourceMask, source) {
     uint32_t play = atomic_exchange(&source->playRequest, ~0u);
-    if (play != ~0u) source->playing = !!play;
+
+    if (play != ~0u) {
+      if (!source->playing && play == 1) {
+        iplDirectEffectReset(source->directEffect);
+        iplPanningEffectReset(source->panningEffect);
+        iplBinauralEffectReset(source->binauralEffect);
+        iplReflectionEffectReset(source->reflectionEffect);
+      }
+
+      source->playing = !!play;
+    }
 
     uint32_t seek = atomic_exchange(&source->seekRequest, ~0u);
     if (seek != ~0u) source->offset = seek;

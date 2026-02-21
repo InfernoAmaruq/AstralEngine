@@ -881,26 +881,26 @@ static float applyAttenuation(IPLfloat32 distance, void* userdata) {
   if (distance <= source->innerDistance) {
     return 1.f;
   } else {
-    return MAX(source->innerDistance / distance, source->minFalloffVolume);
+    return MAX(1.f / (1.f + MAX(distance - source->innerDistance, 0.f)), source->minFalloffVolume);
   }
 }
 
-static float applyDirectivity(IPLVector3 sourceDirection, void* userdata) {
+static float applyDirectivity(IPLVector3 sourceToListener, void* userdata) {
   Source* source = userdata;
 
-  float listenerDirection[3];
-  vec3_init(listenerDirection, &state.listenerBasis[state.backbuffer].origin.x);
-  vec3_sub(listenerDirection, source->position);
-  vec3_normalize(listenerDirection);
-  float angle = acosf(vec3_dot(&sourceDirection.x, listenerDirection));
+  float sourceDirection[3];
+  quat_getDirection(source->orientation, sourceDirection);
+  float angle = vec3_angle(sourceDirection, &sourceToListener.x);
 
   if (angle < source->innerAngle) {
     return 1.f;
   } else if (angle >= source->outerAngle) {
     return source->outerAngleVolume;
-  } else {
+  } else if (source->innerAngle < source->outerAngle) {
     float t = (angle - source->innerAngle) / (source->outerAngle - source->innerAngle);
-    return source->outerAngleVolume + (1.f - source->outerAngleVolume) * t;
+    return 1.f - (1.f - source->outerAngleVolume) * t;
+  } else {
+    return angle < source->innerAngle ? 1.f : source->outerAngleVolume;
   }
 }
 
@@ -1065,7 +1065,11 @@ static void phonon_update(float dt) {
 
   FOREACH_SOURCE(mask, source) {
     convertPose(source->position, source->orientation, &source->inputs.source);
+
+    float inverseListenerOrientation[4];
+    quat_conjugate(quat_init(inverseListenerOrientation, state.orientation));
     vec3_sub(vec3_init(&source->relativeDirection[backbuffer].x, source->position), state.position);
+    quat_rotate(inverseListenerOrientation, &source->relativeDirection[backbuffer].x);
 
     source->inputs.directFlags = 0;
     if (vec3_dot(source->absorption, source->absorption) > 1e-5) source->inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_AIRABSORPTION;

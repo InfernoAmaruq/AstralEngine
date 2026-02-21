@@ -229,8 +229,10 @@ static int l_lovrSourceGetCone(lua_State* L) {
 
 static int l_lovrSourceSetCone(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
-  if (lua_isnoneornil(L, 2)) {
+  if (!lua_toboolean(L, 2)) {
     lovrSourceSetCone(source, 2.f * (float) M_PI, 2.f * (float) M_PI, 0.f);
+  } else if (lua_isboolean(L, 2)) {
+    lovrSourceSetCone(source, 0.f, (float) M_PI, 0.f);
   } else {
     float innerAngle = luax_checkfloat(L, 2);
     float outerAngle = luax_checkfloat(L, 3);
@@ -298,9 +300,15 @@ static int l_lovrSourceGetReverb(lua_State* L) {
 
 static int l_lovrSourceSetReverb(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
-  float reverb = luax_optfloat(L, 2, 0.f);
-  ReverbMode mode = luax_checkenum(L, 3, ReverbMode, "listener");
-  lovrSourceSetReverb(source, reverb, mode);
+  if (!lua_toboolean(L, 2)) {
+    lovrSourceSetReverb(source, 0.f, REVERB_LISTENER);
+  } else if (lua_isboolean(L, 2)) {
+    lovrSourceSetReverb(source, 1.f, REVERB_LISTENER);
+  } else {
+    float reverb = luax_optfloat(L, 2, 0.f);
+    ReverbMode mode = luax_checkenum(L, 3, ReverbMode, "listener");
+    lovrSourceSetReverb(source, reverb, mode);
+  }
   return 0;
 }
 

@@ -5,8 +5,8 @@
 #include "util.h"
 #include "lib/miniaudio/miniaudio.h"
 #include <stdatomic.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -20,7 +20,7 @@
 #define OUTPUT_CHANNELS 2
 
 struct Source {
-  uint32_t ref;
+  atomic_uint ref;
   uint32_t index;
   Sound* sound;
   // Note: Converter is written once in lovrSourceCreate and can never be changed.
@@ -40,8 +40,9 @@ struct Source {
   bool spatial;
 };
 
+static atomic_uint ref;
+
 static struct {
-  uint32_t ref;
   ma_mutex lock;
   ma_context context;
   ma_device devices[2];
@@ -193,15 +194,19 @@ static Spatializer* spatializers[] = {
 // Entry
 
 bool lovrAudioInit(const char* spatializer, uint32_t sampleRate) {
-  if (atomic_fetch_add(&state.ref, 1)) return true;
+  if (!lovrModuleAcquire(&ref)) return true;
 
   ma_result result = ma_context_init(NULL, 0, NULL, &state.context);
-  lovrAssert(result == MA_SUCCESS, "Failed to initialize miniaudio context: %s", ma_result_description(result));
+  if (result != MA_SUCCESS) {
+    lovrModuleReset(&ref);
+    return lovrSetError("Failed to initialize miniaudio context: %s", ma_result_description(result));
+  }
 
   result = ma_mutex_init(&state.lock);
 
   if (result != MA_SUCCESS) {
     ma_context_uninit(&state.context);
+    lovrModuleReset(&ref);
     return lovrSetError("Failed to create audio mutex: %s", ma_result_description(result));
   }
 
@@ -219,6 +224,7 @@ bool lovrAudioInit(const char* spatializer, uint32_t sampleRate) {
   if (!state.spatializer) {
     ma_context_uninit(&state.context);
     ma_mutex_uninit(&state.lock);
+    lovrModuleReset(&ref);
     return lovrSetError("Must have at least one spatializer");
   }
 
@@ -229,11 +235,12 @@ bool lovrAudioInit(const char* spatializer, uint32_t sampleRate) {
 
   quat_identity(state.orientation);
   state.sampleRate = sampleRate;
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrAudioDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) return;
+  if (!lovrModuleRelease(&ref)) return;
   for (size_t i = 0; i < 2; i++) {
     ma_device_uninit(&state.devices[i]);
     lovrFree(state.deviceInfo[i]);
@@ -247,6 +254,7 @@ void lovrAudioDestroy(void) {
   if (state.spatializer) state.spatializer->destroy();
   ma_data_converter_uninit(&state.playbackConverter, NULL);
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
 
 static AudioDeviceCallback* enumerateCallback;

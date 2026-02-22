@@ -1,10 +1,11 @@
+#include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #pragma once
 
 typedef struct Blob {
-  uint32_t ref;
+  atomic_uint ref;
   void* data;
   size_t size;
   char* name;

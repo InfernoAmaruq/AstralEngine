@@ -6,6 +6,7 @@
 #define MINIMP3_FLOAT_OUTPUT
 #define MINIMP3_NO_STDIO
 #include "lib/minimp3/minimp3_ex.h"
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
@@ -16,7 +17,7 @@ static const ma_format miniaudioFormats[] = {
 };
 
 struct Sound {
-  uint32_t ref;
+  atomic_uint ref;
   SoundCallback* read;
   void* callbackMemo; // When using lovrSoundCreateFromCallback, any state the read callback uses should be stored here
   SoundDestroyCallback* callbackMemoDestroy; // This should be used to free the callbackMemo pointer (if appropriate)

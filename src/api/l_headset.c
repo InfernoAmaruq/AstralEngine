@@ -1148,7 +1148,7 @@ int luaopen_lovr_headset(lua_State* L) {
   }
   lua_pop(L, 1);
 
-  luax_atexit(L, lovrHeadsetDestroy);
   luax_assert(L, lovrHeadsetInit(&config));
+  luax_atexit(L, lovrHeadsetDestroy);
   return 1;
 }

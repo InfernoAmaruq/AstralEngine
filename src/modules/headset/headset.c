@@ -10,6 +10,7 @@
 #include "core/maf.h"
 #include "core/os.h"
 #include "util.h"
+#include <stdatomic.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -176,7 +177,7 @@ typedef struct {
 } Swapchain;
 
 struct Layer {
-  uint32_t ref;
+  atomic_uint ref;
   LayerInfo info;
   Swapchain swapchain;
   Device origin;
@@ -258,8 +259,9 @@ enum {
   MAX_ACTIONS
 };
 
+static atomic_uint ref;
+
 static struct {
-  bool initialized;
   HeadsetConfig config;
   Simulator simulator;
   XrInstance instance;
@@ -388,12 +390,11 @@ static bool loadVisibilityMask(void);
 // Entry
 
 bool lovrHeadsetInit(HeadsetConfig* config) {
-  if (state.initialized) {
+  if (!lovrModuleAcquire(&ref)) {
     lovrFree(config->extensions);
     return true;
   }
 
-  state.initialized = true;
   state.config = *config;
 
   if (!state.simulator.initialized) {
@@ -411,15 +412,18 @@ bool lovrHeadsetInit(HeadsetConfig* config) {
 
   lovrHeadsetSetClipDistance(.01f, 0.f);
 
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrHeadsetDestroy(void) {
+  if (!lovrModuleRelease(&ref)) return;
   disconnect();
   lovrFree(state.config.extensions);
   Simulator simulator = state.simulator; // Keep simulator state between restarts, for convenience
   memset(&state, 0, sizeof(state));
   state.simulator = simulator;
+  lovrModuleReset(&ref);
 }
 
 bool lovrHeadsetConnect(void) {

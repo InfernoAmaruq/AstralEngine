@@ -3,13 +3,13 @@
 #include "core/job.h"
 #include "core/maf.h"
 #include "util.h"
-#include <stdlib.h>
+#include <joltc.h>
 #include <stdatomic.h>
 #include <threads.h>
-#include <joltc.h>
+#include <stdlib.h>
 
 struct Contact {
-  uint32_t ref;
+  atomic_uint ref;
   Collider* colliderA;
   Collider* colliderB;
   const JPH_ContactManifold* manifold;
@@ -17,7 +17,7 @@ struct Contact {
 };
 
 struct World {
-  uint32_t ref;
+  atomic_uint ref;
   JPH_PhysicsSystem* system;
   JPH_BodyInterface* bodyInterfaceLocked;
   JPH_BodyInterface* bodyInterfaceNoLock;
@@ -45,7 +45,7 @@ struct World {
 };
 
 struct Collider {
-  uint32_t ref;
+  atomic_uint ref;
   JPH_BodyID id;
   JPH_Body* body;
   Collider* prev;
@@ -63,7 +63,7 @@ struct Collider {
 };
 
 struct Shape {
-  uint32_t ref;
+  atomic_uint ref;
   ShapeType type;
   JPH_Shape* handle;
   Collider* collider;
@@ -80,7 +80,7 @@ typedef struct {
 } JointNode;
 
 struct Joint {
-  uint32_t ref;
+  atomic_uint ref;
   JointType type;
   JPH_Constraint* constraint;
   uintptr_t userdata;
@@ -95,8 +95,9 @@ static thread_local struct {
   bool locked;
 } thread;
 
+static atomic_uint ref;
+
 static struct {
-  bool initialized;
   JPH_Shape* emptyShape;
   void (*freeUserData)(void* object, uintptr_t userdata);
 } state;
@@ -310,7 +311,8 @@ static void queueJobs(void* context, JPH_JobFunction* function, void** args, uin
 }
 
 bool lovrPhysicsInit(void (*freeUserData)(void* object, uintptr_t userdata)) {
-  if (state.initialized) return true;
+  if (!lovrModuleAcquire(&ref)) return true;
+
   JPH_Init();
   float center[3] = { 0.f, 0.f, 0.f };
   JPH_EmptyShapeSettings* settings = JPH_EmptyShapeSettings_Create(vec3_toJolt(center));
@@ -344,14 +346,15 @@ bool lovrPhysicsInit(void (*freeUserData)(void* object, uintptr_t userdata)) {
   JPH_ContactListener_SetProcs(&contactListenerProcs);
 
   state.freeUserData = freeUserData;
-  return state.initialized = true;
+  lovrModuleReady(&ref);
+  return true;
 }
 
 void lovrPhysicsDestroy(void) {
-  if (!state.initialized) return;
+  if (!lovrModuleRelease(&ref)) return;
   JPH_Shape_Destroy(state.emptyShape);
   JPH_Shutdown();
-  state.initialized = false;
+  lovrModuleReset(&ref);
 }
 
 World* lovrWorldCreate(WorldInfo* info) {

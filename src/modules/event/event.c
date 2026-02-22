@@ -6,22 +6,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+static atomic_uint ref;
+
 static struct {
-  uint32_t ref;
   arr_t(Event) events;
   size_t head;
   mtx_t lock;
 } state;
 
 bool lovrEventInit(void) {
-  if (atomic_fetch_add(&state.ref, 1)) return true;
+  if (!lovrModuleAcquire(&ref)) return true;
   arr_init(&state.events);
   mtx_init(&state.lock, mtx_plain);
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrEventDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) return;
+  if (!lovrModuleRelease(&ref)) return;
   mtx_lock(&state.lock);
   for (size_t i = state.head; i < state.events.length; i++) {
     Event* event = &state.events.data[i];
@@ -42,11 +44,10 @@ void lovrEventDestroy(void) {
   mtx_unlock(&state.lock);
   mtx_destroy(&state.lock);
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
 
 void lovrEventPush(Event event) {
-  if (state.ref == 0) return;
-
 #ifndef LOVR_DISABLE_THREAD
   if (event.type == EVENT_THREAD_ERROR) {
     lovrRetain(event.data.thread.thread);

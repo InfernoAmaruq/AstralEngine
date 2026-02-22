@@ -5,8 +5,9 @@
 #include <stdatomic.h>
 #include <string.h>
 
+static atomic_uint ref;
+
 static struct {
-  uint32_t ref;
   bool keyRepeat;
   bool prevKeyState[OS_KEY_COUNT];
   bool keyState[OS_KEY_COUNT];
@@ -101,7 +102,7 @@ static void onFocus(bool focused) {
 }
 
 bool lovrSystemInit(void) {
-  if (atomic_fetch_add(&state.ref, 1)) return false;
+  if (!lovrModuleAcquire(&ref)) return true;
   os_on_key(onKey);
   os_on_text(onText);
   os_on_mouse_button(onMouseButton);
@@ -109,15 +110,17 @@ bool lovrSystemInit(void) {
   os_on_mousewheel_move(onWheelMove);
   os_on_permission(onPermission);
   os_get_mouse_position(&state.mouseX, &state.mouseY);
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrSystemDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) return;
+  if (!lovrModuleRelease(&ref)) return;
   os_on_key(NULL);
   os_on_text(NULL);
   os_on_permission(NULL);
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
 
 const char* lovrSystemGetOS(void) {

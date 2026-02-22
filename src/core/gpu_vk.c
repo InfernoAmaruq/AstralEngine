@@ -260,7 +260,7 @@ static struct {
   gpu_allocator allocators[GPU_MEMORY_COUNT];
   uint8_t allocatorLookup[GPU_MEMORY_COUNT];
   gpu_memory memory[1024];
-  gpu_thread_state* threads;
+  _Atomic(gpu_thread_state*) threads;
   gpu_morgue morgue;
 } state;
 

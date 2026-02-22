@@ -2,6 +2,7 @@
 #include "data/blob.h"
 #include "util.h"
 #include "lib/stb/stb_image.h"
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -18,7 +19,7 @@ typedef struct {
 } Mipmap;
 
 struct Image {
-  uint32_t ref;
+  atomic_uint ref;
   uint32_t flags;
   uint32_t width;
   uint32_t height;

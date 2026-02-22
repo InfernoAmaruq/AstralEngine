@@ -299,7 +299,6 @@ target_include_directories(lovr PRIVATE
   ${LOVR_LUA_INCLUDE}
   ${PROJECT_SOURCE_DIR}/src
   ${PROJECT_SOURCE_DIR}/src/modules
-  ${PROJECT_SOURCE_DIR}/src/lib/std
   ${PROJECT_SOURCE_DIR}/etc
 )
 
@@ -653,7 +652,7 @@ endfunction()
 if(WIN32)
   target_sources(lovr PRIVATE src/core/os_win32.c etc/lovr.rc)
   if(MSVC)
-    set_target_properties(lovr PROPERTIES COMPILE_FLAGS /wd4244)
+    target_compile_options(lovr PRIVATE /wd4244 /experimental:c11atomics)
     # Excuse anonymous union for type punning
     set_source_files_properties(src/util.c src/modules/graphics/graphics.c PROPERTIES COMPILE_FLAGS /wd4116)
     # Excuse unsigned negation for flag-magic bit math
@@ -668,10 +667,6 @@ if(WIN32)
   endif()
   target_compile_definitions(lovr PRIVATE _CRT_SECURE_NO_WARNINGS)
   target_compile_definitions(lovr PRIVATE _CRT_NONSTDC_NO_WARNINGS)
-
-  if(MSVC_VERSION VERSION_LESS 1900)
-    target_compile_definitions(lovr PRIVATE inline=__inline snprintf=_snprintf)
-  endif()
 
   function(move_dll)
     if(TARGET ${ARGV0})

@@ -11,39 +11,42 @@
 #include <time.h>
 
 struct Curve {
-  uint32_t ref;
+  atomic_uint ref;
   arr_t(float) points;
 };
 
 struct Mat4 {
-  uint32_t ref;
+  atomic_uint ref;
   float m[16];
 };
 
 struct RandomGenerator {
-  uint32_t ref;
+  atomic_uint ref;
   Seed seed;
   Seed state;
   double lastRandomNormal;
 };
 
+static atomic_uint ref;
+
 static struct {
-  uint32_t ref;
   RandomGenerator* generator;
 } state;
 
 bool lovrMathInit(void) {
-  if (atomic_fetch_add(&state.ref, 1)) return false;
+  if (!lovrModuleAcquire(&ref)) return true;
   state.generator = lovrRandomGeneratorCreate();
   Seed seed = { .b64 = (uint64_t) time(0) };
   lovrRandomGeneratorSetSeed(state.generator, seed);
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrMathDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) return;
+  if (!lovrModuleRelease(&ref)) return;
   lovrRelease(state.generator, lovrRandomGeneratorDestroy);
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
 
 float lovrMathGammaToLinear(float x) {

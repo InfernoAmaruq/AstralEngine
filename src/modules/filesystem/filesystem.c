@@ -47,7 +47,7 @@ typedef struct {
 } Handle;
 
 struct Archive {
-  uint32_t ref;
+  atomic_uint ref;
   struct Archive* next;
   bool (*open)(Archive* archive, const char* path, Handle* handle);
   bool (*close)(Archive* archive, Handle* handle);
@@ -67,15 +67,16 @@ struct Archive {
 };
 
 struct File {
-  uint32_t ref;
+  atomic_uint ref;
   OpenMode mode;
   Handle handle;
   Archive* archive;
   char* path;
 };
 
+static atomic_uint ref;
+
 static struct {
-  uint32_t ref;
   Archive* archives;
   size_t savePathLength;
   char savePath[1024];
@@ -159,7 +160,7 @@ static bool sanitize(const char* path, char* buffer, size_t* length) {
 }
 
 bool lovrFilesystemInit(void) {
-  if (atomic_fetch_add(&state.ref, 1)) return true;
+  if (!lovrModuleAcquire(&ref)) return true;
 
 #ifdef LOVR_USE_LUAU
   lovrFilesystemSetRequirePath("?.luau;?/init.luau;?.lua;?/init.lua");
@@ -189,11 +190,12 @@ bool lovrFilesystemInit(void) {
   }
 #endif
 
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrFilesystemDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) return;
+  if (!lovrModuleRelease(&ref)) return;
   Archive* archive = state.archives;
   while (archive) {
     Archive* next = archive->next;
@@ -203,6 +205,7 @@ void lovrFilesystemDestroy(void) {
   lovrFilesystemUnwatch();
   lovrFree(state.requirePath);
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
 
 bool lovrFilesystemSetSource(const char* source) {

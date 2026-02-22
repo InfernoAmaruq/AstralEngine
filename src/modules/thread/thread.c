@@ -11,7 +11,7 @@
 #include <threads.h>
 
 struct Thread {
-  uint32_t ref;
+  atomic_uint ref;
   thrd_t handle;
   mtx_t lock;
   mtx_t waitLock;
@@ -20,11 +20,12 @@ struct Thread {
   Variant arguments[MAX_THREAD_ARGUMENTS];
   uint32_t argumentCount;
   char* error;
+  bool joinable;
   bool running;
 };
 
 struct Channel {
-  uint32_t ref;
+  atomic_uint ref;
   mtx_t lock;
   cnd_t cond;
   arr_t(Variant) messages;
@@ -34,8 +35,9 @@ struct Channel {
   uint64_t hash;
 };
 
+static atomic_uint ref;
+
 static struct {
-  uint32_t ref;
   uint32_t workers;
   mtx_t channelLock;
   map_t channels;
@@ -47,7 +49,7 @@ static void setupWorker(uint32_t id) {
 }
 
 bool lovrThreadModuleInit(int32_t workers) {
-  if (atomic_fetch_add(&state.ref, 1)) return false;
+  if (!lovrModuleAcquire(&ref)) return true;
   mtx_init(&state.channelLock, mtx_plain);
   map_init(&state.channels, 0);
 
@@ -56,11 +58,12 @@ bool lovrThreadModuleInit(int32_t workers) {
   state.workers = MAX(workers, 0);
   job_init(state.workers, setupWorker);
 
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrThreadModuleDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) return;
+  if (!lovrModuleRelease(&ref)) return;
   for (size_t i = 0; i < state.channels.size; i++) {
     if (state.channels.values[i] != MAP_NIL) {
       lovrRelease((Channel*) (uintptr_t) state.channels.values[i], lovrChannelDestroy);
@@ -70,6 +73,7 @@ void lovrThreadModuleDestroy(void) {
   map_free(&state.channels);
   job_destroy();
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
 
 uint32_t lovrThreadGetWorkerCount(void) {
@@ -135,7 +139,7 @@ void lovrThreadDestroy(void* ref) {
   Thread* thread = ref;
   mtx_destroy(&thread->lock);
   mtx_destroy(&thread->waitLock);
-  if (thread->handle) thrd_detach(thread->handle);
+  if (thread->joinable) thrd_detach(thread->handle);
   for (uint32_t i = 0; i < thread->argumentCount; i++) {
     lovrVariantDestroy(&thread->arguments[i]);
   }
@@ -171,6 +175,7 @@ bool lovrThreadStart(Thread* thread, Variant* arguments, uint32_t argumentCount)
     return lovrSetError("Could not create thread...sorry");
   }
 
+  thread->joinable = true;
   thread->running = true;
   mtx_unlock(&thread->lock);
   return true;
@@ -179,9 +184,9 @@ bool lovrThreadStart(Thread* thread, Variant* arguments, uint32_t argumentCount)
 void lovrThreadWait(Thread* thread) {
   mtx_lock(&thread->waitLock);
 
-  if (thread->handle) {
+  if (thread->joinable) {
     thrd_join(thread->handle, NULL);
-    thread->handle = 0;
+    thread->joinable = false;
   }
 
   mtx_unlock(&thread->waitLock);

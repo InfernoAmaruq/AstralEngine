@@ -16,8 +16,8 @@
 #include "monkey.h"
 #include "shaders.h"
 #include <math.h>
-#include <stdatomic.h>
 #include <threads.h>
+#include <stdatomic.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,7 +67,7 @@ typedef struct {
 } Sync;
 
 struct Buffer {
-  uint32_t ref;
+  atomic_uint ref;
   uint32_t base;
   Buffer* root;
   Sync* sync;
@@ -77,7 +77,7 @@ struct Buffer {
 };
 
 struct Texture {
-  uint32_t ref;
+  atomic_uint ref;
   bool xrAcquired;
   Sync* sync;
   gpu_texture* gpu;
@@ -94,7 +94,7 @@ struct Texture {
 };
 
 struct Sampler {
-  uint32_t ref;
+  atomic_uint ref;
   gpu_sampler* gpu;
   SamplerInfo info;
 };
@@ -139,7 +139,7 @@ typedef struct Layout {
 } Layout;
 
 struct Shader {
-  uint32_t ref;
+  atomic_uint ref;
   Shader* parent;
   gpu_shader* gpu;
   gpu_pipeline* computePipeline;
@@ -181,7 +181,7 @@ typedef struct {
 } MaterialBlock;
 
 struct Material {
-  uint32_t ref;
+  atomic_uint ref;
   uint32_t next;
   uint32_t tick;
   uint32_t index;
@@ -199,7 +199,7 @@ typedef struct {
 } Glyph;
 
 struct Font {
-  uint32_t ref;
+  atomic_uint ref;
   mtx_t lock;
   FontInfo info;
   Material* material;
@@ -217,7 +217,7 @@ struct Font {
 };
 
 struct Mesh {
-  uint32_t ref;
+  atomic_uint ref;
   MeshStorage storage;
   Buffer* vertexBuffer;
   Buffer* indexBuffer;
@@ -283,7 +283,7 @@ typedef struct {
 } NodeTransform;
 
 struct Model {
-  uint32_t ref;
+  atomic_uint ref;
   Model* parent;
   ModelMetadata meta;
   Buffer* rawVertexBuffer;
@@ -307,7 +307,7 @@ struct Model {
 };
 
 struct Raytracer {
-  uint32_t ref;
+  atomic_uint ref;
   uint32_t count;
   uint32_t meshCount;
   uint32_t modelCount;
@@ -331,7 +331,7 @@ typedef struct {
 } TimingInfo;
 
 struct Readback {
-  uint32_t ref;
+  atomic_uint ref;
   uint32_t tick;
   Readback* next;
   BufferView view;
@@ -521,7 +521,7 @@ typedef struct {
 } Tally;
 
 struct Pass {
-  uint32_t ref;
+  atomic_uint ref;
   uint32_t flags;
   Allocator allocator;
   BufferAllocator buffers;
@@ -562,7 +562,7 @@ typedef struct PipelineJob {
   uint64_t hash;
   gpu_pipeline_info* info;
   gpu_pipeline* pipeline;
-  atomic_uint done;
+  atomic_bool done;
   char* error;
 } PipelineJob;
 
@@ -570,8 +570,10 @@ static thread_local struct {
   Allocator stack;
 } thread;
 
+static atomic_uint ref;
+
 static struct {
-  uint32_t ref;
+  bool initialized;
   bool glslang;
   bool resized;
   bool shouldPresent;
@@ -581,7 +583,8 @@ static struct {
   gpu_device_info device;
   gpu_features features;
   gpu_limits limits;
-  GraphicsStats stats;
+  atomic_uint bufferMemory;
+  atomic_uint textureMemory;
   mtx_t lock;
   gpu_stream* stream;
   gpu_barrier barrier;
@@ -594,21 +597,21 @@ static struct {
   TextureFormat depthFormat;
   Texture* window;
   Pass* windowPass;
-  Font* defaultFont;
+  _Atomic(Font*) defaultFont;
   Buffer* defaultBuffer;
   Texture* defaultTexture;
   Material* defaultMaterial;
   Sampler* defaultSamplers[2];
-  Shader* defaultShaders[DEFAULT_SHADER_COUNT];
+  _Atomic(Shader*) defaultShaders[DEFAULT_SHADER_COUNT];
   gpu_vertex_format vertexFormats[VERTEX_FORMAT_COUNT];
   Readback* readbacks;
   MaterialBlock* materials;
   BufferAllocator bufferAllocators[4];
-  PipelineJob* newPipelines;
+  _Atomic(PipelineJob*) newPipelines;
   map_t pipelineLookup;
   gpu_pipeline* pipelines;
-  uint32_t pipelineCount;
-  Layout* layouts;
+  atomic_uint pipelineCount;
+  _Atomic(Layout*) layouts;
   Layout* builtinLayout;
   Layout* materialLayout;
   Layout* uniformLayout;
@@ -654,7 +657,7 @@ static void onMessage(void* context, const char* message);
 bool lovrGraphicsInit(GraphicsConfig* config) {
   initAllocator(&thread.stack);
 
-  if (atomic_fetch_add(&state.ref, 1)) {
+  if (!lovrModuleAcquire(&ref)) {
     return true;
   }
 
@@ -690,6 +693,7 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
 #endif
     lovrSetError("Failed to initialize GPU: %s", gpu_get_error());
     lovrFree(thread.stack.memory);
+    lovrModuleReset(&ref);
     return false;
   }
 
@@ -869,6 +873,8 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
   glslang_initialize_process();
   state.glslang = true;
 #endif
+  state.initialized = true;
+  lovrModuleReady(&ref);
   return true;
 fail:
   lovrGraphicsDestroy();
@@ -876,7 +882,7 @@ fail:
 }
 
 void lovrGraphicsDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) {
+  if (!lovrModuleRelease(&ref)) {
     lovrFree(thread.stack.memory);
     memset(&thread, 0, sizeof(thread));
     return;
@@ -950,10 +956,11 @@ void lovrGraphicsDestroy(void) {
   lovrFree(thread.stack.memory);
   memset(&thread, 0, sizeof(thread));
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
 
 bool lovrGraphicsIsInitialized(void) {
-  return state.ref;
+  return state.initialized;
 }
 
 void lovrGraphicsGetDevice(GraphicsDevice* device) {
@@ -1016,12 +1023,13 @@ void lovrGraphicsGetLimits(GraphicsLimits* limits) {
 }
 
 void lovrGraphicsGetStats(GraphicsStats* stats) {
-  if (!gpu_get_memory_info(&state.stats.memoryBudget, &state.stats.memoryUsage)) {
-    state.stats.memoryBudget = ~0ull;
-    state.stats.memoryUsage = ~0ull;
+  if (!gpu_get_memory_info(&stats->memoryBudget, &stats->memoryUsage)) {
+    stats->memoryBudget = ~0ull;
+    stats->memoryUsage = ~0ull;
   }
 
-  *stats = state.stats;
+  stats->bufferMemory = state.bufferMemory;
+  stats->textureMemory = state.textureMemory;
 }
 
 uint32_t lovrGraphicsGetFormatSupport(uint32_t format, uint32_t features) {
@@ -1148,7 +1156,7 @@ static void compilePipeline(void* arg) {
     const char* error = gpu_get_error();
     job->error = lovrStrdup(error);
   }
-  atomic_store(&job->done, 1);
+  job->done = true;
 }
 
 static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
@@ -1183,7 +1191,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
     }
 
     // If it's not in the global lookup, search through the linked list of new pipelines
-    PipelineJob* node = atomic_load(&state.newPipelines);
+    PipelineJob* node = state.newPipelines;
     bool found = false;
 
     while (node) {
@@ -1213,7 +1221,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
     job->hash = hash;
     job->info = draw->pipelineInfo;
     job->pipeline = getPipeline(index);
-    job->done = 0;
+    job->done = false;
     job->error = NULL;
 
     bool slow;
@@ -1236,7 +1244,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
       }
     } else {
       // Chain the new pipeline on to the list of new pipelines
-      job->next = atomic_load(&state.newPipelines);
+      job->next = state.newPipelines;
       while (!atomic_compare_exchange_strong(&state.newPipelines, &job->next, job)) {
         continue;
       }
@@ -1493,7 +1501,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
   while (pipelineJobs) {
     PipelineJob* job = pipelineJobs;
 
-    while (!atomic_load(&job->done)) {
+    while (!job->done) {
       job_spin();
     }
 
@@ -1506,7 +1514,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
     }
 
     pipelineJobs = job->next;
-    job->next = atomic_load(&state.newPipelines);
+    job->next = state.newPipelines;
     while (!atomic_compare_exchange_strong(&state.newPipelines, &job->next, job)) {
       continue;
     }
@@ -1955,13 +1963,13 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
     }
 
     // Merge any new pipelines into the global pipeline lookup
-    for (PipelineJob* job = atomic_load(&state.newPipelines); job; job = job->next) {
+    for (PipelineJob* job = state.newPipelines; job; job = job->next) {
       if (map_get(&state.pipelineLookup, job->hash) == MAP_NIL) {
         map_set(&state.pipelineLookup, job->hash, (uint64_t) (uintptr_t) job->pipeline);
       }
     }
 
-    atomic_store(&state.newPipelines, NULL);
+    state.newPipelines = NULL;
   }
 
   lovrAssertGoto(fail, gpu_submit(streams, streamCount, state.tick++), "Failed to submit GPU command buffers: %s", gpu_get_error());
@@ -1992,7 +2000,7 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
   return true;
 fail:
   stackPop(&thread.stack, stack);
-  atomic_store(&state.newPipelines, NULL);
+  state.newPipelines = NULL;
   mtx_unlock(&state.lock);
   return false;
 }
@@ -2221,7 +2229,7 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
   }
 
   buffer->sync->barrier = &state.barrier;
-  atomic_fetch_add(&state.stats.bufferMemory, size);
+  state.bufferMemory += size;
   return buffer;
 }
 
@@ -2248,7 +2256,7 @@ Buffer* lovrBufferCreateView(Buffer* parent, uint32_t offset, uint32_t extent) {
 void lovrBufferDestroy(void* ref) {
   Buffer* buffer = ref;
   if (buffer->root == buffer) {
-    atomic_fetch_sub(&state.stats.bufferMemory, buffer->info.size);
+    state.bufferMemory -= buffer->info.size;
     gpu_buffer_destroy(buffer->gpu);
     lovrFree(buffer->sync);
   } else {
@@ -2636,10 +2644,12 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
   // Sample-only textures are exempt from sync tracking to reduce overhead.  Instead, they are
   // manually synchronized with a single barrier after the upload stream.
   if (info->usage == TEXTURE_SAMPLE) {
-    atomic_fetch_or(&state.barrier.prev, GPU_PHASE_COPY | GPU_PHASE_BLIT);
-    atomic_fetch_or(&state.barrier.next, GPU_PHASE_SHADER_VERTEX | GPU_PHASE_SHADER_FRAGMENT | GPU_PHASE_SHADER_COMPUTE);
-    atomic_fetch_or(&state.barrier.flush, GPU_CACHE_TRANSFER_WRITE);
-    atomic_fetch_or(&state.barrier.clear, GPU_CACHE_TEXTURE);
+    mtx_lock(&state.lock);
+    state.barrier.prev |= GPU_PHASE_COPY | GPU_PHASE_BLIT;
+    state.barrier.next |= GPU_PHASE_SHADER_VERTEX | GPU_PHASE_SHADER_FRAGMENT | GPU_PHASE_SHADER_COMPUTE;
+    state.barrier.flush |= GPU_CACHE_TRANSFER_WRITE;
+    state.barrier.clear |= GPU_CACHE_TEXTURE;
+    mtx_unlock(&state.lock);
   } else if (levelCount > 0) {
     texture->sync->writePhase = GPU_PHASE_COPY | GPU_PHASE_BLIT;
     texture->sync->pendingWrite = GPU_CACHE_TRANSFER_WRITE;
@@ -2654,7 +2664,7 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
   }
 
   texture->sync->barrier = &state.barrier;
-  atomic_fetch_add(&state.stats.textureMemory, texture->memorySize);
+  state.textureMemory += texture->memorySize;
   return texture;
 }
 
@@ -2808,7 +2818,7 @@ void lovrTextureDestroy(void* ref) {
     }
   }
   if (texture->root == texture) {
-    atomic_fetch_sub(&state.stats.textureMemory, texture->memorySize);
+    state.textureMemory -= texture->memorySize;
     lovrFree(texture->sync);
   }
   lovrFree(texture);
@@ -3403,7 +3413,7 @@ ShaderSource lovrGraphicsGetDefaultShaderSource(DefaultShader type, ShaderStage 
 }
 
 Shader* lovrGraphicsGetDefaultShader(DefaultShader type) {
-  Shader* shader = atomic_load(&state.defaultShaders[type]);
+  Shader* shader = state.defaultShaders[type];
 
   if (!shader) {
     if (type == SHADER_ANIMATOR || type == SHADER_BLENDER || type == SHADER_TALLY_MERGE) {
@@ -4123,7 +4133,7 @@ const MaterialInfo* lovrMaterialGetInfo(Material* material) {
 // Font
 
 Font* lovrGraphicsGetDefaultFont(void) {
-  Font* font = atomic_load(&state.defaultFont);
+  Font* font = state.defaultFont;
 
   if (!font) {
     Rasterizer* rasterizer = lovrRasterizerCreate(NULL, 32, NULL);
@@ -9150,7 +9160,7 @@ static void pollReadbacks(void) {
 static Layout* getLayout(gpu_slot* slots, uint32_t count) {
   uint64_t hash = hash64(slots, count * sizeof(gpu_slot));
 
-  for (Layout* layout = atomic_load(&state.layouts); layout; layout = layout->next) {
+  for (Layout* layout = state.layouts; layout; layout = layout->next) {
     if (layout->hash == hash) {
       return layout;
     }
@@ -9179,7 +9189,7 @@ static Layout* getLayout(gpu_slot* slots, uint32_t count) {
     return NULL;
   }
 
-  layout->next = atomic_load(&state.layouts);
+  layout->next = state.layouts;
   while (!atomic_compare_exchange_strong(&state.layouts, &layout->next, layout)) {
     continue;
   }

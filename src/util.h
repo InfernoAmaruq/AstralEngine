@@ -1,3 +1,4 @@
+#include <stdatomic.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -37,12 +38,17 @@ void lovrFree(void* data);
 
 #define lovrStrdup(s) (s ? memcpy(lovrMalloc(strlen(s) + 1), s, strlen(s) + 1) : NULL)
 
-// Refcounting (to be refcounted, a struct must have a uint32_t refcount as its first field)
+// Module
+bool lovrModuleAcquire(atomic_uint* ref);
+bool lovrModuleRelease(atomic_uint* ref);
+void lovrModuleReady(atomic_uint* ref);
+void lovrModuleReset(atomic_uint* ref);
+
+// Refcounting (to be refcounted, a struct must have an atomic_uint refcount as its first field)
 void lovrRetain(void* ref);
 void lovrRelease(void* ref, void (*destructor)(void*));
 
 // Errors
-
 const char* lovrGetError(void);
 int lovrSetError(const char* format, ...);
 

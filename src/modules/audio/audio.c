@@ -1101,7 +1101,7 @@ static void phonon_update(float dt) {
 
   FOREACH_SOURCE(mask, source) {
     iplSourceGetOutputs(source->handle, IPL_SIMULATIONFLAGS_DIRECT, &source->outputs[backbuffer]);
-    source->outputs[backbuffer].direct.flags = source->inputs.directFlags;
+    source->outputs[backbuffer].direct.flags = (IPLDirectEffectFlags) source->inputs.directFlags;
   }
 
   if (state.enabledMeshCount > 0) {

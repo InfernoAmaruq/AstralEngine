@@ -247,7 +247,6 @@ typedef enum {
   VERTEX_SHAPE,
   VERTEX_POINT,
   VERTEX_GLYPH,
-  VERTEX_MODEL,
   VERTEX_EMPTY,
   VERTEX_FORMAT_COUNT
 } VertexFormat;
@@ -845,17 +844,6 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
     .attributes[2] = { 0, 12, offsetof(GlyphVertex, uv), GPU_TYPE_UN16x2 },
     .attributes[3] = { 0, 13, offsetof(GlyphVertex, color), GPU_TYPE_UN8x4 },
     .attributes[4] = { 1, 14, 0, GPU_TYPE_F32x4 }
-  };
-
-  state.vertexFormats[VERTEX_MODEL] = (gpu_vertex_format) {
-    .bufferCount = 2,
-    .attributeCount = 5,
-    .bufferStrides[0] = sizeof(ModelVertex),
-    .attributes[0] = { 0, 10, offsetof(ModelVertex, position), GPU_TYPE_F32x3 },
-    .attributes[1] = { 0, 11, offsetof(ModelVertex, normal), GPU_TYPE_SN10x3 },
-    .attributes[2] = { 0, 12, offsetof(ModelVertex, uv), GPU_TYPE_F32x2 },
-    .attributes[3] = { 0, 13, offsetof(ModelVertex, color), GPU_TYPE_UN8x4 },
-    .attributes[4] = { 0, 14, offsetof(ModelVertex, tangent), GPU_TYPE_SN10x3 }
   };
 
   state.vertexFormats[VERTEX_EMPTY] = (gpu_vertex_format) {

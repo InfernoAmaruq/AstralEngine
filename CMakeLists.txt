@@ -692,6 +692,7 @@ if(WIN32)
 elseif(APPLE)
   find_library(AVFOUNDATION AVFoundation)
   target_link_libraries(lovr objc ${AVFOUNDATION})
+  target_include_directories(lovr PRIVATE ${PROJECT_SOURCE_DIR}/src/lib/std)
   target_sources(lovr PRIVATE src/core/os_macos.c)
   set_source_files_properties(src/core/os_macos.c PROPERTIES COMPILE_FLAGS -xobjective-c)
   set_target_properties(lovr PROPERTIES

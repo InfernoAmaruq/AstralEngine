@@ -365,10 +365,22 @@ void copyAttribute(void* destination, gltfAccessor* accessor, ComponentType type
     } else {
       lovrUnreachable();
     }
-  } else if (type == U16 && components == 1 && !normalized && !accessor->normalized) {
-    if (accessor->type == U8) {
+  } else if (type == U16) {
+    if (accessor->type == U8 && !accessor->normalized && !normalized) {
       for (uint32_t i = 0; i < count; i++, src += srcStride, dst += stride) {
         *((uint16_t*) dst) = *(uint8_t*) src;
+      }
+    } else if (accessor->type == U8 && accessor->normalized && normalized) {
+      for (uint32_t i = 0; i < count; i++, src += srcStride, dst += stride) {
+        for (uint32_t j = 0; j < components; j++) {
+          ((uint16_t*) dst)[j] = ((uint16_t) ((uint8_t*) src)[j]) * 257; // Yes, 257
+        }
+      }
+    } else if (accessor->type == F32 && normalized) {
+      for (uint32_t i = 0; i < count; i++, src += srcStride, dst += stride) {
+        for (uint32_t j = 0; j < components; j++) {
+          ((uint16_t*) dst)[j] = (uint16_t) (((float*) src)[j] * 65535.f + .5f);
+        }
       }
     } else {
       lovrUnreachable();
@@ -1061,7 +1073,8 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
           for (uint32_t j = (token++)->size; j > 0; j--, part++) {
             gltfAccessor* positions = NULL;
             gltfAccessor* normals = NULL;
-            gltfAccessor* uvs = NULL;
+            gltfAccessor* uv1 = NULL;
+            gltfAccessor* uv2 = NULL;
             gltfAccessor* colors = NULL;
             gltfAccessor* tangents = NULL;
             gltfAccessor* indices = NULL;
@@ -1087,7 +1100,8 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                   uint32_t accessor = NOM_U32(json, token);
                   if (STR_EQ(name, "POSITION")) positions = &accessors[accessor];
                   else if (STR_EQ(name, "NORMAL")) normals = &accessors[accessor];
-                  else if (STR_EQ(name, "TEXCOORD_0")) uvs = &accessors[accessor];
+                  else if (STR_EQ(name, "TEXCOORD_0")) uv1 = &accessors[accessor];
+                  else if (STR_EQ(name, "TEXCOORD_1")) uv2 = &accessors[accessor];
                   else if (STR_EQ(name, "COLOR_0")) colors = &accessors[accessor];
                   else if (STR_EQ(name, "TANGENT")) tangents = &accessors[accessor];
                   else if (STR_EQ(name, "JOINTS_0")) joints = &accessors[accessor];
@@ -1143,9 +1157,10 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               ModelVertex* vertices = model->vertices + vertexOffset;
               copyAttribute(vertices, positions, F32, 3, false, 0, sizeof(ModelVertex), vertexCount, 0);
               copyAttribute(vertices, normals, SN10x3, 1, false, 12, sizeof(ModelVertex), vertexCount, 0);
-              copyAttribute(vertices, uvs, F32, 2, false, 16, sizeof(ModelVertex), vertexCount, 0);
-              copyAttribute(vertices, colors, U8, 4, true, 24, sizeof(ModelVertex), vertexCount, 0xff);
-              copyAttribute(vertices, tangents, SN10x3, 1, false, 28, sizeof(ModelVertex), vertexCount, 0);
+              copyAttribute(vertices, uv1, F32, 2, false, 16, sizeof(ModelVertex), vertexCount, 0);
+              copyAttribute(vertices, uv2, U16, 2, true, 24, sizeof(ModelVertex), vertexCount, 0);
+              copyAttribute(vertices, colors, U8, 4, true, 28, sizeof(ModelVertex), vertexCount, 0xff);
+              copyAttribute(vertices, tangents, SN10x3, 1, false, 32, sizeof(ModelVertex), vertexCount, 0);
               mesh->vertexCount += vertexCount;
               vertexOffset += vertexCount;
 

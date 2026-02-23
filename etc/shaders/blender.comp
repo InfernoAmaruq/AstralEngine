@@ -17,6 +17,7 @@ struct ModelVertex {
   float px, py, pz;
   uint normal;
   float u, v;
+  uint uv2;
   uint color;
   uint tangent;
 };

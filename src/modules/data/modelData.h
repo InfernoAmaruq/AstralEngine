@@ -12,6 +12,7 @@ typedef struct {
   struct { float x, y, z; } position;
   uint32_t normal;
   struct { float u, v; } uv;
+  struct { uint16_t u, v; } uv2;
   struct { uint8_t r, g, b, a; } color;
   uint32_t tangent;
 } ModelVertex;

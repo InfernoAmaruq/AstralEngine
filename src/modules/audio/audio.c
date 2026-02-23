@@ -140,8 +140,8 @@ static void phonon_destroy(void);
 static void phonon_update(float dt);
 static bool phonon_set_hrtf(Blob* blob);
 static void phonon_mix_begin(void);
-static bool phonon_mix_source(Source* source, float* src, float* dst, float* tmp);
-static void phonon_mix_tail(float* output, float* temp);
+static bool phonon_mix_source(Source* source, float* src, float* dst);
+static void phonon_mix_reverb(float* dst);
 static bool phonon_source_init(Source* source);
 static void phonon_source_destroy(Source* source);
 static void phonon_source_add(Source* source);
@@ -168,12 +168,14 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
     uint32_t play = atomic_exchange(&source->playRequest, ~0u);
 
     if (play != ~0u) {
+#ifdef LOVR_USE_PHONON
       if (!source->playing && play == 1) {
         iplDirectEffectReset(source->directEffect);
         iplPanningEffectReset(source->panningEffect);
         iplBinauralEffectReset(source->binauralEffect);
         iplReflectionEffectReset(source->reflectionEffect);
       }
+#endif
 
       source->playing = !!play;
     }
@@ -184,7 +186,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
     bool pitchChanged = atomic_exchange(&source->pitchChanged, false);
     if (pitchChanged) ma_data_converter_set_rate_ratio(source->converter, source->pitchRatio);
 
-    bool hasTail = false;
+    uint32_t channels = lovrSoundGetChannelCount(source->sound);
 
     if (source->playing) {
       // Read and convert raw frames until there's BUFFER_SIZE converted frames
@@ -192,15 +194,13 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
       // - Converter: keep reading as many frames as possible/needed into raw and convert into tmp.
       // - If EOF is reached, rewind and continue for looping sources, otherwise pad end with zero.
       float* cursor = source->converter ? tmp : raw; // Edge of processed frames
-      uint32_t channelsOut = source->spatial ? 1 : 2; // If spatializer isn't converting to stereo, converter must do it
       uint32_t framesRemaining = BUFFER_SIZE;
 
       while (framesRemaining > 0) {
         uint32_t framesRead;
 
         if (source->converter) {
-          uint32_t channelsIn = lovrSoundGetChannelCount(source->sound);
-          uint32_t capacity = sizeof(raw) / (channelsIn * sizeof(float));
+          uint32_t capacity = sizeof(raw) / (channels * sizeof(float));
           ma_uint64 chunk;
           ma_data_converter_get_required_input_frame_count(source->converter, framesRemaining, &chunk);
           framesRead = lovrSoundRead(source->sound, source->offset, MIN(chunk, capacity), raw);
@@ -215,7 +215,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
           } else {
             source->offset = 0;
             source->playing = false;
-            memset(cursor, 0, framesRemaining * channelsOut * sizeof(float));
+            memset(cursor, 0, framesRemaining * channels * sizeof(float));
             break;
           }
         } else {
@@ -226,10 +226,10 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
           ma_uint64 framesIn = framesRead;
           ma_uint64 framesOut = framesRemaining;
           ma_data_converter_process_pcm_frames(source->converter, raw, &framesIn, cursor, &framesOut);
-          cursor += framesOut * channelsOut;
+          cursor += framesOut * channels;
           framesRemaining -= framesOut;
         } else {
-          cursor += framesRead * channelsOut;
+          cursor += framesRead * channels;
           framesRemaining -= framesRead;
         }
       }
@@ -237,24 +237,30 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
       buf = source->converter ? tmp : raw;
     }
 
-    bool tail = false;
+    // Scale
+    for (uint32_t i = 0; i < channels * BUFFER_SIZE; i++) {
+      buf[i] *= source->volume;
+    }
 
+    // Spatialize
     if (source->spatial) {
-      tail = phonon_mix_source(source, buf, mix, buf == raw ? tmp : raw);
+      source->hasTail = phonon_mix_source(source, buf, mix);
+      buf = mix;
+    } else if (channels == 1) {
+      for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+        mix[i * 2 + 0] = buf[i];
+        mix[i * 2 + 1] = buf[i];
+      }
       buf = mix;
     }
 
     // Mix
-    float volume = source->volume;
     for (uint32_t i = 0; i < 2 * BUFFER_SIZE; i++) {
-      dst[i] += buf[i] * volume;
+      dst[i] += buf[i];
     }
-
-    // Once we set this to false, the source could get destroyed (if it's not playing)
-    source->hasTail = tail;
   }
 
-  phonon_mix_tail(dst, tmp);
+  phonon_mix_reverb(dst);
 
   if (state.sinks[AUDIO_PLAYBACK]) {
     uint64_t capacity = sizeof(tmp) / lovrSoundGetChannelCount(state.sinks[AUDIO_PLAYBACK]) / sizeof(float);
@@ -549,12 +555,12 @@ Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial) {
   config.formatIn = miniaudioFormats[lovrSoundGetFormat(sound)];
   config.formatOut = miniaudioFormats[OUTPUT_FORMAT];
   config.channelsIn = lovrSoundGetChannelCount(sound);
-  config.channelsOut = spatial ? 1 : 2;
+  config.channelsOut = lovrSoundGetChannelCount(sound);
   config.sampleRateIn = lovrSoundGetSampleRate(sound);
   config.sampleRateOut = state.config.sampleRate;
   config.allowDynamicSampleRate = pitchable;
 
-  if (pitchable || config.formatIn != config.formatOut || config.channelsIn != config.channelsOut || config.sampleRateIn != config.sampleRateOut) {
+  if (pitchable || config.formatIn != config.formatOut || config.sampleRateIn != config.sampleRateOut) {
     ma_data_converter* converter = lovrMalloc(sizeof(ma_data_converter));
     ma_result status = ma_data_converter_init(&config, NULL, converter);
 
@@ -1199,60 +1205,86 @@ static void phonon_mix_begin(void) {
   }
 }
 
-static bool phonon_mix_source(Source* source, float* _src, float* dst, float* _tmp) {
-  IPLAudioBuffer src = { .numChannels = 1, .numSamples = BUFFER_SIZE, .data = &_src };
-  IPLAudioBuffer tmp1 = { .numChannels = 1, .numSamples = BUFFER_SIZE, .data = &_tmp };
-  IPLAudioBuffer tmp2 = { .numChannels = 2, .numSamples = BUFFER_SIZE, .data = (float*[2]) { _tmp, _tmp + BUFFER_SIZE } };
-
+static bool phonon_mix_source(Source* source, float* src, float* dst) {
+  float left[BUFFER_SIZE], right[BUFFER_SIZE];
+  uint32_t channels = lovrSoundGetChannelCount(source->sound);
   uint32_t index = !state.backbuffer;
   bool tail = false;
 
   // Tail
   if (!source->playing) {
+    IPLAudioBuffer buffer = { 2, BUFFER_SIZE, (float*[2]) { left, right } };
+
     if (iplBinauralEffectGetTailSize(source->binauralEffect) > 0) {
-      tail |= !iplBinauralEffectGetTail(source->binauralEffect, &tmp2);
-      iplAudioBufferInterleave(state.phonon, &tmp2, dst);
+      tail |= !iplBinauralEffectGetTail(source->binauralEffect, &buffer);
+      iplAudioBufferInterleave(state.phonon, &buffer, dst);
     } else {
       memset(dst, 0, 2 * BUFFER_SIZE * sizeof(float));
     }
 
     if (iplReflectionEffectGetTailSize(source->reflectionEffect) > 0) {
       if (state.config.reverb.type == REVERB_CONVOLUTION) {
-        tail |= !iplReflectionEffectGetTail(source->reflectionEffect, &tmp1, state.reflectionMixer);
+        tail |= !iplReflectionEffectGetTail(source->reflectionEffect, &buffer, state.reflectionMixer);
       } else {
-        tail |= !iplReflectionEffectGetTail(source->reflectionEffect, &tmp1, NULL);
-        iplAudioBufferMix(state.phonon, &tmp1, &state.reflectionBuffer);
+        buffer.numChannels = 1;
+        tail |= !iplReflectionEffectGetTail(source->reflectionEffect, &buffer, NULL);
+        iplAudioBufferMix(state.phonon, &buffer, &state.reflectionBuffer);
       }
     }
 
     return tail;
   }
 
+  // Prepare input (since we always copy src, it can be reused as a temporary buffer after this)
+  IPLAudioBuffer input = { channels, BUFFER_SIZE, (float*[2]) { left, right } };
+
+  if (channels == 1) {
+    input.data[1] = left; // Alias both channels, useful for spatialization
+    memcpy(left, src, BUFFER_SIZE * sizeof(float));
+  } else {
+    iplAudioBufferDeinterleave(state.phonon, src, &input);
+  }
+
   // Reverb
   if (source->reverb > 0.f && state.enabledMeshCount > 0) {
+    if (channels == 2) {
+      for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+        src[i] = (left[i] + right[i]) * .5f * source->reverb;
+      }
+    } else if (source->reverb != 1.f) {
+      for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+        src[i] *= source->reverb;
+      }
+    }
+
+    IPLAudioBuffer reverbInput = { 1, BUFFER_SIZE, &src };
+
     if (source->reverbMode == REVERB_SOURCE) {
       IPLSimulationOutputs outputs = { 0 };
       iplSourceGetOutputs(source->handle, IPL_SIMULATIONFLAGS_REFLECTIONS, &outputs);
 
       if (state.config.reverb.type == REVERB_CONVOLUTION) {
-        tail |= !iplReflectionEffectApply(source->reflectionEffect, &outputs.reflections, &src, &tmp1, state.reflectionMixer);
+        tail |= !iplReflectionEffectApply(source->reflectionEffect, &outputs.reflections, &reverbInput, &reverbInput, state.reflectionMixer);
       } else {
-        tail |= !iplReflectionEffectApply(source->reflectionEffect, &outputs.reflections, &src, &tmp1, NULL);
-        iplAudioBufferMix(state.phonon, &tmp1, &state.reflectionBuffer);
+        IPLAudioBuffer out = { 1, BUFFER_SIZE, (float*[1]) { dst } };
+        tail |= !iplReflectionEffectApply(source->reflectionEffect, &outputs.reflections, &reverbInput, &out, NULL);
+        iplAudioBufferMix(state.phonon, &out, &state.reflectionBuffer);
       }
     } else if (state.reverb > 0.f) {
-      iplAudioBufferMix(state.phonon, &src, &state.listenerReverbInput);
+      iplAudioBufferMix(state.phonon, &reverbInput, &state.listenerReverbInput);
     }
   }
 
   // Direct effects, applied in-place
-  IPLDirectEffectParams* directParams = &source->outputs[index].direct;
-  if (directParams->flags) {
-    tail |= !iplDirectEffectApply(source->directEffect, directParams, &src, &src);
+  if (source->outputs[index].direct.flags) {
+    tail |= !iplDirectEffectApply(source->directEffect, &source->outputs[index].direct, &input, &input);
   }
 
   // Spatialization (either binaural, panning, or upmix)
   if (source->spatialization > 0.f) {
+    // Can reuse src as temporary buffer for spatialization output
+    IPLAudioBuffer spatialized = { 2, BUFFER_SIZE, (float*[2]) { src, src + BUFFER_SIZE } };
+
     if (state.hrtf[0]) {
       IPLBinauralEffectParams params = {
         .direction = source->relativeDirection[index],
@@ -1260,30 +1292,45 @@ static bool phonon_mix_source(Source* source, float* _src, float* dst, float* _t
         .spatialBlend = source->spatialization,
         .hrtf = state.hrtf[0]
       };
-
-      tail |= !iplBinauralEffectApply(source->binauralEffect, &params, &src, &tmp2);
+      input.numChannels = 2; // For mono input, left/right channels are aliased to same buffer
+      tail |= !iplBinauralEffectApply(source->binauralEffect, &params, &input, &spatialized);
     } else {
-      IPLPanningEffectParams params = {
-        .direction = source->relativeDirection[index]
-      };
+      IPLAudioBuffer mono = { 1, BUFFER_SIZE, .data = channels == 2 ? &dst : input.data };
 
-      iplPanningEffectApply(source->panningEffect, &params, &src, &tmp2);
+      // Stereo input uses dst as temporary buffer to hold downmixed audio, for panning effect
+      if (channels == 2) {
+        for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+          dst[i] = (left[i] + right[i]) * .5f;
+        }
+      }
+
+      IPLPanningEffectParams params = { .direction = source->relativeDirection[index] };
+      iplPanningEffectApply(source->panningEffect, &params, &mono, &spatialized);
+
+      if (source->spatialization < 1.f) {
+        float s = source->spatialization, t = 1.f - s;
+        for (uint32_t c = 0; c < 2; c++) {
+          for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+            spatialized.data[c][i] = spatialized.data[c][i] * s + input.data[c][i] * t;
+          }
+        }
+      }
     }
 
-    iplAudioBufferInterleave(state.phonon, &tmp2, dst);
+    iplAudioBufferInterleave(state.phonon, &spatialized, dst);
   } else {
-    for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
-      dst[2 * i + 0] = _src[i];
-      dst[2 * i + 1] = _src[i];
-    }
+    input.numChannels = 2;
+    iplAudioBufferInterleave(state.phonon, &input, dst);
   }
 
   return tail;
 }
 
-static void phonon_mix_tail(float* dst, float* _tmp) {
-  IPLAudioBuffer tmp1 = { .numChannels = 1, .numSamples = BUFFER_SIZE, .data = &_tmp };
-  IPLAudioBuffer tmp2 = { .numChannels = 2, .numSamples = BUFFER_SIZE, .data = (float*[2]) { _tmp, _tmp + BUFFER_SIZE } };
+static void phonon_mix_reverb(float* dst) {
+  float left[BUFFER_SIZE], right[BUFFER_SIZE];
+
+  IPLAudioBuffer mono = { 1, BUFFER_SIZE, (float*[1]) { left } };
+  IPLAudioBuffer stereo = { 2, BUFFER_SIZE, (float*[2]) { left, right } };
 
   bool anyReverb = state.sourceReverbMask || state.listenerReverbMask;
 
@@ -1293,17 +1340,17 @@ static void phonon_mix_tail(float* dst, float* _tmp) {
     iplSourceGetOutputs(state.listener, IPL_SIMULATIONFLAGS_REFLECTIONS, &outputs);
 
     if (state.config.reverb.type == REVERB_CONVOLUTION) {
-      iplReflectionEffectApply(state.reflectionEffect, &outputs.reflections, &state.listenerReverbInput, &tmp1, state.reflectionMixer);
+      iplReflectionEffectApply(state.reflectionEffect, &outputs.reflections, &state.listenerReverbInput, &mono, state.reflectionMixer);
     } else {
-      iplReflectionEffectApply(state.reflectionEffect, &outputs.reflections, &state.listenerReverbInput, &tmp1, NULL);
-      iplAudioBufferMix(state.phonon, &tmp1, &state.reflectionBuffer);
+      iplReflectionEffectApply(state.reflectionEffect, &outputs.reflections, &state.listenerReverbInput, &mono, NULL);
+      iplAudioBufferMix(state.phonon, &mono, &state.reflectionBuffer);
     }
   } else if (iplReflectionEffectGetTailSize(state.reflectionEffect) > 0) {
     if (state.config.reverb.type == REVERB_CONVOLUTION) {
-      iplReflectionEffectGetTail(state.reflectionEffect, &tmp1, state.reflectionMixer);
+      iplReflectionEffectGetTail(state.reflectionEffect, &mono, state.reflectionMixer);
     } else {
-      iplReflectionEffectGetTail(state.reflectionEffect, &tmp1, NULL);
-      iplAudioBufferMix(state.phonon, &tmp1, &state.reflectionBuffer);
+      iplReflectionEffectGetTail(state.reflectionEffect, &mono, NULL);
+      iplAudioBufferMix(state.phonon, &mono, &state.reflectionBuffer);
     }
 
     anyReverb = true;
@@ -1325,16 +1372,16 @@ static void phonon_mix_tail(float* dst, float* _tmp) {
         .binaural = !!state.hrtf[0]
       };
 
-      iplAmbisonicsDecodeEffectApply(state.ambisonicsDecodeEffect, &ambisonicsDecodeParams, &state.reflectionBuffer, &tmp2);
+      iplAmbisonicsDecodeEffectApply(state.ambisonicsDecodeEffect, &ambisonicsDecodeParams, &state.reflectionBuffer, &stereo);
     } else if (iplAmbisonicsDecodeEffectGetTailSize(state.ambisonicsDecodeEffect) > 0) {
-      iplAmbisonicsDecodeEffectGetTail(state.ambisonicsDecodeEffect, &tmp2);
+      iplAmbisonicsDecodeEffectGetTail(state.ambisonicsDecodeEffect, &stereo);
     } else {
       return;
     }
 
     for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
-      dst[2 * i + 0] += tmp2.data[0][i];
-      dst[2 * i + 1] += tmp2.data[1][i];
+      dst[2 * i + 0] += stereo.data[0][i];
+      dst[2 * i + 1] += stereo.data[1][i];
     }
   } else if (anyReverb) {
     for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
@@ -1364,7 +1411,7 @@ static bool phonon_source_init(Source* source) {
   vec3_set(source->inputs.reverbScale, 1.f, 1.f, 1.f);
 
   IPLDirectEffectSettings directEffectSettings = {
-    .numChannels = 1
+    .numChannels = lovrSoundGetChannelCount(source->sound)
   };
 
   if (iplDirectEffectCreate(state.phonon, &state.audioSettings, &directEffectSettings, &source->directEffect)) {
@@ -1569,8 +1616,8 @@ static void phonon_destroy(void) {}
 static void phonon_update(float dt) {}
 static bool phonon_set_hrtf(Blob* blob) { return true; }
 static void phonon_mix_begin(void) {}
-static bool phonon_mix_source(Source* source, float* src, float* dst, float* tmp) {}
-static void phonon_mix_tail(float* output, float* temp) {}
+static bool phonon_mix_source(Source* source, float* src, float* dst) { return false; }
+static void phonon_mix_reverb(float* dst) {}
 static bool phonon_source_init(Source* source) { return true; }
 static void phonon_source_destroy(Source* source) {}
 static void phonon_source_add(Source* source) {}

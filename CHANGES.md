@@ -40,6 +40,8 @@ dev
 - Add `Model:is/setNodeVisible`.
 - Add `Layer:get/setOrigin`.
 - Add support for non-uniform scale in `ConvexShape` and `MeshShape`.
+- Add `VertexUV2` builtin vertex attribute and `UV2` shader variable.
+- Add support for two sets of UVs in `ModelData`.
 
 ### Change
 

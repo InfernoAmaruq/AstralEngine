@@ -92,6 +92,7 @@ static struct {
   atomic_ullong activeSourceMask;
   uint64_t pendingSourceMask;
   atomic_uint backbuffer;
+  uint32_t frontbuffer;
   float position[3];
   float orientation[4];
   float absorption[3];
@@ -105,16 +106,16 @@ static struct {
   bool simulatorDirty;
   bool sceneDirty;
   atomic_uint enabledMeshCount;
-  atomic_ullong sourceReverbMask;
-  atomic_ullong listenerReverbMask;
   _Atomic(IPLHRTF) hrtf[2];
   IPLCoordinateSpace3 listenerBasis[2];
   IPLReflectionEffect reflectionEffect;
   IPLReflectionMixer reflectionMixer;
-  IPLAudioBuffer reflectionBuffer;
-  IPLAudioBuffer listenerReverbInput;
   IPLAmbisonicsDecodeEffect ambisonicsDecodeEffect;
   atomic_bool reverbFinished;
+  atomic_ullong sourceReverbMask;
+  atomic_ullong listenerReverbMask;
+  IPLAudioBuffer listenerReverb;
+  IPLAudioBuffer parametricReverb;
   float reverbSimulationTimer;
   float reverbDecay;
 #endif
@@ -155,12 +156,11 @@ static void phonon_mesh_set_transform(AudioMesh* mesh, float* transform);
 // Device callbacks
 
 static void onPlayback(ma_device* device, void* out, const void* in, uint32_t count) {
-  Source* source;
   float raw[BUFFER_SIZE * 2];
   float tmp[BUFFER_SIZE * 2];
-  float mix[BUFFER_SIZE * 2];
-  float* dst = out;
   float* buf = NULL;
+  float* dst = out;
+  Source* source;
 
   phonon_mix_begin();
 
@@ -215,7 +215,8 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
             break;
           }
         } else {
-          source->offset += framesRead;
+          uint32_t offset = atomic_load_explicit(&source->offset, memory_order_relaxed);
+          atomic_store_explicit(&source->offset, offset + framesRead, memory_order_relaxed);
         }
 
         if (source->converter) {
@@ -231,15 +232,16 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
       }
 
       buf = source->converter ? tmp : raw;
+
+      for (uint32_t i = 0; i < channels * BUFFER_SIZE; i++) {
+        buf[i] *= source->volume;
+      }
     } else {
       memset(raw, 0, BUFFER_SIZE * sizeof(float));
       buf = raw;
     }
 
-    // Scale
-    for (uint32_t i = 0; i < channels * BUFFER_SIZE; i++) {
-      buf[i] *= source->volume;
-    }
+    float* mix = buf == raw ? tmp : raw;
 
     // Spatialize
     if (source->spatial) {
@@ -1007,11 +1009,11 @@ static bool phonon_init(void) {
     }
   }
 
-  if (iplAudioBufferAllocate(state.phonon, reflectionSettings.numChannels, BUFFER_SIZE, &state.reflectionBuffer)) {
+  if (iplAudioBufferAllocate(state.phonon, 1, BUFFER_SIZE, &state.listenerReverb)) {
     return phonon_destroy(), lovrSetError("Failed to create reverb buffer");
   }
 
-  if (iplAudioBufferAllocate(state.phonon, 1, BUFFER_SIZE, &state.listenerReverbInput)) {
+  if (iplAudioBufferAllocate(state.phonon, 1, BUFFER_SIZE, &state.parametricReverb)) {
     return phonon_destroy(), lovrSetError("Failed to create reverb buffer");
   }
 
@@ -1028,9 +1030,9 @@ static void phonon_destroy(void) {
   phonon_set_hrtf(NULL);
   IPLHRTF hrtf = state.hrtf[0];
   iplHRTFRelease(&hrtf);
+  iplAudioBufferFree(state.phonon, &state.parametricReverb);
+  iplAudioBufferFree(state.phonon, &state.listenerReverb);
   iplAmbisonicsDecodeEffectRelease(&state.ambisonicsDecodeEffect), state.ambisonicsDecodeEffect = NULL;
-  iplAudioBufferFree(state.phonon, &state.listenerReverbInput), state.listenerReverbInput.data = NULL;
-  iplAudioBufferFree(state.phonon, &state.reflectionBuffer), state.reflectionBuffer.data = NULL;
   iplReflectionMixerRelease(&state.reflectionMixer), state.reflectionMixer = NULL;
   iplReflectionEffectRelease(&state.reflectionEffect), state.reflectionEffect = NULL;
   iplSourceRelease(&state.listener), state.listener = NULL;
@@ -1155,7 +1157,7 @@ static void phonon_update(float dt) {
 
   state.sourceReverbMask = sourceReverbMask;
   state.listenerReverbMask = listenerReverbMask;
-  state.backbuffer ^= 1;
+  atomic_fetch_xor_explicit(&state.backbuffer, 1, memory_order_release);
 }
 
 static bool phonon_set_hrtf(Blob* blob) {
@@ -1195,6 +1197,8 @@ static void phonon_set_reverb(float reverb) {
 }
 
 static void phonon_mix_begin(void) {
+  state.frontbuffer = !atomic_load_explicit(&state.backbuffer, memory_order_acquire);
+
   IPLHRTF newHRTF = atomic_exchange(&state.hrtf[1], NO_HRTF);
 
   if (newHRTF != NO_HRTF) {
@@ -1203,19 +1207,13 @@ static void phonon_mix_begin(void) {
     state.hrtf[0] = newHRTF;
   }
 
-  if (state.sourceReverbMask || state.listenerReverbMask) {
-    memset(state.reflectionBuffer.data[0], 0, BUFFER_SIZE * sizeof(float));
-  }
-
-  if (state.listenerReverbMask) {
-    memset(state.listenerReverbInput.data[0], 0, BUFFER_SIZE * sizeof(float));
-  }
+  memset(state.listenerReverb.data[0], 0, BUFFER_SIZE * sizeof(float));
+  memset(state.parametricReverb.data[0], 0, BUFFER_SIZE * sizeof(float));
 }
 
 static bool phonon_mix_source(Source* source, float* src, float* dst) {
   float left[BUFFER_SIZE], right[BUFFER_SIZE];
   uint32_t channels = lovrSoundGetChannelCount(source->sound);
-  uint32_t index = !state.backbuffer;
   bool tail = false;
 
   // Tail
@@ -1235,7 +1233,7 @@ static bool phonon_mix_source(Source* source, float* src, float* dst) {
       } else {
         buffer.numChannels = 1;
         tail |= !iplReflectionEffectGetTail(source->reflectionEffect, &buffer, NULL);
-        iplAudioBufferMix(state.phonon, &buffer, &state.reflectionBuffer);
+        iplAudioBufferMix(state.phonon, &buffer, &state.parametricReverb);
       }
     }
 
@@ -1275,16 +1273,16 @@ static bool phonon_mix_source(Source* source, float* src, float* dst) {
       } else {
         IPLAudioBuffer out = { 1, BUFFER_SIZE, (float*[1]) { dst } };
         tail |= !iplReflectionEffectApply(source->reflectionEffect, &outputs.reflections, &reverbInput, &out, NULL);
-        iplAudioBufferMix(state.phonon, &out, &state.reflectionBuffer);
+        iplAudioBufferMix(state.phonon, &out, &state.parametricReverb);
       }
     } else if (state.reverb > 0.f) {
-      iplAudioBufferMix(state.phonon, &reverbInput, &state.listenerReverbInput);
+      iplAudioBufferMix(state.phonon, &reverbInput, &state.listenerReverb);
     }
   }
 
   // Direct effects, applied in-place
-  if (source->directParams[index].flags) {
-    tail |= !iplDirectEffectApply(source->directEffect, &source->directParams[index], &input, &input);
+  if (source->directParams[state.frontbuffer].flags) {
+    tail |= !iplDirectEffectApply(source->directEffect, &source->directParams[state.frontbuffer], &input, &input);
   }
 
   // Spatialization (either binaural, panning, or upmix)
@@ -1294,7 +1292,7 @@ static bool phonon_mix_source(Source* source, float* src, float* dst) {
 
     if (state.hrtf[0]) {
       IPLBinauralEffectParams params = {
-        .direction = source->relativeDirection[index],
+        .direction = source->relativeDirection[state.frontbuffer],
         .interpolation = IPL_HRTFINTERPOLATION_BILINEAR,
         .spatialBlend = source->spatialization,
         .hrtf = state.hrtf[0]
@@ -1311,7 +1309,7 @@ static bool phonon_mix_source(Source* source, float* src, float* dst) {
         }
       }
 
-      IPLPanningEffectParams params = { .direction = source->relativeDirection[index] };
+      IPLPanningEffectParams params = { .direction = source->relativeDirection[state.frontbuffer] };
       iplPanningEffectApply(source->panningEffect, &params, &mono, &spatialized);
 
       if (source->spatialization < 1.f) {
@@ -1347,10 +1345,10 @@ static void phonon_mix_reverb(float* dst) {
     iplSourceGetOutputs(state.listener, IPL_SIMULATIONFLAGS_REFLECTIONS, &outputs);
 
     if (state.config.reverb.type == REVERB_CONVOLUTION) {
-      iplReflectionEffectApply(state.reflectionEffect, &outputs.reflections, &state.listenerReverbInput, &mono, state.reflectionMixer);
+      iplReflectionEffectApply(state.reflectionEffect, &outputs.reflections, &state.listenerReverb, &mono, state.reflectionMixer);
     } else {
-      iplReflectionEffectApply(state.reflectionEffect, &outputs.reflections, &state.listenerReverbInput, &mono, NULL);
-      iplAudioBufferMix(state.phonon, &mono, &state.reflectionBuffer);
+      iplReflectionEffectApply(state.reflectionEffect, &outputs.reflections, &state.listenerReverb, &mono, NULL);
+      iplAudioBufferMix(state.phonon, &mono, &state.parametricReverb);
     }
 
     // After reverbing sources finish playing, we keep feeding the effect silence for a bit, so that
@@ -1365,7 +1363,7 @@ static void phonon_mix_reverb(float* dst) {
       complete = iplReflectionEffectGetTail(state.reflectionEffect, &mono, state.reflectionMixer);
     } else {
       complete = iplReflectionEffectGetTail(state.reflectionEffect, &mono, NULL);
-      iplAudioBufferMix(state.phonon, &mono, &state.reflectionBuffer);
+      iplAudioBufferMix(state.phonon, &mono, &state.parametricReverb);
     }
 
     if (complete) {
@@ -1378,17 +1376,19 @@ static void phonon_mix_reverb(float* dst) {
   // Final reverb mix
   if (state.config.reverb.type == REVERB_CONVOLUTION) {
     if (anyReverb) {
+      float a[BUFFER_SIZE], b[BUFFER_SIZE], c[BUFFER_SIZE], d[BUFFER_SIZE];
+      IPLAudioBuffer ambisonic = { 4, BUFFER_SIZE, (float*[4]) { a, b, c, d } };
       IPLReflectionEffectParams reflectionMixerParams = { .numChannels = 4 };
-      iplReflectionMixerApply(state.reflectionMixer, &reflectionMixerParams, &state.reflectionBuffer);
+      iplReflectionMixerApply(state.reflectionMixer, &reflectionMixerParams, &ambisonic);
 
       IPLAmbisonicsDecodeEffectParams ambisonicsDecodeParams = {
         .order = 1,
         .hrtf = state.hrtf[0],
-        .orientation = state.listenerBasis[!state.backbuffer],
+        .orientation = state.listenerBasis[state.frontbuffer],
         .binaural = !!state.hrtf[0]
       };
 
-      iplAmbisonicsDecodeEffectApply(state.ambisonicsDecodeEffect, &ambisonicsDecodeParams, &state.reflectionBuffer, &stereo);
+      iplAmbisonicsDecodeEffectApply(state.ambisonicsDecodeEffect, &ambisonicsDecodeParams, &ambisonic, &stereo);
     } else if (iplAmbisonicsDecodeEffectGetTailSize(state.ambisonicsDecodeEffect) > 0) {
       iplAmbisonicsDecodeEffectGetTail(state.ambisonicsDecodeEffect, &stereo);
     } else {
@@ -1401,8 +1401,8 @@ static void phonon_mix_reverb(float* dst) {
     }
   } else if (anyReverb) {
     for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
-      dst[2 * i + 0] += state.reflectionBuffer.data[0][i];
-      dst[2 * i + 1] += state.reflectionBuffer.data[0][i];
+      dst[2 * i + 0] += state.parametricReverb.data[0][i];
+      dst[2 * i + 1] += state.parametricReverb.data[0][i];
     }
   }
 }

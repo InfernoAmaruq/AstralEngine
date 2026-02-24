@@ -78,6 +78,7 @@ typedef void AudioDeviceCallback(AudioDevice* device, void* userdata);
 
 bool lovrAudioInit(AudioConfig* config);
 void lovrAudioDestroy(void);
+uint32_t lovrAudioGetSampleRate(void);
 void lovrAudioEnumerateDevices(AudioType type, AudioDeviceCallback* callback, void* userdata);
 bool lovrAudioGetDevice(AudioType type, AudioDevice* device);
 bool lovrAudioSetDevice(AudioType type, void* id, size_t size, struct Sound* sink, AudioShareMode shareMode);
@@ -90,7 +91,6 @@ void lovrAudioSetVolume(float volume, VolumeUnit units);
 void lovrAudioGetPose(float position[3], float orientation[4]);
 void lovrAudioSetPose(float position[3], float orientation[4]);
 bool lovrAudioSetHRTF(struct Blob* hrtf);
-uint32_t lovrAudioGetSampleRate(void);
 void lovrAudioGetAbsorption(float absorption[3]);
 void lovrAudioSetAbsorption(float absorption[3]);
 float lovrAudioGetReverb(void);

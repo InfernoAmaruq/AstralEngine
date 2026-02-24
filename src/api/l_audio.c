@@ -57,6 +57,11 @@ StringEntry lovrReverbType[] = {
   { 0 }
 };
 
+static int l_lovrAudioGetSampleRate(lua_State *L) {
+  lua_pushinteger(L, lovrAudioGetSampleRate());
+  return 1;
+}
+
 static void onDevice(AudioDevice* device, void* userdata) {
   lua_State* L = userdata;
   lua_createtable(L, 0, 3);
@@ -203,11 +208,6 @@ static int l_lovrAudioSetHRTF(lua_State* L) {
   return 0;
 }
 
-static int l_lovrAudioGetSampleRate(lua_State *L) {
-  lua_pushinteger(L, lovrAudioGetSampleRate());
-  return 1;
-}
-
 static int l_lovrAudioGetAbsorption(lua_State* L) {
   float absorption[3];
   lovrAudioGetAbsorption(absorption);
@@ -251,8 +251,7 @@ static int l_lovrAudioNewSource(lua_State* L) {
     decode = lua_toboolean(L, -1);
     lua_pop(L, 1);
 
-    lua_getfield(L, 2, "pitch");
-    if (lua_isnil(L, -1)) lua_pop(L, 1), lua_getfield(L, 2, "pitchable");
+    lua_getfield(L, 2, "pitchable");
     if (!lua_isnil(L, -1)) pitchable = lua_toboolean(L, -1);
     lua_pop(L, 1);
 
@@ -307,6 +306,7 @@ static int l_lovrAudioNewAudioMesh(lua_State* L) {
 }
 
 static const luaL_Reg lovrAudio[] = {
+  { "getSampleRate", l_lovrAudioGetSampleRate },
   { "getDevices", l_lovrAudioGetDevices },
   { "getDevice", l_lovrAudioGetDevice },
   { "setDevice", l_lovrAudioSetDevice },
@@ -323,7 +323,6 @@ static const luaL_Reg lovrAudio[] = {
   { "getPose", l_lovrAudioGetPose },
   { "setPose", l_lovrAudioSetPose },
   { "setHRTF", l_lovrAudioSetHRTF },
-  { "getSampleRate", l_lovrAudioGetSampleRate },
   { "getAbsorption", l_lovrAudioGetAbsorption },
   { "setAbsorption", l_lovrAudioSetAbsorption },
   { "getReverb", l_lovrAudioGetReverb },

@@ -165,6 +165,10 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
   phonon_mix_begin();
 
   FOREACH_SOURCE(state.activeSourceMask, source) {
+    if (!source) {
+      continue;
+    }
+
     uint32_t play = atomic_exchange(&source->playRequest, ~0u);
 
     if (play != ~0u) {
@@ -346,6 +350,10 @@ void lovrAudioDestroy(void) {
   lovrModuleReset(&ref);
 }
 
+uint32_t lovrAudioGetSampleRate(void) {
+  return state.config.sampleRate;
+}
+
 static AudioDeviceCallback* enumerateCallback;
 
 static ma_bool32 enumPlayback(ma_context* context, ma_device_type type, const ma_device_info* info, void* userdata) {
@@ -473,9 +481,9 @@ void lovrAudioUpdate(float dt) {
   FOREACH_SOURCE(state.activeSourceMask | state.pendingSourceMask, source) {
     if (!source->playing && source->playRequest != 1 && !source->hasTail) {
       phonon_source_remove(source);
-      state.activeSources[source->slot] = NULL;
       state.activeSourceMask &= ~(1ull << source->slot);
       state.pendingSourceMask &= ~(1ull << source->slot);
+      state.activeSources[source->slot] = NULL;
       source->slot = ~0u;
       lovrRelease(source, lovrSourceDestroy);
     }
@@ -510,10 +518,6 @@ void lovrAudioSetPose(float position[3], float orientation[4]) {
 
 bool lovrAudioSetHRTF(Blob* blob) {
   return phonon_set_hrtf(blob);
-}
-
-uint32_t lovrAudioGetSampleRate(void) {
-  return state.config.sampleRate;
 }
 
 void lovrAudioGetAbsorption(float absorption[3]) {
@@ -1114,6 +1118,15 @@ static void phonon_update(float dt) {
     IPLSimulationOutputs outputs;
     iplSourceGetOutputs(source->handle, IPL_SIMULATIONFLAGS_DIRECT, &outputs);
     source->directParams[backbuffer] = outputs.direct;
+
+    // gr
+    IPLDirectEffectFlags flags = 0;
+    if (vec3_dot(source->absorption, source->absorption) > 1e-5) flags |= IPL_DIRECTEFFECTFLAGS_APPLYAIRABSORPTION;
+    if (source->innerAngle < (float) M_PI) flags |= IPL_DIRECTEFFECTFLAGS_APPLYDIRECTIVITY;
+    if (source->minFalloffVolume < 1.f) flags |= IPL_DIRECTEFFECTFLAGS_APPLYDISTANCEATTENUATION;
+    if (source->occlusionRays > 0) flags |= IPL_DIRECTEFFECTFLAGS_APPLYOCCLUSION;
+    if (source->occlusionRays > 0 && source->transmissionRays > 0) flags |= IPL_DIRECTEFFECTFLAGS_APPLYTRANSMISSION;
+    source->directParams[backbuffer].flags = flags;
   }
 
   uint64_t sourceReverbMask = 0;

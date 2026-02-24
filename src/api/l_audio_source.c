@@ -248,7 +248,7 @@ static int l_lovrSourceGetFalloff(lua_State* L) {
   lovrSourceGetFalloff(source, &innerDistance, &minVolume);
   lua_pushnumber(L, innerDistance);
   lua_pushnumber(L, minVolume);
-  return 3;
+  return 2;
 }
 
 static int l_lovrSourceSetFalloff(lua_State* L) {

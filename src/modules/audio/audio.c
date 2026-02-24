@@ -51,7 +51,6 @@ struct Source {
   bool pitchable;
   bool spatial;
   atomic_bool playing;
-  atomic_bool pitchChanged;
   atomic_bool hasTail;
   atomic_uint offset;
   atomic_uint playRequest;
@@ -179,8 +178,9 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
     uint32_t seek = atomic_exchange(&source->seekRequest, ~0u);
     if (seek != ~0u) source->offset = seek;
 
-    bool pitchChanged = atomic_exchange(&source->pitchChanged, false);
-    if (pitchChanged) ma_data_converter_set_rate_ratio(source->converter, source->pitchRatio);
+    if (source->pitchable) {
+      ma_data_converter_set_rate_ratio(source->converter, source->pitchRatio);
+    }
 
     uint32_t channels = lovrSoundGetChannelCount(source->sound);
 
@@ -713,7 +713,6 @@ bool lovrSourceSetPitch(Source* source, float pitch) {
   lovrCheck(pitch > 0.f, "Source pitch must be positive");
   lovrCheck(source->pitchable, "Source must be created with the 'pitch' flag to change its pitch");
   source->pitchRatio = pitch * ((float) lovrSoundGetSampleRate(source->sound) / state.config.sampleRate);
-  source->pitchChanged = true;
   return true;
 }
 

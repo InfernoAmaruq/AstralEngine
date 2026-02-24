@@ -542,14 +542,22 @@ Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial) {
   source->ref = 1;
   source->slot = ~0u;
   source->sound = sound;
-  source->pitchRatio = 1.f;
+  source->pitchRatio = ((float) lovrSoundGetSampleRate(source->sound) / state.config.sampleRate);
   source->volume = 1.f;
-  source->pitchable = pitchable;
-  source->spatial = spatial;
+  quat_identity(source->orientation);
   vec3_init(source->absorption, state.absorption);
+  source->innerAngle = 2.f * (float) M_PI;
+  source->outerAngle = 2.f * (float) M_PI;
+  source->outerAngleVolume = 0.f;
+  source->innerDistance = 0.f;
+  source->minFalloffVolume = 1.f;
+  source->occlusionRays = 64;
+  source->transmissionRays = 4;
   source->reverb = 1.f;
   source->reverbMode = REVERB_LISTENER;
-  quat_identity(source->orientation);
+  source->spatialization = 1.f;
+  source->pitchable = pitchable;
+  source->spatial = spatial;
   lovrRetain(source->sound);
 
   ma_data_converter_config config = ma_data_converter_config_init_default();

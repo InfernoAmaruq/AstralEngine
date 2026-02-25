@@ -25,7 +25,7 @@ struct Sound {
   void* decoder;
   void* stream;
   SampleFormat format;
-  ChannelLayout layout;
+  uint32_t channels;
   uint32_t sampleRate;
   uint32_t frames;
   uint32_t cursor;
@@ -78,12 +78,12 @@ static uint32_t lovrSoundReadMp3(Sound* sound, uint32_t offset, uint32_t count, 
 
 // Sound
 
-Sound* lovrSoundCreateRaw(uint32_t frames, SampleFormat format, ChannelLayout layout, uint32_t sampleRate, Blob* blob) {
+Sound* lovrSoundCreateRaw(uint32_t frames, SampleFormat format, uint32_t channels, uint32_t sampleRate, Blob* blob) {
   Sound* sound = lovrCalloc(sizeof(Sound));
   sound->ref = 1;
   sound->frames = frames;
   sound->format = format;
-  sound->layout = layout;
+  sound->channels = channels;
   sound->sampleRate = sampleRate;
   sound->read = lovrSoundReadRaw;
   size_t size = frames * lovrSoundGetStride(sound);
@@ -97,12 +97,12 @@ Sound* lovrSoundCreateRaw(uint32_t frames, SampleFormat format, ChannelLayout la
   return sound;
 }
 
-Sound* lovrSoundCreateStream(uint32_t frames, SampleFormat format, ChannelLayout layout, uint32_t sampleRate) {
+Sound* lovrSoundCreateStream(uint32_t frames, SampleFormat format, uint32_t channels, uint32_t sampleRate) {
   Sound* sound = lovrCalloc(sizeof(Sound));
   sound->ref = 1;
   sound->frames = frames;
   sound->format = format;
-  sound->layout = layout;
+  sound->channels = channels;
   sound->sampleRate = sampleRate;
   sound->read = lovrSoundReadStream;
   sound->stream = lovrMalloc(sizeof(ma_pcm_rb));
@@ -135,7 +135,7 @@ static bool loadOgg(Sound** result, Blob* blob, bool decode) {
 
   stb_vorbis_info info = stb_vorbis_get_info(sound->decoder);
   sound->format = SAMPLE_F32;
-  sound->layout = info.channels >= 2 ? CHANNEL_STEREO : CHANNEL_MONO;
+  sound->channels = info.channels;
   sound->sampleRate = info.sample_rate;
   sound->frames = stb_vorbis_stream_length_in_samples(sound->decoder);
 
@@ -225,7 +225,7 @@ static bool loadWAV(Sound** result, Blob* blob, bool decode) {
   Sound* sound = lovrCalloc(sizeof(Sound));
   sound->ref = 1;
   sound->format = f32 || wav->sampleSize == 24 || wav->sampleSize == 32 ? SAMPLE_F32 : SAMPLE_I16;
-  sound->layout = wav->channels == 4 ? CHANNEL_AMBISONIC : (wav->channels == 2 ? CHANNEL_STEREO : CHANNEL_MONO);
+  sound->channels = wav->channels;
   sound->sampleRate = wav->sampleRate;
 
   // Search for data chunk containing samples
@@ -321,7 +321,7 @@ static bool loadMP3(Sound** result, Blob* blob, bool decode) {
     sound->blob = lovrBlobCreate(info.buffer, info.samples * sizeof(float), blob->name);
     sound->format = SAMPLE_F32;
     sound->sampleRate = info.hz;
-    sound->layout = info.channels == 2 ? CHANNEL_STEREO : CHANNEL_MONO;
+    sound->channels = info.channels;
     sound->frames = (uint32_t) (info.samples / info.channels);
     sound->read = lovrSoundReadRaw;
     *result = sound;
@@ -337,7 +337,7 @@ static bool loadMP3(Sound** result, Blob* blob, bool decode) {
     sound->ref = 1;
     sound->format = SAMPLE_F32;
     sound->sampleRate = decoder->info.hz;
-    sound->layout = decoder->info.channels == 2 ? CHANNEL_STEREO : CHANNEL_MONO;
+    sound->channels = decoder->info.channels;
     sound->frames = decoder->samples / decoder->info.channels;
     sound->read = lovrSoundReadMp3;
     sound->blob = blob;
@@ -374,12 +374,8 @@ SampleFormat lovrSoundGetFormat(Sound* sound) {
   return sound->format;
 }
 
-ChannelLayout lovrSoundGetChannelLayout(Sound* sound) {
-  return sound->layout;
-}
-
 uint32_t lovrSoundGetChannelCount(Sound* sound) {
-  return 1 << sound->layout;
+  return sound->channels;
 }
 
 uint32_t lovrSoundGetSampleRate(Sound* sound) {
@@ -443,7 +439,7 @@ bool lovrSoundCopy(Sound* src, Sound* dst, uint32_t count, uint32_t srcOffset, u
   lovrCheck(dst->stream || dst->blob, "Live-generated sound can not be written to");
   lovrCheck(src != dst, "Can not copy a Sound to itself");
   lovrCheck(src->format == dst->format, "Sound formats need to match");
-  lovrCheck(src->layout == dst->layout, "Sound channel layouts need to match");
+  lovrCheck(src->channels == dst->channels, "Sound channel counts need to match");
   uint32_t frames = 0;
 
   if (dst->stream) {

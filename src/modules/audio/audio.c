@@ -394,7 +394,7 @@ bool lovrAudioGetDevice(AudioType type, AudioDevice* device) {
 
 bool lovrAudioSetDevice(AudioType type, void* id, size_t size, Sound* sink, AudioShareMode shareMode) {
   lovrAssert(!id || size == sizeof(ma_device_id), "Invalid device ID");
-  lovrCheck(!sink || lovrSoundGetChannelLayout(sink) != CHANNEL_AMBISONIC, "Ambisonic Sounds cannot be used as sinks");
+  lovrCheck(!sink || lovrSoundGetChannelCount(sink) <= 2, "Ambisonic Sounds cannot be used as sinks");
   lovrCheck(!sink || lovrSoundIsStream(sink), "Sinks must be streams");
 
   // If no sink is provided for a capture device, one is created internally
@@ -540,7 +540,7 @@ void lovrAudioSetReverb(float reverb) {
 // Source
 
 Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial) {
-  lovrCheck(lovrSoundGetChannelLayout(sound) != CHANNEL_AMBISONIC, "Ambisonic Sources are not currently supported");
+  lovrCheck(lovrSoundGetChannelCount(sound) <= 2, "Ambisonic Sources are not currently supported");
 
   Source* source = lovrCalloc(sizeof(Source));
   source->ref = 1;

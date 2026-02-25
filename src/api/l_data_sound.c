@@ -31,7 +31,12 @@ static int l_lovrSoundGetFormat(lua_State* L) {
 
 static int l_lovrSoundGetChannelLayout(lua_State* L) {
   Sound* sound = luax_checktype(L, 1, Sound);
-  luax_pushenum(L, ChannelLayout, lovrSoundGetChannelLayout(sound));
+  switch (lovrSoundGetChannelCount(sound)) {
+    case 1: luax_pushenum(L, ChannelLayout, CHANNEL_MONO); break;
+    case 2: luax_pushenum(L, ChannelLayout, CHANNEL_STEREO); break;
+    case 4: case 9: case 16: luax_pushenum(L, ChannelLayout, CHANNEL_AMBISONIC); break;
+    default: lua_pushnil(L);
+  }
   return 1;
 }
 

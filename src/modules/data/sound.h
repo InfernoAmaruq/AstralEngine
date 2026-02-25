@@ -19,13 +19,12 @@ typedef enum {
 
 typedef struct Sound Sound;
 
-Sound* lovrSoundCreateRaw(uint32_t frames, SampleFormat format, ChannelLayout channels, uint32_t sampleRate, struct Blob* data);
-Sound* lovrSoundCreateStream(uint32_t frames, SampleFormat format, ChannelLayout channels, uint32_t sampleRate);
+Sound* lovrSoundCreateRaw(uint32_t frames, SampleFormat format, uint32_t channels, uint32_t sampleRate, struct Blob* data);
+Sound* lovrSoundCreateStream(uint32_t frames, SampleFormat format, uint32_t channels, uint32_t sampleRate);
 Sound* lovrSoundCreateFromFile(struct Blob* blob, bool decode);
 void lovrSoundDestroy(void* ref);
 struct Blob* lovrSoundGetBlob(Sound* sound);
 SampleFormat lovrSoundGetFormat(Sound* sound);
-ChannelLayout lovrSoundGetChannelLayout(Sound* sound);
 uint32_t lovrSoundGetChannelCount(Sound* sound);
 uint32_t lovrSoundGetSampleRate(Sound* sound);
 uint32_t lovrSoundGetFrameCount(Sound* sound);

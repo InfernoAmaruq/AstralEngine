@@ -173,14 +173,24 @@ static int l_lovrDataNewSound(lua_State* L) {
   if (type == LUA_TNUMBER) {
     uint32_t frames = luax_checku32(L, 1);
     SampleFormat format = luax_checkenum(L, 2, SampleFormat, "f32");
-    ChannelLayout layout = luax_checkenum(L, 3, ChannelLayout, "stereo");
+    uint32_t channels;
+    if (lua_type(L, 3) == LUA_TSTRING) {
+      switch (luax_checkenum(L, 3, ChannelLayout, NULL)) {
+        case CHANNEL_MONO: channels = 1; break;
+        case CHANNEL_STEREO: channels = 2; break;
+        case CHANNEL_AMBISONIC: channels = 4; break;
+        default: channels = 1; break;
+      }
+    } else {
+      channels = luax_checku32(L, 3);
+    }
     uint32_t sampleRate = luax_optu32(L, 4, 48000);
     Blob* blob = luax_totype(L, 5, Blob);
     const char* other = lua_tostring(L, 5);
     bool stream = other && !strcmp(other, "stream");
     Sound* sound = stream ?
-      lovrSoundCreateStream(frames, format, layout, sampleRate) :
-      lovrSoundCreateRaw(frames, format, layout, sampleRate, blob);
+      lovrSoundCreateStream(frames, format, channels, sampleRate) :
+      lovrSoundCreateRaw(frames, format, channels, sampleRate, blob);
     luax_assert(L, sound);
     luax_pushtype(L, Sound, sound);
     lovrRelease(sound, lovrSoundDestroy);

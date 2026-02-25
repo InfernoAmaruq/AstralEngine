@@ -16,11 +16,11 @@ static const ma_format miniaudioFormats[] = {
   [SAMPLE_F32] = ma_format_f32
 };
 
+typedef uint32_t SoundCallback(Sound* sound, uint32_t offset, uint32_t count, void* data);
+
 struct Sound {
   atomic_uint ref;
   SoundCallback* read;
-  void* callbackMemo; // When using lovrSoundCreateFromCallback, any state the read callback uses should be stored here
-  SoundDestroyCallback* callbackMemoDestroy; // This should be used to free the callbackMemo pointer (if appropriate)
   Blob* blob;
   void* decoder;
   void* stream;
@@ -35,7 +35,7 @@ struct Sound {
 
 static uint32_t lovrSoundReadRaw(Sound* sound, uint32_t offset, uint32_t count, void* data) {
   uint8_t* p = sound->blob->data;
-  uint32_t n = sound->frames == LOVR_SOUND_ENDLESS ? count : MIN(count, sound->frames - offset);
+  uint32_t n = MIN(count, sound->frames - offset);
   size_t stride = lovrSoundGetStride(sound);
   memcpy(data, p + offset * stride, n * stride);
   return n;
@@ -356,22 +356,8 @@ Sound* lovrSoundCreateFromFile(Blob* blob, bool decode) {
   return sound;
 }
 
-Sound* lovrSoundCreateFromCallback(SoundCallback read, void *callbackMemo, SoundDestroyCallback callbackMemoDestroy, SampleFormat format, uint32_t sampleRate, ChannelLayout layout, uint32_t maxFrames) {
-  Sound* sound = lovrCalloc(sizeof(Sound));
-  sound->ref = 1;
-  sound->read = read;
-  sound->format = format;
-  sound->sampleRate = sampleRate;
-  sound->layout = layout;
-  sound->frames = maxFrames;
-  sound->callbackMemo = callbackMemo;
-  sound->callbackMemoDestroy = callbackMemoDestroy;
-  return sound;
-}
-
 void lovrSoundDestroy(void* ref) {
   Sound* sound = (Sound*) ref;
-  if (sound->callbackMemoDestroy) sound->callbackMemoDestroy(sound);
   lovrRelease(sound->blob, lovrBlobDestroy);
   if (sound->read == lovrSoundReadOgg) stb_vorbis_close(sound->decoder);
   if (sound->read == lovrSoundReadMp3) mp3dec_ex_close(sound->decoder), lovrFree(sound->decoder);
@@ -484,8 +470,4 @@ bool lovrSoundCopy(Sound* src, Sound* dst, uint32_t count, uint32_t srcOffset, u
 
   if (framesCopied) *framesCopied = frames;
   return true;
-}
-
-void *lovrSoundGetCallbackMemo(Sound* sound) {
-  return sound->callbackMemo;
 }

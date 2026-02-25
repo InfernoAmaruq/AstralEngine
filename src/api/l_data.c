@@ -190,8 +190,14 @@ static int l_lovrDataNewSound(lua_State* L) {
     bool stream = other && !strcmp(other, "stream");
     Sound* sound = stream ?
       lovrSoundCreateStream(frames, format, channels, sampleRate) :
-      lovrSoundCreateRaw(frames, format, channels, sampleRate, blob);
+      lovrSoundCreate(frames, format, channels, sampleRate);
     luax_assert(L, sound);
+
+    if (blob) {
+      Blob* dst = lovrSoundGetBlob(sound);
+      memcpy(dst->data, blob->data, MIN(blob->size, dst->size));
+    }
+
     luax_pushtype(L, Sound, sound);
     lovrRelease(sound, lovrSoundDestroy);
     return 1;

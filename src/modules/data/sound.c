@@ -78,7 +78,7 @@ static uint32_t lovrSoundReadMp3(Sound* sound, uint32_t offset, uint32_t count, 
 
 // Sound
 
-Sound* lovrSoundCreateRaw(uint32_t frames, SampleFormat format, uint32_t channels, uint32_t sampleRate, Blob* blob) {
+Sound* lovrSoundCreate(uint32_t frames, SampleFormat format, uint32_t channels, uint32_t sampleRate) {
   Sound* sound = lovrCalloc(sizeof(Sound));
   sound->ref = 1;
   sound->frames = frames;
@@ -89,11 +89,6 @@ Sound* lovrSoundCreateRaw(uint32_t frames, SampleFormat format, uint32_t channel
   size_t size = frames * lovrSoundGetStride(sound);
   void* data = lovrCalloc(size);
   sound->blob = lovrBlobCreate(data, size, "Sound");
-
-  if (blob) {
-    memcpy(sound->blob->data, blob->data, MIN(size, blob->size));
-  }
-
   return sound;
 }
 

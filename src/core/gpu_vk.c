@@ -1884,6 +1884,9 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info,
 
   if (state.extensions.dynamicRendering) {
     pipelineInfo.pNext = &renderingInfo;
+    if (info->foveated) {
+      pipelineInfo.flags |= VK_PIPELINE_CREATE_RENDERING_FRAGMENT_DENSITY_MAP_ATTACHMENT_BIT_EXT;
+    }
   } else {
     bool depth = info->depth.format;
     uint32_t colorCount = info->attachmentCount;

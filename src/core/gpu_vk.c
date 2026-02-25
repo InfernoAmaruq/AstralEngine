@@ -3154,11 +3154,8 @@ bool gpu_init(gpu_config* config) {
     }
 
     if (state.extensions.foveation) {
-      VkPhysicalDeviceFragmentDensityMapFeaturesEXT supportedDensityMapFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT };
-      VkPhysicalDeviceFeatures2 query = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &supportedDensityMapFeatures };
-      vkGetPhysicalDeviceFeatures2(state.adapter, &query);
       fragmentDensityMapFeatures.fragmentDensityMap = true;
-      fragmentDensityMapFeatures.fragmentDensityMapNonSubsampledImages = supportedDensityMapFeatures.fragmentDensityMapNonSubsampledImages;
+      fragmentDensityMapFeatures.fragmentDensityMapNonSubsampledImages = true;
       CHAIN(fragmentDensityMapFeatures);
     }
 
@@ -4034,9 +4031,7 @@ static bool transitionAttachment(gpu_texture* texture, bool begin, bool resolve,
 }
 
 static VkImageLayout getNaturalLayout(uint32_t usage, VkImageAspectFlags aspect) {
-  if (usage & GPU_TEXTURE_FOVEATION) {
-    return VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT;
-  } else if (usage & (GPU_TEXTURE_STORAGE | GPU_TEXTURE_COPY_SRC | GPU_TEXTURE_COPY_DST)) {
+  if (usage & (GPU_TEXTURE_STORAGE | GPU_TEXTURE_COPY_SRC | GPU_TEXTURE_COPY_DST)) {
     return VK_IMAGE_LAYOUT_GENERAL;
   } else if (usage & GPU_TEXTURE_SAMPLE) {
     return VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL_KHR;

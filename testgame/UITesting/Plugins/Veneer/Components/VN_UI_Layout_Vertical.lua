@@ -1,3 +1,4 @@
+local EnumData = require("../EnumData")
 local EntityService = GetService("Entity")
 local Component = GetService("Component")
 local Layout_Vertical = {
@@ -6,6 +7,8 @@ local Layout_Vertical = {
     },
 }
 Layout_Vertical.Name = "UIVerticalLayout"
+
+local LayoutEnum = EnumData.AlignPosition
 
 local OnMatrixUpdate = function(EntityId, NewMatrix)
     local Ancestry = Component.HasComponent(EntityId, "Ancestry")
@@ -35,8 +38,25 @@ EntityService.OnAncestryChanged:Connect(function(...)
     end
 end)
 
+local Index = {
+    PaddingScale = 1,
+    PaddingOffset = 2,
+    AlignmentVertical = 3,
+    AlignmentHorizontal = 4,
+}
+
+local Methods = {
+    RebuildChildren = function()
+        --
+    end,
+}
+
 local mt = {
-    __index = function(self, k) end,
+    __index = function(self, k)
+        if Methods[k] then
+            return Methods[k]
+        end
+    end,
     __newindex = function(self, k, v) end,
 }
 
@@ -46,13 +66,17 @@ Layout_Vertical.Metadata.__create = function(Input, Ent, Sink)
     if not AncestryComponent and not Sink then
     end
 
-    local PaddingScale
-    local PaddingOffset
+    local PaddingScale = Input and Input.PaddingScale or Vec2()
+    local PaddingOffset = Input and Input.PaddingOffset or Vec2()
 
-    local AlignmentVertical
-    local AlignmentHorizontal
+    local AlignmentVertical = Input and Input.AlignmentVertical or LayoutEnum.Center
+    local AlignmentHorizontal = Input and Input.AlignmentHorizontal or LayoutEnum.Center
 
-    return {}
+    local Data = {}
+
+    setmetatable(Data, mt)
+
+    return Data
 end
 
 Layout_Vertical.FinalProcessing = function()

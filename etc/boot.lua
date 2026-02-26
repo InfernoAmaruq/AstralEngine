@@ -174,9 +174,9 @@ function lovr.boot()
     lovr.filesystem.filesystemType = FSType
 
     lovr.filesystem.getCurrentPath = function(Level)
-        Level = Level or 2
+        Level = Level or 1
 
-        local Info = debug.getinfo(Level, "S")
+        local Info = debug.getinfo(Level + 1, "S")
         local CurPath = Info.source:sub(1, 1) == "@" and Info.source:sub(2) or Info.source
         return CurPath
     end

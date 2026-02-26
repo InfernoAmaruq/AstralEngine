@@ -100,6 +100,7 @@ Entity.OnAncestryChanged:Connect(function(...)
     while i <= n do
         for LocalI = 0, 1 do
             local Object = select(i + LocalI, ...)
+
             local HasEntityWithUICamera = Object
                 and Object:GetComponent("Ancestry"):FindFirstAncestorWithComponent("UICamera")
             if HasEntityWithUICamera then
@@ -225,6 +226,8 @@ UICam.Metadata.__resolvesoft = function(_, Ent, Name)
 end
 
 UICam.Metadata.__create = function(Input, Entity, Skip)
+    -- errors HERE
+
     local Data = {}
 
     if not Skip and not ComponentService.HasComponent(Entity, "Ancestry") then

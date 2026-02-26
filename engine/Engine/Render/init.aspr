@@ -67,7 +67,17 @@ function Renderer.PassStorage.AddPass(P, Pass, Id, Enabled)
     Renderer.PassStorage.RebuildPassTable()
 end
 
-function Renderer.PassStorage.RemovePass(P, Id)
+function Renderer.PassStorage.RemovePass(Pass)
+    for i = 1,2 do
+        local Search = i == 1 and "PreTable" or "PostTable"
+        for j,P in pairs(Renderer.PassStorage[Search]) do
+            if P == Pass then
+                Renderer.PassStorage[Search][j] = nil
+                break
+            end
+        end
+    end
+
     Renderer.PassStorage.RebuildPassTable()
 end
 

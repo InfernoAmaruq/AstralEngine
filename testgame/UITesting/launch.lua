@@ -8,10 +8,30 @@ local CamComp = CameraEnt:AddComponent("Camera", {
     DrawToScreen = true,
 })
 
-local UICam = CameraEnt:AddComponent("UICamera", {
+-- INTRO
+
+local IntroMod = require("Intro")
+local Int = IntroMod.Load(CameraEnt)
+coroutine.yield()
+-- wait a bit since this is launch.lua
+Int:Play()
+print("WAIT")
+Int.Finished:Wait()
+print("DONE")
+
+-- END
+
+--[[local UICam = CameraEnt:AddComponent("UICamera", {
     Camera = CamComp,
     ProcessInputs = true,
-})
+})]]
+
+local ok, Err = pcall(CameraEnt.AddComponent, CameraEnt, "UICamera", { Camera = CamComp, ProcessInputs = true })
+print(ok, Err)
+
+if not ok then
+    return
+end
 
 local LayoutContainer = EntityService.New("LayoutContainer")
 LayoutContainer:AddComponent("Ancestry")

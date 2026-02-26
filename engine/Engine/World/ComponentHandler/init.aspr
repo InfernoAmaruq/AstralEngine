@@ -176,11 +176,13 @@ function Component.RemoveComponent(e, id, Force)
         Comp.Metadata.__remove(CompInst, e, Force)
     end
 
-    setmetatable(CompInst, DEADMT)
-
     for i in pairs(CompInst) do
         CompInst[i] = nil
     end
+
+    CompInst.IsNull = true
+
+    setmetatable(CompInst, DEADMT)
 
     Component.Components[id].Storage[e] = nil
     Component.SetComponents[e][id] = nil

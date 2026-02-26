@@ -1,3 +1,4 @@
+local EnumData = require("../EnumData")
 local Component = GetService("Component")
 local Renderer = GetService("Renderer")
 local Text = {}
@@ -11,14 +12,7 @@ Text.Metadata = {
     HardDependency = { UIRoot = true },
 }
 
-local AlignPos = ENUM.TextAlignPosition
-    or ENUM({
-        Left = 1,
-        Right = 2,
-        Center = 3,
-        Top = 4,
-        Bottom = 5,
-    }, "TextAlignPosition")
+local AlignPos = EnumData.AlignPosition
 
 local HAlignTranslate = {
     [AlignPos.Center] = "center",

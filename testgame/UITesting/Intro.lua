@@ -7,9 +7,6 @@ IntroModule.__index = IntroModule
 local IntroTime = 4
 
 local FlameLogo = [[
-
-
-
      δ   σ
              δ
     /\   /\
@@ -18,10 +15,6 @@ local FlameLogo = [[
  σ    \w/ σ
   δ
             δ
-
-
-
-  > Flare Amaro
 ]]
 
 -- allocing directly cause its about as temp as shit can be
@@ -60,14 +53,34 @@ IntroModule.Load = function(Camera, Time)
     FGCanvas.Parent = BackgroundCanvas
 
     -- define textbox w logo
-    --[[local TextBox = ES.New("UIText")
+    local TextBox = ES.New("UIText")
     TextBox:AddComponent("Ancestry")
     TextBox:AddComponent("UIRoot", {
-        Size = { Scale = vec2(1, 1) },
-        Position = { Scale = vec2(-0.02, 0) },
+        Size = { Scale = vec2(0.25, 0.1) },
+        Position = { Scale = vec2(1, 0.98) },
+        AnchorPoint = vec2(0.7, 1),
     })
-    TextBox:AddComponent("UIText", { Color = color.fromRGB(255, 0, 0), Text = FlameLogo, Font = Font, FontSize = 60 })
-    TextBox.Parent = BackgroundCanvas]]
+    TextBox:AddComponent("UIText", {
+        Color = color.fromRGB(255, 255, 255),
+        Text = FlameLogo,
+        Font = Font,
+        FontSize = 15,
+    })
+    TextBox.Parent = BackgroundCanvas
+
+    local TB2 = ES.New("UIText2")
+    TB2:AddComponent("Ancestry")
+    TB2:AddComponent("UIRoot", {
+        Size = { Scale = vec2(1, 0.35) },
+        Position = { Scale = vec2(0, 0) },
+    })
+    TB2:AddComponent("UIText", {
+        Color = color.fromRGB(255, 255, 255),
+        Text = "Proudly made with:",
+        Font = Font,
+        FontSize = 70,
+    })
+    TB2.Parent = BackgroundCanvas
 
     local AstralLogo = ES.New("LogoTexture")
     AstralLogo:AddComponent("Ancestry")
@@ -86,6 +99,8 @@ IntroModule.Load = function(Camera, Time)
         BG = BackgroundCanvas,
         FG = FGCanvas,
         Logo = AstralLogo,
+        Text1 = TextBox,
+        Text2 = TB2,
     }
 
     setmetatable(Data, IntroModule)
@@ -111,6 +126,8 @@ local Func = function(dt)
         Obj.Objects.Logo:Destroy()
         Obj.Objects.BG:Destroy()
         Obj.Objects.Camera:Destroy()
+        Obj.Objects.Text1:Destroy()
+        Obj.Objects.Text2:Destroy()
         Logo:release()
         Font:release()
         RS.UnbindFromStep(BindName)

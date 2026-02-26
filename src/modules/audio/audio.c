@@ -87,7 +87,7 @@ static struct {
   ma_device devices[2];
   ma_device_info* deviceInfo[2];
   ma_data_converter playbackConverter;
-  Sound* sinks[2];
+  AudioStream* sinks[2];
   Source* activeSources[64];
   atomic_ullong activeSourceMask;
   uint64_t pendingSourceMask;
@@ -268,12 +268,13 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
   phonon_mix_reverb(dst);
 
   if (state.sinks[AUDIO_PLAYBACK]) {
-    uint64_t capacity = sizeof(tmp) / lovrSoundGetChannelCount(state.sinks[AUDIO_PLAYBACK]) / sizeof(float);
+    Sound* sound = lovrAudioStreamGetSound(state.sinks[AUDIO_PLAYBACK]);
+    uint64_t capacity = sizeof(tmp) / lovrSoundGetChannelCount(sound) / sizeof(float);
     while (count > 0) {
       ma_uint64 framesConsumed = count;
       ma_uint64 framesWritten = capacity;
       ma_data_converter_process_pcm_frames(&state.playbackConverter, dst, &framesConsumed, tmp, &framesWritten);
-      lovrSoundWrite(state.sinks[AUDIO_PLAYBACK], 0, framesWritten, tmp, NULL);
+      if (lovrAudioStreamWrite(state.sinks[AUDIO_PLAYBACK], framesWritten, tmp) < framesWritten) break;
       dst += framesConsumed * 2;
       count -= framesConsumed;
     }
@@ -281,7 +282,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
 }
 
 static void onCapture(ma_device* device, void* output, const void* input, uint32_t count) {
-  lovrSoundWrite(state.sinks[AUDIO_CAPTURE], 0, count, input, NULL);
+  lovrAudioStreamWrite(state.sinks[AUDIO_CAPTURE], count, input);
 }
 
 static void onLog(void* userdata, ma_uint32 maLevel, const char* message) {
@@ -342,8 +343,8 @@ void lovrAudioDestroy(void) {
   Source* source;
   FOREACH_SOURCE(state.activeSourceMask | state.pendingSourceMask, source) lovrRelease(source, lovrSourceDestroy);
   ma_context_uninit(&state.context);
-  lovrRelease(state.sinks[AUDIO_PLAYBACK], lovrSoundDestroy);
-  lovrRelease(state.sinks[AUDIO_CAPTURE], lovrSoundDestroy);
+  lovrRelease(state.sinks[AUDIO_PLAYBACK], lovrAudioStreamDestroy);
+  lovrRelease(state.sinks[AUDIO_CAPTURE], lovrAudioStreamDestroy);
   ma_data_converter_uninit(&state.playbackConverter, NULL);
   phonon_destroy();
   memset(&state, 0, sizeof(state));
@@ -392,14 +393,13 @@ bool lovrAudioGetDevice(AudioType type, AudioDevice* device) {
   return result == MA_SUCCESS;
 }
 
-bool lovrAudioSetDevice(AudioType type, void* id, size_t size, Sound* sink, AudioShareMode shareMode) {
+bool lovrAudioSetDevice(AudioType type, void* id, size_t size, AudioStream* sink, AudioShareMode shareMode) {
   lovrAssert(!id || size == sizeof(ma_device_id), "Invalid device ID");
-  lovrCheck(!sink || lovrSoundGetChannelCount(sink) <= 2, "Ambisonic Sounds cannot be used as sinks");
-  lovrCheck(!sink || lovrSoundIsStream(sink), "Sinks must be streams");
+  lovrCheck(!sink || lovrSoundGetChannelCount(lovrAudioStreamGetSound(sink)) <= 2, "Ambisonic Sounds cannot be used as sinks");
 
   // If no sink is provided for a capture device, one is created internally
   if (type == AUDIO_CAPTURE && !sink) {
-    sink = lovrSoundCreateStream(state.config.sampleRate * 1., SAMPLE_F32, CHANNEL_MONO, state.config.sampleRate);
+    sink = lovrAudioStreamCreate(state.config.sampleRate * 1., SAMPLE_F32, CHANNEL_MONO, state.config.sampleRate);
   } else {
     lovrRetain(sink);
   }
@@ -433,24 +433,26 @@ bool lovrAudioSetDevice(AudioType type, void* id, size_t size, Sound* sink, Audi
     config.periodSizeInFrames = BUFFER_SIZE;
     config.dataCallback = onPlayback;
     if (sink) {
+      Sound* sound = lovrAudioStreamGetSound(sink);
       ma_data_converter_config converterConfig = ma_data_converter_config_init_default();
       converterConfig.formatIn = config.playback.format;
-      converterConfig.formatOut = miniaudioFormats[lovrSoundGetFormat(sink)];
+      converterConfig.formatOut = miniaudioFormats[lovrSoundGetFormat(sound)];
       converterConfig.channelsIn = config.playback.channels;
-      converterConfig.channelsOut = lovrSoundGetChannelCount(sink);
+      converterConfig.channelsOut = lovrSoundGetChannelCount(sound);
       converterConfig.sampleRateIn = config.sampleRate;
-      converterConfig.sampleRateOut = lovrSoundGetSampleRate(sink);
+      converterConfig.sampleRateOut = lovrSoundGetSampleRate(sound);
       ma_data_converter_uninit(&state.playbackConverter, NULL);
       result = ma_data_converter_init(&converterConfig, NULL, &state.playbackConverter);
       lovrAssertGoto(fail, result == MA_SUCCESS, "Failed to create sink data converter: %s", ma_result_description(result));
     }
   } else {
+    Sound* sound = lovrAudioStreamGetSound(sink);
     config = ma_device_config_init(ma_device_type_capture);
     config.capture.pDeviceID = (ma_device_id*) id;
     config.capture.shareMode = shareModes[shareMode];
-    config.capture.format = miniaudioFormats[lovrSoundGetFormat(sink)];
-    config.capture.channels = lovrSoundGetChannelCount(sink);
-    config.sampleRate = lovrSoundGetSampleRate(sink);
+    config.capture.format = miniaudioFormats[lovrSoundGetFormat(sound)];
+    config.capture.channels = lovrSoundGetChannelCount(sound);
+    config.sampleRate = lovrSoundGetSampleRate(sound);
     config.periodSizeInFrames = BUFFER_SIZE;
     config.dataCallback = onCapture;
   }
@@ -459,7 +461,7 @@ bool lovrAudioSetDevice(AudioType type, void* id, size_t size, Sound* sink, Audi
   lovrAssertGoto(fail, result == MA_SUCCESS, "Failed to initialize device: %s", ma_result_description(result));
   return true;
 fail:
-  lovrRelease(sink, lovrSoundDestroy);
+  lovrRelease(sink, lovrAudioStreamDestroy);
   state.sinks[type] = NULL;
   return false;
 }
@@ -714,7 +716,7 @@ bool lovrSourceIsLooping(Source* source) {
 }
 
 bool lovrSourceSetLooping(Source* source, bool loop) {
-  lovrCheck(loop == false || lovrSoundIsStream(source->sound) == false, "Can't loop streams");
+  lovrCheck(!loop || !lovrSoundIsStream(source->sound), "Can't loop streams");
   source->looping = loop;
   return true;
 }

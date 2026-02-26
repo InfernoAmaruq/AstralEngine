@@ -98,7 +98,7 @@ static int l_lovrAudioSetDevice(lua_State *L) {
   AudioType type = luax_checkenum(L, 1, AudioType, "playback");
   void* id = lua_touserdata(L, 2);
   size_t size = id ? luax_len(L, 2) : 0;
-  Sound* sink = lua_isnoneornil(L, 3) ? NULL : luax_checktype(L, 3, Sound);
+  AudioStream* sink = lua_isnoneornil(L, 3) ? NULL : luax_checktype(L, 3, AudioStream);
   AudioShareMode shareMode = luax_checkenum(L, 4, AudioShareMode, "shared");
   return luax_pushsuccess(L, lovrAudioSetDevice(type, id, size, sink, shareMode));
 }
@@ -239,11 +239,10 @@ static int l_lovrAudioSetReverb(lua_State* L) {
 }
 
 static int l_lovrAudioNewSource(lua_State* L) {
-  Sound* sound = luax_totype(L, 1, Sound);
-
   bool decode = false;
   bool pitchable = true;
   bool spatial = true;
+
   if (lua_gettop(L) >= 2) {
     luaL_checktype(L, 2, LUA_TTABLE);
 
@@ -260,12 +259,21 @@ static int l_lovrAudioNewSource(lua_State* L) {
     lua_pop(L, 1);
   }
 
-  if (!sound) {
+  Sound* sound = luax_totype(L, 1, Sound);
+  AudioStream* stream = luax_totype(L, 1, AudioStream);
+
+  if (lua_type(L, 1) == LUA_TSTRING || luax_totype(L, 1, Blob)) {
     Blob* blob = luax_readblob(L, 1, "Source");
-    sound = lovrSoundCreateFromFile(blob, decode);
+    sound = lovrSoundLoad(blob, decode);
     lovrRelease(blob, lovrBlobDestroy);
-  } else {
+    luax_assert(L, sound);
+  } else if (sound) {
     lovrRetain(sound);
+  } else if (stream) {
+    sound = lovrAudioStreamGetSound(stream);
+    lovrRetain(sound);
+  } else {
+    return luax_typeerror(L, 1, "string, Blob, Sound, or AudioStream");
   }
 
   Source* source = lovrSourceCreate(sound, pitchable, spatial);

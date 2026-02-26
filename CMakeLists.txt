@@ -343,18 +343,13 @@ if(LOVR_USE_LUAU)
   target_compile_definitions(lovr PRIVATE LOVR_USE_LUAU)
 endif()
 
-if(LOVR_ENABLE_AUDIO OR LOVR_ENABLE_DATA)
-  target_sources(lovr PRIVATE
-    src/lib/miniaudio/miniaudio.c
-  )
-endif()
-
 if(LOVR_ENABLE_AUDIO)
   target_sources(lovr PRIVATE
     src/modules/audio/audio.c
     src/api/l_audio.c
     src/api/l_audio_source.c
     src/api/l_audio_audioMesh.c
+    src/lib/miniaudio/miniaudio.c
   )
 
   if(LOVR_USE_STEAM_AUDIO)
@@ -377,6 +372,7 @@ if(LOVR_ENABLE_DATA)
     src/modules/data/rasterizer.c
     src/modules/data/sound.c
     src/api/l_data.c
+    src/api/l_data_audioStream.c
     src/api/l_data_blob.c
     src/api/l_data_image.c
     src/api/l_data_modelData.c

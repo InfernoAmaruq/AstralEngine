@@ -4,6 +4,7 @@
 
 #pragma once
 
+struct AudioStream;
 struct Blob;
 struct Sound;
 
@@ -81,7 +82,7 @@ void lovrAudioDestroy(void);
 uint32_t lovrAudioGetSampleRate(void);
 void lovrAudioEnumerateDevices(AudioType type, AudioDeviceCallback* callback, void* userdata);
 bool lovrAudioGetDevice(AudioType type, AudioDevice* device);
-bool lovrAudioSetDevice(AudioType type, void* id, size_t size, struct Sound* sink, AudioShareMode shareMode);
+bool lovrAudioSetDevice(AudioType type, void* id, size_t size, struct AudioStream* sink, AudioShareMode shareMode);
 bool lovrAudioStart(AudioType type);
 bool lovrAudioStop(AudioType type);
 bool lovrAudioIsStarted(AudioType type);

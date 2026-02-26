@@ -147,6 +147,7 @@ typedef enum {
   T_NONE,
   T_Source,
   T_AudioMesh,
+  T_AudioStream,
   T_Blob,
   T_Image,
   T_ModelData,

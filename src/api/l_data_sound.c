@@ -66,13 +66,6 @@ static int l_lovrSoundGetFrameCount(lua_State* L) {
   return 1;
 }
 
-static int l_lovrSoundGetCapacity(lua_State* L) {
-  Sound* sound = luax_checktype(L, 1, Sound);
-  uint32_t frames = lovrSoundGetCapacity(sound);
-  lua_pushinteger(L, frames);
-  return 1;
-}
-
 static int l_lovrSoundGetSampleCount(lua_State* L) {
   Sound* sound = luax_checktype(L, 1, Sound);
   uint32_t frames = lovrSoundGetFrameCount(sound);
@@ -93,13 +86,6 @@ static int l_lovrSoundIsCompressed(lua_State* L) {
   Sound* sound = luax_checktype(L, 1, Sound);
   bool compressed = lovrSoundIsCompressed(sound);
   lua_pushboolean(L, compressed);
-  return 1;
-}
-
-static int l_lovrSoundIsStream(lua_State* L) {
-  Sound* sound = luax_checktype(L, 1, Sound);
-  bool stream = lovrSoundIsStream(sound);
-  lua_pushboolean(L, stream);
   return 1;
 }
 
@@ -184,7 +170,7 @@ static int l_lovrSoundSetFrames(lua_State* L) {
   Sound* sound = luax_checktype(L, 1, Sound);
   size_t stride = lovrSoundGetStride(sound);
   SampleFormat format = lovrSoundGetFormat(sound);
-  uint32_t frameCount = lovrSoundGetCapacity(sound);
+  uint32_t frameCount = lovrSoundGetFrameCount(sound);
   uint32_t channels = lovrSoundGetChannelCount(sound);
 
   if (lua_isuserdata(L, 2)) {
@@ -206,7 +192,7 @@ static int l_lovrSoundSetFrames(lua_State* L) {
     if (other) {
       uint32_t srcOffset = luax_optu32(L, 5, 0);
       uint32_t dstOffset = luax_optu32(L, 4, 0);
-      uint32_t count = luax_optu32(L, 3, lovrSoundGetCapacity(other) - srcOffset);
+      uint32_t count = luax_optu32(L, 3, lovrSoundGetFrameCount(other) - srcOffset);
       uint32_t frames;
       luax_assert(L, lovrSoundCopy(other, sound, count, srcOffset, dstOffset,  &frames));
       lua_pushinteger(L, frames);
@@ -264,11 +250,9 @@ const luaL_Reg lovrSound[] = {
   { "getSampleRate", l_lovrSoundGetSampleRate },
   { "getByteStride", l_lovrSoundGetByteStride },
   { "getFrameCount", l_lovrSoundGetFrameCount },
-  { "getCapacity", l_lovrSoundGetCapacity },
   { "getSampleCount", l_lovrSoundGetSampleCount },
   { "getDuration", l_lovrSoundGetDuration },
   { "isCompressed", l_lovrSoundIsCompressed },
-  { "isStream", l_lovrSoundIsStream },
   { "getFrames", l_lovrSoundGetFrames },
   { "setFrames", l_lovrSoundSetFrames },
   { NULL, NULL }

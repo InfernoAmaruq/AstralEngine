@@ -385,6 +385,13 @@ Camera.Metadata.__remove = function(self, Entity)
     Renderer.PassStorage.RemovePass(self.SolidPass)
     Renderer.PassStorage.RemovePass(self.CameraPass)
 
+    local OIT = self.OITPass[1] or self.OITPass
+    OIT:release()
+    local Solid = self.SolidPass[1] or self.SolidPass
+    Solid:release()
+    local CameraPass = self.CameraPass[1] or self.CameraPass
+    CameraPass:release()
+
     if Component.TransformRequired then
         table.insert(Component.TransformRequired, Camera.Name)
     end

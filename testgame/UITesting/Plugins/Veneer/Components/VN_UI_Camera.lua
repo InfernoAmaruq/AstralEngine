@@ -342,6 +342,9 @@ end
 UICam.Metadata.__remove = function(self, Ent)
     RenderService.VeneerUI.UnbindUICamera(self)
     table.remove(TotalCameraEntities, table.find(TotalCameraEntities, Ent))
+
+    local Pass = self[1][1] or self[1]
+    Pass:release()
 end
 
 return UICam

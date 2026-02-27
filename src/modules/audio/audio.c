@@ -61,6 +61,8 @@ struct Source {
   IPLPanningEffect panningEffect;
   IPLBinauralEffect binauralEffect;
   IPLReflectionEffect reflectionEffect;
+  IPLAmbisonicsDecodeEffect ambisonicEffect;
+  IPLAudioBuffer ambisonicBuffer;
   IPLDirectEffectParams directParams[2];
   IPLVector3 relativeDirection[2];
 #endif
@@ -156,8 +158,8 @@ static void phonon_mesh_set_transform(AudioMesh* mesh, float* transform);
 // Device callbacks
 
 static void onPlayback(ma_device* device, void* out, const void* in, uint32_t count) {
-  float raw[BUFFER_SIZE * 2];
-  float tmp[BUFFER_SIZE * 2];
+  float raw[BUFFER_SIZE * 16];
+  float tmp[BUFFER_SIZE * 16];
   float* buf = NULL;
   float* dst = out;
   Source* source;
@@ -241,7 +243,7 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
         buf[i] *= source->volume;
       }
     } else {
-      memset(raw, 0, BUFFER_SIZE * sizeof(float));
+      memset(raw, 0, BUFFER_SIZE * channels * sizeof(float));
       buf = raw;
     }
 
@@ -541,7 +543,8 @@ void lovrAudioSetReverb(float reverb) {
 // Source
 
 Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial) {
-  lovrCheck(lovrSoundGetChannelCount(sound) <= 2, "Ambisonic Sources are not currently supported");
+  lovrCheck(lovrSoundGetChannelCount(sound) <= 2 || spatial, "Ambisonic Sources must be spatial");
+  lovrCheck(lovrSoundGetChannelCount(sound) <= 16, "Max source channel count is 16");
 
   Source* source = lovrCalloc(sizeof(Source));
   source->ref = 1;
@@ -1233,10 +1236,121 @@ static void phonon_mix_begin(void) {
   memset(state.parametricReverb.data[0], 0, BUFFER_SIZE * sizeof(float));
 }
 
+static bool phonon_mix_source_ambisonic(Source* source, float* src, float* dst) {
+  float left[BUFFER_SIZE], right[BUFFER_SIZE];
+  IPLAudioBuffer output = { 2, BUFFER_SIZE, (float*[2]) { left, right } };
+  bool tail = false;
+
+  // Tail
+  if (!source->playing) {
+    if (iplAmbisonicsDecodeEffectGetTailSize(source->ambisonicEffect) > 0) {
+      tail |= !iplAmbisonicsDecodeEffectGetTail(source->ambisonicEffect, &output);
+      iplAudioBufferInterleave(state.phonon, &output, dst);
+    } else {
+      memset(dst, 0, 2 * BUFFER_SIZE * sizeof(float));
+    }
+
+    if (iplReflectionEffectGetTailSize(source->reflectionEffect) > 0) {
+      if (state.config.reverb.type == REVERB_CONVOLUTION) {
+        tail |= !iplReflectionEffectGetTail(source->reflectionEffect, &output, state.reflectionMixer);
+      } else {
+        output.numChannels = 1;
+        tail |= !iplReflectionEffectGetTail(source->reflectionEffect, &output, NULL);
+        iplAudioBufferMix(state.phonon, &output, &state.parametricReverb);
+      }
+    }
+
+    return tail;
+  }
+
+  IPLAudioBuffer input = source->ambisonicBuffer;
+  iplAudioBufferDeinterleave(state.phonon, src, &input);
+
+  // Reverb
+  if (source->reverb > 0.f && state.enabledMeshCount > 0) {
+    IPLAudioBuffer reverbInput = { 1, BUFFER_SIZE };
+
+    if (source->reverb == 1.f) {
+      reverbInput.data = input.data;
+    } else {
+      reverbInput.data = &src;
+      for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+        src[i] *= source->reverb;
+      }
+    }
+
+    if (source->reverbMode == REVERB_SOURCE) {
+      IPLSimulationOutputs outputs = { 0 };
+      iplSourceGetOutputs(source->handle, IPL_SIMULATIONFLAGS_REFLECTIONS, &outputs);
+
+      if (state.config.reverb.type == REVERB_CONVOLUTION) {
+        tail |= !iplReflectionEffectApply(source->reflectionEffect, &outputs.reflections, &reverbInput, &reverbInput, state.reflectionMixer);
+      } else {
+        IPLAudioBuffer out = { 1, BUFFER_SIZE, (float*[1]) { dst } };
+        tail |= !iplReflectionEffectApply(source->reflectionEffect, &outputs.reflections, &reverbInput, &out, NULL);
+        iplAudioBufferMix(state.phonon, &out, &state.parametricReverb);
+      }
+    } else if (state.reverb > 0.f) {
+      iplAudioBufferMix(state.phonon, &reverbInput, &state.listenerReverb);
+    }
+  }
+
+  // Direct
+  if (source->directParams[state.frontbuffer].flags) {
+    tail |= !iplDirectEffectApply(source->directEffect, &source->directParams[state.frontbuffer], &input, &input);
+  }
+
+  // Spatialization
+  if (source->spatialization > 0.f) {
+    uint32_t order;
+
+    switch (input.numChannels) {
+      case 4: order = 1; break;
+      case 9: order = 2; break;
+      case 16: order = 3; break;
+      default: lovrUnreachable();
+    }
+
+    IPLAmbisonicsDecodeEffectParams params = {
+      .order = order,
+      .hrtf = state.hrtf[0],
+      .binaural = !!state.hrtf[0]
+    };
+
+    float orientation[4];
+    quat_conjugate(quat_init(orientation, source->orientation));
+    quat_mul(orientation, orientation, state.orientation);
+    convertPose((float[3]) { 0.f, 0.f, 0.f }, orientation, &params.orientation);
+
+    tail |= !iplAmbisonicsDecodeEffectApply(source->ambisonicEffect, &params, &input, &output);
+
+    if (source->spatialization < 1.f) {
+      float s = source->spatialization, t = 1.f - s;
+      for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+        left[i] = left[i] * s + input.data[0][i] * t;
+        right[i] = right[i] * s + input.data[0][i] * t;
+      }
+    }
+
+    iplAudioBufferInterleave(state.phonon, &output, dst);
+  } else {
+    for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
+      dst[2 * i + 0] = input.data[0][i];
+      dst[2 * i + 1] = input.data[0][i];
+    }
+  }
+
+  return tail;
+}
+
 static bool phonon_mix_source(Source* source, float* src, float* dst) {
   float left[BUFFER_SIZE], right[BUFFER_SIZE];
   uint32_t channels = lovrSoundGetChannelCount(source->sound);
   bool tail = false;
+
+  if (channels > 2) {
+    return phonon_mix_source_ambisonic(source, src, dst);
+  }
 
   // Tail
   if (!source->playing) {
@@ -1470,22 +1584,51 @@ static bool phonon_source_init(Source* source) {
     return false;
   }
 
-  if (iplBinauralEffectCreate(state.phonon, &state.audioSettings, &binauralEffectSettings, &source->binauralEffect)) {
-    lovrSetError("Failed to create binaural effect");
-    phonon_source_destroy(source);
-    return false;
-  }
-
   if (iplReflectionEffectCreate(state.phonon, &state.audioSettings, &reflectionSettings, &source->reflectionEffect)) {
     lovrSetError("Failed to create reflection effect");
     phonon_source_destroy(source);
     return false;
   }
 
+  if (lovrSoundGetChannelCount(source->sound) > 2) {
+    IPLAmbisonicsDecodeEffectSettings ambisonicSettings = {
+      .speakerLayout.type = IPL_SPEAKERLAYOUTTYPE_STEREO
+    };
+
+    uint32_t channels = lovrSoundGetChannelCount(source->sound);
+
+    switch (channels) {
+      case 4: ambisonicSettings.maxOrder = 1; break;
+      case 9: ambisonicSettings.maxOrder = 2; break;
+      case 16: ambisonicSettings.maxOrder = 3; break;
+      default: lovrUnreachable();
+    }
+
+    if (iplAmbisonicsDecodeEffectCreate(state.phonon, &state.audioSettings, &ambisonicSettings, &source->ambisonicEffect)) {
+      lovrSetError("Failed to create ambisonic effect");
+      phonon_source_destroy(source);
+      return false;
+    }
+
+    if (iplAudioBufferAllocate(state.phonon, channels, BUFFER_SIZE, &source->ambisonicBuffer)) {
+      lovrSetError("Failed to create audio buffer");
+      phonon_source_destroy(source);
+      return false;
+    }
+  } else {
+    if (iplBinauralEffectCreate(state.phonon, &state.audioSettings, &binauralEffectSettings, &source->binauralEffect)) {
+      lovrSetError("Failed to create binaural effect");
+      phonon_source_destroy(source);
+      return false;
+    }
+  }
+
   return true;
 }
 
 static void phonon_source_destroy(Source* source) {
+  iplAudioBufferFree(state.phonon, &source->ambisonicBuffer), source->ambisonicBuffer.data = NULL;
+  iplAmbisonicsDecodeEffectRelease(&source->ambisonicEffect), source->ambisonicEffect = NULL;
   iplReflectionEffectRelease(&source->reflectionEffect), source->reflectionEffect = NULL;
   iplBinauralEffectRelease(&source->binauralEffect), source->binauralEffect = NULL;
   iplPanningEffectRelease(&source->panningEffect), source->panningEffect = NULL;
@@ -1498,6 +1641,7 @@ static void phonon_source_reset(Source* source) {
   iplPanningEffectReset(source->panningEffect);
   iplBinauralEffectReset(source->binauralEffect);
   iplReflectionEffectReset(source->reflectionEffect);
+  iplAmbisonicsDecodeEffectReset(source->ambisonicEffect);
 }
 
 static void phonon_source_add(Source* source) {

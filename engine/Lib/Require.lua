@@ -18,7 +18,7 @@ local LoadExtensionsToTry = {
     ".aspr",
     "/init.lua",
     "/init.aspr",
-    ".lbmf",
+    ".laf",
 }
 
 function _G.__BOOT.REQUIRELIB_OVERRIDE(Type, Func)
@@ -43,21 +43,7 @@ local function DotFix(s)  -- fix Lua's dot indexing so require("Folder.Script") 
         )
 end
 
-local function Normalize(Path)
-    if not Path:find("%.%./") and not Path:find("/%.") then
-        return Path
-    end
-
-    local Parts = {}
-    for Part in Path:gmatch("[^/]+") do
-        if Part == ".." then
-            table.remove(Parts)
-        elseif Part ~= "." then
-            Parts[#Parts + 1] = Part
-        end
-    end
-    return table.concat(Parts, "/")
-end
+local Normalize = lovr.filesystem.normalize
 
 local function LoadFile(Path, Env, STACK)
     local UseGlobalPath = false
@@ -86,7 +72,7 @@ local function LoadFile(Path, Env, STACK)
         v = v == Path and v or Normalize(v)
         for _, ext in ipairs(LoadExtensionsToTry) do
             local True = v .. ext
-            local F = (ext == ".lbmf" and LBMF) and LBMF.FromPath(True) or OgLoadfile(True, Env)
+            local F = (ext == ".laf" and LAF and LAF.LoadArchive(True, 3)) or OgLoadfile(True, Env)
             if F then
                 Data = F
                 TruePath = True
@@ -135,6 +121,7 @@ local Methods = {
         end
     end,
     function(Path, ...)
+        --  try loadfile
         local f, TruePath = LoadFile(Path, nil, 4)
         if f then
             local Canon = Canonical(TruePath)
@@ -150,6 +137,7 @@ local Methods = {
         end
     end,
     function(Path, ...)
+        -- C lib?
         local Info = debug.getinfo(3, "S")
         local CurPath = Info.source:sub(1, 1) == "@" and Info.source:sub(2) or Info.source
         local CurDir = CurPath:match(Match)
@@ -177,6 +165,7 @@ local Methods = {
             package.cpath = package.cpath .. ";" .. PhysPath .. "?" .. package.clibtag
         end
 
+        -- its over try og require?
         local a, b, c, d, e = OgRequire(Path)
         package.cpath = old
         if a or b or c or d or e then

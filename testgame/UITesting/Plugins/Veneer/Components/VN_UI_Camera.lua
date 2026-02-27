@@ -85,6 +85,8 @@ end)
 
 -- PROCESSING CAMERA
 
+local function SetEnabled(Camera, State) end
+
 local ToRebuild = {}
 
 local function SortMethod(a, b)
@@ -121,6 +123,7 @@ local IdxGetter = {
     Texture = 2,
     DepthTexture = 3,
     ZIndex = 8,
+    Enabled = 9,
 }
 local Getters = {
     Resolution = function(self)
@@ -131,6 +134,18 @@ local Setters = {
     ZIndex = function(self, v)
         self[8] = v
         self:RebuildRenderChain()
+    end,
+    Enabled = function(self, v)
+        local Current = self[9]
+        self[9] = v
+
+        if Current == v then
+            return
+        end
+
+        if not v then
+        else
+        end
     end,
 }
 local Methods = {

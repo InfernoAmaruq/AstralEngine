@@ -98,9 +98,17 @@ static int l_lovrAudioSetDevice(lua_State *L) {
   AudioType type = luax_checkenum(L, 1, AudioType, "playback");
   void* id = lua_touserdata(L, 2);
   size_t size = id ? luax_len(L, 2) : 0;
-  AudioStream* sink = lua_isnoneornil(L, 3) ? NULL : luax_checktype(L, 3, AudioStream);
+  bool read = type == AUDIO_CAPTURE || lua_toboolean(L, 3);
+  AudioStream* stream = luax_totype(L, 3, AudioStream);
   AudioShareMode shareMode = luax_checkenum(L, 4, AudioShareMode, "shared");
-  return luax_pushsuccess(L, lovrAudioSetDevice(type, id, size, sink, shareMode));
+  return luax_pushsuccess(L, lovrAudioSetDevice(type, id, size, read, stream, shareMode));
+}
+
+static int l_lovrAudioGetStream(lua_State* L) {
+  AudioType type = luax_checkenum(L, 1, AudioType, "playback");
+  AudioStream* stream = lovrAudioGetStream(type);
+  luax_pushtype(L, AudioStream, stream);
+  return 1;
 }
 
 static int l_lovrAudioStart(lua_State* L) {
@@ -318,6 +326,7 @@ static const luaL_Reg lovrAudio[] = {
   { "getDevices", l_lovrAudioGetDevices },
   { "getDevice", l_lovrAudioGetDevice },
   { "setDevice", l_lovrAudioSetDevice },
+  { "getStream", l_lovrAudioGetStream },
   { "start", l_lovrAudioStart },
   { "stop", l_lovrAudioStop },
   { "isStarted", l_lovrAudioIsStarted },

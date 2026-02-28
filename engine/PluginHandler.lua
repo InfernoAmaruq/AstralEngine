@@ -43,9 +43,6 @@ PluginHandler.Load = function(Path)
         end
     end
 
-    if Tab.OnRead then
-        Tab.OnRead()
-    end
     if Tab.OnLoad then
         table.insert(LateFuncs, Tab.OnLoad)
     end

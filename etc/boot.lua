@@ -181,6 +181,20 @@ function lovr.boot()
         return CurPath
     end
 
+    lovr.filesystem.getExtension = function(Path)
+        local LastDot = Path:match(".*()%.")
+        if not LastDot then
+            return nil
+        end
+
+        local AfterDot = Path:sub(LastDot + 1)
+        if AfterDot:find("/") then
+            return nil
+        end
+
+        return Path:sub(LastDot)
+    end
+
     OsType = FSType
 
     -- adding FS helpers

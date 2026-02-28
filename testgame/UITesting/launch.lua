@@ -11,21 +11,21 @@ local CamComp = CameraEnt:AddComponent("Camera", {
 -- MESS WITH FS
 print("START FS TEST")
 
---local ROOTFILE = require("LuaTest")
+--[[local S, Err = pcall(function()
+    local Extractor = AstralEngine.Filesystem.Extractor
 
-local S, Err = pcall(function()
-    print(lovr.filesystem.isFile("GAMEFILE/LuaTest.laf"))
-    local INTERNAL, BYTES = lovr.filesystem.read("GAMEFILE/LuaTest.laf")
-    local BLOB = lovr.filesystem.newBlob("GAMEFILE/LuaTest.laf")
-    print(BLOB, BLOB:getString(), BLOB:getSize())
-    local MS, ME = lovr.filesystem.mount("GAMEFILE/LuaTest.laf")
-    print(MS, ME)
-end)
+    local TESTMOUNT = lovr.filesystem.mount(
+        lovr.filesystem.getRealDirectory(lovr.filesystem.getCurrentPath()) .. "/LuaTest.laf",
+        "LAF"
+    )
+
+    local FILE = loadfile("LAF/main.lua")()
+end)]]
 
 print("FS TEST:", S, Err)
 -- INTRO
 
-local IntroMod = require("Intro")
+local IntroMod = loadfile("BaseIntro.laf")()
 local Int = IntroMod.Load(CameraEnt)
 coroutine.yield()
 -- wait a bit since this is launch.lua

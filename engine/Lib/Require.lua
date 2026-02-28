@@ -2,6 +2,7 @@ lovr.filesystem.setRequirePath(package.path)
 
 -- set cpath
 local OgRequire = require
+local OgLoadLib = package.loadlib
 local OgLoadfile = function(Path, Env)
     local Raw = lovr.filesystem.read(Path)
     local f = Raw and loadstring(Raw, "@" .. Path) or nil
@@ -45,6 +46,18 @@ end
 
 local Normalize = lovr.filesystem.normalize
 
+local function LoadLib(Path, EntryPoint)
+    local Extract = lovr.filesystem.extractor.Extract(Path)
+    local EP = EntryPoint
+    if not EP then
+        local Folder = lovr.filesystem.folderFromPath(Path)
+        local Name = Path:gsub(Folder, "")
+        EP = "luaopen_" .. Name:gsub("%..*$", "")
+    end
+    print("OPEN LIB AT:", EP, Extract, Path)
+    return OgLoadLib(Extract, EP)
+end
+
 local function LoadFile(Path, Env, STACK)
     local UseGlobalPath = false
     if Path:sub(1, 1) == "-" then
@@ -72,7 +85,10 @@ local function LoadFile(Path, Env, STACK)
         v = v == Path and v or Normalize(v)
         for _, ext in ipairs(LoadExtensionsToTry) do
             local True = v .. ext
-            local F = (ext == ".laf" and LAF and LAF.LoadArchive(True, 3)) or OgLoadfile(True, Env)
+            -- nts, doesnt work with 'file.laf' cause it doesnt recognize the extension!
+            local Extension = ext == "" and True:match("%.(%w+)") or ext
+            -- fuck it i go break :3
+            local F = (Extension == "laf") and LAF and LAF.LoadArchive(True, 3) or OgLoadfile(True, Env)
             if F then
                 Data = F
                 TruePath = True
@@ -161,19 +177,17 @@ local Methods = {
                 end
                 return true, a, b, c, d, e
             end
-            -- loadlib failed, try require
-            package.cpath = package.cpath .. ";" .. PhysPath .. "?" .. package.clibtag
         end
 
         -- its over try og require?
-        local a, b, c, d, e = OgRequire(Path)
+        local a = { OgRequire(Path) }
         package.cpath = old
-        if a or b or c or d or e then
-            package.loaded[Canon] = { a, b, c, d, e }
+        if a then
+            package.loaded[Canon] = a
             if _G.CONTEXT and NEXT_CONTEXTUAL then
                 _G.CONTEXT:BindToContext("Require", package.loaded[Canon], Canon)
             end
-            return true, a, b, c, d, e
+            return true, unpack(a)
         end
     end,
 }
@@ -201,4 +215,4 @@ local function Require(Path, ...)
     NEXT_CONTEXTUAL = false
 end
 
-return { LoadFile, Require }
+return { LoadFile, Require, LoadLib }

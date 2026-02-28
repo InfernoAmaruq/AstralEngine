@@ -13,7 +13,8 @@ _G.AstralEngine = {
     Signals = {},
 }
 AstralEngine._MOUNT = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Mount.lua")()
-loadfile, require = unpack(lovr.filesystem.load(package.ENG_PATH .. "/Lib/Require.lua")())
+lovr.filesystem.extractor = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Extractor.lua")()
+loadfile, require, package.loadlib = unpack(lovr.filesystem.load(package.ENG_PATH .. "/Lib/Require.lua")())
 
 if not arg.SHARED then
     local mnt, err = lovr.filesystem.mount(PATH, "GAMEFILE", true)

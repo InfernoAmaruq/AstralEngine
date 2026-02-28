@@ -3,9 +3,20 @@ local A = {}
 print("HELLO WORLD!")
 print("I AM MAIN.LUA TEST FILE, I EXIST IN:", lovr.filesystem.getCurrentPath())
 
-print("LOAD:", "test2.lua")
-local File2 = loadfile("test2.lua")
-print(File2, pcall(File2))
-print(require("test2"))
+print("time to mount MYSELF!")
+
+local Extract = AstralEngine.Filesystem.Extractor
+local ExtractedPath = Extract.Extract("LAF/TESTZIP.zip")
+
+print("ExtractedPath:", ExtractedPath)
+
+local MOUNT, e = lovr.filesystem.mount(ExtractedPath, "TESTING")
+print(MOUNT, e)
+local FILE = loadfile("TESTING/TESTFILE_ZIP_2.lua")
+print("CALL FILE")
+print(FILE, pcall(FILE))
+print("END CALL")
+
+print("end")
 
 return A

@@ -1265,6 +1265,7 @@ static bool phonon_mix_source_ambisonic(Source* source, float* src, float* dst) 
 
   IPLAudioBuffer input = source->ambisonicBuffer;
   iplAudioBufferDeinterleave(state.phonon, src, &input);
+  iplAudioBufferConvertAmbisonics(state.phonon, IPL_AMBISONICSTYPE_SN3D, IPL_AMBISONICSTYPE_N3D, &input, &input);
 
   // Reverb
   if (source->reverb > 0.f && state.enabledMeshCount > 0) {

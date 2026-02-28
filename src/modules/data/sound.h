@@ -4,6 +4,8 @@
 
 #pragma once
 
+#define MAX_CHANNELS 16
+
 struct Blob;
 
 typedef enum {

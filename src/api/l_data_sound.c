@@ -89,6 +89,50 @@ static int l_lovrSoundIsCompressed(lua_State* L) {
   return 1;
 }
 
+static int l_lovrSoundGetFrame(lua_State* L) {
+  Sound* sound = luax_checktype(L, 1, Sound);
+  uint32_t frame = luax_checku32(L, 2);
+  uint32_t channels = lovrSoundGetChannelCount(sound);
+
+  if (lovrSoundGetFormat(sound) == SAMPLE_I16) {
+    int16_t samples[MAX_CHANNELS];
+    lovrSoundRead(sound, frame, 1, samples);
+    for (uint32_t c = 0; c < channels; c++) {
+      lua_pushinteger(L, samples[c]);
+    }
+  } else {
+    float samples[MAX_CHANNELS];
+    lovrSoundRead(sound, frame, 1, samples);
+    for (uint32_t c = 0; c < channels; c++) {
+      lua_pushnumber(L, samples[c]);
+    }
+  }
+
+  return channels;
+}
+
+static int l_lovrSoundSetFrame(lua_State* L) {
+  Sound* sound = luax_checktype(L, 1, Sound);
+  uint32_t frame = luax_checku32(L, 2);
+  uint32_t channels = lovrSoundGetChannelCount(sound);
+
+  if (lovrSoundGetFormat(sound) == SAMPLE_I16) {
+    int16_t samples[MAX_CHANNELS];
+    for (uint32_t c = 0; c < channels; c++) {
+      samples[c] = (int16_t) luaL_checknumber(L, 3 + c);
+    }
+    lovrSoundWrite(sound, frame, 1, samples, NULL);
+  } else {
+    float samples[MAX_CHANNELS];
+    for (uint32_t c = 0; c < channels; c++) {
+      samples[c] = luax_checkfloat(L, 3 + c);
+    }
+    lovrSoundWrite(sound, frame, 1, samples, NULL);
+  }
+
+  return 0;
+}
+
 static int l_lovrSoundGetFrames(lua_State* L) {
   Sound* sound = luax_checktype(L, 1, Sound);
   size_t stride = lovrSoundGetStride(sound);
@@ -253,6 +297,8 @@ const luaL_Reg lovrSound[] = {
   { "getSampleCount", l_lovrSoundGetSampleCount },
   { "getDuration", l_lovrSoundGetDuration },
   { "isCompressed", l_lovrSoundIsCompressed },
+  { "getFrame", l_lovrSoundGetFrame },
+  { "setFrame", l_lovrSoundSetFrame },
   { "getFrames", l_lovrSoundGetFrames },
   { "setFrames", l_lovrSoundSetFrames },
   { NULL, NULL }

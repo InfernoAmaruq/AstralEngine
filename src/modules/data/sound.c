@@ -67,6 +67,7 @@ static uint32_t lovrSoundReadMp3(Sound* sound, uint32_t offset, uint32_t count, 
 // Sound
 
 Sound* lovrSoundCreate(uint32_t frames, SampleFormat format, uint32_t channels, uint32_t sampleRate) {
+  lovrCheck(channels < MAX_CHANNELS, "Max sound channels is %d", MAX_CHANNELS);
   Sound* sound = lovrCalloc(sizeof(Sound));
   sound->ref = 1;
   sound->frames = frames;
@@ -100,10 +101,10 @@ static bool loadOgg(Sound** result, Blob* blob, bool decode) {
   if (decode) {
     sound->read = lovrSoundReadRaw;
     uint32_t channels = lovrSoundGetChannelCount(sound);
-    if (sound->frames * channels > INT_MAX) {
+    if (sound->frames * channels > INT_MAX || channels > MAX_CHANNELS) {
       stb_vorbis_close(sound->decoder);
       lovrFree(sound);
-      return lovrSetError("Decoded OGG file has too many samples");
+      return lovrSetError("Decoded OGG file has too many samples/channels");
     }
 
     size_t size = sound->frames * lovrSoundGetStride(sound);
@@ -177,8 +178,7 @@ static bool loadWAV(Sound** result, Blob* blob, bool decode) {
   }
 
   lovrAssert(pcm || f32, "Invalid WAV sample format");
-  lovrAssert(wav->channels != 9 && wav->channels != 16, "Invalid WAV channel count"" (Note: only first order ambisonics are supported)");
-  lovrAssert(wav->channels == 1 || wav->channels == 2 || wav->channels == 4, "Invalid WAV channel count");
+  lovrAssert(wav->channels == 1 || wav->channels == 2 || wav->channels == 4 || wav->channels == 9 || wav->channels == 16, "Invalid WAV channel count");
 
   Sound* sound = lovrCalloc(sizeof(Sound));
   sound->ref = 1;
@@ -269,9 +269,9 @@ static bool loadMP3(Sound** result, Blob* blob, bool decode) {
     mp3dec_file_info_t info;
     int status = mp3dec_load_buf(&decoder, blob->data, blob->size, &info, NULL, NULL);
     lovrAssert(!status, "Could not decode mp3 from '%s'", blob->name);
-    if (info.samples / info.channels > UINT32_MAX) {
+    if (info.samples / info.channels > UINT32_MAX || info.channels > MAX_CHANNELS) {
       lovrFree(info.buffer);
-      return lovrSetError("MP3 is too long");
+      return lovrSetError("MP3 is too long or has too many channels");
     }
 
     Sound* sound = lovrCalloc(sizeof(Sound));

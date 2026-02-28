@@ -20,6 +20,7 @@
 #endif
 
 #define FOREACH_SOURCE(mask, s) for (uint64_t m = mask; s = m ? state.activeSources[CTZL(m)] : NULL, m; m ^= (m & -m))
+#define AMBISONIC_ORDER(channels) ((channels / 6) + 1)
 #define OUTPUT_FORMAT SAMPLE_F32
 #define MAX_OCCLUSION_SAMPLES 16
 #define NO_HRTF ((IPLHRTF) (uintptr_t) ~0ull)
@@ -158,8 +159,8 @@ static void phonon_mesh_set_transform(AudioMesh* mesh, float* transform);
 // Device callbacks
 
 static void onPlayback(ma_device* device, void* out, const void* in, uint32_t count) {
-  float raw[BUFFER_SIZE * 16];
-  float tmp[BUFFER_SIZE * 16];
+  float raw[BUFFER_SIZE * MAX_CHANNELS];
+  float tmp[BUFFER_SIZE * MAX_CHANNELS];
   float* buf = NULL;
   float* dst = out;
   Source* source;
@@ -544,7 +545,6 @@ void lovrAudioSetReverb(float reverb) {
 
 Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial) {
   lovrCheck(lovrSoundGetChannelCount(sound) <= 2 || spatial, "Ambisonic Sources must be spatial");
-  lovrCheck(lovrSoundGetChannelCount(sound) <= 16, "Max source channel count is 16");
 
   Source* source = lovrCalloc(sizeof(Source));
   source->ref = 1;
@@ -1302,17 +1302,8 @@ static bool phonon_mix_source_ambisonic(Source* source, float* src, float* dst) 
 
   // Spatialization
   if (source->spatialization > 0.f) {
-    uint32_t order;
-
-    switch (input.numChannels) {
-      case 4: order = 1; break;
-      case 9: order = 2; break;
-      case 16: order = 3; break;
-      default: lovrUnreachable();
-    }
-
     IPLAmbisonicsDecodeEffectParams params = {
-      .order = order,
+      .order = AMBISONIC_ORDER(input.numChannels),
       .hrtf = state.hrtf[0],
       .binaural = !!state.hrtf[0]
     };
@@ -1591,18 +1582,12 @@ static bool phonon_source_init(Source* source) {
   }
 
   if (lovrSoundGetChannelCount(source->sound) > 2) {
-    IPLAmbisonicsDecodeEffectSettings ambisonicSettings = {
-      .speakerLayout.type = IPL_SPEAKERLAYOUTTYPE_STEREO
-    };
-
     uint32_t channels = lovrSoundGetChannelCount(source->sound);
 
-    switch (channels) {
-      case 4: ambisonicSettings.maxOrder = 1; break;
-      case 9: ambisonicSettings.maxOrder = 2; break;
-      case 16: ambisonicSettings.maxOrder = 3; break;
-      default: lovrUnreachable();
-    }
+    IPLAmbisonicsDecodeEffectSettings ambisonicSettings = {
+      .speakerLayout.type = IPL_SPEAKERLAYOUTTYPE_STEREO,
+      .maxOrder = AMBISONIC_ORDER(channels)
+    };
 
     if (iplAmbisonicsDecodeEffectCreate(state.phonon, &state.audioSettings, &ambisonicSettings, &source->ambisonicEffect)) {
       lovrSetError("Failed to create ambisonic effect");

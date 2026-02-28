@@ -435,26 +435,43 @@ bool lovrAudioSetDevice(AudioType type, void* id, size_t size, bool read, AudioS
         ma_data_converter_uninit(&state.playbackConverter, NULL);
         result = ma_data_converter_init(&converterConfig, NULL, &state.playbackConverter);
         lovrAssert(result == MA_SUCCESS, "Failed to create sink data converter: %s", ma_result_description(result));
+        lovrRetain(stream);
       } else {
-        stream = lovrAudioStreamCreate(state.config.sampleRate * 1., SAMPLE_F32, 2, state.config.sampleRate);
+        stream = lovrAudioStreamCreate(state.config.sampleRate, SAMPLE_F32, 2, state.config.sampleRate);
       }
     }
   } else {
-    Sound* sound = lovrAudioStreamGetSound(stream);
     config = ma_device_config_init(ma_device_type_capture);
     config.capture.pDeviceID = (ma_device_id*) id;
     config.capture.shareMode = shareModes[shareMode];
-    config.capture.format = miniaudioFormats[lovrSoundGetFormat(sound)];
-    config.capture.channels = lovrSoundGetChannelCount(sound);
-    config.sampleRate = lovrSoundGetSampleRate(sound);
     config.periodSizeInFrames = BUFFER_SIZE;
     config.dataCallback = onCapture;
+
+    if (stream) {
+      Sound* sound = lovrAudioStreamGetSound(stream);
+      config.capture.format = miniaudioFormats[lovrSoundGetFormat(sound)];
+      config.capture.channels = lovrSoundGetChannelCount(sound);
+      config.sampleRate = lovrSoundGetSampleRate(sound);
+      lovrRetain(stream);
+    } else {
+      config.capture.format = ma_format_f32;
+      config.capture.channels = 1;
+    }
   }
 
   result = ma_device_init(&state.context, &config, &state.devices[type]);
-  lovrAssert(result == MA_SUCCESS, "Failed to initialize device: %s", ma_result_description(result));
+
+  if (result != MA_SUCCESS) {
+    lovrRelease(stream, lovrAudioStreamDestroy);
+    return lovrSetError("Failed to initialize device: %s", ma_result_description(result));
+  }
+
+  if (type == AUDIO_CAPTURE && !stream) {
+    uint32_t sampleRate = state.devices[AUDIO_CAPTURE].sampleRate;
+    stream = lovrAudioStreamCreate(sampleRate, SAMPLE_F32, 1, sampleRate);
+  }
+
   state.streams[type] = stream;
-  lovrRetain(stream);
   return true;
 }
 
@@ -463,6 +480,10 @@ AudioStream* lovrAudioGetStream(AudioType type) {
 }
 
 bool lovrAudioStart(AudioType type) {
+  if (!state.devices[type].pContext) {
+    return lovrSetError("no device");
+  }
+
   ma_result result = ma_device_start(&state.devices[type]);
   lovrAssert(result == MA_SUCCESS, ma_result_description(result));
 }

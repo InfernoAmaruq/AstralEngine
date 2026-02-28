@@ -1,7 +1,7 @@
 return function(ScriptService, Ctx)
     local Signal = require("../../Lib/Signal.lua")
 
-    local ScenesPath = "GAMEFILE/Assets/Scenes/"
+    local ScenesPath = package.GAME_PATH .. "/Assets/Scenes/"
 
     local AppendsToTry = { "", ".lbmf", ".lua", ".aspr" }
 
@@ -17,7 +17,6 @@ return function(ScriptService, Ctx)
 
     local AssetMapLoader = require("./AssetMap")
     local ScriptLoader = require("./Scripts")
-    local AssetLoader = require("./LoadAssets")
 
     -- PUBLIC
 
@@ -49,6 +48,7 @@ return function(ScriptService, Ctx)
 
         if not SceneFile then
             AstralEngine.Log("Scene " .. Scene .. " does not exist!", "fatal", "SCENEMANAGER")
+            return
         end
 
         AstralEngine.Log("Loading scene: " .. Scene .. " at path: " .. SceneFile, "info", "SCENEMANAGER")

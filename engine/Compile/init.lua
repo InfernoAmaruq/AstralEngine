@@ -130,10 +130,11 @@ end
 _G.__BOOT.REQUIRELIB_OVERRIDE("loadfile", Recompiler.Loadfile)
 
 do -- GETTING ALL THE META FILES
-    local Items = lovr.filesystem.getDirectoryItems("./Compile/Metatags/")
+    local MetaTagsFolder = package.ENG_PATH .. "/Compile/Metatags/"
+    local Items = lovr.filesystem.getDirectoryItems(MetaTagsFolder)
     for _, v in ipairs(Items) do
-        if lovr.filesystem.isFile("./Compile/Metatags/" .. v) then
-            local f = loadfile("./Compile/Metatags/" .. v)
+        if lovr.filesystem.isFile(MetaTagsFolder .. v) then
+            local f = loadfile(MetaTagsFolder .. v)
             if f then
                 local Data = f(SharedMemory, Code.Meta)
                 Recompiler.Dirs[#Recompiler.Dirs + 1] = Data

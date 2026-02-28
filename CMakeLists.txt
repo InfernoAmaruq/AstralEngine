@@ -658,12 +658,6 @@ if(NOT ANDROID AND NOT EMSCRIPTEN)
   else()
     set(NOGAME_BUNDLE "$<TARGET_FILE:${ASTRAL_TARGET}>")
   endif()
-  add_custom_command(TARGET ${ASTRAL_TARGET} POST_BUILD
-    DEPENDS "etc/nogame"
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/etc/nogame"
-    COMMAND ${CMAKE_COMMAND} -E tar c "${PROJECT_BINARY_DIR}/nogame.zip" --format=zip .
-    COMMAND ${CMAKE_COMMAND} -E cat "${PROJECT_BINARY_DIR}/nogame.zip" >> ${NOGAME_BUNDLE}
-  )
 endif()
 
 if(LOVR_VERSION_HASH)

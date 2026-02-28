@@ -201,7 +201,7 @@ function Component.__RemoveAllComponents(EntityHandle)
     end
 end
 
-local SERIALIZE = require("Lib.Serialize")
+local SERIALIZE = require(package.ENG_PATH.."/Lib/Serialize")
 
 local SerializerFenv = setmetatable({ SERIALIZE = SERIALIZE, __InjectedEnv = "CMPH" }, { __index = _G })
 

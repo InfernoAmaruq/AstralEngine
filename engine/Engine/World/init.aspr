@@ -26,7 +26,7 @@ end
 
 local Entity = {}
 
-local SERIALIZER = require("Lib.Serialize")
+local SERIALIZER = require(package.ENG_PATH .. "/Lib/Serialize")
 
 -- Parent, Child, "add"|"remove"
 Entity.OnAncestryChanged = SignalLib.new(SignalLib.Type.RTC)

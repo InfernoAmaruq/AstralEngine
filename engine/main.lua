@@ -1,4 +1,5 @@
 local CONFIG = CONF
+local PluginHandler = require("./PluginHandler")
 
 local SIGNAL = require("Lib.Signal")
 AstralEngine.Plugins.SignalLib = SIGNAL
@@ -10,6 +11,19 @@ AstralEngine.Callbacks = {}
 -- LOAD
 
 function lovr.load()
+    -- QUEUE PLUGINS
+
+    for _, Dir in ipairs(lovr.filesystem.getDirectoryItems("/Plugins")) do
+        lovr.filesystem.alias("/Plugins/" .. Dir, "Plugins")
+    end
+    for _, Dir in ipairs(lovr.filesystem.getDirectoryItems(package.GAME_PATH.."/Plugins")) do
+        lovr.filesystem.alias(package.GAME_PATH.."/Plugins/" .. Dir, "Plugins")
+    end
+
+    for _, PluginFolder in ipairs(lovr.filesystem.getAliased("Plugins")) do
+        PluginHandler.Load(PluginFolder)
+    end
+
     -- INITIAL DECL
 
     require("./Engine/Graphics")
@@ -24,18 +38,12 @@ function lovr.load()
     Renderer = GetService"Renderer"
     local Entity = GetService"Entity"
 
-    local SERIALIZER = require("Lib.Serialize")
-
     ROOT = {
         SCHEDULERS = {},
         SCRIPTSYS = {},
     }
 
     QUIT = lovr.event.quit
-
-    lovr.draw = Renderer.DrawScene
-
-    CONFIG.RUNSPLASH()
 
     -- EXE
 
@@ -294,7 +302,7 @@ function lovr.run()
     -- MOUNT
 
     -- try execute core script first
-    local Ok, Err = pcall(loadfile,"GAMEFILE/launch.lua")
+    local Ok, Err = pcall(loadfile,package.GAME_PATH.."/launch.lua")
     if Ok then
         if Err then
             task.spawn(Err)

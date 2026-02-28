@@ -16,8 +16,8 @@ AstralEngine._MOUNT = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Mount.lua")
 lovr.filesystem.extractor = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Extractor.lua")()
 loadfile, require, package.loadlib = unpack(lovr.filesystem.load(package.ENG_PATH .. "/Lib/Require.lua")())
 
-if not arg.SHARED then
-    local mnt, err = lovr.filesystem.mount(PATH, "GAMEFILE", true)
+if not lovr.filesystem.isFused() then
+    local mnt, err = lovr.filesystem.mount(PATH, package.GAME_PATH, true)
     if not mnt then
         print("FAILED TO MOUNT GAME PATH <" .. PATH .. ">:", err)
         return -1
@@ -26,7 +26,7 @@ else
     print("GAME ALREADY MOUNTED!")
 end
 
-local Real = lovr.filesystem.getRealDirectory(package.ENG_PATH) .. "/"
+local Real = lovr.filesystem.getRealDirectory(package.ENG_PATH)
 local AliasMap = {
     Shaders = "Shaders",
     COMPONENTS = "Components",
@@ -36,24 +36,46 @@ local AliasMap = {
 -- mount core systems
 
 local ShaderPath
-
-AstralEngine._MOUNT(Real, "", "", true, function(Name, _, True)
-    if AliasMap[Name] then
-        if AliasMap[Name] == AliasMap.Shaders then
-            ShaderPath = True
+local IsZip = Real:sub(-4) == ".zip"
+if not IsZip and not lovr.filesystem.isFused() then
+    AstralEngine._MOUNT(Real, "", "", true, function(Name, _, True)
+        if AliasMap[Name] then
+            if AliasMap[Name] == AliasMap.Shaders then
+                ShaderPath = True
+            end
+            lovr.filesystem.alias(True, AliasMap[Name])
+        elseif ShaderPath and True:find(ShaderPath) then
+            local Sub = True:gsub(ShaderPath, "")
+            lovr.filesystem.alias(True, AliasMap.Shaders .. Sub)
         end
-        lovr.filesystem.alias(True, AliasMap[Name])
-    elseif ShaderPath and True:find(ShaderPath) then
-        local Sub = True:gsub(ShaderPath, "")
-        lovr.filesystem.alias(True, AliasMap.Shaders .. Sub)
+    end)
+else
+    local function ProcessDir(path, callback, recursive)
+        for _, item in ipairs(lovr.filesystem.getDirectoryItems(path)) do
+            local FullPath = path ~= "" and (path .. "/" .. item) or item
+            local Info = lovr.filesystem.isFile(FullPath)
+            if Info then
+                callback(FullPath)
+            else
+                callback(FullPath)
+                ProcessDir(FullPath, callback, recursive)
+            end
+        end
     end
-end)
 
--- initiate the globals and compiler
-
-require("Global")()
-require("Compile")
-require("CompGlobals")
+    ProcessDir(package.ENG_PATH, function(True)
+        local Name = string.match(True, "([^/]+)$")
+        if AliasMap[Name] then
+            if AliasMap[Name] == AliasMap.Shaders then
+                ShaderPath = True
+            end
+            lovr.filesystem.alias(True, AliasMap[Name])
+        elseif ShaderPath and True:find(ShaderPath) then
+            local Sub = True:gsub(ShaderPath, "")
+            lovr.filesystem.alias(True, AliasMap.Shaders .. Sub)
+        end
+    end, true)
+end
 
 function AstralEngine.Log(Msg, Flag, Tag, Level)
     Flag = Flag and tostring(Flag) or error("Invalid flag provided!")
@@ -106,29 +128,14 @@ local GameAliasTable = {
     Scenes = "Scenes",
 }
 
-AstralEngine._MOUNT(PATH, "GAMEFILE", "GAMEFILE", true, function(Name, _, VfsPath)
+AstralEngine._MOUNT(PATH, package.GAME_PATH, package.GAME_PATH, true, function(Name, _, VfsPath)
     if GameAliasTable[Name] then
         lovr.filesystem.alias(VfsPath, GameAliasTable[Name])
     end
 end)
 
--- time to mount the plugins
-
-local PluginHandler = require("./PluginHandler")
-
-for _, Dir in ipairs(lovr.filesystem.getDirectoryItems("/Plugins")) do
-    lovr.filesystem.alias("/Plugins/" .. Dir, "Plugins")
-end
-for _, Dir in ipairs(lovr.filesystem.getDirectoryItems("GAMEFILE/Plugins")) do
-    lovr.filesystem.alias("GAMEFILE/Plugins/" .. Dir, "Plugins")
-end
-
-for _, PluginFolder in ipairs(lovr.filesystem.getAliased("Plugins")) do
-    PluginHandler.Load(PluginFolder)
-end
-
 -- parse config
-local ok, ConfigFile = pcall(require, "GAMEFILE/config")
+local ok, ConfigFile = pcall(require, package.GAME_PATH .. "/config")
 
 if ok then
     ConfigFile = ConfigFile or {}
@@ -158,25 +165,11 @@ end
 RecursiveAssign(ConfigTable, CoreConfig)
 
 if ConfigTable.Astral.Debug then
-    AstralEngine.DebugPrint = function(msg, lvl)
-        local Info = debug.getinfo(lvl or 2, "l")
-        local Info2 = debug.getinfo(lvl or 2, "S")
-
-        print("DBGPRNT: ", msg, "\n- Line: " .. Info.currentline, "Script: " .. Info2.source)
-    end
     print("DEBUG: -- MOUNTED")
     for i, v in pairs(lovr.filesystem.getMounted()) do
         print(" -", i, "", "", "R:", v)
     end
     print("MOUNTED EOF")
-else
-    AstralEngine.DebugPrint = function() end
-end
-
-for n, v in pairs(ConfigTable.Define) do
-    for _, f in pairs(v) do
-        meta.setdefined(n, f, not (f:sub(1, 1) == "!"))
-    end
 end
 
 AstralEngine.Window = {}
@@ -192,6 +185,9 @@ function lovr.conf(t)
     t.graphics.antialias = AstralEngine._CONFIG.Game.Window.AntiAliasing
 
     t.window = nil
+
+    t.identity = AstralEngine._CONFIG.Game.Identity
+    t.saveprecedence = AstralEngine._CONFIG.Game.SavePrecedence
 end
 
 -- set astral config, not lovr config
@@ -200,7 +196,6 @@ _G.CONF = CONF
 
 CONF.CONFIG = {
     DEBUG = AstralEngine._CONFIG.Astral.Debug,
-    SPLASH = AstralEngine._CONFIG.Astral.Splash,
 
     PHYSRATE = AstralEngine._CONFIG.Astral.Tick.PhysicsRate,
     RENDERRATE = AstralEngine._CONFIG.Astral.Tick.FrameRate,
@@ -210,32 +205,30 @@ CONF.CONFIG = {
     GCCollect = AstralEngine._CONFIG.Astral.Tick.GCCollect,
 }
 
-function CONF.RUNSPLASH()
-    if not CONF.CONFIG.SPLASH then
-        return
+lovr.identitySet = function()
+    -- initiate the globals and compiler
+
+    print("SET IDENTITY")
+    require("Global")()
+    print("GOT GLOBALS")
+    require("Compile")
+    print("GOT COMPILER")
+    require("CompGlobals")
+
+    for n, v in pairs(ConfigTable.Define) do
+        for _, f in pairs(v) do
+            meta.setdefined(n, f, not (f:sub(1, 1) == "!"))
+        end
     end
 
-    local SPLASH = loadfile("splash")()
+    -- SETTING UP GLOBALS
+    if meta.getdefined("System", "UNIX") then
+        package.clibtag = ".so"
+    elseif meta.getdefined("System", "WIN") then
+        package.clibtag = ".dll"
+    end -- if its none of those, Require sets it manually
 
-    local CURUPD = lovr.update
-    local CURDRW = lovr.draw
-
-    SPLASH.FINISH = function()
-        lovr.update = CURUPD
-        lovr.draw = CURDRW
-    end
-
-    lovr.update = SPLASH.UPDATE
-    lovr.draw = SPLASH.DRAW
+    _G.__BOOT = nil
 end
-
--- SETTING UP GLOBALS
-if meta.getdefined("System", "UNIX") then
-    package.clibtag = ".so"
-elseif meta.getdefined("System", "WIN") then
-    package.clibtag = ".dll"
-end -- if its none of those, Require sets it manually
-
-_G.__BOOT = nil
 
 return CONF

@@ -7,17 +7,34 @@ PluginHandler.Cache = PluginCache
 local LateFuncs = {}
 
 PluginHandler.Load = function(Path)
-    AstralEngine.Assert(lovr.filesystem.isDirectory(Path), "INVALID PLUGIN. PLUGIN MUST BE A DIRECTORY", "PLUGIN")
+    local S, MetadataFile
 
-    local S, MetadataFile = pcall(loadfile, Path .. "/meta.lua")
+    if lovr.filesystem.isFile(Path) and Path:sub(-3) == "laf" then
+        Path = lovr.filesystem.normalize(Path)
 
-    if not S or type(MetadataFile) == "string" or not MetadataFile then
-        AstralEngine.Log(
-            "ERROR LOADING PLUGIN AT: " .. Path .. " ERROR: " .. (MetadataFile or "no file meta.lua found"),
-            "warn",
-            "PLUGIN"
-        )
-        return
+        local MetaFile = LAF.LoadArchive(Path, "meta.lua")
+
+        if not MetaFile then
+            S = false
+            MetadataFile = "Not found!"
+        else
+            S = true
+            MetadataFile = MetaFile
+        end
+    else
+        -- IS DIRECTORY
+        AstralEngine.Assert(lovr.filesystem.isDirectory(Path), "INVALID PLUGIN. PLUGIN MUST BE A DIRECTORY", "PLUGIN")
+
+        S, MetadataFile = pcall(loadfile, Path .. "/meta.lua")
+
+        if not S or type(MetadataFile) == "string" or not MetadataFile then
+            AstralEngine.Log(
+                "ERROR LOADING PLUGIN AT: " .. Path .. " ERROR: " .. (MetadataFile or "no file meta.lua found"),
+                "warn",
+                "PLUGIN"
+            )
+            return
+        end
     end
 
     local Alloc = {}

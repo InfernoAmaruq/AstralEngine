@@ -46,3 +46,6 @@ return {
 	│         A │	
 	╚───────────╝
 ]]
+
+-- making an archive
+-- zip -r ./ASTRAL_GAME.zip ./Engine/ && cd ../../testgame && zip -r ../build/bin/ASTRAL_GAME.zip ./UITesting ./meta.lua && cd ../build/bin && cat ./astral ASTRAL_GAME.zip > GAMEEXE && chmod +x GAMEEXE

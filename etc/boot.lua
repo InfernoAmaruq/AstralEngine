@@ -2,6 +2,124 @@ lovr = require("lovr")
 
 local lovr = lovr
 
+function lovr.arg(arg)
+    local options = {
+        _help = { short = "-h", long = "--help", help = "Show help and exit" },
+        _version = { short = "-v", long = "--version", help = "Show version and exit" },
+        console = { long = "--console", help = "Attach Windows console" },
+        debug = { long = "--debug", help = "Enable debugging checks and logging" },
+        simulator = { long = "--simulator", help = "Force headset simulator" },
+        watch = { short = "-w", long = "--watch", help = "Watch files and restart on change" },
+        engine = { short = "-e", long = "--engine", help = "Path override to engine folder" },
+        game = { short = "-g", long = "--game", help = "Path to game folder/archive" },
+        define = { short = "-d", long = "--define", help = "Define a variable with <Name>=<Value>" },
+    }
+
+    local shift
+
+    for i, argument in ipairs(arg) do
+        if argument:match("^%-") then
+            for name, option in pairs(options) do
+                local ShortLen = option.short and option.short:len()
+                local LongLen = option.long and option.long:len()
+
+                local IsShort = ShortLen and argument:sub(1, ShortLen) == option.short
+                local IsLong = LongLen and argument:sub(1, LongLen) == option.long
+
+                if IsShort or IsLong then
+                    local Value = argument:sub((IsShort and ShortLen or LongLen) + 1)
+                    if name == "define" then
+                        arg[name] = arg[name] or {}
+
+                        local v1, v2, eq
+                        v1, eq = unpack(string.split(Value, "="))
+                        v1, v2 = unpack(string.split(v1, "."))
+
+                        if v2 then
+                            arg[name][v1] = arg[name][v1] or {}
+                            arg[name][v1][v2] = eq
+                        else
+                            arg[name][v1] = eq
+                        end
+                    else
+                        arg[name] = Value ~= "" and Value or true
+                    end
+                    break
+                end
+            end
+        else
+            shift = i
+            break
+        end
+    end
+
+    shift = shift or (#arg + 1)
+
+    for i = 0, #arg do
+        arg[i - shift], arg[i] = arg[i], nil
+    end
+
+    if arg.console or arg._help or arg._version then
+        local ok, system = pcall(require, "lovr.system")
+        if ok and system then
+            system.openConsole()
+        end
+    end
+
+    if arg._help then
+        local message = {}
+
+        local list = {}
+        for name, option in pairs(options) do
+            option.name = name
+            table.insert(list, option)
+        end
+
+        table.sort(list, function(a, b)
+            return a.name < b.name
+        end)
+
+        for i, option in ipairs(list) do
+            if option.short and option.long then
+                table.insert(message, ("  %s, %s\t\t%s"):format(option.short, option.long, option.help))
+            else
+                table.insert(message, ("  %s\t\t%s"):format(option.long or option.short, option.help))
+            end
+        end
+
+        table.insert(message, 1, "usage: lovr [options] [<source>]\n")
+        table.insert(message, 2, "options:")
+        table.insert(message, "\n<source> can be a Lua file, a folder, or a zip archive")
+        print(table.concat(message, "\n"))
+        os.exit(0)
+    end
+
+    if arg._version then
+        if select("#", lovr.getVersion()) >= 5 then
+            print(("ASTRAL %d.%d.%d (%s) %s"):format(lovr.getVersion()))
+        else
+            print(("ASTRAL %d.%d.%d (%s)"):format(lovr.getVersion()))
+        end
+        os.exit(0)
+    end
+
+    return function(conf)
+        if arg.debug then
+            conf.graphics.debug = true
+            conf.headset.debug = true
+        end
+
+        if arg.simulator then
+            conf.headset.connect = false
+            conf.headset.start = false
+        end
+
+        if arg.watch then
+            lovr.filesystem.watch()
+        end
+    end
+end
+
 local conf = {
     version = "0.0.1",
     identity = "default",
@@ -60,12 +178,7 @@ local conf = {
 }
 
 local Gap = "   "
-local ListOfParams = table.concat({
-    Gap .. "-E<path> -> Redefine path to Engine core",
-    Gap .. "-N -> Run nogame.astrl (boot testing tool)",
-    Gap
-    .. "-F<Identifier>=<Value> -> Define runtime/compile-time flag. Can be used for interpreting by the Aspera compiler",
-}, "\n")
+local ListOfParams = table.concat({}, "\n")
 
 local OsType = nil
 
@@ -87,7 +200,7 @@ local function Normalize(path, full)
     end
 end
 
-local ZipTag = "__ZIP__"
+local ZipTag = "ENGINE"
 
 local function HandleZipPath(Path)
     local ZipEnd = Path:find("%.zip", 1, false)
@@ -220,27 +333,12 @@ function lovr.boot()
 
     local bundle, root = lovr.filesystem.getBundlePath()
     local fused = bundle and lovr.filesystem.mount(bundle, nil, true, root)
-    local cli = lovr.filesystem.isFile("arg.lua") and assert(pcall(require, "arg")) and lovr.arg and lovr.arg(arg)
 
-    -- Implement a barebones CLI if there is no bundled CLI/project
-
-    if not fused then
-        if arg[1] and not arg[1]:match("^%-") then
-            for i = 0, #arg do
-                arg[i - 1], arg[i] = arg[i], nil
-            end
-        else
-            return function()
-                print(table.concat({
-                    "usage: astral <source> <...params>",
-                    "<source> can be a folder with game files or a zip archive",
-                    "list of params:",
-                    ListOfParams,
-                }, "\n"))
-                return 0
-            end
-        end
+    lovr.filesystem.isFused = function()
+        return fused
     end
+
+    local cli = lovr.arg and lovr.arg(arg)
 
     -- Figure out source archive and main module.  CLI places source at arg[0]
 
@@ -257,7 +355,6 @@ function lovr.boot()
     local game = arg.game
     local path = arg.engine
 
-    local main = "main.lua"
     local pre = "pre.lua"
 
     local EXE = (lovr.filesystem.getExecutablePath() or root or bundle):gsub("\\", "/")
@@ -274,46 +371,61 @@ function lovr.boot()
 
     _G.package.ENG_PATH = "/"
     _G.package.GAME_PATH = "GAMEFILE/"
-    _G.package.SHARED = false
+
+    local ok, Data = pcall(require, "meta")
+
+    local IsFused = fused
 
     local Mounted, Failed
-    if path then
-        path = Normalize(EXEFOLD .. path, FSType == "Unix")
-        local Zip, Inner = HandleZipPath(path)
+    if not IsFused then
+        if path then
+            path = Normalize(EXEFOLD .. path, FSType == "Unix")
+            local Zip, Inner = HandleZipPath(path)
 
-        if Zip then
-            Mounted, Failed = lovr.filesystem.mount(Zip, ZipTag)
-            if not Mounted then
-                error("Failed to mount zip file! " .. Failed)
+            Inner = Inner or ""
+
+            if Zip then
+                Mounted, Failed = lovr.filesystem.mount(Zip, ZipTag)
+                if not Mounted then
+                    error("Failed to mount zip file! " .. Failed)
+                else
+                    print("MOUNTED:", Zip, ZipTag, #lovr.filesystem.getDirectoryItems(ZipTag))
+                end
+                path = ZipTag
+                pre = path .. "/pre.lua"
+
+                _G.package.ENG_PATH = path
             else
-                print("MOUNTED:", Zip, ZipTag, Inner, #lovr.filesystem.getDirectoryItems("__ZIP__"))
-            end
-            path = ZipTag .. "/" .. Inner
-            Mounted = lovr.filesystem.isDirectory(path) or lovr.filesystem.isFile(path)
-            if not Mounted then
-                Failed = "Path" .. path .. " in zip " .. Zip .. " is not a valid file/folder"
-            else
-                main = lovr.filesystem.isDirectory(path) and path .. "/main.lua" or path
-                pre = lovr.filesystem.isDirectory(path) and path .. "/pre.lua" or path
-                _G.package.ENG_PATH = path .. "/"
-                local NGAME = Normalize(EXEFOLD .. game, FSType == "Unix")
-                arg.SHARED = (HandleZipPath(NGAME) == Zip) and not lovr.filesystem.mount(NGAME, "GAMEFILE")
+                Mounted, Failed = lovr.filesystem.mount(path)
+                _G.package.ENG_PATH = "Engine"
             end
         else
-            Mounted, Failed = lovr.filesystem.mount(path)
+            for _, v in ipairs(PossiblePaths) do
+                local p = Normalize(EXEFOLD .. v, FSType == "Unix")
+
+                Mounted, Failed = lovr.filesystem.mount(p)
+
+                if Mounted then
+                    path = v
+                    break
+                end
+            end
         end
-    else
-        for _, v in ipairs(PossiblePaths) do
-            local p = Normalize(EXEFOLD .. v, FSType == "Unix")
-
-            Mounted, Failed = lovr.filesystem.mount(p)
-
-            if Mounted then
-                path = p
+    elseif not Data or (Data and not Data.Engine) then
+        Mounted = IsFused
+        for _, v in ipairs({ "Engine", "ENGINE" }) do
+            local IsDir = lovr.filesystem.isDirectory(v)
+            if IsDir then
+                package.ENG_PATH = v
                 break
             end
         end
+    elseif Data and Data.Engine then
+        Mounted = true
+        package.ENG_PATH = Data.Engine
     end
+
+    package.GAME_PATH = Data and Data.Gamefile or package.GAME_PATH
 
     if not Mounted then
         if path then
@@ -328,22 +440,23 @@ function lovr.boot()
             error(("Failed to mount engine path, searched:\n%s"):format(table.concat(NormalizedPaths, "\n")))
         end
     end
-    if not lovr.filesystem.isFile("main.lua") then
+
+    if not lovr.filesystem.isFile(package.ENG_PATH .. "/main.lua") then
         error("COULD NOT FIND main.lua")
     end
 
-    if path:sub(-1, -1) ~= "/" then
+    if path and path:sub(-1, -1) ~= "/" then
         path = path .. "/"
     end
 
     -- Mount source archive, make sure it's got the main file, and load pre.lua
 
-    lovr.filesystem.setSource(path)
-    if path ~= bundle then
+    lovr.filesystem.setSource(path or lovr.filesystem.getExecutablePath())
+    if path ~= bundle and not fused then
         lovr.filesystem.unmount(bundle)
     end
-    if lovr.filesystem.isFile(pre) then
-        ok, failure = pcall(require, pre:sub(1, -5))
+    if lovr.filesystem.isFile(package.ENG_PATH .. "/" .. pre) then
+        ok, failure = pcall(lovr.filesystem.load(package.ENG_PATH .. "/" .. pre))
         if failure == -1 then
             error("No game path has been provided")
         end
@@ -353,7 +466,21 @@ function lovr.boot()
     end
 
     lovr._setConf(conf)
+
+    if IsFused and conf and conf.identity then
+        conf.identity = "ASTR/" .. conf.identity
+        -- lovr is weird, bundled files get saved to share/<identity> not share/astr/<identity>, so im forcing it to be the same here
+    end
+
     lovr.filesystem.setIdentity(conf.identity, conf.saveprecedence)
+
+    if lovr.identitySet then
+        lovr.identitySet()
+        lovr.identitySet = nil
+    end
+    if lovr.conf then
+        lovr.conf = nil
+    end
 
     -- CLI gets a chance to use/modify conf and handle arguments
 
@@ -423,7 +550,9 @@ function lovr.boot()
         error(failure)
     end
 
-    require(main:sub(1, -5))
+    local SearchAt = package.ENG_PATH .. "/main.lua"
+
+    require(SearchAt)
 
     return lovr.run()
 end

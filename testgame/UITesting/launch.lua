@@ -8,23 +8,6 @@ local CamComp = CameraEnt:AddComponent("Camera", {
     DrawToScreen = true,
 })
 
--- MESS WITH FS
-print("START FS TEST")
-
-local S, Err = pcall(function()
-    local Extractor = AstralEngine.Filesystem.Extractor
-
-    local TESTMOUNT = lovr.filesystem.mount(
-        lovr.filesystem.getRealDirectory(lovr.filesystem.getCurrentPath()) .. "/LuaTest.laf",
-        "LAF"
-    )
-
-    local FILE = loadfile("LAF/main.lua")()
-end)
-
-print("FS TEST:", S, Err)
--- INTRO
-
 local IntroMod = require("BaseIntro")
 print("INT:", IntroMod)
 print("CACHED:", pcall(require, "BaseIntro"))

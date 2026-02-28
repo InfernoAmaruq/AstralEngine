@@ -52,6 +52,7 @@ return {
     },
     Game = {
         Identity = "Astral_Default",
+        SavePrecedence = true,
         Window = {
             AntiAliasing = false, -- windows AA options
             -- NOT renderer AA, just output

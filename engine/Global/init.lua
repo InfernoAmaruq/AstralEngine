@@ -13,7 +13,7 @@ end
 return function() -- Loads Global
     _G.processchildfiles = ProcessDir
 
-    ProcessDir("Global", function(FileName)
+    ProcessDir(package.ENG_PATH .. "/Global", function(FileName)
         if not FileName:match("%.lua$") and not FileName:match("%init.lua$") then
             return
         end

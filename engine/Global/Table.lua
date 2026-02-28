@@ -21,7 +21,8 @@ unpack = function(t, i, j)
     return OgUnpack(t, i, j)
 end
 
-local temp = require("TableAlloc")
+local Path = lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath())
+local temp = require(Path .. "TableAlloc.so")
 table.alloc = temp.Alloc
 debug.getaddress = temp.GetPtr
 

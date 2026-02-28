@@ -1,11 +1,12 @@
 lovr.filesystem.setRequirePath(package.path)
+local Normalize = lovr.filesystem.normalize
 
 -- set cpath
 local OgRequire = require
 local OgLoadLib = package.loadlib
 local OgLoadfile = function(Path, Env)
     local Raw = lovr.filesystem.read(Path)
-    local f = Raw and loadstring(Raw, "@" .. Path) or nil
+    local f = Raw and loadstring(Raw, "@" .. (Normalize(Path) or Path)) or nil
     return (f and Env) and setfenv(f, Env) or f
 end
 local Match = "^(.*)/[^/]+$"
@@ -22,6 +23,16 @@ local LoadExtensionsToTry = {
     ".laf",
 }
 
+local CacheExtensionsToTry = {
+    "",
+    ".lua",
+    ".aspr",
+    "/init.lua",
+    "/init.aspr",
+    ".laf",
+    package.clibtag,
+}
+
 function _G.__BOOT.REQUIRELIB_OVERRIDE(Type, Func)
     if Type == "require" then
         OgRequire = Func
@@ -35,7 +46,7 @@ local function DotFix(s)  -- fix Lua's dot indexing so require("Folder.Script") 
         or (
             s:gsub("%.(%w+)", function(ext)
                 local e = ext:lower()
-                if e == "sol" or e == "lua" or e == "aspr" or e == "lbmf" then
+                if e == "lua" or e == "aspr" or e == "laf" or e == package.clibtag:sub(2) then
                     return "." .. e
                 else
                     return "/" .. ext
@@ -43,8 +54,6 @@ local function DotFix(s)  -- fix Lua's dot indexing so require("Folder.Script") 
             end)
         )
 end
-
-local Normalize = lovr.filesystem.normalize
 
 local function LoadLib(Path, EntryPoint)
     local Extract = lovr.filesystem.extractor.Extract(Path)
@@ -54,7 +63,6 @@ local function LoadLib(Path, EntryPoint)
         local Name = Path:gsub(Folder, "")
         EP = "luaopen_" .. Name:gsub("%..*$", "")
     end
-    print("OPEN LIB AT:", EP, Extract, Path)
     return OgLoadLib(Extract, EP)
 end
 
@@ -85,10 +93,18 @@ local function LoadFile(Path, Env, STACK)
         v = v == Path and v or Normalize(v)
         for _, ext in ipairs(LoadExtensionsToTry) do
             local True = v .. ext
-            -- nts, doesnt work with 'file.laf' cause it doesnt recognize the extension!
-            local Extension = ext == "" and True:match("%.(%w+)") or ext
-            -- fuck it i go break :3
-            local F = (Extension == "laf") and LAF and LAF.LoadArchive(True, 3) or OgLoadfile(True, Env)
+
+            if not lovr.filesystem.isFile(True) then
+                continue
+            end
+
+            local F
+            if True:sub(-3):lower() == "laf" and LAF then
+                F = LAF.LoadArchive(True, nil, 3)
+            else
+                F = OgLoadfile(True, Env)
+            end
+
             if F then
                 Data = F
                 TruePath = True
@@ -103,33 +119,26 @@ local function LoadFile(Path, Env, STACK)
     return Data, TruePath
 end
 
-local function Canonical(Path)
-    local RealDir = lovr.filesystem.getRealDirectory(Path)
-    if not RealDir then
-        return Path
-    end
-    return (RealDir .. "/" .. Path):gsub("//+", "/")
-end
-
 local NEXT_CONTEXTUAL
 
 local Methods = {
     function(Path, ...)
         -- cache fetch
         Path = DotFix(Path)
+
         local Info = debug.getinfo(3, "S")
         local CurPath = Info.source:sub(1, 1) == "@" and Info.source:sub(2) or Info.source
         local CurDir = CurPath:match(Match)
         local PathsToTry = {
             Path,
-            CurDir and CurDir .. "/" .. Path or nil,
+            CurDir and CurDir .. "/" .. Path or "",
             "GAMEFILE/" .. Path,
             _G.package.ENG_PATH .. Path,
             _G.package.GAME_PATH .. Path,
         }
         for _, v in ipairs(PathsToTry) do
-            for _, ext in ipairs(LoadExtensionsToTry) do
-                local c = Canonical(v == Path and v .. ext or Normalize(v .. ext))
+            for _, ext in ipairs(CacheExtensionsToTry) do
+                local c = v == Path and v .. ext or Normalize(v .. ext)
                 if c and package.loaded[c] then
                     return true, (package.loaded[c] and unpack(package.loaded[c]))
                 end
@@ -138,9 +147,12 @@ local Methods = {
     end,
     function(Path, ...)
         --  try loadfile
+        if Path:find(package.clibtag) then
+            return false
+        end
         local f, TruePath = LoadFile(Path, nil, 4)
         if f then
-            local Canon = Canonical(TruePath)
+            local Canon = TruePath
             if type(f) == "function" then
                 package.loaded[Canon] = { f(...) }
             else
@@ -158,12 +170,12 @@ local Methods = {
         local CurPath = Info.source:sub(1, 1) == "@" and Info.source:sub(2) or Info.source
         local CurDir = CurPath:match(Match)
 
-        local Canon = Canonical(Path)
+        local Canon = Path
 
         local old = package.cpath
         if CurDir then
             -- since LoadFile failed, we could be trying for a c lib
-            local OSP = lovr.filesystem.getRealDirectory(CurPath)
+            --[[local OSP = lovr.filesystem.getRealDirectory(CurPath)
             local PhysPath = OSP .. "/" .. CurDir .. "/"
             local TryPath = PhysPath .. Path .. package.clibtag
             local List = DotFix(Path):split("/")
@@ -176,6 +188,32 @@ local Methods = {
                     _G.CONTEXT:BindToContext("Require", package.loaded[Canon], Canon)
                 end
                 return true, a, b, c, d, e
+            end]]
+
+            -- nts: try all paths
+
+            local Normalized = Normalize(CurDir .. "/" .. Path)
+            local ToTry = {
+                Path,
+                Path .. package.clibtag,
+                Normalized,
+                Normalized .. package.clibtag,
+            }
+
+            for _, v in pairs(ToTry) do
+                if lovr.filesystem.isFile(v) then
+                    local Lib = package.loadlib(v)
+                    if Lib then
+                        local Grab = { Lib(...) }
+                        package.loaded[v] = Grab
+
+                        if _G.CONTEXT and NEXT_CONTEXTUAL then
+                            _G.CONTEXT:BindToContext("Require", package.loaded[v], v)
+                        end
+
+                        return true, unpack(Grab)
+                    end
+                end
             end
         end
 

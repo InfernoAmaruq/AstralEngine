@@ -6,15 +6,20 @@ local LAFReader = {}
 
 LAFReader.Mounted = {}
 
-function LAFReader.LoadArchive(Path, Depth)
-    Path = FS.getRealDirectory(Path) or Path
+function LAFReader.LoadArchive(Path, EntryPoint, Depth)
+    local Folder = FS.folderFromPath(Path)
+    local FileName = Path:gsub(Folder, "")
+    local OSPath = FS.getRealDirectory(Path) or Path
 
     local RelativePath = FS.folderFromPath(FS.getCurrentPath(Depth or 2))
     local Normalized = FS.normalize(RelativePath .. "/" .. Path)
 
     local PathsToTry = {
         Path,
+        Path .. "/" .. FileName,
+        OSPath .. "/" .. FileName,
         Normalized,
+        Normalized .. "/" .. FileName,
     }
 
     for _, P in ipairs(PathsToTry) do
@@ -30,9 +35,10 @@ function LAFReader.LoadArchive(Path, Depth)
                     AstralEngine.Error("Failed to read LAF archive! " .. err, "LAF")
                 end
 
-                local EP = LAFPath .. "/init.lua"
+                local EPTag = EntryPoint or "init.lua"
+                local EP = LAFPath .. "/" .. EPTag
 
-                AstralEngine.Assert(FS.isFile(EP), "Failed to load LAF archive! No file 'init.lua' found!", "LAF")
+                AstralEngine.Assert(FS.isFile(EP), "Failed to load LAF archive! No file " .. EPTag .. " found!", "LAF")
 
                 return loadfile(EP)
             end

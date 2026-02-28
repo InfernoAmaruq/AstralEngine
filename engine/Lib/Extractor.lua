@@ -46,7 +46,6 @@ function Extractor.Extract(Path) -- assumes canon virtual path
     local FileName = Path:gsub(Folder, "")
     local CachePath = Where .. "/" .. FileName
     lovr.filesystem.write(CachePath, TempBlob)
-    TempBlob:release()
 
     CachePath = lovr.filesystem.getSaveDirectory() .. "/" .. CachePath
 

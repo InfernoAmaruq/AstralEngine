@@ -431,7 +431,7 @@ uint32_t lovrAudioStreamRead(AudioStream* stream, uint32_t frameCount, void* dat
   memcpy(data, src + readIndex * stride, count * stride);
 
   if (count < frameCount) {
-    memcpy(data + count * stride, src, (frameCount - count) * stride);
+    memcpy((char*) data + count * stride, src, (frameCount - count) * stride);
   }
 
   atomic_store_explicit(&stream->read, read + frameCount, memory_order_release);
@@ -452,7 +452,7 @@ uint32_t lovrAudioStreamWrite(AudioStream* stream, uint32_t frameCount, const vo
   memcpy(dst + writeIndex * stride, data, count * stride);
 
   if (count < frameCount) {
-    memcpy(dst, data + count * stride, (frameCount - count) * stride);
+    memcpy(dst, (char*) data + count * stride, (frameCount - count) * stride);
   }
 
   atomic_store_explicit(&stream->write, write + frameCount, memory_order_release);

@@ -463,11 +463,13 @@ AudioStream* lovrAudioGetStream(AudioType type) {
 }
 
 bool lovrAudioStart(AudioType type) {
-  return ma_device_start(&state.devices[type]) == MA_SUCCESS;
+  ma_result result = ma_device_start(&state.devices[type]);
+  lovrAssert(result == MA_SUCCESS, ma_result_description(result));
 }
 
 bool lovrAudioStop(AudioType type) {
-  return ma_device_stop(&state.devices[type]) == MA_SUCCESS;
+  ma_result result = ma_device_stop(&state.devices[type]);
+  lovrAssert(result == MA_SUCCESS, ma_result_description(result));
 }
 
 bool lovrAudioIsStarted(AudioType type) {

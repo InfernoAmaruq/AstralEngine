@@ -113,16 +113,12 @@ static int l_lovrAudioGetStream(lua_State* L) {
 
 static int l_lovrAudioStart(lua_State* L) {
   AudioType type = luax_checkenum(L, 1, AudioType, "playback");
-  bool started = lovrAudioStart(type);
-  lua_pushboolean(L, started);
-  return 1;
+  return luax_pushsuccess(L, lovrAudioStart(type));
 }
 
 static int l_lovrAudioStop(lua_State* L) {
   AudioType type = luax_checkenum(L, 1, AudioType, "playback");
-  bool stopped = lovrAudioStop(type);
-  lua_pushboolean(L, stopped);
-  return 1;
+  return luax_pushsuccess(L, lovrAudioStop(type));
 }
 
 static int l_lovrAudioIsStarted(lua_State* L) {

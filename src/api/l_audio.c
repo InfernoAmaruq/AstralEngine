@@ -249,7 +249,7 @@ static int l_lovrAudioSetReverb(lua_State* L) {
 static int l_lovrAudioNewSource(lua_State* L) {
   bool decode = false;
   bool pitchable = true;
-  bool spatial = true;
+  bool spatial = false;
 
   if (lua_gettop(L) >= 2) {
     luaL_checktype(L, 2, LUA_TTABLE);
@@ -263,7 +263,7 @@ static int l_lovrAudioNewSource(lua_State* L) {
     lua_pop(L, 1);
 
     lua_getfield(L, 2, "spatial");
-    if (!lua_isnil(L, -1)) spatial = lua_toboolean(L, -1);
+    spatial = lua_toboolean(L, -1);
     lua_pop(L, 1);
   }
 

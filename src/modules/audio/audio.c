@@ -98,7 +98,6 @@ static struct {
   uint32_t frontbuffer;
   float position[3];
   float orientation[4];
-  float absorption[3];
   float reverb;
 #ifdef LOVR_USE_PHONON
   IPLContext phonon;
@@ -325,11 +324,6 @@ bool lovrAudioInit(AudioConfig* config) {
     return false;
   }
 
-  // SteamAudio's default frequency-dependent absorption coefficients for air
-  state.absorption[0] = .0002f;
-  state.absorption[1] = .0017f;
-  state.absorption[2] = .0182f;
-
   state.reverb = 1.f;
 
   quat_identity(state.orientation);
@@ -524,14 +518,6 @@ bool lovrAudioSetHRTF(Blob* blob) {
   return phonon_set_hrtf(blob);
 }
 
-void lovrAudioGetAbsorption(float absorption[3]) {
-  vec3_init(absorption, state.absorption);
-}
-
-void lovrAudioSetAbsorption(float absorption[3]) {
-  vec3_init(state.absorption, absorption);
-}
-
 float lovrAudioGetReverb(void) {
   return state.reverb;
 }
@@ -553,17 +539,8 @@ Source* lovrSourceCreate(Sound* sound, bool pitchable, bool spatial) {
   source->pitchRatio = ((float) lovrSoundGetSampleRate(source->sound) / state.config.sampleRate);
   source->volume = 1.f;
   quat_identity(source->orientation);
-  vec3_init(source->absorption, state.absorption);
-  source->innerAngle = 2.f * (float) M_PI;
-  source->outerAngle = 2.f * (float) M_PI;
-  source->outerAngleVolume = 0.f;
-  source->innerDistance = 0.f;
+  source->outerAngleVolume = 1.f;
   source->minFalloffVolume = 1.f;
-  source->occlusionRays = 64;
-  source->transmissionRays = 4;
-  source->reverb = 1.f;
-  source->reverbMode = REVERB_LISTENER;
-  source->spatialization = 1.f;
   source->pitchable = pitchable;
   source->spatial = spatial;
   lovrRetain(source->sound);
@@ -922,7 +899,7 @@ static float applyDirectivity(IPLVector3 sourceToListener, void* userdata) {
   quat_getDirection(source->orientation, sourceDirection);
   float angle = vec3_angle(sourceDirection, &sourceToListener.x);
 
-  if (angle < source->innerAngle) {
+  if (angle <= source->innerAngle) {
     return 1.f;
   } else if (angle >= source->outerAngle) {
     return source->outerAngleVolume;
@@ -1089,10 +1066,10 @@ static void phonon_update(float dt) {
 
     inputs.directFlags = 0;
     if (vec3_dot(source->absorption, source->absorption) > 1e-5) inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_AIRABSORPTION;
-    if (source->innerAngle < (float) M_PI) inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_DIRECTIVITY;
+    if (source->outerAngleVolume < 1.f) inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_DIRECTIVITY;
     if (source->minFalloffVolume < 1.f) inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_DISTANCEATTENUATION;
-    if (source->occlusionRays > 0) inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_OCCLUSION;
-    if (source->occlusionRays > 0 && source->transmissionRays > 0) inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_TRANSMISSION;
+    if (state.enabledMeshCount > 0 && source->occlusionRays > 0) inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_OCCLUSION;
+    if (state.enabledMeshCount > 0 && source->occlusionRays > 0 && source->transmissionRays > 0) inputs.directFlags |= IPL_DIRECTSIMULATIONFLAGS_TRANSMISSION;
 
     convertPose(source->position, source->orientation, &inputs.source);
 
@@ -1126,10 +1103,10 @@ static void phonon_update(float dt) {
     // gr
     IPLDirectEffectFlags flags = 0;
     if (vec3_dot(source->absorption, source->absorption) > 1e-5) flags |= IPL_DIRECTEFFECTFLAGS_APPLYAIRABSORPTION;
-    if (source->innerAngle < (float) M_PI) flags |= IPL_DIRECTEFFECTFLAGS_APPLYDIRECTIVITY;
+    if (source->outerAngleVolume < 1.f) flags |= IPL_DIRECTEFFECTFLAGS_APPLYDIRECTIVITY;
     if (source->minFalloffVolume < 1.f) flags |= IPL_DIRECTEFFECTFLAGS_APPLYDISTANCEATTENUATION;
-    if (source->occlusionRays > 0) flags |= IPL_DIRECTEFFECTFLAGS_APPLYOCCLUSION;
-    if (source->occlusionRays > 0 && source->transmissionRays > 0) flags |= IPL_DIRECTEFFECTFLAGS_APPLYTRANSMISSION;
+    if (state.enabledMeshCount > 0 && source->occlusionRays > 0) flags |= IPL_DIRECTEFFECTFLAGS_APPLYOCCLUSION;
+    if (state.enabledMeshCount > 0 && source->occlusionRays > 0 && source->transmissionRays > 0) flags |= IPL_DIRECTEFFECTFLAGS_APPLYTRANSMISSION;
     source->directParams[backbuffer].flags = flags;
   }
 

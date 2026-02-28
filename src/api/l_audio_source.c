@@ -205,9 +205,14 @@ static int l_lovrSourceSetAbsorption(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
   float absorption[3];
   if (!lua_toboolean(L, 2)) {
-    absorption[0] = absorption[1] = absorption[2] = 0.f;
+    absorption[0] = 0.f;
+    absorption[1] = 0.f;
+    absorption[2] = 0.f;
   } else if (lua_isboolean(L, 2)) {
-    lovrAudioGetAbsorption(absorption);
+    // SteamAudio's default absorption coefficients for air
+    absorption[0] = .0002f;
+    absorption[1] = .0017f;
+    absorption[2] = .0182f;
   } else {
     absorption[0] = luax_checkfloat(L, 2);
     absorption[1] = luax_checkfloat(L, 3);
@@ -230,7 +235,7 @@ static int l_lovrSourceGetCone(lua_State* L) {
 static int l_lovrSourceSetCone(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
   if (!lua_toboolean(L, 2)) {
-    lovrSourceSetCone(source, 2.f * (float) M_PI, 2.f * (float) M_PI, 0.f);
+    lovrSourceSetCone(source, (float) M_PI, (float) M_PI, 1.f);
   } else if (lua_isboolean(L, 2)) {
     lovrSourceSetCone(source, 0.f, (float) M_PI, 0.f);
   } else {

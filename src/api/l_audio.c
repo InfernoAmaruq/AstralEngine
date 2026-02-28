@@ -216,24 +216,6 @@ static int l_lovrAudioSetHRTF(lua_State* L) {
   return 0;
 }
 
-static int l_lovrAudioGetAbsorption(lua_State* L) {
-  float absorption[3];
-  lovrAudioGetAbsorption(absorption);
-  lua_pushnumber(L, absorption[0]);
-  lua_pushnumber(L, absorption[1]);
-  lua_pushnumber(L, absorption[2]);
-  return 3;
-}
-
-static int l_lovrAudioSetAbsorption(lua_State* L) {
-  float absorption[3];
-  absorption[0] = luax_checkfloat(L, 1);
-  absorption[1] = luax_checkfloat(L, 2);
-  absorption[2] = luax_checkfloat(L, 3);
-  lovrAudioSetAbsorption(absorption);
-  return 0;
-}
-
 static int l_lovrAudioGetReverb(lua_State* L) {
   float reverb = lovrAudioGetReverb();
   lua_pushnumber(L, reverb);
@@ -340,8 +322,6 @@ static const luaL_Reg lovrAudio[] = {
   { "getPose", l_lovrAudioGetPose },
   { "setPose", l_lovrAudioSetPose },
   { "setHRTF", l_lovrAudioSetHRTF },
-  { "getAbsorption", l_lovrAudioGetAbsorption },
-  { "setAbsorption", l_lovrAudioSetAbsorption },
   { "getReverb", l_lovrAudioGetReverb },
   { "setReverb", l_lovrAudioSetReverb },
   { "newSource", l_lovrAudioNewSource },

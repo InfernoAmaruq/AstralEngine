@@ -50,23 +50,10 @@ Image* luax_checkimage(lua_State* L, int index) {
   return image;
 }
 
-uint32_t luax_checkchannelcount(lua_State* L, int index) {
-  if (lua_type(L, index) == LUA_TSTRING) {
-    switch (luax_checkenum(L, index, ChannelLayout, NULL)) {
-      case CHANNEL_MONO: return 1;
-      case CHANNEL_STEREO: return 2;
-      case CHANNEL_AMBISONIC: return 4;
-      default: return 1;
-    }
-  } else {
-    return luax_checku32(L, index);
-  }
-}
-
 static int l_lovrDataNewAudioStream(lua_State* L) {
   uint32_t frames = luax_checku32(L, 1);
   SampleFormat format = luax_checkenum(L, 2, SampleFormat, "f32");
-  uint32_t channels = luax_checkchannelcount(L, 3);
+  uint32_t channels = luax_checku32(L, 3);
   uint32_t sampleRate = luax_optu32(L, 4, 48000);
   AudioStream* stream = lovrAudioStreamCreate(frames, format, channels, sampleRate);
   luax_assert(L, stream);
@@ -198,7 +185,7 @@ static int l_lovrDataNewSound(lua_State* L) {
   if (type == LUA_TNUMBER) {
     uint32_t frames = luax_checku32(L, 1);
     SampleFormat format = luax_checkenum(L, 2, SampleFormat, "f32");
-    uint32_t channels = luax_checkchannelcount(L, 3);
+    uint32_t channels = lua_type(L, 3) == LUA_TNUMBER ? luax_checku32(L, 3) : (1 << luax_checkenum(L, 3, ChannelLayout, NULL));
     uint32_t sampleRate = luax_optu32(L, 4, 48000);
     Blob* blob = luax_totype(L, 5, Blob);
     Sound* sound = lovrSoundCreate(frames, format, channels, sampleRate);

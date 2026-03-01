@@ -351,6 +351,14 @@ bool os_window_is_focused(void) {
   return true;
 }
 
+bool os_window_is_fullscreen(void) {
+  return false;
+}
+
+void os_window_set_fullscreen(bool fullscreen) {
+  //
+}
+
 void os_window_get_size(uint32_t* width, uint32_t* height) {
   *width = state.width;
   *height = state.height;

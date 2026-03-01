@@ -50,6 +50,18 @@ Image* luax_checkimage(lua_State* L, int index) {
   return image;
 }
 
+static int l_lovrDataNewAudioStream(lua_State* L) {
+  uint32_t frames = luax_checku32(L, 1);
+  SampleFormat format = luax_checkenum(L, 2, SampleFormat, "f32");
+  uint32_t channels = luax_checku32(L, 3);
+  uint32_t sampleRate = luax_optu32(L, 4, 48000);
+  AudioStream* stream = lovrAudioStreamCreate(frames, format, channels, sampleRate);
+  luax_assert(L, stream);
+  luax_pushtype(L, AudioStream, stream);
+  lovrRelease(stream, lovrAudioStreamDestroy);
+  return 1;
+}
+
 static int l_lovrDataNewBlob(lua_State* L) {
   size_t size;
   uint8_t* data = NULL;
@@ -173,15 +185,17 @@ static int l_lovrDataNewSound(lua_State* L) {
   if (type == LUA_TNUMBER) {
     uint32_t frames = luax_checku32(L, 1);
     SampleFormat format = luax_checkenum(L, 2, SampleFormat, "f32");
-    ChannelLayout layout = luax_checkenum(L, 3, ChannelLayout, "stereo");
+    uint32_t channels = lua_type(L, 3) == LUA_TNUMBER ? luax_checku32(L, 3) : (1 << luax_checkenum(L, 3, ChannelLayout, NULL));
     uint32_t sampleRate = luax_optu32(L, 4, 48000);
     Blob* blob = luax_totype(L, 5, Blob);
-    const char* other = lua_tostring(L, 5);
-    bool stream = other && !strcmp(other, "stream");
-    Sound* sound = stream ?
-      lovrSoundCreateStream(frames, format, layout, sampleRate) :
-      lovrSoundCreateRaw(frames, format, layout, sampleRate, blob);
+    Sound* sound = lovrSoundCreate(frames, format, channels, sampleRate);
     luax_assert(L, sound);
+
+    if (blob) {
+      Blob* dst = lovrSoundGetBlob(sound);
+      memcpy(dst->data, blob->data, MIN(blob->size, dst->size));
+    }
+
     luax_pushtype(L, Sound, sound);
     lovrRelease(sound, lovrSoundDestroy);
     return 1;
@@ -192,7 +206,7 @@ static int l_lovrDataNewSound(lua_State* L) {
   Blob* blob = luax_readblob(L, 1, "Sound");
   bool decode = lua_toboolean(L, 2);
 
-  Sound* sound = lovrSoundCreateFromFile(blob, decode);
+  Sound* sound = lovrSoundLoad(blob, decode);
   lovrRelease(blob, lovrBlobDestroy);
   luax_assert(L, sound);
   luax_pushtype(L, Sound, sound);
@@ -201,6 +215,7 @@ static int l_lovrDataNewSound(lua_State* L) {
 }
 
 static const luaL_Reg lovrData[] = {
+  { "newAudioStream", l_lovrDataNewAudioStream },
   { "newBlob", l_lovrDataNewBlob },
   { "newBlobView", l_lovrDataNewBlobView },
   { "newImage", l_lovrDataNewImage },
@@ -210,6 +225,7 @@ static const luaL_Reg lovrData[] = {
   { NULL, NULL }
 };
 
+extern const luaL_Reg lovrAudioStream[];
 extern const luaL_Reg lovrBlob[];
 extern const luaL_Reg lovrImage[];
 extern const luaL_Reg lovrModelData[];
@@ -219,6 +235,7 @@ extern const luaL_Reg lovrSound[];
 int luaopen_lovr_data(lua_State* L) {
   lua_newtable(L);
   luax_register(L, lovrData);
+  luax_registertype(L, AudioStream);
   luax_registertype(L, Blob);
   luax_registertype(L, Image);
   luax_registertype(L, ModelData);

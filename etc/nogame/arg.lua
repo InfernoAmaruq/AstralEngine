@@ -72,6 +72,7 @@ function lovr.arg(arg)
 
   return function(conf)
     if arg.debug then
+      conf.audio.debug = true
       conf.graphics.debug = true
       conf.headset.debug = true
     end

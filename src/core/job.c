@@ -70,7 +70,9 @@ bool job_init(uint32_t count, void (*setupWorker)(uint32_t id)) {
 }
 
 void job_destroy(void) {
+  mtx_lock(&state.lock);
   state.quit = true;
+  mtx_unlock(&state.lock);
   cnd_broadcast(&state.hasJob);
   for (uint32_t i = 0; i < state.workerCount; i++) {
     thrd_join(state.workers[i], NULL);

@@ -1,5 +1,6 @@
 #include "api.h"
 #include "audio/audio.h"
+#include "data/sound.h"
 #include "core/maf.h"
 #include "util.h"
 
@@ -15,7 +16,11 @@ static int l_lovrSourceClone(lua_State* L) {
 static int l_lovrSourceGetSound(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
   struct Sound* sound = lovrSourceGetSound(source);
-  luax_pushtype(L, Sound, sound);
+  if (lovrSoundIsStream(sound)) {
+    luax_pushtype(L, AudioStream, sound);
+  } else {
+    luax_pushtype(L, Sound, sound);
+  }
   return 1;
 }
 
@@ -170,23 +175,6 @@ static int l_lovrSourceSetPose(lua_State *L) {
   return 0;
 }
 
-static int l_lovrSourceGetDirectivity(lua_State* L) {
-  Source* source = luax_checktype(L, 1, Source);
-  float weight, power;
-  lovrSourceGetDirectivity(source, &weight, &power);
-  lua_pushnumber(L, weight);
-  lua_pushnumber(L, power);
-  return 2;
-}
-
-static int l_lovrSourceSetDirectivity(lua_State* L) {
-  Source* source = luax_checktype(L, 1, Source);
-  float weight = luax_optfloat(L, 2, 0.f);
-  float power = luax_optfloat(L, 3, 1.f);
-  lovrSourceSetDirectivity(source, weight, power);
-  return 0;
-}
-
 static int l_lovrSourceGetRadius(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
   float radius = lovrSourceGetRadius(source);
@@ -201,27 +189,157 @@ static int l_lovrSourceSetRadius(lua_State* L) {
   return 0;
 }
 
-static int l_lovrSourceIsEffectEnabled(lua_State* L) {
-  Source* source = luax_checktype(L, 1, Source);
-  Effect effect = luax_checkenum(L, 2, Effect, NULL);
-  bool enabled = lovrSourceIsEffectEnabled(source, effect);
-  lua_pushboolean(L, enabled);
-  return 1;
-}
-
-static int l_lovrSourceSetEffectEnabled(lua_State* L) {
-  Source* source = luax_checktype(L, 1, Source);
-  Effect effect = luax_checkenum(L, 2, Effect, NULL);
-  bool enabled = lua_isnoneornil(L, -1) ? true : lua_toboolean(L, -1);
-  luax_assert(L, lovrSourceSetEffectEnabled(source, effect, enabled));
-  return 0;
-}
-
 static int l_lovrSourceIsSpatial(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
   bool spatial = lovrSourceIsSpatial(source);
   lua_pushboolean(L, spatial);
   return 1;
+}
+
+static int l_lovrSourceGetAbsorption(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  float absorption[3];
+  lovrSourceGetAbsorption(source, absorption);
+  lua_pushnumber(L, absorption[0]);
+  lua_pushnumber(L, absorption[1]);
+  lua_pushnumber(L, absorption[2]);
+  return 3;
+}
+
+static int l_lovrSourceSetAbsorption(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  float absorption[3];
+  if (!lua_toboolean(L, 2)) {
+    absorption[0] = 0.f;
+    absorption[1] = 0.f;
+    absorption[2] = 0.f;
+  } else if (lua_isboolean(L, 2)) {
+    // SteamAudio's default absorption coefficients for air
+    absorption[0] = .0002f;
+    absorption[1] = .0017f;
+    absorption[2] = .0182f;
+  } else {
+    absorption[0] = luax_checkfloat(L, 2);
+    absorption[1] = luax_checkfloat(L, 3);
+    absorption[2] = luax_checkfloat(L, 4);
+  }
+  lovrSourceSetAbsorption(source, absorption);
+  return 0;
+}
+
+static int l_lovrSourceGetCone(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  float innerAngle, outerAngle, outerVolume;
+  lovrSourceGetCone(source, &innerAngle, &outerAngle, &outerVolume);
+  lua_pushnumber(L, innerAngle);
+  lua_pushnumber(L, outerAngle);
+  lua_pushnumber(L, outerVolume);
+  return 3;
+}
+
+static int l_lovrSourceSetCone(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  if (!lua_toboolean(L, 2)) {
+    lovrSourceSetCone(source, (float) M_PI, (float) M_PI, 1.f);
+  } else if (lua_isboolean(L, 2)) {
+    lovrSourceSetCone(source, 0.f, (float) M_PI, 0.f);
+  } else {
+    float innerAngle = luax_checkfloat(L, 2);
+    float outerAngle = luax_checkfloat(L, 3);
+    float outerVolume = luax_optfloat(L, 4, 0.);
+    lovrSourceSetCone(source, innerAngle, outerAngle, outerVolume);
+  }
+  return 0;
+}
+
+static int l_lovrSourceGetFalloff(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  float innerDistance, minVolume;
+  lovrSourceGetFalloff(source, &innerDistance, &minVolume);
+  lua_pushnumber(L, innerDistance);
+  lua_pushnumber(L, minVolume);
+  return 2;
+}
+
+static int l_lovrSourceSetFalloff(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  if (!lua_toboolean(L, 2)) {
+    lovrSourceSetFalloff(source, 0.f, 1.f);
+  } else if (lua_isboolean(L, 2)) {
+    lovrSourceSetFalloff(source, 0.f, 0.f);
+  } else {
+    float innerDistance = luax_checkfloat(L, 2);
+    float minVolume = luax_optfloat(L, 3, 0.);
+    lovrSourceSetFalloff(source, innerDistance, minVolume);
+  }
+  return 0;
+}
+
+static int l_lovrSourceGetOcclusion(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  uint32_t occlusionRays, transmissionRays;
+  lovrSourceGetOcclusion(source, &occlusionRays, &transmissionRays);
+  lua_pushinteger(L, occlusionRays);
+  lua_pushinteger(L, transmissionRays);
+  return 2;
+}
+
+static int l_lovrSourceSetOcclusion(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  if (!lua_toboolean(L, 2)) {
+    lovrSourceSetOcclusion(source, 0, 0);
+  } else if (lua_isboolean(L, 2)) {
+    lovrSourceSetOcclusion(source, 64, 4);
+  } else {
+    uint32_t occlusionRays = luax_checku32(L, 2);
+    uint32_t transmissionRays = luax_optu32(L, 3, 4);
+    lovrSourceSetOcclusion(source, occlusionRays, transmissionRays);
+  }
+  return 0;
+}
+
+static int l_lovrSourceGetReverb(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  float reverb;
+  ReverbMode mode;
+  lovrSourceGetReverb(source, &reverb, &mode);
+  lua_pushnumber(L, reverb);
+  luax_pushenum(L, ReverbMode, mode);
+  return 2;
+}
+
+static int l_lovrSourceSetReverb(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  if (!lua_toboolean(L, 2)) {
+    lovrSourceSetReverb(source, 0.f, REVERB_LISTENER);
+  } else if (lua_isboolean(L, 2)) {
+    lovrSourceSetReverb(source, 1.f, REVERB_LISTENER);
+  } else {
+    float reverb = luax_optfloat(L, 2, 0.f);
+    ReverbMode mode = luax_checkenum(L, 3, ReverbMode, "listener");
+    lovrSourceSetReverb(source, reverb, mode);
+  }
+  return 0;
+}
+
+static int l_lovrSourceGetSpatialization(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  float spatialization = lovrSourceGetSpatialization(source);
+  lua_pushnumber(L, spatialization);
+  return 1;
+}
+
+static int l_lovrSourceSetSpatialization(lua_State* L) {
+  Source* source = luax_checktype(L, 1, Source);
+  if (!lua_toboolean(L, 2)) {
+    lovrSourceSetSpatialization(source, 0.f);
+  } else if (lua_isboolean(L, 2)) {
+    lovrSourceSetSpatialization(source, 1.f);
+  } else {
+    float spatialization = luax_checkfloat(L, 2);
+    lovrSourceSetSpatialization(source, spatialization);
+  }
+  return 0;
 }
 
 const luaL_Reg lovrSource[] = {
@@ -248,10 +366,18 @@ const luaL_Reg lovrSource[] = {
   { "setPose", l_lovrSourceSetPose },
   { "getRadius", l_lovrSourceGetRadius },
   { "setRadius", l_lovrSourceSetRadius },
-  { "getDirectivity", l_lovrSourceGetDirectivity },
-  { "setDirectivity", l_lovrSourceSetDirectivity },
-  { "isEffectEnabled", l_lovrSourceIsEffectEnabled },
-  { "setEffectEnabled", l_lovrSourceSetEffectEnabled },
   { "isSpatial", l_lovrSourceIsSpatial },
+  { "getAbsorption", l_lovrSourceGetAbsorption },
+  { "setAbsorption", l_lovrSourceSetAbsorption },
+  { "getCone", l_lovrSourceGetCone },
+  { "setCone", l_lovrSourceSetCone },
+  { "getFalloff", l_lovrSourceGetFalloff },
+  { "setFalloff", l_lovrSourceSetFalloff },
+  { "getOcclusion", l_lovrSourceGetOcclusion },
+  { "setOcclusion", l_lovrSourceSetOcclusion },
+  { "getReverb", l_lovrSourceGetReverb },
+  { "setReverb", l_lovrSourceSetReverb },
+  { "getSpatialization", l_lovrSourceGetSpatialization },
+  { "setSpatialization", l_lovrSourceSetSpatialization },
   { NULL, NULL }
 };

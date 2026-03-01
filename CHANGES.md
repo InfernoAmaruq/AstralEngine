@@ -42,6 +42,21 @@ dev
 - Add support for non-uniform scale in `ConvexShape` and `MeshShape`.
 - Add `VertexUV2` builtin vertex attribute and `UV2` shader variable.
 - Add support for two sets of UVs in `ModelData`.
+- Add `t.audio.debug` and `t.audio.reverb` settings to `lovr.conf`.
+- Add `lovr.audio.update`.
+- Add `lovr.audio.setHRTF`.
+- Add `lovr.audio.get/setReverb`.
+- Add `Source:get/setAbsorption`.
+- Add `Source:get/setCone`.
+- Add `Source:get/setFalloff`.
+- Add `Source:get/setOcclusion`.
+- Add `Source:get/setReverb`.
+- Add `Source:get/setSpatialization`.
+- Add support for ambisonic source playback.
+- Add `AudioMesh`.
+- Add `lovr.audio.getStream`.
+- Add `AudioStream`.
+- Add `Sound:get/setFrame`.
 
 ### Change
 
@@ -63,6 +78,12 @@ dev
 - Change `Mat4` to be a regular object instead of a vector type.
 - Change `lovr.graphics.submit` to have better performance when called multiple times per frame.
 - Change `Pass:text` and Font methods to also take nested tables of multicolor strings.
+- Change `lovr.audio.start` sink parameter to be a `boolean` or an `AudioStream`.
+- Change `lovr.audio.start/stop` to return error messages if they fail.
+- Change `lovr.audio.newSource` to create non-spatial sources by default.
+- Change `lovr.audio.newSource` to also accept and `AudioStream`.
+- Change audio device to start when playing a Source for the first time, instead of immediately.
+- Change `lovr.data.newSound` to take a channel count instead of a channel layout.
 
 ### Fix
 
@@ -118,6 +139,12 @@ dev
 - Remove `Model:getData` (create and keep a `ModelData` around as needed).
 - Remove userdata vector types (use tables, and the `vector` and `quaternion` modules).
 - Remove `lovr.headset.getHandles` (use FFI).
+- Remove `lovr.audio.getSpatializer` (SteamAudio is always active).
+- Remove `lovr.audio.setGeometry` (use `AudioMesh`).
+- Remove `lovr.audio.get/setAbsorption` (use `Source:get/setAbsorption`).
+- Remove `Source:get/setDirectivity` (use `Source:get/setCone`).
+- Remove `Source:is/setEffectEnabled` (use new effect getters/setters).
+- Remove "stream" `Sound`s, `Sound:getCapacity`, and `Sound:isStream` (use `AudioStream`).
 
 v0.18.0 - 2025-02-14
 ---

@@ -57,6 +57,8 @@ extern StringEntry lovrOpenMode[];
 extern StringEntry lovrOriginType[];
 extern StringEntry lovrPassType[];
 extern StringEntry lovrPermission[];
+extern StringEntry lovrReverbMode[];
+extern StringEntry lovrReverbType[];
 extern StringEntry lovrSampleFormat[];
 extern StringEntry lovrShaderStage[];
 extern StringEntry lovrShaderType[];

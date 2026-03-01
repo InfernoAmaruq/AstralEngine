@@ -19,8 +19,15 @@ local conf = {
     timer = true
   },
   audio = {
+    debug = false,
     start = true,
-    spatializer = nil
+    reverb = {
+      type = 'convolution',
+      rays = 4096,
+      bounces = 16,
+      duration = 2,
+      rate = .1
+    }
   },
   graphics = {
     debug = false,
@@ -195,6 +202,7 @@ function lovr.run()
       if not lovr.headset.isActive() then lovr.simulate(dt) end
     end
     if lovr.update then lovr.update(dt) end
+    if lovr.audio then lovr.audio.update(dt) end
     if lovr.graphics then
       local window = lovr.graphics.getWindowPass()
       local headset = lovr.headset and lovr.headset.getPass()

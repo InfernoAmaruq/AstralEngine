@@ -26,7 +26,7 @@ option(LOVR_USE_LUAU "Use Luau instead of Lua" OFF)
 option(LOVR_USE_GLSLANG "Use glslang to compile GLSL shaders" ON)
 option(LOVR_USE_VULKAN "Use the Vulkan renderer" ON)
 option(LOVR_USE_WEBGPU "Use the WebGPU renderer" OFF)
-option(LOVR_USE_STEAM_AUDIO "Enable the Steam Audio spatializer (be sure to also set LOVR_STEAM_AUDIO_PATH)" OFF)
+option(LOVR_USE_STEAM_AUDIO "Use Steam Audio for audio spatialization" ON)
 
 option(LOVR_SANITIZE "Enable Address Sanitizer" OFF)
 option(LOVR_PROFILE "Enable Tracy integration" OFF)
@@ -195,6 +195,29 @@ if(LOVR_ENABLE_PHYSICS)
   set(LOVR_JOLT joltc)
 endif()
 
+# Steam Audio (aka phonon)
+if(LOVR_USE_STEAM_AUDIO AND LOVR_ENABLE_AUDIO)
+  set(BUILD_SHARED_LIBS ON)
+  set(STEAMAUDIO_ENABLE_SERIALIZATION OFF CACHE BOOL "")
+  set(STEAMAUDIO_ENABLE_DEFAULT_HRTF OFF CACHE BOOL "")
+  set(STEAMAUDIO_ENABLE_VALIDATION OFF CACHE BOOL "")
+  set(STEAMAUDIO_BUILD_TESTS OFF CACHE BOOL "")
+  set(STEAMAUDIO_BUILD_BENCHMARKS OFF CACHE BOOL "")
+  set(STEAMAUDIO_BUILD_SAMPLES OFF CACHE BOOL "")
+  set(STEAMAUDIO_BUILD_ITESTS OFF CACHE BOOL "")
+  set(STEAMAUDIO_BUILD_DOCS OFF CACHE BOOL "")
+  set(STEAMAUDIO_STATIC_RUNTIME OFF CACHE BOOL "")
+  set(STEAMAUDIO_ENABLE_IPP OFF CACHE BOOL "")
+  set(STEAMAUDIO_ENABLE_MKL OFF CACHE BOOL "")
+  set(STEAMAUDIO_ENABLE_EMBREE OFF CACHE BOOL "")
+  set(STEAMAUDIO_ENABLE_FFTS OFF CACHE BOOL "")
+  set(STEAMAUDIO_ENABLE_RADEONRAYS OFF CACHE BOOL "")
+  set(STEAMAUDIO_ENABLE_TRUEAUDIONEXT OFF CACHE BOOL "")
+  add_subdirectory(deps/phonon/core phonon)
+  set(LOVR_PHONON phonon)
+  set(BUILD_SHARED_LIBS OFF)
+endif()
+
 # glslang
 if(LOVR_USE_GLSLANG)
   set(ENABLE_HLSL OFF CACHE BOOL "")
@@ -237,28 +260,6 @@ if(LOVR_ENABLE_THREAD AND NOT (WIN32 OR EMSCRIPTEN))
   set(THREADS_PREFER_PTHREAD_FLAG ON)
   find_package(Threads REQUIRED)
   set(LOVR_PTHREADS Threads::Threads)
-endif()
-
-# Steam Audio (aka Phonon)
-if(LOVR_USE_STEAM_AUDIO)
-  if(NOT LOVR_STEAM_AUDIO_PATH)
-    message(FATAL_ERROR "LOVR_USE_STEAM_AUDIO requires the LOVR_STEAM_AUDIO_PATH to be set to the location of the Steam Audio folder")
-  endif()
-  add_library(Phonon SHARED IMPORTED)
-  target_include_directories(Phonon INTERFACE "${LOVR_STEAM_AUDIO_PATH}/include")
-  if(ANDROID)
-    set_target_properties(Phonon PROPERTIES IMPORTED_LOCATION "${LOVR_STEAM_AUDIO_PATH}/lib/Android/arm64/libphonon.so")
-  elseif(WIN32)
-    set_target_properties(Phonon PROPERTIES IMPORTED_IMPLIB "${LOVR_STEAM_AUDIO_PATH}/lib/Windows/x64/phonon.lib")
-    set_target_properties(Phonon PROPERTIES IMPORTED_LOCATION "${LOVR_STEAM_AUDIO_PATH}/bin/Windows/x64/phonon.dll")
-  elseif(APPLE)
-    set_target_properties(Phonon PROPERTIES IMPORTED_LOCATION "${LOVR_STEAM_AUDIO_PATH}/lib/OSX/libphonon.dylib"
-                                            IMPORTED_SONAME "@rpath/libphonon.dylib")  # It doesn't make sense this line is required, but it is
-  else() # Assume Linux. Note: This has *not* been tested. FIXME: When is the .so copied?
-    set_target_properties(Phonon PROPERTIES IMPORTED_LOCATION "${LOVR_STEAM_AUDIO_PATH}/lib/Linux/x64/libphonon.so")
-  endif()
-
-  set(LOVR_PHONON Phonon)
 endif()
 
 # LÖVR
@@ -309,6 +310,7 @@ target_link_libraries(lovr
   ${LOVR_LUA}
   ${LOVR_MSDF}
   ${LOVR_JOLT}
+  ${LOVR_PHONON}
   ${LOVR_GLSLANG}
   ${LOVR_OPENXR}
   ${LOVR_PTHREADS}
@@ -341,25 +343,19 @@ if(LOVR_USE_LUAU)
   target_compile_definitions(lovr PRIVATE LOVR_USE_LUAU)
 endif()
 
-if(LOVR_ENABLE_AUDIO OR LOVR_ENABLE_DATA)
-  target_sources(lovr PRIVATE
-    src/lib/miniaudio/miniaudio.c
-  )
-endif()
-
 if(LOVR_ENABLE_AUDIO)
   target_sources(lovr PRIVATE
     src/modules/audio/audio.c
-    src/modules/audio/spatializer_simple.c
     src/api/l_audio.c
     src/api/l_audio_source.c
+    src/api/l_audio_audioMesh.c
+    src/lib/miniaudio/miniaudio.c
   )
 
   if(LOVR_USE_STEAM_AUDIO)
-    target_compile_definitions(lovr PRIVATE LOVR_ENABLE_PHONON_SPATIALIZER)
-    target_sources(lovr PRIVATE src/modules/audio/spatializer_phonon.c)
-    # Dynamically linked at runtime, so this is not otherwise a dependency
-    add_dependencies(lovr ${LOVR_PHONON})
+    target_include_directories(lovr PRIVATE deps/phonon/core/src/core)
+    target_include_directories(lovr PRIVATE "${PROJECT_BINARY_DIR}/phonon/src/core")
+    target_compile_definitions(lovr PRIVATE LOVR_USE_PHONON)
   endif()
 else()
   target_compile_definitions(lovr PRIVATE LOVR_DISABLE_AUDIO)
@@ -376,6 +372,7 @@ if(LOVR_ENABLE_DATA)
     src/modules/data/rasterizer.c
     src/modules/data/sound.c
     src/api/l_data.c
+    src/api/l_data_audioStream.c
     src/api/l_data_blob.c
     src/api/l_data_image.c
     src/api/l_data_modelData.c
@@ -771,6 +768,7 @@ elseif(ANDROID)
     ${LOVR_MSDF}
     ${LOVR_LUA}
     ${LOVR_GLSLANG}
+    ${LOVR_PHONON}
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/raw/lib/${ANDROID_ABI}"
   )
 
@@ -791,11 +789,6 @@ elseif(ANDROID)
     )
 
     configure_file("${ANDROID_NDK}/toolchains/llvm/prebuilt/${ANDROID_HOST_TAG}/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "raw/lib/${ANDROID_ABI}/libc++_shared.so" COPYONLY)
-
-    if(LOVR_USE_STEAM_AUDIO)
-      get_target_property(PHONON_LIB ${LOVR_PHONON} IMPORTED_LOCATION)
-      file(COPY ${PHONON_LIB} DESTINATION raw/lib/${ANDROID_ABI})
-    endif()
 
     # Make an apk
     add_custom_target(
@@ -896,6 +889,7 @@ elseif(UNIX)
   move_lib(${LOVR_JOLT})
   move_lib(${LOVR_GLSLANG})
   move_lib(${LOVR_OPENXR})
+  move_lib(${LOVR_PHONON})
   foreach(target ${ALL_PLUGIN_TARGETS})
     move_lib(${target})
   endforeach()

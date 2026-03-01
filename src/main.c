@@ -45,11 +45,11 @@ int main(int argc, char** argv) {
     if (lua_type(T, 1) == LUA_TSTRING && !strcmp(lua_tostring(T, 1), "restart")) {
       luax_checkvariant(T, 2, &cookie);
       if (cookie.type == TYPE_OBJECT) memset(&cookie, 0, sizeof(cookie));
-      lua_close(L);
+      luax_close(L);
       continue;
     } else {
       int status = lua_tointeger(T, 1);
-      lua_close(L);
+      luax_close(L);
       os_destroy();
       return status;
     }

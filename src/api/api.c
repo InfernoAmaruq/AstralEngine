@@ -14,8 +14,6 @@
 #include "graphics/graphics.h"
 #endif
 
-typedef void voidFn(void);
-
 #ifdef _WIN32
 #define LOVR_EXPORT __declspec(dllexport)
 #else
@@ -47,6 +45,16 @@ static int luax_type(lua_State* L) {
   return 1;
 }
 
+#ifdef LOVR_USE_LUAU
+static void luax_destructor(lua_State* L, void* userdata) {
+  Object* object = userdata;
+  if (object->pointer) {
+    lovrRelease(object->pointer, lovrTypeInfo[object->type].destructor);
+    object->pointer = NULL;
+  }
+}
+#endif
+
 static int luax_release(lua_State* L) {
   Object* object = lua_touserdata(L, 1);
 
@@ -65,17 +73,6 @@ static int luax_release(lua_State* L) {
   lovrRelease(object->pointer, lovrTypeInfo[object->type].destructor);
   object->pointer = NULL;
 
-  return 0;
-}
-
-static int luax_runfinalizers(lua_State* L) {
-  lua_getfield(L, LUA_REGISTRYINDEX, "_lovrfinalizers");
-  for (int i = luax_len(L, 2); i >= 1; i--) {
-    lua_rawgeti(L, 2, i);
-    voidFn* finalizer = (voidFn*) lua_tocfunction(L, -1);
-    finalizer();
-    lua_pop(L, 1);
-  }
   return 0;
 }
 
@@ -138,6 +135,11 @@ void _luax_registertype(lua_State* L, int type, const char* name, void (*destruc
   lua_pushvalue(L, -1);
   lua_setfield(L, -1, "__index");
 
+#ifdef LOVR_USE_LUAU
+  lua_setuserdatadtor(L, type, luax_destructor);
+  lua_pushvalue(L, -1);
+  lua_setuserdatametatable(L, type);
+#else
   // m.__gc = luax_release
   lua_pushcfunction(L, luax_release);
   lua_setfield(L, -2, "__gc");
@@ -145,6 +147,7 @@ void _luax_registertype(lua_State* L, int type, const char* name, void (*destruc
   // m.__close = gc
   lua_pushcfunction(L, luax_release);
   lua_setfield(L, -2, "__close");
+#endif
 
   // m.__tostring
   lua_pushcfunction(L, luax_tostring);
@@ -168,6 +171,10 @@ void _luax_registertype(lua_State* L, int type, const char* name, void (*destruc
 }
 
 void* _luax_totype(lua_State* L, int index, int type) {
+#ifdef LOVR_USE_LUAU
+  Object* object = lua_touserdatatagged(L, index, type);
+  return object ? object->pointer : NULL;
+#else
   Object* object = lua_touserdata(L, index);
 
   if (object && lua_type(L, index) != LUA_TLIGHTUSERDATA && object->type == type) {
@@ -175,6 +182,7 @@ void* _luax_totype(lua_State* L, int index, int type) {
   }
 
   return NULL;
+#endif
 }
 
 void* _luax_checktype(lua_State* L, int index, int type) {
@@ -240,9 +248,13 @@ void _luax_pushtype(lua_State* L, int type, void* pointer) {
   }
 
   // Allocate userdata
+#ifdef LOVR_USE_LUAU
+  Object* object = (Object*) lua_newuserdatataggedwithmetatable(L, sizeof(Object), type);
+#else
   Object* object = (Object*) lua_newuserdata(L, sizeof(Object));
   luaL_newmetatable(L, lovrTypeInfo[type].name);
   lua_setmetatable(L, -2);
+#endif
   lovrRetain(pointer);
   object->pointer = pointer;
   object->type = type;
@@ -428,30 +440,35 @@ void luax_setmainthread(lua_State *L) {
 #endif
 }
 
-void luax_atexit(lua_State* L, voidFn* finalizer) {
+typedef struct Finalizer {
+  struct Finalizer* next;
+  void (*fn)(void);
+} Finalizer;
+
+void luax_atexit(lua_State* L, void (*fn)(void)) {
+  Finalizer* finalizer = lovrMalloc(sizeof(Finalizer));
+  finalizer->fn = fn;
+
   lua_getfield(L, LUA_REGISTRYINDEX, "_lovrfinalizers");
-
-  if (lua_isnil(L, -1)) {
-    lua_newtable(L);
-    lua_replace(L, -2);
-
-    // Userdata sentinel since tables don't have __gc (yet)
-    lua_newuserdata(L, sizeof(void*));
-    lua_createtable(L, 0, 1);
-    lua_pushcfunction(L, luax_runfinalizers);
-    lua_setfield(L, -2, "__gc");
-    lua_setmetatable(L, -2);
-    lua_setfield(L, -2, "");
-
-    // Write to the registry
-    lua_pushvalue(L, -1);
-    lua_setfield(L, LUA_REGISTRYINDEX, "_lovrfinalizers");
-  }
-
-  int length = luax_len(L, -1);
-  lua_pushcfunction(L, (lua_CFunction) finalizer);
-  lua_rawseti(L, -2, length + 1);
+  finalizer->next = lua_touserdata(L, -1);
   lua_pop(L, 1);
+
+  lua_pushlightuserdata(L, finalizer);
+  lua_setfield(L, LUA_REGISTRYINDEX, "_lovrfinalizers");
+}
+
+void luax_close(lua_State* L) {
+  lua_getfield(L, LUA_REGISTRYINDEX, "_lovrfinalizers");
+  Finalizer* finalizer = lua_touserdata(L, -1);
+
+  lua_close(L);
+
+  while (finalizer) {
+    finalizer->fn();
+    Finalizer* next = finalizer->next;
+    lovrFree(finalizer);
+    finalizer = next;
+  }
 }
 
 uint32_t _luax_checku32(lua_State* L, int index) {

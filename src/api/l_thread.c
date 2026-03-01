@@ -21,7 +21,7 @@ static char* threadRunner(Thread* thread, Blob* body, Variant* arguments, uint32
     }
 
     if (!lua_pcall(L, argumentCount, 0, errhandler)) {
-      lua_close(L);
+      luax_close(L);
       return NULL;
     }
   }
@@ -30,11 +30,11 @@ static char* threadRunner(Thread* thread, Blob* body, Variant* arguments, uint32
   if (lua_type(L, -1) == LUA_TSTRING) {
     const char* message = lua_tostring(L, -1);
     char* error = lovrStrdup(message);
-    lua_close(L);
+    luax_close(L);
     return error;
   }
 
-  lua_close(L);
+  luax_close(L);
   return NULL;
 }
 

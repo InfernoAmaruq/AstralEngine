@@ -3862,7 +3862,6 @@ void lovrHeadsetGetVulkanPhysicalDevice(void* instance, uintptr_t physicalDevice
   XrResult result = xrGetVulkanGraphicsDevice2KHR(state.instance, &info, (VkPhysicalDevice*) physicalDevice);
 
   if (XR_FAILED(result)) {
-    lovrLog(LOG_ERROR, "XR", "OpenXR failed to get Vulkan device (%d)", result);
     *((VkPhysicalDevice*) physicalDevice) = 0;
   }
 }
@@ -3880,7 +3879,6 @@ uint32_t lovrHeadsetCreateVulkanInstance(void* instanceCreateInfo, void* allocat
   XrResult result = xrCreateVulkanInstanceKHR(state.instance, &info, (VkInstance*) instance, &vkResult);
 
   if (XR_FAILED(result)) {
-    lovrLog(LOG_ERROR, "XR", "OpenXR failed to create Vulkan instance (%d)", result);
     return VK_ERROR_INITIALIZATION_FAILED;
   }
 

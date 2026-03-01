@@ -2981,9 +2981,16 @@ bool gpu_init(gpu_config* config) {
   { // Device
     if (config->vk.getPhysicalDevice) {
       config->vk.getPhysicalDevice(state.instance, (uintptr_t) &state.adapter);
-    } else {
+    }
+
+    if (!state.adapter) {
       uint32_t deviceCount = 1;
       VK(vkEnumeratePhysicalDevices(state.instance, &deviceCount, &state.adapter), "vkEnumeratePhysicalDevices") goto fail;
+    }
+
+    if (!state.adapter) {
+      error("No suitable graphics device available");
+      goto fail;
     }
 
     // Device Extensions

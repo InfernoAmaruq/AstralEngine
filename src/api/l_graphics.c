@@ -165,6 +165,14 @@ StringEntry lovrOriginType[] = {
   { 0 }
 };
 
+StringEntry lovrProjectionType[] = {
+  [PROJECTION_MATRIX] = ENTRY("matrix"),
+  [PROJECTION_ORTHOGRAPHIC] = ENTRY("orthographic"),
+  [PROJECTION_PERSPECTIVE] = ENTRY("perspective"),
+  [PROJECTION_ASYMMETRIC] = ENTRY("asymmetric"),
+  { 0 }
+};
+
 StringEntry lovrShaderStage[] = {
   [STAGE_VERTEX] = ENTRY("vertex"),
   [STAGE_FRAGMENT] = ENTRY("pixel"),

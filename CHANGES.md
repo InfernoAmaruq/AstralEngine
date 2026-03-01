@@ -85,6 +85,7 @@ dev
 - Change `lovr.audio.newSource` to also accept and `AudioStream`.
 - Change audio device to start when playing a Source for the first time, instead of immediately.
 - Change `lovr.data.newSound` to take a channel count instead of a channel layout.
+- Change `Pass:setProjection` to accept a `ProjectionType`.
 
 ### Fix
 
@@ -125,6 +126,7 @@ dev
 - Deprecate `t.math.globals` (use `vector` and `quaternion`).
 - Deprecate `Layer:getPass` (use your own `Pass`).
 - Deprecate ability to use zero for window dimensions in `lovr.conf` (use `t.window.fullscreen`).
+- Deprecate variant of `Pass:setProjection` that takes 4 numeric FOV angles (use `ProjectionType`).
 
 ### Remove
 

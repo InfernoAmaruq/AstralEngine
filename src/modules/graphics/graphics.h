@@ -584,6 +584,13 @@ typedef struct {
 } Canvas;
 
 typedef enum {
+  PROJECTION_MATRIX,
+  PROJECTION_ORTHOGRAPHIC,
+  PROJECTION_PERSPECTIVE,
+  PROJECTION_ASYMMETRIC
+} ProjectionType;
+
+typedef enum {
   STACK_TRANSFORM,
   STACK_STATE
 } StackType;

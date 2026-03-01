@@ -348,21 +348,70 @@ static int l_lovrPassGetProjection(lua_State* L) {
 
 static int l_lovrPassSetProjection(lua_State* L) {
   Pass* pass = luax_checktype(L, 1, Pass);
-  uint32_t view = luaL_checkinteger(L, 2) - 1;
-  if (lua_type(L, 3) == LUA_TNUMBER) {
-    float left = luax_checkfloat(L, 3);
-    float right = luax_checkfloat(L, 4);
-    float up = luax_checkfloat(L, 5);
-    float down = luax_checkfloat(L, 6);
-    float clipNear = luax_optfloat(L, 7, .01f);
-    float clipFar = luax_optfloat(L, 8, 0.f);
-    float matrix[16];
-    mat4_fov(matrix, left, right, up, down, clipNear, clipFar);
-    lovrPassSetProjection(pass, view, matrix);
+  uint32_t view = lua_type(L, 2) == LUA_TNUMBER ? lua_tointeger(L, 2) - 1 : ~0u;
+  mat4 projection = (float[16]) { 0 };
+
+  int index = view == ~0u ? 2 : 3;
+  Mat4* matrix = luax_totype(L, index, Mat4);
+
+  if (matrix) {
+    projection = lovrMat4GetData(matrix);
+  } else if (lua_type(L, index) == LUA_TNUMBER) { // Deprecated
+    float left = luax_checkfloat(L, index++);
+    float right = luax_checkfloat(L, index++);
+    float up = luax_checkfloat(L, index++);
+    float down = luax_checkfloat(L, index++);
+    float clipNear = luax_optfloat(L, index++, .01f);
+    float clipFar = luax_optfloat(L, index++, 0.f);
+    mat4_fov(projection, left, right, up, down, clipNear, clipFar);
   } else {
-    float* matrix = lovrMat4GetData(luax_checktype(L, 3, Mat4));
-    lovrPassSetProjection(pass, view, matrix);
+    ProjectionType type = luax_checkenum(L, index++, ProjectionType, NULL);
+    switch (type) {
+      case PROJECTION_ORTHOGRAPHIC: {
+        float left = luax_optfloat(L, index++, 0.f);
+        float right = luax_optfloat(L, index++, (float) lovrPassGetWidth(pass));
+        float bottom = luax_optfloat(L, index++, (float) 0.f);
+        float top = luax_optfloat(L, index++, (float) lovrPassGetHeight(pass));
+        float near = luax_optfloat(L, index++, -1.f);
+        float far = luax_optfloat(L, index++, 1.f);
+        mat4_orthographic(projection, left, right, bottom, top, near, far);
+        break;
+      }
+      case PROJECTION_PERSPECTIVE: {
+        float fov = luax_optfloat(L, index++, (float) M_PI / 2.f);
+        float aspect = luax_optfloat(L, index++, (float) lovrPassGetWidth(pass) / lovrPassGetHeight(pass));
+        float near = luax_optfloat(L, index++, (float) .01f);
+        float far = luax_optfloat(L, index++, (float) 0.f);
+        mat4_perspective(projection, fov, aspect, near, far);
+        break;
+      }
+      case PROJECTION_ASYMMETRIC: {
+        float left = luax_optfloat(L, index++, (float) M_PI / 4.f);
+        float right = luax_optfloat(L, index++, left);
+        float up = luax_optfloat(L, index++, left);
+        float down = luax_optfloat(L, index++, left);
+        float near = luax_optfloat(L, index++, (float) .01f);
+        float far = luax_optfloat(L, index++, (float) 0.f);
+        mat4_fov(projection, left, right, up, down, near, far);
+        break;
+      }
+      case PROJECTION_MATRIX:
+        for (int i = 0; i < 16; i++) {
+          projection[i] = luax_checkfloat(L, index + i);
+        }
+        break;
+    }
   }
+
+  if (view == ~0u) {
+    uint32_t count = lovrPassGetViewCount(pass);
+    for (uint32_t i = 0; i < count; i++) {
+      lovrPassSetProjection(pass, i, projection);
+    }
+  } else {
+    lovrPassSetProjection(pass, view, projection);
+  }
+
   return 0;
 }
 

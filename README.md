@@ -9,7 +9,6 @@ Features:
 - Bit operators (>>, |, &) (as well as 'and', 'or' aliasing with && and ||)
 - Metaprogramming via macros and compile-time execute blocks (@macro, @define, @ifdef, @execute)
 - Easily extensible metaprogramming dialect. Adding a new `@directive` is just a single Lua file!
-- LBMF (Lua-Based Markdown File) a JSON-like format used for data by the engine, utilising the shape of Lua tables and optional `@CODE` blocks for logic. Supports comments!
 The Aspera compiler does a quick parse over files as they are loaded, checking for macro symbols or '@'. The compilers effect on boot time is minimal
 
 A lightweight GLSL shader pipeline is also included that makes compiling shaders easier

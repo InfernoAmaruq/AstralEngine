@@ -535,6 +535,7 @@ void lovrAudioGetPose(float position[3], float orientation[4]) {
 void lovrAudioSetPose(float position[3], float orientation[4]) {
   vec3_init(state.position, position);
   quat_init(state.orientation, orientation);
+  state.simulatorDirty = true;
 }
 
 bool lovrAudioSetHRTF(Blob* blob) {
@@ -548,6 +549,7 @@ float lovrAudioGetReverb(void) {
 void lovrAudioSetReverb(float reverb) {
   phonon_set_reverb(reverb);
   state.reverb = reverb;
+  state.simulatorDirty = true;
 }
 
 // Source
@@ -764,6 +766,7 @@ void lovrSourceGetPose(Source* source, float position[3], float orientation[4]) 
 void lovrSourceSetPose(Source* source, float position[3], float orientation[4]) {
   if (position) vec3_init(source->position, position);
   if (orientation) quat_init(source->orientation, orientation);
+  state.simulatorDirty = true;
 }
 
 float lovrSourceGetRadius(Source* source) {
@@ -772,6 +775,7 @@ float lovrSourceGetRadius(Source* source) {
 
 void lovrSourceSetRadius(Source* source, float radius) {
   source->radius = radius;
+  state.simulatorDirty = true;
 }
 
 bool lovrSourceIsSpatial(Source* source) {
@@ -796,6 +800,7 @@ void lovrSourceSetCone(Source* source, float innerAngle, float outerAngle, float
   source->innerAngle = innerAngle;
   source->outerAngle = outerAngle;
   source->outerAngleVolume = outerVolume;
+  state.simulatorDirty = true;
 }
 
 void lovrSourceGetFalloff(Source* source, float* innerDistance, float* minVolume) {
@@ -806,6 +811,7 @@ void lovrSourceGetFalloff(Source* source, float* innerDistance, float* minVolume
 void lovrSourceSetFalloff(Source* source, float innerDistance, float minVolume) {
   source->innerDistance = innerDistance;
   source->minFalloffVolume = minVolume;
+  state.simulatorDirty = true;
 }
 
 void lovrSourceGetOcclusion(Source* source, uint32_t* occlusionRays, uint32_t* transmissionRays) {
@@ -816,6 +822,7 @@ void lovrSourceGetOcclusion(Source* source, uint32_t* occlusionRays, uint32_t* t
 void lovrSourceSetOcclusion(Source* source, uint32_t occlusionRays, uint32_t transmissionRays) {
   source->occlusionRays = occlusionRays;
   source->transmissionRays = transmissionRays;
+  state.simulatorDirty = true;
 }
 
 void lovrSourceGetReverb(Source* source, float* reverb, ReverbMode* mode) {
@@ -826,6 +833,7 @@ void lovrSourceGetReverb(Source* source, float* reverb, ReverbMode* mode) {
 void lovrSourceSetReverb(Source* source, float reverb, ReverbMode mode) {
   source->reverb = reverb;
   source->reverbMode = mode;
+  state.simulatorDirty = true;
 }
 
 float lovrSourceGetSpatialization(Source* source) {
@@ -834,6 +842,7 @@ float lovrSourceGetSpatialization(Source* source) {
 
 void lovrSourceSetSpatialization(Source* source, float spatialization) {
   source->spatialization = spatialization;
+  state.simulatorDirty = true;
 }
 
 // AudioMesh
@@ -1060,13 +1069,19 @@ static void phonon_destroy(void) {
 static void phonon_update(float dt) {
   if (state.sceneDirty) {
     iplSceneCommit(state.scene);
+    state.simulatorDirty = true;
     state.sceneDirty = false;
   }
 
+  if (!state.simulatorDirty) {
+    return;
+  }
+
+  state.simulatorDirty = false;
+
   // TODO maybe split into 2 simulators so we can have less latency on direct simulation commits
-  if (state.simulatorDirty && state.reverbFinished) {
+  if (state.reverbFinished) {
     iplSimulatorCommit(state.simulator);
-    state.simulatorDirty = false;
   }
 
   uint32_t backbuffer = state.backbuffer;

@@ -106,15 +106,8 @@ static inline void _arr_reserve(void** data, size_t n, size_t* capacity, size_t 
   *data = lovrRealloc(*data, *capacity * stride);
 }
 
-// Hash function (FNV1a)
-static inline uint64_t hash64(const void* data, size_t length) {
-  const uint8_t* bytes = (const uint8_t*) data;
-  uint64_t hash = 0xcbf29ce484222325;
-  for (size_t i = 0; i < length; i++) {
-    hash = (hash ^ bytes[i]) * 0x100000001b3;
-  }
-  return hash;
-}
+// Hash function
+uint64_t hash64(const void* data, size_t length);
 
 // Hashmap (does not support removal)
 typedef struct {

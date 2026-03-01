@@ -135,6 +135,13 @@ void lovrLog(int level, const char* tag, const char* format, ...) {
   va_end(args);
 }
 
+// Hashing
+
+#include "lib/rapidhash/rapidhash.h"
+uint64_t hash64(const void* data, size_t length) {
+  return rapidhash(data, length);
+}
+
 // Hashmap
 
 static void map_rehash(map_t* map) {

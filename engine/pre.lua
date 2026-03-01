@@ -130,6 +130,9 @@ local GameAliasTable = {
 
 AstralEngine._MOUNT(PATH, package.GAME_PATH, package.GAME_PATH, true, function(Name, _, VfsPath)
     if GameAliasTable[Name] then
+        if Name == "Components" and VfsPath:find("Plugin") then
+            return
+        end
         lovr.filesystem.alias(VfsPath, GameAliasTable[Name])
     end
 end)
@@ -208,11 +211,8 @@ CONF.CONFIG = {
 lovr.identitySet = function()
     -- initiate the globals and compiler
 
-    print("SET IDENTITY")
     require("Global")()
-    print("GOT GLOBALS")
     require("Compile")
-    print("GOT COMPILER")
     require("CompGlobals")
 
     for n, v in pairs(ConfigTable.Define) do

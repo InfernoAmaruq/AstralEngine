@@ -148,6 +148,7 @@ layout(location = 15) in vec4 Tangent;
 // Helpers
 
 #define Constants uniform DefaultUniformBlock
+#define raytracer accelerationStructureEXT
 
 #ifndef GL_COMPUTE_SHADER
 #define Projection Cameras[ViewIndex].projection

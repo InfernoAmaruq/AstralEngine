@@ -486,11 +486,13 @@ bool lovrAudioStart(AudioType type) {
 
   ma_result result = ma_device_start(&state.devices[type]);
   lovrAssert(result == MA_SUCCESS, ma_result_description(result));
+  return true;
 }
 
 bool lovrAudioStop(AudioType type) {
   ma_result result = ma_device_stop(&state.devices[type]);
   lovrAssert(result == MA_SUCCESS, ma_result_description(result));
+  return true;
 }
 
 bool lovrAudioIsStarted(AudioType type) {

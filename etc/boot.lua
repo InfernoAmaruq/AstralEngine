@@ -19,6 +19,7 @@ local conf = {
     timer = true
   },
   audio = {
+    debug = false,
     start = true,
     reverb = {
       type = 'convolution',

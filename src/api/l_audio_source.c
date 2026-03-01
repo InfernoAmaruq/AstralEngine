@@ -1,5 +1,6 @@
 #include "api.h"
 #include "audio/audio.h"
+#include "data/sound.h"
 #include "core/maf.h"
 #include "util.h"
 
@@ -15,7 +16,11 @@ static int l_lovrSourceClone(lua_State* L) {
 static int l_lovrSourceGetSound(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
   struct Sound* sound = lovrSourceGetSound(source);
-  luax_pushtype(L, Sound, sound);
+  if (lovrSoundIsStream(sound)) {
+    luax_pushtype(L, AudioStream, sound);
+  } else {
+    luax_pushtype(L, Sound, sound);
+  }
   return 1;
 }
 

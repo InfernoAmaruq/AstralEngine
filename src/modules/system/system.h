@@ -19,6 +19,8 @@ bool lovrSystemOpenWindow(struct os_window_config* config);
 bool lovrSystemIsWindowOpen(void);
 bool lovrSystemIsWindowVisible(void);
 bool lovrSystemIsWindowFocused(void);
+bool lovrSystemIsWindowFullscreen(void);
+void lovrSystemSetWindowFullscreen(bool fullscreen);
 void lovrSystemGetWindowSize(uint32_t* width, uint32_t* height);
 float lovrSystemGetWindowDensity(void);
 void lovrSystemPollEvents(void);

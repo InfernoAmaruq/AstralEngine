@@ -57,6 +57,7 @@ dev
 - Add `lovr.audio.getStream`.
 - Add `AudioStream`.
 - Add `Sound:get/setFrame`.
+- Add `lovr.system.is/setWindowFullscreen`.
 
 ### Change
 
@@ -123,6 +124,7 @@ dev
 - Deprecate `lovr.math.mat4` (use `lovr.math.newMat4`).
 - Deprecate `t.math.globals` (use `vector` and `quaternion`).
 - Deprecate `Layer:getPass` (use your own `Pass`).
+- Deprecate ability to use zero for window dimensions in `lovr.conf` (use `t.window.fullscreen`).
 
 ### Remove
 

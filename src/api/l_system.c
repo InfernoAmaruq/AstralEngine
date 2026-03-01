@@ -177,6 +177,13 @@ static int l_lovrSystemOpenWindow(lua_State* L) {
   }
   lua_pop(L, 1);
 
+  // Deprecated method for setting fullscreen
+  if (window.width == 0 || window.height == 0) {
+    window.fullscreen = true;
+    window.width = 720;
+    window.height = 800;
+  }
+
   bool success = lovrSystemOpenWindow(&window);
   lovrRelease(image, lovrImageDestroy);
   luax_assert(L, success);
@@ -199,6 +206,18 @@ static int l_lovrSystemIsWindowFocused(lua_State* L) {
   bool focused = lovrSystemIsWindowFocused();
   lua_pushboolean(L, focused);
   return 1;
+}
+
+static int l_lovrSystemIsWindowFullscreen(lua_State* L) {
+  bool fullscreen = lovrSystemIsWindowFullscreen();
+  lua_pushboolean(L, fullscreen);
+  return 1;
+}
+
+static int l_lovrSystemSetWindowFullscreen(lua_State* L) {
+  bool fullscreen = lua_toboolean(L, 1);
+  lovrSystemSetWindowFullscreen(fullscreen);
+  return 0;
 }
 
 static int l_lovrSystemGetWindowWidth(lua_State* L) {
@@ -363,6 +382,8 @@ static const luaL_Reg lovrSystem[] = {
   { "isWindowOpen", l_lovrSystemIsWindowOpen },
   { "isWindowVisible", l_lovrSystemIsWindowVisible },
   { "isWindowFocused", l_lovrSystemIsWindowFocused },
+  { "isWindowFullscreen", l_lovrSystemIsWindowFullscreen },
+  { "setWindowFullscreen", l_lovrSystemSetWindowFullscreen },
   { "getWindowWidth", l_lovrSystemGetWindowWidth },
   { "getWindowHeight", l_lovrSystemGetWindowHeight },
   { "getWindowDimensions", l_lovrSystemGetWindowDimensions },

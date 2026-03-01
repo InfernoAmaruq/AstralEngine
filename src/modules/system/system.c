@@ -159,6 +159,14 @@ bool lovrSystemIsWindowFocused(void) {
   return os_window_is_focused();
 }
 
+bool lovrSystemIsWindowFullscreen(void) {
+  return os_window_is_fullscreen();
+}
+
+void lovrSystemSetWindowFullscreen(bool fullscreen) {
+  return os_window_set_fullscreen(fullscreen);
+}
+
 void lovrSystemGetWindowSize(uint32_t* width, uint32_t* height) {
   os_window_get_size(width, height);
 }

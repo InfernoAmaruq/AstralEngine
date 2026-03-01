@@ -137,6 +137,7 @@ static struct {
   fn_mousewheel_move* onMouseWheelMove;
   uint32_t width;
   uint32_t height;
+  bool fullscreen;
 } glfwState;
 
 static void onError(int code, const char* description) {
@@ -163,8 +164,6 @@ static void onWindowFocus(GLFWwindow* window, int focused) {
 
 static void onWindowResize(GLFWwindow* window, int width, int height) {
   if (glfwState.onWindowResize && width > 0 && height > 0) {
-    glfwState.width = width;
-    glfwState.height = height;
     glfwState.onWindowResize(width, height);
   }
 }
@@ -377,11 +376,7 @@ bool os_window_open(const os_window_config* config) {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, config->resizable);
 
-  if (config->width == 0 && config->height == 0) {
-    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-  }
-
-  bool center = config->centered && !config->fullscreen && config->width > 0 && config->height > 0;
+  bool center = config->centered && !config->fullscreen;
 
   if (center) {
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -389,17 +384,14 @@ bool os_window_open(const os_window_config* config) {
 
   GLFWmonitor* monitor = glfwGetPrimaryMonitor();
   const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-  uint32_t width = config->width ? config->width : (uint32_t) mode->width;
-  uint32_t height = config->height ? config->height : (uint32_t) mode->height;
+  uint32_t width = config->fullscreen ? (uint32_t) mode->width : config->width;
+  uint32_t height = config->fullscreen ? (uint32_t) mode->height : config->height;
 
   if (config->fullscreen) {
-    glfwWindowHint(GLFW_RED_BITS, mode->redBits);
-    glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
-    glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
-    glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
   }
 
-  glfwState.window = glfwCreateWindow(width, height, config->title, config->fullscreen ? monitor : NULL, NULL);
+  glfwState.window = glfwCreateWindow(width, height, config->title, NULL, NULL);
 
   if (!glfwState.window) {
     return false;
@@ -429,8 +421,9 @@ bool os_window_open(const os_window_config* config) {
   glfwSetMouseButtonCallback(glfwState.window, onMouseButton);
   glfwSetCursorPosCallback(glfwState.window, onMouseMove);
   glfwSetScrollCallback(glfwState.window, onMouseWheelMove);
-  glfwState.width = width;
-  glfwState.height = height;
+  glfwState.width = config->width;
+  glfwState.height = config->height;
+  glfwState.fullscreen = config->fullscreen;
   return true;
 }
 
@@ -446,9 +439,38 @@ bool os_window_is_focused(void) {
   return glfwState.window && glfwGetWindowAttrib(glfwState.window, GLFW_FOCUSED);
 }
 
+bool os_window_is_fullscreen(void) {
+  return glfwState.fullscreen;
+}
+
+void os_window_set_fullscreen(bool fullscreen) {
+  if (!glfwState.window) {
+    return;
+  }
+
+  glfwState.fullscreen = fullscreen;
+
+  if (fullscreen) {
+    os_window_get_size(&glfwState.width, &glfwState.height);
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+    glfwSetWindowSize(glfwState.window, mode->width, mode->height);
+    glfwSetWindowAttrib(glfwState.window, GLFW_DECORATED, false);
+    glfwSetWindowPos(glfwState.window, 0, 0);
+  } else {
+    int x, y, w, h;
+    int width = (int) glfwState.width;
+    int height = (int) glfwState.height;
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    glfwGetMonitorWorkarea(monitor, &x, &y, &w, &h);
+    glfwSetWindowSize(glfwState.window, width, height);
+    glfwSetWindowAttrib(glfwState.window, GLFW_DECORATED, true);
+    glfwSetWindowPos(glfwState.window, x + (w - width) / 2, y + (h - height) / 2);
+  }
+}
+
 void os_window_get_size(uint32_t* width, uint32_t* height) {
-  *width = glfwState.width;
-  *height = glfwState.height;
+  glfwGetWindowSize(glfwState.window, width, height);
 }
 
 float os_window_get_pixel_density(void) {

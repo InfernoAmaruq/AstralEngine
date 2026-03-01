@@ -190,6 +190,8 @@ bool os_window_open(const os_window_config* config);
 bool os_window_is_open(void);
 bool os_window_is_visible(void);
 bool os_window_is_focused(void);
+bool os_window_is_fullscreen(void);
+void os_window_set_fullscreen(bool fullscreen);
 void os_window_get_size(uint32_t* width, uint32_t* height);
 float os_window_get_pixel_density(void);
 void os_window_message_box(const char* message);

@@ -22,7 +22,7 @@ unpack = function(t, i, j)
 end
 
 local Path = lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath())
-local temp = require(Path .. "TableAlloc.so")
+local temp = require(Path .. "TableAlloc")
 table.alloc = temp.Alloc
 debug.getaddress = temp.GetPtr
 

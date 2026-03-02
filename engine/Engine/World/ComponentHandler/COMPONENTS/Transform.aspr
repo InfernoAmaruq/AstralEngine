@@ -1,32 +1,21 @@
-local Component = GetService("Component","Component")
-local Physics = GetService("Physics","Physics")
+local Component = GetService("Component", "Component")
+local Physics = GetService("Physics", "Physics")
 local Transform = {}
 
 Transform.Name = "Transform"
 Transform.FastFetch = {
-    "Position", "Orientation", "Rotation", "Matrix", "LocalOrientation", "LocalPosition", "LocalRotation", "LocalMatrix"
+    "Position",
+    "Orientation",
+    "Rotation",
+    "Matrix",
 }
 Transform.Pattern = {
     Position = Vec3,
     Orientation = Quat,
     Rotation = Vec3,
     Matrix = Mat4,
-    FromPose = 0,
-    LocalPosition = Vec3,
-    LocalOrientation = Quat,
-    LocalRotation = Vec3,
-    LocalMatrix = Mat4,
 }
 Transform.Metadata = {}
-
-@flag{
-    PosIdx = 1,
-    OriIdx = 2,
-    MatIdx = 3,
-    RotIdx = 4,
-
-    Self = 9,
-}
 
 local FIELDS = {
     Position = 1,
@@ -35,10 +24,12 @@ local FIELDS = {
     Rotation = 4,
 }
 
+-- private methods
+
 local function GetOrientation(Comp)
     local O = Comp[4]
-    local x,y,z = math.rad(O.x),math.rad(O.y),math.rad(O.z)
-    Comp[2]:setEuler(y,x,z)
+    local x, y, z = math.rad(O.x), math.rad(O.y), math.rad(O.z)
+    Comp[2]:setEuler(y, x, z)
     return Comp[2]
 end
 
@@ -56,21 +47,24 @@ local function FromPose(T, x, y, z, a, ax, ay, az)
     R:set(ex, ey, ez)
 end
 
+local function GetVector(self, Type)
+    local V = Type == "UpVector" and vec3.up or (Type == "RightVector" and vec3.right) or vec3.forward
+
+    return (self[2] * V):normalize()
+    -- quat * vector normalized
+end
+
+-- meta stuff
+
 local BaseMethods = {
     FromPose = FromPose,
     GetOrientation = GetOrientation,
     GetMatrix = GetMatrix,
 }
 
-local function GetVector(self,Type)
-    local V = Type == "UpVector" and vec3.up or (Type == "RightVector" and vec3.right) or vec3.forward
-
-    return (self[2] * V):normalize()
-end
-
 local function __INDEX(T, k)
     if k == "UpVector" or k == "RightVector" or k == "ForwardVector" then
-        return GetVector(T,k)
+        return GetVector(T, k)
     end
     local KEY = FIELDS[k]
     if KEY then
@@ -109,15 +103,13 @@ local function __NEWINDEX(Ret, k, v)
         GetMatrix(Ret)
     end
 
-    local Col = HasCollider(Ret[9])
+    local Col = Component.HasComponent(Ret[9], "Collider")
     if Col then
-        Physics.QueueToSyncLTJ(Col.WId,Col.ColRef,Ret)
+        Physics.QueueToSyncLTJ(Col.WId, Col.ColRef, Ret)
     end
 end
 
-local MT = {__index = __INDEX, __newindex = __NEWINDEX}
-
-@macro<L>:HasCollider(&E) = Component.HasComponent(&E,"Collider")
+local MT = { __index = __INDEX, __newindex = __NEWINDEX }
 
 Transform.Metadata.__remove = function(self, EId, Forced)
     for i in pairs(self) do
@@ -126,7 +118,7 @@ Transform.Metadata.__remove = function(self, EId, Forced)
 end
 
 Transform.Metadata.__create = function(DATA, Entity)
-    local Ret = {[9] = Entity}
+    local Ret = { [9] = Entity }
 
     if DATA then
         for i, v in pairs(DATA) do
@@ -142,7 +134,7 @@ Transform.Metadata.__create = function(DATA, Entity)
     end
 
     for i, v in pairs(Transform.Pattern) do
-        if (FIELDS[i] and Ret[FIELDS[i]]) then
+        if FIELDS[i] and Ret[FIELDS[i]] then
             continue
         end
         if FIELDS[i] then
@@ -153,7 +145,7 @@ Transform.Metadata.__create = function(DATA, Entity)
     GetOrientation(Ret)
     GetMatrix(Ret)
 
-    return setmetatable(Ret,MT)
+    return setmetatable(Ret, MT)
 end
 
 return Transform

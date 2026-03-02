@@ -1,4 +1,4 @@
-# GetService(Name)
+# GetService(Name:string)
 ## Description
 Returns singletons that reference different service API, read `Services/`
 
@@ -7,6 +7,7 @@ local Service = GetService("ServiceName")
 ```
 
 A list of available services:
+- World - lower level entity manager. Mainly stores pointers to component and information about Entity allocation. Rarely used in games
 - Entity - used to create entities
 - Physics - used to create new World entities
 - Renderer - manages render passes
@@ -29,7 +30,7 @@ local MyEntity = EntityService.New("CoolEntityName") -- may or may not be outdat
 ## Custom Servicex
 One can add their own services to be callable by GetService() via:
 ```lua
-GetService.AddService("Name",Table|Function)
+GetService.AddService(Name:string,Obj:table|function)
 ```
 ## Notes
 Internally, the engine uses GetService() to resolve dependency issues, consult Engine manual to see how it works

@@ -169,6 +169,7 @@ local Methods = {
         local ZIndex = self[8]
         local Stack = { SelfEnt }
 
+        print("REBUILD")
         while #Stack > 0 do
             local Top = table.remove(Stack)
 
@@ -208,7 +209,7 @@ local Methods = {
 
         for Child in SelfEnt.Ancestry:IterChildren() do
             local Root = Child:GetComponent("UIRoot")
-            if Root then
+            if Root and Root[1][4] == 1 then
                 Root:RebuildMatrix()
             end
         end

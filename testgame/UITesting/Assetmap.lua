@@ -5,7 +5,8 @@ return {
             Ancestry = {},
             UIRoot = {
                 Size = {
-                    Scale = vec2(1, 0.25),
+                    Scale = vec2(1, 0),
+                    Offset = vec2(0, 100),
                 },
                 Position = { Scale = vec2(0.5, 0.5) },
                 AnchorPoint = vec2(0.5, 0.5),

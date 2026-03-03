@@ -1866,14 +1866,18 @@ void lovrHeadsetStop(void) {
   lovrRelease(state.mask, lovrMeshDestroy);
   state.mask = NULL;
 
-  for (uint32_t i = 0; i < state.modelCount; i++) {
-    if (state.models[i].handle) xrDestroyRenderModelEXT(state.models[i].handle);
-    if (state.models[i].space) xrDestroySpace(state.models[i].space);
-    lovrFree(state.models[i].nodeStates);
-    lovrFree(state.models[i].nodes);
+  if (state.extensions.renderModel) {
+    for (uint32_t i = 0; i < state.modelCount; i++) {
+      if (state.models[i].handle) xrDestroyRenderModelEXT(state.models[i].handle);
+      if (state.models[i].space) xrDestroySpace(state.models[i].space);
+      lovrFree(state.models[i].nodeStates);
+      lovrFree(state.models[i].nodes);
+    }
   }
   lovrFree(state.modelKeys);
   lovrFree(state.models);
+  state.modelKeys = NULL;
+  state.models = NULL;
 
   if (state.handTrackers[0]) xrDestroyHandTrackerEXT(state.handTrackers[0]);
   if (state.handTrackers[1]) xrDestroyHandTrackerEXT(state.handTrackers[1]);

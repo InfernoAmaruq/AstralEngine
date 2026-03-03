@@ -96,6 +96,7 @@ static struct {
   uint64_t pendingSourceMask;
   atomic_uint backbuffer;
   uint32_t frontbuffer;
+  bool simulatorDirty;
   float position[3];
   float orientation[4];
   float reverb;
@@ -105,7 +106,6 @@ static struct {
   IPLSimulator simulator;
   IPLSource listener;
   IPLScene scene;
-  bool simulatorDirty;
   bool sceneDirty;
   atomic_uint enabledMeshCount;
   _Atomic(IPLHRTF) hrtf[2];

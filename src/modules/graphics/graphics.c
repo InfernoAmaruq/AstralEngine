@@ -7724,7 +7724,7 @@ bool lovrPassPolygon(Pass* pass, uint32_t count, float** vertices) {
     .vertex.pointer = (void**) vertices,
     .vertex.count = count,
     .index.pointer = (void**) &indices,
-    .index.count = 3 * count - 2
+    .index.count = 3 * (count - 2)
   };
 
   if (!lovrPassDraw(pass, &draw)) {

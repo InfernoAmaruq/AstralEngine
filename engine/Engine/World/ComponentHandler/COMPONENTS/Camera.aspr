@@ -1,7 +1,20 @@
-local Camera = {}
+--╔──────────────────────────────────────────────────╗
+--│                   Camera.lua                     │
+--│         Component for rendering the world        │
+--╚──────────────────────────────────────────────────╝
+
+--\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
+--              DEPENDENCY
+--\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
 
 local Renderer = GetService("Renderer")
 local Component = GetService("Component")
+
+--\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
+--     STATIC COMPONENT DECLARATION
+--\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
+
+local Camera = {}
 
 local MSAASolid = { samples = 4, usage = { "render", "sample" }, mipmaps = false }
 local TextureConfig = { samples = 1, usage = { "render", "sample" }, mipmaps = false }

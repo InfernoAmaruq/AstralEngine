@@ -16,6 +16,27 @@ print("INT:", IntroMod)
 print("CACHED:", pcall(require, "BaseIntro"))
 --local Int = IntroMod.Load(CameraEnt)
 coroutine.yield()
+
+-- TEST STRINGS
+print("STR TEST")
+local lust = require("lust")
+
+local f = function()
+    local Dave = "John"
+    local s = "Hello {Dave}"
+    local LOCAL_MARKER = true
+    local n = 0
+
+    print(s)
+
+    print(s:interpolate())
+end
+
+print(f())
+
+print("END STR")
+-- END STRINGS
+
 -- wait a bit since this is launch.lua
 
 --[[Int:Play()
@@ -114,5 +135,3 @@ local Loose = EntityService.New("E")
 Loose:AddComponent("Ancestry")
 Loose:AddComponent("UIRoot", { Size = { Scale = vec2(1, 1) } })
 Loose:AddComponent("UICanvas", { Color = color.fromRGB(255, 0, 0) })
-
-print("END")

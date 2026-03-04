@@ -30,7 +30,7 @@ local MyEntity = EntityService.New("CoolEntityName") -- may or may not be outdat
 ## Custom Servicex
 One can add their own services to be callable by GetService() via:
 ```lua
-GetService.AddService(Name:string,Obj:table|function)
+GetService.AddService(Name:string,Obj:table|function) -> nil
 ```
 ## Notes
 Internally, the engine uses GetService() to resolve dependency issues, consult Engine manual to see how it works

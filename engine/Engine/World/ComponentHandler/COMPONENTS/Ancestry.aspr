@@ -1,22 +1,30 @@
-local Ancestry = {}
+--╔──────────────────────────────────────────────────╗
+--│                  Ancestry.lua                    │
+--│      Component for managing ancestry chains      │
+--╚──────────────────────────────────────────────────╝
+
+--\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
+--              DEPENDENCY
+--\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
 
 local Component = GetService("Component")
 local World = GetService("Entity")
 
--- declarations
+--\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
+--     STATIC COMPONENT DECLARATION
+--\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
 
-Ancestry.Name = "Ancestry"
-Ancestry.Pattern = { Parent = 0 }
-Ancestry.FastFetch = { "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById", "GetChildren", "GetChildrenIds", "IterChildren" }
-Ancestry.Metadata = {}
+-- //\\// Macros/Const/Flags/Helper declaration \\//\\
 
-@flag:ParentPtr = 1;
-@flag:ChildPtr = 2;
-@flag:SelfPtr = 3;
+@flag:PARENT_PTR = 1;
+@flag:CHILD_PTR = 2;
+@flag:SELF_PTR = 3;
 
-@macro<L,!USEBRACK>{FastAddChild(ChildArray,ChildId) = table.insert(ChildArray,ChildId)}
+local FAST_ADD_CHILD = table.insert -- used to be a macro, changed to function ref
 @macro<L,!USEBRACK>{GetSelf(&S) = rawget(&S,"__id") and Component.SetComponents[&S.__id]["Ancestry"] or &S}
+-- ^^ used by functions to get the ancestry component, since fast fetches with <Entity>:<AncestryFunction>() will cause 'self' to be the Entity reference. So we wish to convert to component reference
 
+-- a macro to validate user inputs
 @macro<L,!USEBRACK>{VALIDATE(&OBJ,&OUT,&REF) = 
     local PT = type(&OBJ)
     if PT == "astrobj" then
@@ -30,7 +38,23 @@ Ancestry.Metadata = {}
     end
 }
 
--- private methods
+-- //\\// Component Declaration \\//\\
+
+local Ancestry = {}
+
+Ancestry.Name = "Ancestry"
+Ancestry.FastFetch = { "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById", "GetChildren", "GetChildrenIds", "IterChildren" }
+Ancestry.Metadata = {}
+
+local selfPtrForIter -- caches the handle for the Ancestry component to iterate over
+local function ITERATOR()
+    local self = selfPtrForIter
+    self.__ITERIDXCACHE = self.__ITERIDXCACHE + 1
+    local Id = self[&CHILD_PTR][self.__ITERIDXCACHE]
+    return World.GetEntityFromId(Id), Id
+end
+
+-- //\\// Private Methods \\//\\
 
 local function HasChild(ChildArray,ChildId)
     for i = 1, #ChildArray do
@@ -49,15 +73,9 @@ local function RemoveChild(ChildArray,ChildId)
     end
 end
 
-local SelfPtrForIter
-local function ITERATOR()
-    local self = SelfPtrForIter
-    self.__ITERIDXCACHE = self.__ITERIDXCACHE + 1
-    local Id = self[&ChildPtr][self.__ITERIDXCACHE]
-    return World.GetEntityFromId(Id), Id
-end
+-- //\\// Public Methods \\//\\
 
-local FUNC = {
+local PublicMethods = {
     -- CORE
     SetParent = function(self, Parent)
         -- Remove old reference
@@ -65,17 +83,17 @@ local FUNC = {
         local TornDown
         local Rebuilt
 
-        if self[&ParentPtr] then
-            local ParentAnc = Component.HasComponent(self[&ParentPtr],Ancestry.Name)
-            if not ParentAnc then error("FATAL: STALE PARENT POINTER FROM E: "..self[&SelfPtr].." TO "..self[&ParentPtr],2) end
-            local Ref = World.GetEntityFromId(self[&ParentPtr])
-            RemoveChild(ParentAnc[&ChildPtr],self[&SelfPtr])
+        if self[&PARENT_PTR] then
+            local ParentAnc = Component.HasComponent(self[&PARENT_PTR],Ancestry.Name)
+            if not ParentAnc then error("FATAL: STALE PARENT POINTER FROM E: "..self[&SELF_PTR].." TO "..self[&PARENT_PTR],2) end
+            local Ref = World.GetEntityFromId(self[&PARENT_PTR])
+            RemoveChild(ParentAnc[&CHILD_PTR],self[&SELF_PTR])
             TornDown = Ref
         end
 
         if Parent == nil then
             -- remove parent
-            self[&ParentPtr] = false
+            self[&PARENT_PTR] = false
         else
             -- set parent
             local Val
@@ -84,18 +102,18 @@ local FUNC = {
 
             if Reference.IsNull then error("Attempt to set parent to dead object") end
 
-            if Val == self[&SelfPtr] then error("Attempt to set object parent to itself",2) end
+            if Val == self[&SELF_PTR] then error("Attempt to set object parent to itself",2) end
 
             local ParentAnc = Component.HasComponent(Val,Ancestry.Name)
             if not ParentAnc then error("Attempt to set object as child of entity with no ancestry component",2) end
 
-            self[&ParentPtr] = Val
-            FastAddChild(ParentAnc[&ChildPtr],self[&SelfPtr])
+            self[&PARENT_PTR] = Val
+            FAST_ADD_CHILD(ParentAnc[&CHILD_PTR],self[&SELF_PTR])
 
             Rebuilt = Reference
         end
 
-        local SelfRef = World.GetEntityFromId(self[&SelfPtr])
+        local SelfRef = World.GetEntityFromId(self[&SELF_PTR])
 
         if TornDown and Rebuilt then
             World.OnAncestryChanged:Fire(
@@ -117,7 +135,7 @@ local FUNC = {
         self = GetSelf(self)
         rawset(self,"__ITERIDXCACHE",0)
 
-        SelfPtrForIter = self
+        selfPtrForIter = self
 
         return ITERATOR
     end,
@@ -126,8 +144,8 @@ local FUNC = {
         self = GetSelf(self)
         local Ret = {}
 
-        for i = 1, #self[&ChildPtr] do
-            local Ent = World.GetEntityFromId(self[&ChildPtr][i])
+        for i = 1, #self[&CHILD_PTR] do
+            local Ent = World.GetEntityFromId(self[&CHILD_PTR][i])
             table.insert(Ret, Ent)
         end
 
@@ -135,19 +153,19 @@ local FUNC = {
     end,
     GetChildrenIds = function(self)
         self = GetSelf(self)
-        return self[&ChildPtr]
+        return self[&CHILD_PTR]
     end,
     GetChildByIdx = function(self,Idx)
-        return self[&ChildPtr][Idx]
+        return self[&CHILD_PTR][Idx]
     end,
     GetChildCount = function(self)
-        return #self[&ChildPtr]
+        return #self[&CHILD_PTR]
     end,
 
-    -- QUERRY
+    -- QUERY
     FindFirstChildWithComponent = function(self, Type)
         self = GetSelf(self)
-        for _, ChildIdx in ipairs(self[&ChildPtr]) do
+        for _, ChildIdx in ipairs(self[&CHILD_PTR]) do
             local Storage = Component.SetComponents[ChildIdx]
             local Comp = Storage and Storage[Type]
             if Comp then return World.GetEntityFromId(ChildIdx), Comp end
@@ -155,27 +173,27 @@ local FUNC = {
     end,
     FindFirstChild = function(self, Child)
         self = GetSelf(self)
-        for _, ChildIdx in ipairs(self[&ChildPtr]) do
+        for _, ChildIdx in ipairs(self[&CHILD_PTR]) do
             local ChildRef = World.GetEntityFromId(ChildIdx)
             if ChildRef.Name == Child then return ChildRef end
         end
     end,
     FindFirstChildById = function(self, ChildId)
         self = GetSelf(self)
-        return HasChild(self[&ChildPtr],ChildId)
+        return HasChild(self[&CHILD_PTR],ChildId)
     end,
     FindFirstAncestor = function(self, Ancestor)
         self = GetSelf(self)
-        local SelfPtr = self[&SelfPtr]
-        local CurPtr = self[&ParentPtr]
+        local SelfPtr = self[&SELF_PTR]
+        local CurPtr = self[&PARENT_PTR]
         while true do
             local ParentRef = World.GetEntityFromId(CurPtr)
             local AncComp = Component.SetComponents[CurPtr]["Ancestry"]
 
             if ParentRef.Name == Ancestor then return ParentRef end
 
-            if AncComp[&ParentPtr] then
-               CurPtr = AncComp[&ParentPtr]
+            if AncComp[&PARENT_PTR] then
+               CurPtr = AncComp[&PARENT_PTR]
                if CurPtr == SelfPtr then
                    AstralEngine.Log("Cyclic recursion detected in FindFirstAncestorWithComponent, terminating!","Warning","ANCESTRY")
                    break
@@ -187,8 +205,8 @@ local FUNC = {
     end,
     FindFirstAncestorWithComponent = function(self, Type)
         self = GetSelf(self)
-        local CurPtr = self[&ParentPtr]
-        local SelfPtr = self[&SelfPtr]
+        local CurPtr = self[&PARENT_PTR]
+        local SelfPtr = self[&SELF_PTR]
         if not CurPtr then return nil end
         while true do
             local ParentRef = World.GetEntityFromId(CurPtr)
@@ -196,8 +214,8 @@ local FUNC = {
 
             if Component.SetComponents[CurPtr][Type] then return ParentRef, Component.SetComponents[CurPtr][Type] end
 
-            if AncComp[&ParentPtr] then
-               CurPtr = AncComp[&ParentPtr]
+            if AncComp[&PARENT_PTR] then
+               CurPtr = AncComp[&PARENT_PTR]
                if CurPtr == SelfPtr then
                    AstralEngine.Log("Cyclic recursion detected in FindFirstAncestorWithComponent, terminating!","Warning","ANCESTRY")
                    break
@@ -213,14 +231,14 @@ local FUNC = {
         -- allocating path, more precise
         local Checked = {}
 
-        local CurPtr = self[&ParentPtr]
+        local CurPtr = self[&PARENT_PTR]
         if not CurPtr then AstralEngine.Log("Cyclic reference tests must go upwards. No parent set","Warning","ANCESTRY") return end
 
         while not Checked[CurPtr] do
             local AncC = Component.SetComponents[CurPtr]["Ancestry"]
 
             Checked[CurPtr] = true
-            if AncC and AncC[&ParentPtr] then
+            if AncC and AncC[&PARENT_PTR] then
                 CurPtr = AncC[ParentAnc]
             else
                 break
@@ -235,8 +253,8 @@ local FUNC = {
     end,
     FastTestCyclic = function(self)
         -- no alloc path, fast and light
-        local SelfPtr = self[&SelfPtr]
-        local CurPtr = self[&ParentPtr]
+        local SelfPtr = self[&SELF_PTR]
+        local CurPtr = self[&PARENT_PTR]
 
         local Depth = 0
 
@@ -245,7 +263,7 @@ local FUNC = {
             Depth = Depth + 1
             local AncC = Component.SetComponents[CurPtr]["Ancestry"]
 
-            if AncC and AncC[&ParentPtr] then
+            if AncC and AncC[&PARENT_PTR] then
                 CurPtr = AncC[ParentAnc]
             else
                 break
@@ -255,63 +273,69 @@ local FUNC = {
     end
 }
 
-local INVALID = {
+local Invalid = {
     ParentId = true
 }
 
-local MT = {
+local Metatable = {
     __index = function(self, k)
         if k == "Parent" then
-            return self[&ParentPtr] and World.GetEntityFromId(self[&ParentPtr]) or nil
+            return self[&PARENT_PTR] and World.GetEntityFromId(self[&PARENT_PTR]) or nil
         elseif k == "ParentId" then
-            return self[&ParentPtr] or nil
+            return self[&PARENT_PTR] or nil
         end
-        local CACHE = FUNC[k]
+        local CACHE = PublicMethods[k]
         if CACHE then
             return CACHE
         else
-            return FUNC.FindFirstChild(self, k)
+            return PublicMethods.FindFirstChild(self, k)
         end
     end,
     __newindex = function(self, k, v)
         if k == "Parent" then
-            FUNC.SetParent(self, v)
-        elseif INVALID[k] then
+            PublicMethods.SetParent(self, v)
+        elseif Invalid[k] then
             AstralEngine.Log("Cannot write to Ancestry field "..k,"Warning","ANCESTRY")
         end
     end,
 }
 
-Ancestry.Metadata.__create = function(DATA, e)
-    local m = {}
-    m[&ParentPtr] = false -- false so array is linear
-    m[&ChildPtr] = {}
-    m[&SelfPtr] = e
+--\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
+--              CONSTRUCTOR
+--\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
 
-    setmetatable(m, MT)
+Ancestry.Metadata.__create = function(Input, Entity)
+    local Comp = {}
+    Comp[&PARENT_PTR] = false -- false so array is linear
+    Comp[&CHILD_PTR] = {}
+    Comp[&SELF_PTR] = Entity
 
-    if DATA.Parent then
-        FUNC.SetParent(m,DATA.Parent)
+    setmetatable(Comp, Metatable)
+
+    if Input.Parent then
+        PublicMethods.SetParent(Comp,Input.Parent)
     end
 
-    return m
+    return Comp
 end
 
 Ancestry.Metadata.__remove = function(self, EId, Forced)
     local Temp = {}
 
-    local PtrSelf = self[&SelfPtr]
-    local PtrParent = self[&ParentPtr]
-    local PtrChild = self[&ChildPtr]
+    local PtrSelf = self[&SELF_PTR]
+    local PtrParent = self[&PARENT_PTR]
+    local PtrChild = self[&CHILD_PTR]
 
     local ParentRef = PtrParent and World.GetEntityFromId(PtrParent)
+
+    -- since we are destroying ancestry, bunch up all the children and send them to OnAncestryChanged event
 
     local SelfR = World.GetEntityFromId(PtrSelf)
     if ParentRef then
         Temp[#self + 1] = ParentRef
         Temp[#self + 1] = SelfR
         Temp[#self + 1] = "remove"
-        local ChildArr = Component.HasComponent(PtrParent,"Ancestry")[&ChildPtr]
+        local ChildArr = Component.HasComponent(PtrParent,"Ancestry")[&CHILD_PTR]
         RemoveChild(ChildArr,PtrSelf)
     end
 
@@ -319,7 +343,7 @@ Ancestry.Metadata.__remove = function(self, EId, Forced)
         local ChildRef = World.GetEntityFromId(Child)
         local Anc = Component.HasComponent(Child,"Ancestry")
 
-        Anc[&ParentPtr] = false
+        Anc[&PARENT_PTR] = false
         Temp[#self + 1] = SelfR
         Temp[#self + 1] = ChildRef
         Temp[#self + 1] = "remove"

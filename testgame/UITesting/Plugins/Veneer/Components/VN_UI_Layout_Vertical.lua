@@ -1,6 +1,10 @@
 local EnumData = require("../EnumData")
 local EntityService = GetService("Entity")
 local Component = GetService("Component")
+
+-- declarations
+@flag:d=2
+
 local Layout_Vertical = {
     Metadata = {
         HardDependency = { UIRoot = true, Ancestry = true },
@@ -38,7 +42,7 @@ local Index = {
 
 local TempTable = {}
 
-local function InverseRootSort(a, b)
+local function InverseLayoutSort(a, b)
     return (a.LayoutOrder or 0) > (b.LayoutOrder or 0)
 end
 
@@ -60,11 +64,13 @@ local Methods = {
 
         -- TEMP
         local VAlign, HAlign = LayoutEnum.Center, LayoutEnum.Center
-        local Spacing = vec4(0, 10, 0, 10)
+        local OffsetSpacing, ScaleSpacing = vec2(0,0), vec2(0,0.05)
 
         local OwnSize = vec2(OwnMatrix:getScale())
         local OwnPosition = vec2(OwnMatrix:getPosition())
         local TotalHeight = 0
+
+        local Spacing = OffsetSpacing + OwnSize * ScaleSpacing
 
         for Child in Anc:IterChildren() do
             local UIRoot = Child:GetComponent("UIRoot")
@@ -73,7 +79,7 @@ local Methods = {
 
                 local P, S, Q = UIRoot:__GetRebuildValues(OwnMatrix)
 
-                local Mat = UIRoot[1]
+                local Mat = UIRoot[1] -- matrix slot
 
                 Mat:identity()
                 Mat:translate(P.x, P.y, 0)
@@ -89,9 +95,11 @@ local Methods = {
             end
         end
 
-        table.sort(TempTable, InverseRootSort)
-
         local NChildren = #TempTable
+
+        TotalHeight = TotalHeight + ((NChildren - 1) * Spacing.y)
+
+        table.sort(TempTable, InverseLayoutSort)
 
         rawset(self, ".RebuildInProgress", true)
 
@@ -101,7 +109,7 @@ local Methods = {
         elseif VAlign == LayoutEnum.Bottom then
             StartY = -OwnSize.y / 2 + TotalHeight
         else
-            StartY = OwnSize.y / 2
+            StartY = OwnPosition.y - TotalHeight/2
         end
 
         local CurrentY = StartY
@@ -111,9 +119,10 @@ local Methods = {
             local ChildMat = ChildRoot[1]
             local P = vec2(ChildMat:getPosition())
             local S = vec2(ChildMat:getScale())
+            -- now decode euler angle we decoded previously
             local Q = quat():setEuler(0, 0, ChildMat[4])
 
-            local ChildY = CurrentY - S.y
+            local ChildY = CurrentY + S.y/2
             local ChildX
 
             if HAlign == LayoutEnum.Left then
@@ -125,11 +134,11 @@ local Methods = {
             end
 
             P.x = ChildX + OwnPosition.x
-            P.y = ChildY + OwnPosition.y
+            P.y = ChildY
 
-            ChildRoot:RebuildMatrix(P, S, Q, vec2(0, 0))
+            ChildRoot:RebuildMatrix(P, S, Q, vec2(0,0))
 
-            CurrentY = CurrentY - S.y - Spacing.y
+            CurrentY = CurrentY + S.y + Spacing.y
         end
 
         rawset(self, ".RebuildInProgress", nil)

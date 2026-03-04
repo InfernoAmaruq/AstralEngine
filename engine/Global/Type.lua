@@ -34,6 +34,7 @@ Type.__PRO = function()
         Integer = "Integer",
         Double = "Double",
         Inf = "Inf",
+        Array = "array",
 
         -- CORE
         Number = "number",

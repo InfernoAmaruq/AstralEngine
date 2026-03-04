@@ -17,7 +17,7 @@ TypeOf.__PRO = function()
 
         if IsCompound then
             if mt and mt.__type then
-                return mt.__type, x.__ISINST
+                return mt.__type
             elseif x.type and type(x.type) == "function" then
                 return x:type()
             elseif x.__ISENUM then

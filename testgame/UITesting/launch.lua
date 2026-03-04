@@ -8,6 +8,9 @@ local CamComp = CameraEnt:AddComponent("Camera", {
     DrawToScreen = true,
 })
 
+print(type(CameraEnt), typeof(CameraEnt))
+print(type(ENUM.ColliderShape.Sphere), typeof(ENUM.ColliderShape.Sphere))
+
 local IntroMod = require("BaseIntro")
 print("INT:", IntroMod)
 print("CACHED:", pcall(require, "BaseIntro"))
@@ -42,7 +45,7 @@ LCRoot.ScaleSize = vec2(0.5, 0.5)
 LCRoot.ScalePosition = vec2(0.5, 0.5)
 LCRoot.AnchorPoint = vec2(0.5, 0.5)
 LayoutContainer.Parent = CameraEnt
-LayoutContainer:AddComponent("UICanvas")
+LayoutContainer:AddComponent("UICanvas", { Color = color.fromRGB(180, 180, 180) })
 LayoutContainer:AddComponent("UIVerticalLayout")
 
 local Map = AssetService.AssetMapFromPath("./Assetmap.lua")
@@ -54,14 +57,26 @@ local c = {
     color.fromRGB(0, 255, 0),
     color.fromRGB(0, 0, 255),
     color.fromRGB(255, 0, 255),
+    color.fromRGB(255, 255, 0),
 }
 
-for i = 1, 4 do
+for i = 1, 5 do
     local Object = AssetService.LoadAssetMap(Map).ROOT
     Object.UICanvas.Color = c[i]
     Object.Parent = LayoutContainer
     TextFrames[i] = Object
 end
+
+task.wait(1.5)
+
+TextFrames[3].UIRoot.OffsetSize = TextFrames[3].UIRoot.OffsetSize + vec2(0, 50)
+
+task.wait(1.5)
+
+LayoutContainer.UIRoot.ScaleSize = LayoutContainer.UIRoot.ScaleSize + vec2(0, -0.2)
+local t = debug.cpuclock()
+LayoutContainer.UIRoot.ClipDescendantInstances = true
+print(debug.cpuclock() - t)
 
 print(LayoutContainer.UIVerticalLayout, LayoutContainer.UIVerticalLayout:RebuildChildren())
 print("////TEST2")

@@ -169,7 +169,6 @@ local Methods = {
         local ZIndex = self[8]
         local Stack = { SelfEnt }
 
-        print("REBUILD")
         while #Stack > 0 do
             local Top = table.remove(Stack)
 

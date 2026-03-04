@@ -15,7 +15,7 @@ Creates a new entity and returns it
 ### .Destroy(Ent:Entity|number)
 Destroy an entity
 
-### .CreateAtId(Id:number,Name:string,...:ComponentTuple\*)
+### .CreateAtId(Id:number,Name:string,...:ComponentTuple\*) -> Entity
 Allocates an entity at this specific ID. WILL destroy the entity already there
 
 Where `ComponentTuple` = (ComponentName:string,ComponentInput:table)

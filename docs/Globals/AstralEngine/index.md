@@ -23,4 +23,7 @@ AstralEngine global also contains several tables with extra methods, they can be
 ./System.md
 ./Filesystem.md
 ./Graphics.md
+./Window.md
+./Signals.md
+./Plugins.md
 ```

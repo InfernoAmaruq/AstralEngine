@@ -37,6 +37,7 @@ local Index = {
     OffsetPadding = 3,
     AlignmentVertical = 4,
     AlignmentHorizontal = 5,
+    WrapInstances = 6,
 }
 
 local TempTable = {}
@@ -60,6 +61,7 @@ local Methods = {
         )
 
         local OwnMatrix = OwnRoot.Matrix
+        local OwnRotationRad = math.rad(OwnRoot.Rotation)
 
         -- TEMP
         local VAlign, HAlign = self[Index.AlignmentVertical], self[Index.AlignmentHorizontal]
@@ -88,7 +90,10 @@ local Methods = {
                 -- store temporary Z rotation in matrix so we can later fetch it
                 -- why? because :rotate() can return a different quat, so its unreliable
                 -- read readme.md
-                Mat[4] = z
+                Mat[4] = z -- rad
+
+                Mat[12] = OwnRotationRad
+                -- set parent rotation so we can inherit it
 
                 TotalHeight = TotalHeight + S.y
             end
@@ -135,7 +140,7 @@ local Methods = {
             P.x = ChildX + OwnPosition.x
             P.y = ChildY
 
-            ChildRoot:RebuildMatrix(P, S, Q, vec2(0, 0))
+            ChildRoot:RebuildMatrix(P, S, Q, quat(), vec2())
 
             CurrentY = CurrentY + S.y + Spacing.y
         end
@@ -163,7 +168,7 @@ local mt = {
         if Idx == Index.ScalePadding or Idx == Index.OffsetPadding then
             self[Idx]:set(v)
             Methods.RebuildChildren(self)
-        elseif Idx == Index.AlignmentVertical or Idx == Index.AlignmentHorizontal then
+        else
             self[Idx] = v
             Methods.RebuildChildren(self)
         end
@@ -189,6 +194,7 @@ Layout_Vertical.Metadata.__create = function(Input, Ent, Sink)
         [Index.AlignmentVertical] = AlignmentVertical,
         [Index.OffsetPadding] = OffsetPadding,
         [Index.ScalePadding] = ScalePadding,
+        [Index.WrapInstances] = Input and Input.WrapInstances or false,
     }
 
     setmetatable(Data, mt)

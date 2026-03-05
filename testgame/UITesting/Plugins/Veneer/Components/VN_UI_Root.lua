@@ -67,7 +67,8 @@ local Pointers = {
     __HasLayoutElement = 15,
 }
 
-local StorageQuat = Quat()
+@flag:MATRIX_ROTATION_CACHE_IDX = 12;
+
 local CenterVec = Vec2(0.5, 0.5)
 
 local function ResolveAncestorSize(self)
@@ -156,11 +157,11 @@ local Methods = {
         local CenterAdjustmentAnchor = HalfSize - AnchorOffset
 
         local Rot = self[Pointers.Rotation]
-        StorageQuat:setEuler(0, 0, math.rad(Rot))
+        local QuatOwn = quat():setEuler(0, 0, math.rad(Rot))
 
-        return Pos_Vec2Total, Size_Vec2Total, StorageQuat, CenterAdjustmentAnchor
+        return Pos_Vec2Total, Size_Vec2Total, QuatOwn, AncestorTransform, CenterAdjustmentAnchor
     end,
-    RebuildMatrix = function(self, A, B, C, D)
+    RebuildMatrix = function(self, A, B, C, D, E)
         local SelfAncestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
         if SelfAncestry then
             local Par = SelfAncestry.Parent
@@ -175,11 +176,11 @@ local Methods = {
             end
         end
 
-        local Pos_Vec2Total, Size_Vec2Total, Quat, CenterAdjustmentAnchor
+        local Pos_Vec2Total, Size_Vec2Total, Quat, ParentTransform, CenterAdjustmentAnchor
         if A and A:type() == "Vec2" then
-            Pos_Vec2Total, Size_Vec2Total, Quat, CenterAdjustmentAnchor = A, B, C, D
+            Pos_Vec2Total, Size_Vec2Total, Quat, ParentTransform, CenterAdjustmentAnchor = A, B, C, D, E
         else
-            Pos_Vec2Total, Size_Vec2Total, Quat, CenterAdjustmentAnchor =
+            Pos_Vec2Total, Size_Vec2Total, Quat, ParentTransform, CenterAdjustmentAnchor =
                 self:__GetRebuildValues(A and A:type() == "Mat4" and A or nil)
         end
 
@@ -190,6 +191,8 @@ local Methods = {
             return
         end
 
+        local _,_,OwnZ = Quat:getEuler()
+
         Pos_Vec2Total = Pos_Vec2Total + CenterAdjustmentAnchor
 
         Mat:identity()
@@ -198,6 +201,8 @@ local Methods = {
         Mat:rotate(Quat)
         Mat:translate(-CenterAdjustmentAnchor.x, -CenterAdjustmentAnchor.y, 0)
         Mat:scale(Size_Vec2Total.x, Size_Vec2Total.y, 1)
+
+        Mat[&MATRIX_ROTATION_CACHE_IDX] = OwnZ
 
         -- now query point
 

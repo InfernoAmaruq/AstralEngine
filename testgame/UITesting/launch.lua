@@ -8,12 +8,7 @@ local CamComp = CameraEnt:AddComponent("Camera", {
     DrawToScreen = true,
 })
 
-print(type(CameraEnt), typeof(CameraEnt))
-print(type(ENUM.ColliderShape.Sphere), typeof(ENUM.ColliderShape.Sphere))
-
 local IntroMod = require("BaseIntro")
-print("INT:", IntroMod)
-print("CACHED:", pcall(require, "BaseIntro"))
 --local Int = IntroMod.Load(CameraEnt)
 coroutine.yield()
 
@@ -51,7 +46,7 @@ LCRoot.AnchorPoint = vec2(0.5, 0.5)
 LayoutContainer.Parent = CameraEnt
 LayoutContainer:AddComponent("UICanvas", { Color = color.fromRGB(180, 180, 180) })
 local Comp = LayoutContainer:AddComponent("UIVerticalLayout")
-Comp.ScalePadding = vec2(0, 0.05)
+Comp.ScalePadding = vec2(0.01, 0.01)
 Comp.AlignmentVertical = ENUM.UIAlignPosition.Top
 
 local Map = AssetService.AssetMapFromPath("./Assetmap.lua")
@@ -79,9 +74,14 @@ for i = 1, 5 do
     Object.UICanvas.Color = c[i]
     local CurSize = Object.UIRoot.ScaleSize
     Object.UIRoot.ScaleSize = vec2(s[i], CurSize.y)
+    Object.UIRoot.Rotation = 90
     Object.Parent = LayoutContainer
     TextFrames[i] = Object
 end
+
+task.wait(1.5)
+
+Comp.WrapInstances = true
 
 task.wait(1.5)
 

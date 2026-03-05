@@ -3,7 +3,6 @@ local EntityService = GetService("Entity")
 local Component = GetService("Component")
 
 -- declarations
-@flag:d=2
 
 local Layout_Vertical = {
     Metadata = {
@@ -34,10 +33,10 @@ EntityService.OnAncestryChanged:Connect(function(...)
 end)
 
 local Index = {
-    PaddingScale = 1,
-    PaddingOffset = 2,
-    AlignmentVertical = 3,
-    AlignmentHorizontal = 4,
+    ScalePadding = 2,
+    OffsetPadding = 3,
+    AlignmentVertical = 4,
+    AlignmentHorizontal = 5,
 }
 
 local TempTable = {}
@@ -63,8 +62,8 @@ local Methods = {
         local OwnMatrix = OwnRoot.Matrix
 
         -- TEMP
-        local VAlign, HAlign = LayoutEnum.Center, LayoutEnum.Center
-        local OffsetSpacing, ScaleSpacing = vec2(0,0), vec2(0,0.05)
+        local VAlign, HAlign = self[Index.AlignmentVertical], self[Index.AlignmentHorizontal]
+        local OffsetSpacing, ScaleSpacing = self[Index.OffsetPadding], self[Index.ScalePadding]
 
         local OwnSize = vec2(OwnMatrix:getScale())
         local OwnPosition = vec2(OwnMatrix:getPosition())
@@ -105,11 +104,11 @@ local Methods = {
 
         local StartY
         if VAlign == LayoutEnum.Top then
-            StartY = OwnSize.y / 2
+            StartY = OwnPosition.y - OwnSize.y / 2
         elseif VAlign == LayoutEnum.Bottom then
-            StartY = -OwnSize.y / 2 + TotalHeight
+            StartY = OwnPosition.y + OwnSize.y / 2 - TotalHeight
         else
-            StartY = OwnPosition.y - TotalHeight/2
+            StartY = OwnPosition.y - TotalHeight / 2
         end
 
         local CurrentY = StartY
@@ -122,7 +121,7 @@ local Methods = {
             -- now decode euler angle we decoded previously
             local Q = quat():setEuler(0, 0, ChildMat[4])
 
-            local ChildY = CurrentY + S.y/2
+            local ChildY = CurrentY + S.y / 2
             local ChildX
 
             if HAlign == LayoutEnum.Left then
@@ -136,7 +135,7 @@ local Methods = {
             P.x = ChildX + OwnPosition.x
             P.y = ChildY
 
-            ChildRoot:RebuildMatrix(P, S, Q, vec2(0,0))
+            ChildRoot:RebuildMatrix(P, S, Q, vec2(0, 0))
 
             CurrentY = CurrentY + S.y + Spacing.y
         end
@@ -149,9 +148,26 @@ local mt = {
     __index = function(self, k)
         if Methods[k] then
             return Methods[k]
+        else
+            local Idx = Index[k]
+
+            if Idx == Index.OffsetPadding or Idx == Index.ScalePadding then
+                return vec2(self[Idx])
+            elseif Idx then
+                return self[Idx]
+            end
         end
     end,
-    __newindex = function(self, k, v) end,
+    __newindex = function(self, k, v)
+        local Idx = Index[k]
+        if Idx == Index.ScalePadding or Idx == Index.OffsetPadding then
+            self[Idx]:set(v)
+            Methods.RebuildChildren(self)
+        elseif Idx == Index.AlignmentVertical or Idx == Index.AlignmentHorizontal then
+            self[Idx] = v
+            Methods.RebuildChildren(self)
+        end
+    end,
 }
 
 Layout_Vertical.Metadata.__create = function(Input, Ent, Sink)
@@ -161,17 +177,25 @@ Layout_Vertical.Metadata.__create = function(Input, Ent, Sink)
         Component.AddComponent(Ent, "Ancestry")
     end
 
-    local PaddingScale = Input and Input.PaddingScale or Vec2()
-    local PaddingOffset = Input and Input.PaddingOffset or Vec2()
+    local ScalePadding = Vec2(Input and Input.ScalePadding or vec2())
+    local OffsetPadding = Vec2(Input and Input.OffsetPadding or vec2())
 
     local AlignmentVertical = Input and Input.AlignmentVertical or LayoutEnum.Center
     local AlignmentHorizontal = Input and Input.AlignmentHorizontal or LayoutEnum.Center
 
     local Data = {
         [1] = Ent,
+        [Index.AlignmentHorizontal] = AlignmentHorizontal,
+        [Index.AlignmentVertical] = AlignmentVertical,
+        [Index.OffsetPadding] = OffsetPadding,
+        [Index.ScalePadding] = ScalePadding,
     }
 
     setmetatable(Data, mt)
+
+    if TransformComponent and AncestryComponent then
+        Data:RebuildChildren()
+    end
 
     return Data
 end

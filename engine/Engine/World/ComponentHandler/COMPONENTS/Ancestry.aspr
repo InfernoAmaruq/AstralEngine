@@ -139,7 +139,6 @@ local PublicMethods = {
 
         return ITERATOR
     end,
-
     GetChildren = function(self)
         self = GetSelf(self)
         local Ret = {}
@@ -156,7 +155,7 @@ local PublicMethods = {
         return self[&CHILD_PTR]
     end,
     GetChildByIdx = function(self,Idx)
-        return self[&CHILD_PTR][Idx]
+        return World.GetEntityFromId(self[&CHILD_PTR][Idx])
     end,
     GetChildCount = function(self)
         return #self[&CHILD_PTR]

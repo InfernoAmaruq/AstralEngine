@@ -69,6 +69,17 @@ function Signal:Connect(Callback)
     return Tab
 end
 
+-- todo:
+-- these'll just call the specific ones in :Fire() instead of the giant fucking 'if' statement
+-- :Fire() should also be overridden with one of these
+function Signal:FireAndYield() end
+
+function Signal:FireAndForget() end
+
+function Signal:FireRTC() end
+
+-- end of todo
+
 function Signal:Fire(...)
     local CON = self._connections
     local WAIT = self._waiting

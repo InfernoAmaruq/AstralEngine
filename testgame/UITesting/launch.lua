@@ -17,26 +17,6 @@ print("CACHED:", pcall(require, "BaseIntro"))
 --local Int = IntroMod.Load(CameraEnt)
 coroutine.yield()
 
--- TEST STRINGS
-print("STR TEST")
-local lust = require("lust")
-
-local f = function()
-    local Dave = "John"
-    local s = "Hello {Dave}"
-    local LOCAL_MARKER = true
-    local n = 0
-
-    print(s)
-
-    print(s:interpolate())
-end
-
-print(f())
-
-print("END STR")
--- END STRINGS
-
 -- wait a bit since this is launch.lua
 
 --[[Int:Play()
@@ -59,6 +39,9 @@ if not ok then
     return
 end
 
+local Sigma = CameraEnt
+local Streng = ("Hello {Sigma}"):interpolate()
+
 local LayoutContainer = EntityService.New("LayoutContainer")
 LayoutContainer:AddComponent("Ancestry")
 local LCRoot = LayoutContainer:AddComponent("UIRoot")
@@ -67,7 +50,9 @@ LCRoot.ScalePosition = vec2(0.5, 0.5)
 LCRoot.AnchorPoint = vec2(0.5, 0.5)
 LayoutContainer.Parent = CameraEnt
 LayoutContainer:AddComponent("UICanvas", { Color = color.fromRGB(180, 180, 180) })
-LayoutContainer:AddComponent("UIVerticalLayout")
+local Comp = LayoutContainer:AddComponent("UIVerticalLayout")
+Comp.ScalePadding = vec2(0, 0.05)
+Comp.AlignmentVertical = ENUM.UIAlignPosition.Top
 
 local Map = AssetService.AssetMapFromPath("./Assetmap.lua")
 
@@ -81,9 +66,19 @@ local c = {
     color.fromRGB(255, 255, 0),
 }
 
+local s = {
+    0.5,
+    1,
+    0.3,
+    1.1,
+    0.9,
+}
+
 for i = 1, 5 do
     local Object = AssetService.LoadAssetMap(Map).ROOT
     Object.UICanvas.Color = c[i]
+    local CurSize = Object.UIRoot.ScaleSize
+    Object.UIRoot.ScaleSize = vec2(s[i], CurSize.y)
     Object.Parent = LayoutContainer
     TextFrames[i] = Object
 end

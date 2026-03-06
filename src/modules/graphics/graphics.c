@@ -5343,8 +5343,10 @@ Model* lovrModelClone(Model* parent) {
     mtx_unlock(&state.lock);
   }
 
-  model->blendShapeWeights = lovrMalloc(meta->blendShapeCount * sizeof(float));
-  lovrModelResetBlendShapes(model);
+  if (meta->blendShapeCount > 0) {
+    model->blendShapeWeights = lovrMalloc(meta->blendShapeCount * sizeof(float));
+    lovrModelResetBlendShapes(model);
+  }
 
   model->nodeVisibility = lovrMalloc(meta->nodeCount * sizeof(bool));
   memset(model->nodeVisibility, true, meta->nodeCount * sizeof(bool));

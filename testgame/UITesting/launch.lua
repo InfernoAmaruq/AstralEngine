@@ -10,7 +10,6 @@ local CamComp = CameraEnt:AddComponent("Camera", {
 
 local IntroMod = require("BaseIntro")
 --local Int = IntroMod.Load(CameraEnt)
-coroutine.yield()
 
 -- wait a bit since this is launch.lua
 
@@ -29,6 +28,24 @@ print("DONE")]]
 
 local ok, Err = pcall(CameraEnt.AddComponent, CameraEnt, "UICamera", { Camera = CamComp, ProcessInputs = true })
 print(ok, Err)
+
+local function RunIOTest()
+    local ANSIColor = AstralEngine.Plugins.ANSIColor
+
+    AstralEngine.Log("TEST1", "warn")
+    AstralEngine.Error("Test2", ANSIColor.Green .. "testing" .. ANSIColor.Reset)
+end
+
+print(pcall(RunIOTest))
+
+print("\nCHANGE IO\n")
+
+--lovr.filesystem.write("output.txt", "")
+local Path = lovr.filesystem.getSaveDirectory() .. "/output.txt"
+local f = io.output(Path)
+io.stdout = f
+
+print(pcall(RunIOTest))
 
 if not ok then
     return
@@ -74,10 +91,11 @@ for i = 1, 5 do
     Object.UICanvas.Color = c[i]
     local CurSize = Object.UIRoot.ScaleSize
     Object.UIRoot.ScaleSize = vec2(s[i], CurSize.y)
-    Object.UIRoot.Rotation = 90
     Object.Parent = LayoutContainer
     TextFrames[i] = Object
 end
+
+TextFrames[1].UIRoot.Rotation = 45
 
 task.wait(1.5)
 

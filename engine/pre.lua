@@ -11,6 +11,7 @@ PATH = lovr.filesystem.normalize(lovr.filesystem.toUnix(ExeFold .. PATH), true)
 _G.__BOOT = {}
 _G.AstralEngine = {
     Signals = {},
+    [".Internal"] = {},
 }
 AstralEngine._MOUNT = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Mount.lua")()
 lovr.filesystem.extractor = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Extractor.lua")()
@@ -77,11 +78,47 @@ else
     end, true)
 end
 
+local AnsiColorLib = require("Lib/ANSIText")
+
+-- make some IO fixes
+AstralEngine.System = AstralEngine.System or {}
+
+local Tab = string.rep(" ", 6)
+local ConsolePrint = print
+_G.consoleprint = print
+_G.print = function(...)
+    ConsolePrint(...)
+    if AstralEngine[".Internal"].BaseIO == io.output() then
+        return
+    end
+    local n = select("#", ...)
+    for i = 1, n do
+        io.write(tostring(select(i, ...)):gsub("\27%[[0-9;]*m", "") .. Tab)
+    end
+    io.write("\n")
+    if AstralEngine.System.PrintCallback then
+        AstralEngine.System.PrintCallback(...)
+    end
+    if AstralEngine.System.ShouldFlush then
+        io.flush()
+    end
+end
+
 function AstralEngine.Log(Msg, Flag, Tag, Level)
     Flag = Flag and tostring(Flag) or error("Invalid flag provided!")
     local IsErr = Flag:lower() == "error"
     local IsFatal = Flag:lower() == "fatal"
     local f = IsErr and error or print
+
+    local Pre, Post = "", ""
+
+    if IsErr or IsFatal then
+        Pre = AnsiColorLib.Red
+        Post = AnsiColorLib.Clear
+    elseif Flag:lower() == "warn" then
+        Pre = AnsiColorLib.Yellow
+        Post = AnsiColorLib.Clear
+    end
 
     local MsgT = type(Msg)
     if MsgT == "table" then
@@ -89,12 +126,15 @@ function AstralEngine.Log(Msg, Flag, Tag, Level)
     end
 
     if Tag then
-        f(("[ASTRAL %s][%s]: %s"):format(Flag:upper(), Tag, tostring(Msg)), IsErr and (Level or 2) or "")
+        f(
+            Pre .. ("[ASTRAL %s]" .. Post .. "[%s]: %s"):format(Flag:upper(), Tag, tostring(Msg)),
+            IsErr and (Level or 2) or ""
+        )
         if IsFatal then
             QUIT()
         end
     else
-        f(("[ASTRAL %s]: %s"):format(Flag:upper(), tostring(Msg)), IsErr and (Level or 2) or "")
+        f(Pre .. ("[ASTRAL %s]" .. Post .. ": %s"):format(Flag:upper(), tostring(Msg)), IsErr and (Level or 2) or "")
         if IsFatal then
             QUIT()
         end
@@ -114,10 +154,14 @@ function AstralEngine.Error(Msg, Tag, Layer)
         Layer = Tag
     end
     Layer = Layer or 1
+
+    local Pre = AnsiColorLib.Red
+    local Post = AnsiColorLib.Clear
+
     if IsNum then
-        error(("[ASTRAL FATAL ERROR]: %s"):format(Msg), Layer + 1)
+        error((Pre .. "[ASTRAL ERROR]" .. Post .. ": %s"):format(Msg), Layer + 1)
     else
-        error(("[ASTRAL FATAL ERROR][%s]: %s"):format(Tag, Msg), Layer + 1)
+        error((Pre .. "[ASTRAL ERROR]" .. Post .. "[%s]: %s"):format(Tag, Msg), Layer + 1)
     end
 end
 
@@ -227,6 +271,13 @@ lovr.identitySet = function()
     elseif meta.getdefined("System", "WIN") then
         package.clibtag = ".dll"
     end -- if its none of those, Require sets it manually
+
+    -- configure I/O file
+
+    do
+        local BaseIO = io.output()
+        AstralEngine[".Internal"].BaseIO = BaseIO
+    end
 
     _G.__BOOT = nil
 end

@@ -65,6 +65,9 @@ local Pointers = {
     ClipDescendantInstances = 13,
     __ClipDepth = 14,
     __HasLayoutElement = 15,
+    TransformMatrix = 16,
+    __PixelPerfectScale = 17
+    -- Matrix:getScale() has precision loss when rotated, so, we keep our pixel perfect scale separate
 }
 
 @flag:MATRIX_ROTATION_CACHE_IDX = 12;
@@ -84,18 +87,18 @@ local function ResolveAncestorSize(self)
     local ParentTransform = Parent and Parent:GetComponent("UIRoot")
     local ParentUICam = Parent and Parent:GetComponent("UICamera")
     if ParentTransform then
-        return ParentTransform.Matrix
+        return ParentTransform[Pointers.TransformMatrix], ParentTransform[Pointers.__PixelPerfectScale]
     elseif ParentUICam then
         local Res = ParentUICam.Resolution
-        local m = mat4(vec3(), vec3(Res.x, Res.y, 1), quat())
-        return m
+        return mat4(), vec2(Res.x, Res.y)
     end
 end
 
 local Methods = {
     __PostRebuild = function(self)
         local SelfAncestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
-        local Mat = self[Pointers.Matrix]
+        local Mat = self[Pointers.TransformMatrix]
+        local Scale = self[Pointers.__PixelPerfectScale]
 
         local HasListeners = self.MouseLeave:GetListenerCount() > 0 or self.MouseEnter:GetListenerCount() > 0
         if self.Hovering and HasListeners then
@@ -122,20 +125,21 @@ local Methods = {
             for Child in SelfAncestry:IterChildren() do
                 local ChildUIRoot = Child:GetComponent("UIRoot")
                 if ChildUIRoot then
-                    ChildUIRoot:RebuildMatrix(Mat)
+                    ChildUIRoot:RebuildMatrix(Mat,Scale)
                 end
             end
         end
     end,
-    __GetRebuildValues = function(self, AncestorTransform)
-        AncestorTransform = AncestorTransform or ResolveAncestorSize(self)
+    __GetRebuildValues = function(self, AncestorTransform, AncestorSize)
+        if not AncestorTransform or not AncestorSize then
+            AncestorTransform, AncestorSize = ResolveAncestorSize(self)
+        end
 
-        if not AncestorTransform then
+        if not AncestorTransform or not AncestorSize then
             return nil
         end
 
         local AncestorPosition = vec2(AncestorTransform:getPosition())
-        local AncestorSize = vec2(AncestorTransform:getScale())
 
         -- pixel sizes
 
@@ -148,7 +152,7 @@ local Methods = {
 
         local Pos_Vec2Total = self[Pointers.ScalePosition] * AncestorSize
             + self[Pointers.OffsetPosition]
-            + ProcessedAncestorPosition
+            --+ ProcessedAncestorPosition
 
         -- anchor
 
@@ -159,7 +163,7 @@ local Methods = {
         local Rot = self[Pointers.Rotation]
         local QuatOwn = quat():setEuler(0, 0, math.rad(Rot))
 
-        return Pos_Vec2Total, Size_Vec2Total, QuatOwn, AncestorTransform, CenterAdjustmentAnchor
+        return Pos_Vec2Total, Size_Vec2Total, QuatOwn, CenterAdjustmentAnchor, AncestorTransform
     end,
     RebuildMatrix = function(self, A, B, C, D, E)
         local SelfAncestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
@@ -176,15 +180,16 @@ local Methods = {
             end
         end
 
-        local Pos_Vec2Total, Size_Vec2Total, Quat, ParentTransform, CenterAdjustmentAnchor
+        local Pos_Vec2Total, Size_Vec2Total, Quat, CenterAdjustmentAnchor, ParentTransformMatrix
         if A and A:type() == "Vec2" then
-            Pos_Vec2Total, Size_Vec2Total, Quat, ParentTransform, CenterAdjustmentAnchor = A, B, C, D, E
+            Pos_Vec2Total, Size_Vec2Total, Quat, CenterAdjustmentAnchor, ParentTransformMatrix = A, B, C, D, E
         else
-            Pos_Vec2Total, Size_Vec2Total, Quat, ParentTransform, CenterAdjustmentAnchor =
+            Pos_Vec2Total, Size_Vec2Total, Quat, CenterAdjustmentAnchor, ParentTransformMatrix =
                 self:__GetRebuildValues(A and A:type() == "Mat4" and A or nil)
         end
 
         local Mat = self[Pointers.Matrix]
+        local TransMat = self[Pointers.TransformMatrix]
 
         if not Pos_Vec2Total or not Size_Vec2Total or not Quat or not CenterAdjustmentAnchor then
             Mat[4] = 1
@@ -195,12 +200,24 @@ local Methods = {
 
         Pos_Vec2Total = Pos_Vec2Total + CenterAdjustmentAnchor
 
-        Mat:identity()
-        Mat:translate(Pos_Vec2Total.x, Pos_Vec2Total.y, 0)
+        TransMat:identity()
+        TransMat:set(ParentTransformMatrix)
+        TransMat:translate(Pos_Vec2Total.x,Pos_Vec2Total.y,0)
+        TransMat:translate(CenterAdjustmentAnchor.x,CenterAdjustmentAnchor.y,0)
+        TransMat:rotate(Quat)
+        TransMat:translate(-CenterAdjustmentAnchor.x,-CenterAdjustmentAnchor.y,0)
+
+ --[[       Mat:translate(Pos_Vec2Total.x, Pos_Vec2Total.y, 0)
         Mat:translate(CenterAdjustmentAnchor.x, CenterAdjustmentAnchor.y, 0)
         Mat:rotate(Quat)
-        Mat:translate(-CenterAdjustmentAnchor.x, -CenterAdjustmentAnchor.y, 0)
+        Mat:translate(-CenterAdjustmentAnchor.x, -CenterAdjustmentAnchor.y, 0)]]
+
+        Mat:set(TransMat)
         Mat:scale(Size_Vec2Total.x, Size_Vec2Total.y, 1)
+
+        --offsets lil fucky but ill fix :3 mrow~
+
+        self[Pointers.__PixelPerfectScale]:set(Size_Vec2Total)
 
         Mat[&MATRIX_ROTATION_CACHE_IDX] = OwnZ
 
@@ -421,6 +438,8 @@ UIRoot.Metadata.__create = function(InputTransform, Ent)
         [Pointers.__HasLayoutElement] = false,
         [Pointers.ClipDescendantInstances] = InputTransform and InputTransform.ClipDescendantInstances or false,
         [Pointers.__ClipDepth] = 0,
+        [Pointers.TransformMatrix] = Mat4(),
+        [Pointers.__PixelPerfectScale] = Vec2()
     }
 
     Data.TransparentToStencil = InputTransform and InputTransform.TransparentToStencil or false

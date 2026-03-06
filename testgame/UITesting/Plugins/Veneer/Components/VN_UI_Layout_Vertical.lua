@@ -140,7 +140,7 @@ local Methods = {
             P.x = ChildX + OwnPosition.x
             P.y = ChildY
 
-            ChildRoot:RebuildMatrix(P, S, Q, quat(), vec2())
+            ChildRoot:RebuildMatrix(P, S, Q, vec2())
 
             CurrentY = CurrentY + S.y + Spacing.y
         end

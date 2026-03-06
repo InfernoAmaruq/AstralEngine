@@ -95,7 +95,7 @@ function Signal:Fire(...)
         for _, f in ipairs(self._connections) do
             local s, err = pcall(f, ...)
             if not s then
-                AstralEngine.Log("SIGNAL ERROR: " .. err, "warn", "SIGNAL")
+                AstralEngine.Log("SIGNAL ERROR: " .. debug.traceback(err), "warn", "SIGNAL")
             end
         end
     elseif self._yielding then

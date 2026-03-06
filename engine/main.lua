@@ -4,6 +4,9 @@ local PluginHandler = require("./PluginHandler")
 local SIGNAL = require("Lib.Signal")
 AstralEngine.Plugins.SignalLib = SIGNAL
 
+local AnsiColorLib = require("Lib/ANSIText")
+AstralEngine.Plugins.ANSIColor = AnsiColorLib
+
 local ROOT, World, Renderer, RunService, SS
 
 AstralEngine.Callbacks = {}

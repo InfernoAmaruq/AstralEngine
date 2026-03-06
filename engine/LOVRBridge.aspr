@@ -318,7 +318,7 @@ LVRB.Alias = function()
 
     -- SYSTEM
     -- requires a bit more care so
-    AstralEngine.System = {}
+    AstralEngine.System = AstralEngine.System or {}
     AstralEngine.System.GetCoreCount = lovr.system.getCoreCount
     AstralEngine.System.GetOS = lovr.system.getOS
     AstralEngine.System.OpenConsole = lovr.system.openConsole

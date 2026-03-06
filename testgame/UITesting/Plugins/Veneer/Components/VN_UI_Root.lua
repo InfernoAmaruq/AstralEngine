@@ -90,7 +90,7 @@ local function ResolveAncestorSize(self)
         return ParentTransform[Pointers.TransformMatrix], ParentTransform[Pointers.__PixelPerfectScale]
     elseif ParentUICam then
         local Res = ParentUICam.Resolution
-        return mat4(), vec2(Res.x, Res.y)
+        return mat4():translate(Res.x/2,Res.y/2,0), vec2(Res.x, Res.y)
     end
 end
 
@@ -139,20 +139,12 @@ local Methods = {
             return nil
         end
 
-        local AncestorPosition = vec2(AncestorTransform:getPosition())
-
         -- pixel sizes
 
         local Size_Vec2Total = self[Pointers.ScaleSize] * AncestorSize + self[Pointers.OffsetSize]
 
-        local ProcessedAncestorPosition = vec2(
-            math.max(0, AncestorPosition.x - AncestorSize.x / 2),
-            math.max(0, AncestorPosition.y - AncestorSize.y / 2)
-        )
-
         local Pos_Vec2Total = self[Pointers.ScalePosition] * AncestorSize
-            + self[Pointers.OffsetPosition]
-            --+ ProcessedAncestorPosition
+            + self[Pointers.OffsetPosition] - AncestorSize/2
 
         -- anchor
 
@@ -203,9 +195,7 @@ local Methods = {
         TransMat:identity()
         TransMat:set(ParentTransformMatrix)
         TransMat:translate(Pos_Vec2Total.x,Pos_Vec2Total.y,0)
-        TransMat:translate(CenterAdjustmentAnchor.x,CenterAdjustmentAnchor.y,0)
         TransMat:rotate(Quat)
-        TransMat:translate(-CenterAdjustmentAnchor.x,-CenterAdjustmentAnchor.y,0)
 
  --[[       Mat:translate(Pos_Vec2Total.x, Pos_Vec2Total.y, 0)
         Mat:translate(CenterAdjustmentAnchor.x, CenterAdjustmentAnchor.y, 0)
@@ -214,8 +204,6 @@ local Methods = {
 
         Mat:set(TransMat)
         Mat:scale(Size_Vec2Total.x, Size_Vec2Total.y, 1)
-
-        --offsets lil fucky but ill fix :3 mrow~
 
         self[Pointers.__PixelPerfectScale]:set(Size_Vec2Total)
 

@@ -21,10 +21,12 @@ return {
         Components = {
             Ancestry = {},
             UIRoot = {
-                Size = { Scale = vec2(1, 1) },
+                Size = { Scale = vec2(0.3, 0.5) },
+                Position = { Scale = vec2(0.5, 0.5) },
+                AnchorPoint = vec2(0.5, 0.5),
             },
             UIText = {
-                Color = color.fromRGB(0, 0, 0),
+                Color = color.fromRGB(255, 255, 255),
                 Text = "Hello World",
             },
         },

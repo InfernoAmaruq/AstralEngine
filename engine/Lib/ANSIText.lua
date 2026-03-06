@@ -1,5 +1,4 @@
 local tostring = tostring
-local setmetatable = setmetatable
 local schar = string.char
 
 local Colors = {

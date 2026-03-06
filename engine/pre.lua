@@ -13,6 +13,7 @@ _G.AstralEngine = {
     Signals = {},
     [".Internal"] = {},
 }
+
 AstralEngine._MOUNT = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Mount.lua")()
 lovr.filesystem.extractor = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Extractor.lua")()
 loadfile, require, package.loadlib = unpack(lovr.filesystem.load(package.ENG_PATH .. "/Lib/Require.lua")())
@@ -82,6 +83,13 @@ local AnsiColorLib = require("Lib/ANSIText")
 
 -- make some IO fixes
 AstralEngine.System = AstralEngine.System or {}
+
+-- configure I/O file
+
+do
+    local BaseIO = io.output()
+    AstralEngine[".Internal"].BaseIO = BaseIO
+end
 
 local Tab = string.rep(" ", 6)
 local ConsolePrint = print
@@ -271,13 +279,6 @@ lovr.identitySet = function()
     elseif meta.getdefined("System", "WIN") then
         package.clibtag = ".dll"
     end -- if its none of those, Require sets it manually
-
-    -- configure I/O file
-
-    do
-        local BaseIO = io.output()
-        AstralEngine[".Internal"].BaseIO = BaseIO
-    end
 
     _G.__BOOT = nil
 end

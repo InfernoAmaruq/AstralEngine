@@ -36,7 +36,9 @@ return function(D)
     if _G["ENUM"] then
         E = _G["ENUM"]({
             CPUUpdate = 250,
-            RenderScene = 600,
+            RenderSceneSolid = 600,
+            RenderSceneTransparent = 700,
+            RenderSceneComposite = 750,
             RenderPost = 800,
             RenderSubmit = 950,
             RenderMirror = 970,

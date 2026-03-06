@@ -160,8 +160,7 @@ end
         end
 }
 
-function Renderer.DrawScene(Frame)
-    if not Frame then return end
+function Renderer.DrawSolid()
     local Cams = Cams
     local TransparentStack = TransparentStack
     local SolidStack = SolidStack
@@ -198,16 +197,44 @@ function Renderer.DrawScene(Frame)
 
         SolidPass:send('Transparent',false)
 
-        -- INITIAL PASSES
         PROCESSSTACK(SolidStack,SolidPass)
+    end
+end
+
+function Renderer.DrawTransparent()
+    local Cams = Cams
+    local TransparentStack = TransparentStack
+    local SetComponents = Component.SetComponents
+    local CamStorage = Component.Components.Camera.Storage
+    local TransStorage = Component.Components.Transform.Storage
+    local RendStorage = Component.Components.RenderTarget.Storage
+
+    for cind = 1, #Cams do
+        local e = Cams[cind]
+        local CAMERA = CamStorage[e]
+
+        local CMASK = CAMERA[&Cam.Mask] -- cameramask
+
+        local TransPass = CAMERA[21][1]
+
         TransPass:setDepthWrite(false)
         TransPass:setDepthTest('>=')
         TransPass:setBlendMode(1,'add','premultiplied')
         TransPass:setBlendMode(2,'add','premultiplied')
         TransPass:send('Transparent', true)
         PROCESSSTACK(TransparentStack,TransPass)
+    end
+end
 
-        -- MIXING
+function Renderer.Composite()
+    local Cams = Cams
+    local CamStorage = Component.Components.Camera.Storage
+
+    for cind = 1, #Cams do
+        local e = Cams[cind]
+        local CAMERA = CamStorage[e]
+
+        local pass = CAMERA[11][1]
 
         local Solid = CAMERA[20][1]
         local Transparent = CAMERA[13][1]
@@ -232,5 +259,7 @@ Renderer.Late[#Renderer.Late+1] = function()
     local RS = GetService("RunService")
     local Flag = RS.Flags.Raw | RS.Flags.Contextless
 
-    RS.BindToStep("_REND_SCENE",ENUM.StepPriority.RenderScene.RawValue,Renderer.DrawScene,Flag)
+    RS.BindToStep("_REND_SCENE_SOLID",ENUM.StepPriority.RenderSceneSolid.RawValue,Renderer.DrawSolid,Flag)
+    RS.BindToStep("_REND_SCENE_TRANS",ENUM.StepPriority.RenderSceneTransparent.RawValue,Renderer.DrawTransparent,Flag)
+    RS.BindToStep("_REND_SCENE_COMPOSITE",ENUM.StepPriority.RenderSceneComposite.RawValue,Renderer.Composite,Flag)
 end

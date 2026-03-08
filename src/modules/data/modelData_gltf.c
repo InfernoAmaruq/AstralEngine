@@ -717,6 +717,8 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
       scenes = lovrMalloc(info.sceneCount * sizeof(gltfScene));
       gltfScene* scene = scenes;
       for (int i = (token++)->size; i > 0; i--, scene++) {
+        scene->node = ~0u;
+        scene->nodeCount = 0;
         for (int k = (token++)->size; k > 0; k--) {
           gltfString key = NOM_STR(json, token);
           if (STR_EQ(key, "nodes")) {
@@ -1245,7 +1247,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   }
 
   // Nodes
-  if (meta->nodeCount > 0) {
+  if (meta->nodeCount > 0 && info.nodes) {
     jsmntok_t* token = info.nodes;
     ModelNode* node = meta->nodes;
     for (int i = (token++)->size; i > 0; i--, node++) {
@@ -1340,7 +1342,9 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   }
 
   // Scenes
-  if (info.sceneCount == 0) {
+  if (meta->nodeCount == 0) {
+    meta->rootNode = ~0u;
+  } else if (info.sceneCount == 0) {
     meta->rootNode = 0;
   } else if (scenes[rootScene].nodeCount > 1) {
     meta->rootNode = meta->nodeCount - 1;
@@ -1403,8 +1407,10 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
 
   lovrFree(imageJobs);
 
-  for (int i = 0; i < info.buffers->size; i++) {
-    lovrRelease(blobs[i], lovrBlobDestroy);
+  if (info.buffers) {
+    for (int i = 0; i < info.buffers->size; i++) {
+      lovrRelease(blobs[i], lovrBlobDestroy);
+    }
   }
 
   lovrFree(blobs);
@@ -1432,8 +1438,10 @@ fail:
 
   lovrFree(imageJobs);
 
-  for (int i = 0; i < info.buffers->size; i++) {
-    lovrRelease(blobs[i], lovrBlobDestroy);
+  if (info.buffers) {
+    for (int i = 0; i < info.buffers->size; i++) {
+      lovrRelease(blobs[i], lovrBlobDestroy);
+    }
   }
 
   lovrFree(blobs);

@@ -5284,14 +5284,15 @@ Model* lovrModelCreate(const ModelInfo* info) {
     lovrModelResetBlendShapes(model);
   }
 
-  // Visibility
-  model->nodeVisibility = lovrMalloc(meta->nodeCount * sizeof(bool));
-  memset(model->nodeVisibility, true, meta->nodeCount * sizeof(bool));
+  // Node visibility/transforms
+  if (meta->nodeCount > 0) {
+    model->nodeVisibility = lovrMalloc(meta->nodeCount * sizeof(bool));
+    memset(model->nodeVisibility, true, meta->nodeCount * sizeof(bool));
 
-  // Transforms
-  model->localTransforms = lovrMalloc(sizeof(NodeTransform) * meta->nodeCount);
-  model->globalTransforms = lovrMalloc(16 * sizeof(float) * meta->nodeCount);
-  lovrModelResetNodeTransforms(model);
+    model->localTransforms = lovrMalloc(sizeof(NodeTransform) * meta->nodeCount);
+    model->globalTransforms = lovrMalloc(16 * sizeof(float) * meta->nodeCount);
+    lovrModelResetNodeTransforms(model);
+  }
 
   return model;
 fail:
@@ -5348,12 +5349,15 @@ Model* lovrModelClone(Model* parent) {
     lovrModelResetBlendShapes(model);
   }
 
-  model->nodeVisibility = lovrMalloc(meta->nodeCount * sizeof(bool));
-  memset(model->nodeVisibility, true, meta->nodeCount * sizeof(bool));
+  // Node visibility/transforms
+  if (meta->nodeCount > 0) {
+    model->nodeVisibility = lovrMalloc(meta->nodeCount * sizeof(bool));
+    memset(model->nodeVisibility, true, meta->nodeCount * sizeof(bool));
 
-  model->localTransforms = lovrMalloc(sizeof(NodeTransform) * meta->nodeCount);
-  model->globalTransforms = lovrMalloc(16 * sizeof(float) * meta->nodeCount);
-  lovrModelResetNodeTransforms(model);
+    model->localTransforms = lovrMalloc(sizeof(NodeTransform) * meta->nodeCount);
+    model->globalTransforms = lovrMalloc(16 * sizeof(float) * meta->nodeCount);
+    lovrModelResetNodeTransforms(model);
+  }
 
   return model;
 }
@@ -8734,6 +8738,10 @@ static bool drawNode(Pass* pass, Model* model, uint32_t index, uint32_t instance
 }
 
 bool lovrPassDrawModel(Pass* pass, Model* model, float* transform, uint32_t instances) {
+  if (model->meta.nodeCount == 0) {
+    return true;
+  }
+
   if (!lovrModelAnimateVertices(model)) {
     return false;
   }
@@ -8753,6 +8761,10 @@ bool lovrPassDrawModel(Pass* pass, Model* model, float* transform, uint32_t inst
 bool lovrPassDrawPart(Pass* pass, Model* model, uint32_t meshIndex, uint32_t partIndex, float* transform, uint32_t instances) {
   lovrCheck(meshIndex < model->meta.meshCount, "Model mesh index %d is out of range", meshIndex + 1);
   lovrCheck(partIndex == ~0u || partIndex < model->meta.meshes[meshIndex].partCount, "Model part index %d is out of range", partIndex + 1);
+
+  if (model->meta.nodeCount == 0) {
+    return true;
+  }
 
   if (!lovrModelAnimateVertices(model)) {
     return false;

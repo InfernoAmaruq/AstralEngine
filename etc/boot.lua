@@ -538,10 +538,6 @@ function lovr.boot()
         lovr.graphics.initialize()
     end
 
-    if lovr.system and conf.window then
-        lovr.system.openWindow(conf.window)
-    end
-
     if lovr.headset and conf.headset.start then
         lovr.headset.start()
     end

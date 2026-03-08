@@ -1,6 +1,7 @@
 local SignalLib = AstralEngine.Plugins.SignalLib
 local Component = require("ComponentHandler")
 local InstMeta, Methods = require("Instance")(Component)
+local TagService, TagService_ClearTags = require("TagService")
 local World = {}
 
 World.Component = Component
@@ -178,14 +179,24 @@ function Entity.Destroy(Ent, Recursive)
     Ent.ComponentAdded:Clear()
     Ent.ComponentRemoving:Clear()
 
+    TagService_ClearTags(Ent.Id)
+
     Component.__RemoveAllComponents(Ent)
     rawset(Ent, "IsNull", true)
 end
 
 Methods.Destroy = Entity.Destroy
 
+-- virtualize tag functions
+Methods.HasTag = TagService.HasTag
+Methods.AddTag = TagService.AddTag
+Methods.RemoveTag = TagService.RemoveTag
+Methods.ClearTags = TagService.ClearTags
+Methods.GetAllTags = TagService.GetAllTags
+
 GetService.AddService("Component", Component)
 GetService.AddService("Entity", Entity)
+GetService.AddService("TagService", TagService)
 
 -- SERIALIZER
 

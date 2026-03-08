@@ -143,7 +143,17 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
     return D
 end
 
+local function CallstackDepth()
+    local Depth = 0
+    while debug.getinfo(Depth + 1, "") do
+        Depth = Depth + 1
+    end
+    return Depth
+end
+
 function Component.RemoveComponent(e, id, Force)
+    local D = CallstackDepth() - 4
+    local pre = string.rep(">",D)
     if type(e) == &TYPE then
         e = e.__id
     end
@@ -153,6 +163,10 @@ function Component.RemoveComponent(e, id, Force)
     if not Component.SetComponents[e] or not Comp then
         return
     end
+
+    local CompInst = Component.SetComponents[e][id]
+
+    if not CompInst then return end
 
     if not Force then
         for Name, UserComp in pairs(Component.SetComponents[e]) do
@@ -171,12 +185,11 @@ function Component.RemoveComponent(e, id, Force)
         Ent.ComponentRemoving:Fire(id, Component.SetComponents[e][id])
     end
 
-    local CompInst = Component.SetComponents[e][id]
     if Comp.Metadata and Comp.Metadata.__remove then
-        Comp.Metadata.__remove(CompInst, e, Force)
+        Comp.Metadata.__remove(CompInst, e, Force) -- weirdly, error lower occurs only when this method is called (it destroys another component), but it should not occur cause it doesnt touch CompInst
     end
 
-    for i in pairs(CompInst) do
+    for i in pairs(CompInst) do -- ERROR HERE?
         CompInst[i] = nil
     end
 
@@ -186,6 +199,27 @@ function Component.RemoveComponent(e, id, Force)
 
     Component.Components[id].Storage[e] = nil
     Component.SetComponents[e][id] = nil
+end
+
+Component.GetComponentStorage = function(Name)
+    return Component.Components[Name].Storage
+end
+
+Component.GetAllWithComponent = function(...)
+    local Ret = {}
+
+    local n = select("#",...)
+    for i = 1, n do
+        local Comp = select(i,...)
+        local Storage = AstralEngine.Assert(Component.Components[Comp].Storage,"INVALID COMPONENT NAME AT GetAllWithComponent, NAME: "..Comp.." AT INDEX: "..i,"COMPONENT")
+
+        for EntId in pairs(Storage) do
+            local EntRef = GetService"World".GetEntityFromId(EntId)
+            table.insert(Ret,EntRef)
+        end
+    end
+
+    return Ret
 end
 
 function Component.__RemoveAllComponents(EntityHandle)
@@ -200,10 +234,6 @@ function Component.__RemoveAllComponents(EntityHandle)
         Component.RemoveComponent(Id,CId,true)
     end
 end
-
-local SERIALIZE = require(package.ENG_PATH.."/Lib/Serialize")
-
-local SerializerFenv = setmetatable({ SERIALIZE = SERIALIZE, __InjectedEnv = "CMPH" }, { __index = _G })
 
 local FinalProcessing = {}
 
@@ -229,15 +259,14 @@ function Component.LoadComponents()
             AttemptedToLoad[f] = true
 
             if File then
-                setfenv(File, SerializerFenv)
-                File = File()
-                if File.Serializer then
-                    SERIALIZE.AddSerializeMethod(File.Name, File.Serializer)
-                end
+                local S, Res = pcall(File)
+
+                if not S or not Res then AstralEngine.Log("FAILED TO LOAD COMPONENT: "..f.." - "..(Res or "COMPONENT RETURNED NIL"),"warn","COMPONENT") continue else File = Res end
+
                 Component.NewComponent(File.Name, File.Pattern, File.Metadata, File.FastFetch)
                 table.insert(FinalProcessing, File.FinalProcessing)
             else
-                AstralEngine.Log("FAILED TO LOAD COMPONENT: "..f,"warning","COMPONENT")
+                AstralEngine.Log("FAILED TO LOAD COMPONENT: "..f,"warn","COMPONENT")
             end
         end
     end

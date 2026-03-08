@@ -13,10 +13,10 @@ local FIELDS = {
 
 local mt = {
     __index = function(self, k)
-        return self.__PROXY[k]
+        local v = FIELDS[k]
+        return self[v]
     end,
     __newindex = function(self, k, v)
-        self.__PROXY[k] = v
         if FIELDS[k] then
             rawset(self, FIELDS[k], v)
         end
@@ -38,27 +38,22 @@ end
 RendTarget.Metadata.__create = function(Type, Entity)
     Renderer.AddToStack(Type.Solid == nil and true or Type.Solid, Entity)
 
-    local Proxy = {
-        __RenderType = (type(Type) == "number" and Type or Type.Value),
-        __RenderMask = type(Type) ~= "number" and Type.Layer or Renderer.CamMask,
-    }
+    local RT = type(Type) == "number" and Type or Type.Value
+    local RM = type(Type) ~= "number" and Type.Layer or Renderer.CamMask
 
     local Data = setmetatable({
-        __PROXY = Proxy,
+        [FIELDS.__RenderMask] = RM,
+        [FIELDS.__RenderType] = RT,
         __E = Entity,
         [".SwapStacks"] = SwapStacks,
         [".ToStack"] = AddToStack,
         [".FromStack"] = RemoveFromStack,
     }, mt)
 
-    for i, v in pairs(Proxy) do
-        rawset(Data, FIELDS[i], v)
-    end
-
     return Data
 end
 
-RendTarget.Metadata.__remove = function(self, Entity)
+RendTarget.Metadata.__remove = function(_, Entity)
     Renderer.RemoveFromStack(Entity)
 end
 

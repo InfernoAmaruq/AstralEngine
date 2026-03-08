@@ -72,6 +72,10 @@ return function(Components)
         return n .. " { " .. table.concat(t, ", ") .. " }"
     end
 
+    function Instance.__concat(a, b)
+        return tostring(a) .. tostring(b)
+    end
+
     function Instance.__eq(a, b)
         return a.UniqueId == b.UniqueId
     end

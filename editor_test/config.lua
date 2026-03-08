@@ -4,13 +4,9 @@ _G.StellarEditor = StellarEditor
 
 local VERSIONSTRING = "0.0.0 - DEMO"
 
-local Ok = pcall(require, package.GAME_PATH .. "Early/init.lua")
+--local Ok = pcall(require, package.GAME_PATH .. "Early/init.lua")
 
-print(pcall(StellarEditor.Log, "Hello World!", "success"))
-
-if not Ok then
-    lovr.event.quit()
-end
+--print(pcall(StellarEditor.Log, "Hello World!", "success"))
 
 StellarEditor.GetVersion = function()
     return VERSIONSTRING

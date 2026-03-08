@@ -8,6 +8,45 @@ local CamComp = CameraEnt:AddComponent("Camera", {
     DrawToScreen = true,
 })
 
+coroutine.yield()
+
+local SHAPE1 = EntityService.New("Shape")
+SHAPE1:AddComponent("Transform", { Position = vec3(1, -1, -4) })
+SHAPE1:AddComponent("Shape", { Size = vec3(1, 1, 1), Color = color.Blue })
+
+local SHAPE2 = EntityService.New("Shape")
+SHAPE2:AddComponent("Transform", { Position = vec3(0, 0, -3) })
+SHAPE2:AddComponent("Shape", { Size = vec3(1, 1, 1), Color = color.fromRGBA(255, 0, 0, 120) })
+
+print("\n\nTEST TS\n\n")
+
+local TagService = GetService("TagService")
+
+local TAG = "TESTTAG"
+
+TagService.TagAdded:Connect(function(...)
+    print("TAG ADD", ...)
+end)
+
+TagService.TagRemoved:Connect(function(...)
+    print("TAG REMOVE", ...)
+end)
+
+print(pcall(function()
+    print("HASTAG:", TagService.HasTag(SHAPE1, TAG))
+    TagService.AddTag(SHAPE1, TAG)
+    print("HASTAG:", SHAPE1:HasTag(TAG))
+
+    print("GET TAGGED")
+    for i, v in pairs(TagService.GetAllTags(SHAPE1, TAG)) do
+        print("", i, v)
+    end
+    print("END")
+end))
+
+print("\n\nEND TEST TS\n\n")
+task.wait(3)
+
 local IntroMod = require("BaseIntro")
 --local Int = IntroMod.Load(CameraEnt)
 

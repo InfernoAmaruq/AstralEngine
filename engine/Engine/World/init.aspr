@@ -27,8 +27,6 @@ end
 
 local Entity = {}
 
-local SERIALIZER = require(package.ENG_PATH .. "/Lib/Serialize")
-
 -- Parent, Child, "add"|"remove"
 Entity.OnAncestryChanged = SignalLib.new(SignalLib.Type.RTC)
 Entity.EntityAdded = SignalLib.new(SignalLib.Type.RTC)
@@ -197,69 +195,3 @@ Methods.GetAllTags = TagService.GetAllTags
 GetService.AddService("Component", Component)
 GetService.AddService("Entity", Entity)
 GetService.AddService("TagService", TagService)
-
--- SERIALIZER
-
-SERIALIZER.AddSerializeMethod("Entity", function(T, I, V)
-    local Parts = {}
-
-    local NI = I .. SERIALIZER.Indent
-    table.insert(Parts, NI .. "Name = " .. T.Name)
-
-    local Components = {}
-
-    for k, val in pairs(T:GetComponents()) do
-        if SERIALIZER.IgnoreKey(k) then
-            continue
-        end
-
-        local Key = SERIALIZER.GetKey(k, I, V)
-
-        local StrVal = SERIALIZER.SerializeValue(val, NI, V)
-
-        if StrVal then
-            table.insert(Components, NI .. SERIALIZER.Indent .. Key .. " = " .. StrVal)
-        end
-    end
-
-    local Ancestry = T:GetComponent("Ancestry")
-    if Ancestry then
-        local Anc = {}
-
-        if Ancestry.__RAWPARENT then
-            table.insert(Anc, NI .. SERIALIZER.Indent .. "Parent = " .. tostring(Ancestry.__RAWPARENT))
-        end
-        if Ancestry.__CHILDTABLE then
-            local HasChild
-            local Children = {}
-            for i in pairs(Ancestry.__CHILDTABLE) do
-                HasChild = true
-                table.insert(Children, NI .. SERIALIZER.Indent .. SERIALIZER.Indent .. i)
-            end
-            if HasChild then
-                table.insert(
-                    Anc,
-                    NI
-                    .. SERIALIZER.Indent
-                    .. "Children = {\n"
-                    .. table.concat(Children, ",\n")
-                    .. "\n"
-                    .. NI
-                    .. SERIALIZER.Indent
-                    .. "}"
-                )
-            end
-        end
-
-        table.insert(Parts, NI .. "Ancestry = {\n" .. table.concat(Anc, ",\n") .. "\n" .. NI .. "}")
-    end
-
-    local CompString = table.concat(Components, ",\n")
-    table.insert(Parts, NI .. "Components = {\n" .. CompString .. "\n" .. NI .. "}")
-
-    return "{\n" .. table.concat(Parts, ",\n") .. "\n" .. I .. "}"
-end)
-
-GetService.AddService("World", World)
-
-return World

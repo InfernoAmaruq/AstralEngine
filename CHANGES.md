@@ -58,6 +58,8 @@ dev
 - Add `AudioStream`.
 - Add `Sound:get/setFrame`.
 - Add `lovr.system.is/setWindowFullscreen`.
+- Add `lovr.simulate`.
+- Add `lovr.headset.setPose` and `lovr.headset.setButton`.
 
 ### Change
 
@@ -79,10 +81,10 @@ dev
 - Change `Mat4` to be a regular object instead of a vector type.
 - Change `lovr.graphics.submit` to have better performance when called multiple times per frame.
 - Change `Pass:text` and Font methods to also take nested tables of multicolor strings.
-- Change `lovr.audio.start` sink parameter to be a `boolean` or an `AudioStream`.
-- Change `lovr.audio.start/stop` to return error messages if they fail.
+- Change `lovr.audio.setDevice` sink parameter to be a `boolean` or an `AudioStream`.
+- Change `lovr.audio.start/stop` to return error messages on failure.
 - Change `lovr.audio.newSource` to create non-spatial sources by default.
-- Change `lovr.audio.newSource` to also accept and `AudioStream`.
+- Change `lovr.audio.newSource` to also accept an `AudioStream`.
 - Change audio device to start when playing a Source for the first time, instead of immediately.
 - Change `lovr.data.newSound` to take a channel count instead of a channel layout.
 - Change `Pass:setProjection` to accept a `ProjectionType`.

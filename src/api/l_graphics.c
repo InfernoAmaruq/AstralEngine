@@ -142,7 +142,6 @@ StringEntry lovrDataType[] = {
 StringEntry lovrFilterMode[] = {
   [FILTER_NEAREST] = ENTRY("nearest"),
   [FILTER_LINEAR] = ENTRY("linear"),
-  [FILTER_CUBIC] = ENTRY("cubic"),
   { 0 }
 };
 
@@ -209,7 +208,6 @@ StringEntry lovrTextureFeature[] = {
   [1] = ENTRY("render"),
   [2] = ENTRY("storage"),
   [3] = ENTRY("blit"),
-  [4] = ENTRY("cubic"),
   { 0 }
 };
 
@@ -527,7 +525,6 @@ static int l_lovrGraphicsGetFeatures(lua_State* L) {
   lua_pushboolean(L, features.float64), lua_setfield(L, -2, "float64");
   lua_pushboolean(L, features.int64), lua_setfield(L, -2, "int64");
   lua_pushboolean(L, features.int16), lua_setfield(L, -2, "int16");
-  lua_pushboolean(L, features.cubic), lua_setfield(L, -2, "cubic");
   return 1;
 }
 

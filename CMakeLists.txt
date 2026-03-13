@@ -398,7 +398,9 @@ if(LOVR_ENABLE_DATA)
     src/modules/data/modelData_stl.c
     src/modules/data/rasterizer.c
     src/modules/data/sound.c
+    src/modules/data/cstruct.c
     src/api/l_data.c
+    src/api/l_data_cstruct.c
     src/api/l_data_blob.c
     src/api/l_data_image.c
     src/api/l_data_modelData.c

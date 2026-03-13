@@ -195,3 +195,6 @@ Methods.GetAllTags = TagService.GetAllTags
 GetService.AddService("Component", Component)
 GetService.AddService("Entity", Entity)
 GetService.AddService("TagService", TagService)
+GetService.AddService("World", World)
+
+return World

@@ -10,6 +10,67 @@ local CamComp = CameraEnt:AddComponent("Camera", {
 
 coroutine.yield()
 
+local CSTRUCT = lovr.data.newCStruct(10)
+
+local NEWCSTRUCT = lovr.data.newCStruct(1)
+
+print(pcall(function()
+    print(CSTRUCT:getSize())
+    print(CSTRUCT:getName())
+    print(CSTRUCT:getPointer())
+    print(CSTRUCT:writeF64(1, 3231))
+    print("READ", CSTRUCT:get(1))
+
+    print("\n\n WRITE INT:")
+    CSTRUCT:writeI64(2, 100, 100)
+    print("READ INT:", CSTRUCT:get(2))
+
+    print("TYPE 1:", CSTRUCT:getType(1))
+    print("TYPE 2:", CSTRUCT:getType(2))
+    print("TYPE 3:", CSTRUCT:getType(3))
+
+    print("WRITE STR")
+    CSTRUCT:writeString(10, "Hello World!")
+    print("STR:", CSTRUCT:get(10))
+
+    NEWCSTRUCT:writeF64(1, 1000)
+    CSTRUCT:writeCStruct(5, NEWCSTRUCT)
+    print("STRUCT", CSTRUCT:getType(5), CSTRUCT:get(5))
+
+    CSTRUCT:setSize(5)
+end))
+
+for i, v in pairs(lovr.thread) do
+    print(i, v)
+end
+
+print("CST:", CSTRUCT)
+local BLOB = lovr.graphics.newTexture(100, 100)[1]
+print(BLOB)
+local CHANNEL = lovr.thread.newChannel("name")
+local Thread = lovr.thread.newThread([[
+    lovr = require('lovr')
+    lovr.thread = require('lovr.thread')
+    require('lovr.data')
+    require('lovr.graphics')
+    print("THREAD ALIVE")
+    print("READ:",...)
+    local cstruct = select(1,...)
+    local channel = lovr.thread.getChannel'name'
+    print("THREAD LOCATION:",debug.getinfo(1,"S").source)
+    print(channel:peek())
+    print(pcall(function()
+        print(cstruct.get)
+        print("READ:",cstruct:get(1))
+        print("READ 2:",cstruct:get(5), cstruct:get(5):get(1))
+    end))
+    collectgarbage('collect')
+]])
+
+Thread:start(CSTRUCT, BLOB)
+task.wait(1)
+collectgarbage("collect")
+
 local SHAPE1 = EntityService.New("Shape")
 SHAPE1:AddComponent("Transform", { Position = vec3(1, -1, -4) })
 SHAPE1:AddComponent("Shape", { Size = vec3(1, 1, 1), Color = color.Blue })

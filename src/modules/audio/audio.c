@@ -648,13 +648,14 @@ Source* lovrSourceClone(Source* source) {
     clone->converter = converter;
   }
 
+  clone->sound = source->sound;
+  lovrRetain(clone->sound);
+
   if (!phonon_source_init(clone)) {
     lovrSourceDestroy(clone);
     return false;
   }
 
-  clone->sound = source->sound;
-  lovrRetain(clone->sound);
   return clone;
 }
 

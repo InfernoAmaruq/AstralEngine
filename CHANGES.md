@@ -6,45 +6,17 @@ dev
 
 ### Add
 
-- Add `Blob:setI8/setU8/setI16/setU16/setI32/setU32/setF32/setF64`.
-- Add `bgra8` TextureFormat.
-- Add `t.graphics.hdr` and `lovr.graphics.isHDR`.
-- Add `pqToLinear`, `linearToPQ`, `sRGBToRec2020`, and `rec2020ToSRGB` shader helpers.
-- Add support for custom array strides in buffer formats.
-- Add `lovr.modelschanged` event.
-- Add `lovr.headset.getModelKeys`.
-- Add `Curve:getLength` and `Curve:step`.
-- Add `thumbrest` HeadsetAxis.
-- Add support for Touch Pro controllers.
-- Add `Pass:setBlendState`.
-- Add `Pass:getViewRay`.
-- Add `lovr.headset.connect` and `t.headset.connect`.
-- Add support for creating 3D texture views.
-- Add `Model:meshes` to iterate over model nodes with meshes.
-- Add `Pass:drawPart` to draw a single part or mesh of a `Model`.
-- Add `Model(Data):getNodeChild/getNodeSibling`.
-- Add `Model(Data):getNodeMesh` (replaces `:getNodeMeshes`).
-- Add `ModelData:getMeshBlendShapeCount/getMeshBlendShapeName/getBlendVertex`.
-- Add `ModelData:getMeshPartCount`.
-- Add `ModelData:getMeshDrawRange`.
-- Add `Mesh:get/setBaseVertex`.
+#### General
+
 - Add support for compiling with Luau as the Lua implementation, instead of Lua/LuaJIT.
 - Add support for passing Luau `vector` and `quaternion` types to functions.
 - Add `vector` and `quaternion` modules.
-- Add `t.headset.extensions` to enable extra OpenXR extensions.
-- Add support for "foveated quad" and "mono" display configurations in `lovr.headset`.
-- Add `t.window.centered`.
-- Add `Mat4:setPosition/Orientation/Scale/Pose`.
-- Add `lovr.data.newBlobView`.
-- Add `lovr.graphics.getStats`.
-- Add `Model:is/setNodeVisible`.
-- Add `Layer:get/setOrigin`.
-- Add support for non-uniform scale in `ConvexShape` and `MeshShape`.
-- Add `VertexUV2` builtin vertex attribute and `UV2` shader variable.
-- Add support for two sets of UVs in `ModelData`.
-- Add `t.audio.debug` and `t.audio.reverb` settings to `lovr.conf`.
-- Add `lovr.audio.update`.
-- Add `lovr.audio.setHRTF`.
+
+#### `lovr.audio`
+
+- Add `AudioMesh` and `lovr.audio.newAudioMesh`.
+- Add support for ambisonic source playback.
+- Add `lovr.audio.setHRTF` to set a custom HRTF.
 - Add `lovr.audio.get/setReverb`.
 - Add `Source:get/setAbsorption`.
 - Add `Source:get/setCone`.
@@ -52,17 +24,79 @@ dev
 - Add `Source:get/setOcclusion`.
 - Add `Source:get/setReverb`.
 - Add `Source:get/setSpatialization`.
-- Add support for ambisonic source playback.
-- Add `AudioMesh`.
+- Add `lovr.audio.update` to atomically commit changes to audio sources.
 - Add `lovr.audio.getStream`.
-- Add `AudioStream`.
+- Add `t.audio.debug` and `t.audio.reverb` settings to `lovr.conf`.
+
+#### `lovr.data`
+
+- Add `AudioStream` and `lovr.data.newAudioStream`.
+- Add `Blob:setI8/setU8/setI16/setU16/setI32/setU32/setF32/setF64`.
+- Add `lovr.data.newBlobView`.
+- Add `Model(Data):getNodeChild/getNodeSibling`.
+- Add `Model(Data):getNodeMesh` (replaces `:getNodeMeshes`).
+- Add `ModelData:getMeshBlendShapeCount/getMeshBlendShapeName/getBlendVertex`.
+- Add `ModelData:getMeshPartCount`.
+- Add `ModelData:getMeshDrawRange`.
+- Add support for importing two sets of UVs in `ModelData`.
 - Add `Sound:get/setFrame`.
+
+#### `lovr.graphics`
+
+- Add `Raytracer`, `lovr.graphics.newRaytracer`, and `raytracing` `GraphicsFeature`.
+- Add `raytracer` option to `lovr.graphics.newMesh` and `lovr.graphics.newModel`.
+- Add `Mesh:buildRaytracer` and `Model:buildRaytracer`.
+- Add `VertexUV2` builtin vertex attribute and `UV2` shader variable, for lightmapping.
+- Add `t.graphics.hdr` and `lovr.graphics.isHDR`.
+- Add `pqToLinear`, `linearToPQ`, `sRGBToRec2020`, and `rec2020ToSRGB` shader helpers.
+- Add `Pass:getViewRay`.
+- Add `Pass:setBlendState`.
+- Add `Pass:drawPart` to draw a single part of a `Model`.
+- Add `Model:meshes` to iterate over model nodes with meshes.
+- Add `Model:is/setNodeVisible`.
+- Add `lovr.graphics.getStats` for GPU memory allocation statistics.
+- Add support for creating 3D texture views.
+- Add `Mesh:get/setBaseVertex`.
+- Add support for custom array strides in buffer formats.
+- Add `bgra8` TextureFormat.
+
+#### `lovr.headset`
+
+- Add `lovr.modelschanged` event.
+- Add `lovr.headset.getModelKeys`.
+- Add support for "foveated quad" and "mono" display configurations.
+- Add `Layer:get/setOrigin` to lock Layer poses to a Device.
+- Add `dpup`, `dpdown`, `dpleft`, `dpright` DeviceButton.
+- Add `bumper` DeviceButton.
+- Add `body` `Device` for full-body tracking in `lovr.headset.getSkeleton`.
+- Add `lovr.simulate` callback to customize the headset simulator.
+- Add support for Touch Pro controllers.
+- Add `thumbrest` HeadsetAxis, for pressure-sensitive thumbrests.
+- Add `t.headset.extensions` to enable extra OpenXR extensions.
+- Add `lovr.headset.connect` and `t.headset.connect`.
+- Add `lovr.headset.setPosition/Orientation/Pose` and `lovr.headset.setButton`.
+
+#### `lovr.math`
+
+- Add `Curve:getLength` and `Curve:step`.
+- Add `Mat4:setPosition/Orientation/Scale/Pose`.
+
+#### `lovr.physics`
+
+- Add support for non-uniform scale in `ConvexShape` and `MeshShape`.
+
+#### `lovr.system`
+
+- Add `t.window.centered`.
 - Add `lovr.system.is/setWindowFullscreen`.
-- Add `lovr.simulate`.
-- Add `lovr.headset.setPose` and `lovr.headset.setButton`.
+- Add `lovr.system.is/setMouseGrabbed`.
 
 ### Change
 
+- Change model loading to use multiple threads to load images.
+- Change `Pass:setProjection` to accept a `ProjectionType`.
+- Change `lovr.graphics.newModel` to no longer retain its `ModelData`, allowing its memory to be freed.
+- Change functions to accept tables for vector/quaternion arguments instead of userdata vector types.
 - Change `require` to have better errors when files/plugins aren't found.
 - Change default require path to also search for `.luau` files, when using Luau.
 - Change `lovr.headset.newModel` to also take a lightuserdata.
@@ -73,9 +107,6 @@ dev
 - Change `ModelData:getMeshVertex` to return data in a consistent vertex format.
 - Change `ModelData:getMeshDrawMode/getMeshMaterial` to take an optional part index.
 - Change `ModelData:getWidth/Height/Depth/Dimensions/BoundingBox` to take an optional mesh/part index.
-- Change model loading to use multiple threads to load images.
-- Change `lovr.graphics.newModel` to no longer retain its `ModelData`, allowing its memory to be freed.
-- Change functions to accept tables for vector/quaternion arguments instead of userdata vector types.
 - Change `lovr.graphics.newBuffer` to also accept a Luau `vector` for the initial buffer data.
 - Change `Pass:transform` to also take a pose (7 numbers for the position and orientation).
 - Change `Mat4` to be a regular object instead of a vector type.
@@ -87,7 +118,6 @@ dev
 - Change `lovr.audio.newSource` to also accept an `AudioStream`.
 - Change audio device to start when playing a Source for the first time, instead of immediately.
 - Change `lovr.data.newSound` to take a channel count instead of a channel layout.
-- Change `Pass:setProjection` to accept a `ProjectionType`.
 
 ### Fix
 
@@ -102,7 +132,7 @@ dev
 - Fix crash when using a 3D texture as a canvas texture.
 - Fix validation message when clearing a 3D texture.
 - Fix issue where normalized buffer fields were rounded incorrectly.
-- Fix possible crash related to Thread:wait.
+- Fix possible crash related to `Thread:wait`.
 - Fix possible crash in Model animation.
 - Fix `Collider:setDegreesOfFreedom` to preserve mass/inertia.
 - Fix missing error in `CapsuleShape:setRadius/Length` and `CylinderShape:setRadius/Length`.
@@ -115,10 +145,11 @@ dev
 - Fix `Texture:setPixels` when copying from an `Image` with an offset.
 - Fix issue with `Shape:containsPoint`.
 - Fix `Collider:moveKinematic` when called on a kinematic collider.
+- Fix fixed foveated rendering on Quest 3.
 
 ### Deprecate
 
-- Deprecate variant of `lovr.headset.newModel` that takes a `Device`.
+- Deprecate variant of `lovr.headset.newModel` that takes a `Device` (use a model key).
 - Deprecate `Model(Data):getNodeChildren` (use `:getNodeChild` and `:getNodeSibling`).
 - Deprecate base vertex argument in `Mesh:get/setDrawRange` (use `Mesh:get/setBaseVertex`).
 - Deprecate `Model:getVertexBuffer/getIndexBuffer/getMesh` (create your own from `ModelData`).
@@ -150,7 +181,8 @@ dev
 - Remove `lovr.audio.get/setAbsorption` (use `Source:get/setAbsorption`).
 - Remove `Source:get/setDirectivity` (use `Source:get/setCone`).
 - Remove `Source:is/setEffectEnabled` (use new effect getters/setters).
-- Remove "stream" `Sound`s, `Sound:getCapacity`, and `Sound:isStream` (use `AudioStream`).
+- Remove `Sound:getCapacity` and `Sound:isStream` (use `AudioStream`).
+- Remove `lovr.headset.getBoundsGeometry`.
 
 v0.18.0 - 2025-02-14
 ---

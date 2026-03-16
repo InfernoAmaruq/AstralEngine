@@ -174,6 +174,7 @@ end
 
 setmetatable(vector, {
   __call = function(self, x, y, z)
+    x = x or 0
     assert(type(x) == 'number', 'vector components must be numbers')
     local instance = { x = x, y = y or x, z = z or (y and 0 or x) }
     setmetatable(instance, self)

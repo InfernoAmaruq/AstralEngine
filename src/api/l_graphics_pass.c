@@ -821,7 +821,9 @@ static int l_lovrPassSend(lua_State* L) {
     lua_pushinteger(L, value);
   }
 
-  luax_checkbufferdata(L, 3, format, data);
+  if (!luax_checkbufferdata(L, 3, format, data)) {
+    return lua_error(L);
+  }
 
   return 0;
 }

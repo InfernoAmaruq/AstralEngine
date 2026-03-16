@@ -183,6 +183,7 @@ dev
 - Remove `Source:is/setEffectEnabled` (use new effect getters/setters).
 - Remove `Sound:getCapacity` and `Sound:isStream` (use `AudioStream`).
 - Remove `lovr.headset.getBoundsGeometry`.
+- Remove `Buffer:mapData`.
 
 v0.18.0 - 2025-02-14
 ---

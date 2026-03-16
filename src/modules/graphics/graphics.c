@@ -2199,19 +2199,24 @@ Buffer* lovrBufferCreate(const BufferInfo* info, void** data) {
     .pointer = data
   };
 
+  // If the caller is writing initial data, we take out the lock and leave it held after returning,
+  // to ensure the caller is able to finish writing their data without a GPU submission happening
+  // before they're done.  This isn't a very good design, and should be improved somehow.
+  if (data) {
+    mtx_lock(&state.lock);
+  }
+
   if (!gpu_buffer_init(buffer->gpu, &bufferInfo)) {
     lovrSetError("Failed to create buffer: %s", gpu_get_error());
     lovrBufferDestroy(buffer);
-    mtx_unlock(&state.lock);
+    if (data) mtx_unlock(&state.lock);
     return NULL;
   }
 
   if (data && *data == NULL) {
-    mtx_lock(&state.lock);
     BufferView staging = getBuffer(GPU_BUFFER_UPLOAD, size, 4);
     if (!staging.buffer) return lovrBufferDestroy(buffer), mtx_unlock(&state.lock), NULL;
     gpu_copy_buffers(state.stream, staging.buffer, buffer->gpu, staging.offset, 0, size);
-    mtx_unlock(&state.lock);
     buffer->sync->writePhase = GPU_PHASE_COPY;
     buffer->sync->pendingWrite = GPU_CACHE_TRANSFER_WRITE;
     buffer->sync->lastStreamWrite = state.tick;
@@ -2294,8 +2299,15 @@ void* lovrBufferSetData(Buffer* buffer, uint32_t offset, uint32_t extent) {
   if (!view.buffer) return mtx_unlock(&state.lock), NULL;
 
   gpu_copy_buffers(state.stream, view.buffer, buffer->gpu, view.offset, buffer->base + offset, extent);
-  mtx_unlock(&state.lock);
+  // Note: leaves the lock held (caller calls lovrBufferFlush to unlock, after they're finished writing)
   return view.pointer;
+}
+
+// lovrBufferSetData leaves the lock held, and lovrBufferFlush must be called to release the lock
+// after the caller is done writing data.  This is a very brittle design, but I can't think of
+// anything better right now.
+void lovrBufferFlush(Buffer* buffer) {
+  mtx_unlock(&state.lock);
 }
 
 bool lovrBufferCopy(Buffer* src, Buffer* dst, uint32_t srcOffset, uint32_t dstOffset, uint32_t extent) {
@@ -5102,6 +5114,7 @@ static bool lovrMeshFlush(Mesh* mesh) {
     void* data = lovrBufferSetData(mesh->vertexBuffer, offset, extent);
     if (!data) return false;
     memcpy(data, (char*) mesh->vertices + offset, extent);
+    lovrBufferFlush(mesh->vertexBuffer);
     mesh->dirtyVertices[0] = ~0u;
     mesh->dirtyVertices[1] = 0;
   }
@@ -5111,6 +5124,7 @@ static bool lovrMeshFlush(Mesh* mesh) {
     void* data = lovrBufferSetData(mesh->indexBuffer, 0, mesh->indexCount * stride);
     if (!data) return false;
     memcpy(data, mesh->indices, mesh->indexCount * stride);
+    lovrBufferFlush(mesh->indexBuffer);
     mesh->dirtyIndices = false;
   }
 
@@ -5202,12 +5216,14 @@ Model* lovrModelCreate(const ModelInfo* info) {
     model->vertexBuffer = lovrBufferCreate(&bufferInfo, (void**) &vertexData);
     lovrAssertGoto(fail, model->vertexBuffer, "Failed to create model vertex buffer: %s", lovrGetError());
     memcpy(vertexData, data->vertices, meta->vertexCount * sizeof(ModelVertex));
+    lovrBufferFlush(model->vertexBuffer);
 
     // Animated vertices are ones that are blended or skinned.  They need a copy of the original vertex
     if (meta->animatedVertexCount > 0) {
       bufferInfo.format->length = meta->animatedVertexCount;
       model->rawVertexBuffer = lovrBufferCreate(&bufferInfo, &vertexData);
       lovrAssertGoto(fail, model->rawVertexBuffer, "Failed to create model raw vertex buffer: %s", lovrGetError());
+      lovrBufferFlush(model->rawVertexBuffer);
 
       ModelMesh* mesh = meta->meshes;
       for (uint32_t i = 0; i < meta->meshCount; i++, mesh++) {
@@ -5232,6 +5248,7 @@ Model* lovrModelCreate(const ModelInfo* info) {
     model->indexBuffer = lovrBufferCreate(&bufferInfo, &indexData);
     lovrAssertGoto(fail, model->indexBuffer, "Failed to create model index buffer: %s", lovrGetError());
     memcpy(indexData, data->indices, meta->indexCount * meta->indexSize);
+    lovrBufferFlush(model->indexBuffer);
   }
 
   // Joints
@@ -5248,6 +5265,7 @@ Model* lovrModelCreate(const ModelInfo* info) {
     model->skinBuffer = lovrBufferCreate(&bufferInfo, &skinData);
     lovrAssertGoto(fail, model->skinBuffer, "Failed to create model skinning buffer: %s", lovrGetError());
     memcpy(skinData, data->skinData, meta->skinnedVertexCount * 8);
+    lovrBufferFlush(model->skinBuffer);
   }
 
   // Blend Shapes
@@ -5265,6 +5283,7 @@ Model* lovrModelCreate(const ModelInfo* info) {
     model->blendBuffer = lovrBufferCreate(&bufferInfo, &blendData);
     lovrAssertGoto(fail, model->blendBuffer, "Failed to create model blend shape buffer: %s", lovrGetError());
     memcpy(blendData, data->blendData, meta->blendedVertexCount * sizeof(BlendData));
+    lovrBufferFlush(model->blendBuffer);
   }
 
   // Blend shapes

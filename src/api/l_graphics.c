@@ -851,8 +851,11 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
   // Write data
   if (blob) {
     memcpy(data, blob->data, info.size);
+    lovrBufferFlush(buffer);
   } else if (hasData) {
-    luax_checkbufferdata(L, 2, format, data);
+    bool success = luax_checkbufferdata(L, 2, format, data);
+    lovrBufferFlush(buffer);
+    if (!success) return lua_error(L);
   }
 
   luax_pushtype(L, Buffer, buffer);
@@ -1571,10 +1574,15 @@ static int l_lovrGraphicsNewMesh(lua_State* L) {
   Mesh* mesh = lovrMeshCreate(&info, hasData ? &vertices : NULL);
   luax_assert(L, mesh);
 
+  Buffer* vertexBuffer = lovrMeshGetVertexBuffer(mesh);
+
   if (blob) {
     memcpy(vertices, blob->data, blob->size);
+    if (vertexBuffer) lovrBufferFlush(vertexBuffer);
   } else if (hasData) {
-    luax_checkbufferdata(L, index, lovrMeshGetVertexFormat(mesh), vertices);
+    bool success = luax_checkbufferdata(L, index, lovrMeshGetVertexFormat(mesh), vertices);
+    if (vertexBuffer) lovrBufferFlush(vertexBuffer);
+    if (!success) return lua_error(L);
   }
 
   luax_pushtype(L, Mesh, mesh);

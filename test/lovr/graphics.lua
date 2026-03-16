@@ -277,15 +277,6 @@ group('graphics', function()
       expect(buffer:getData()).to.equal({ 0, 0, 0 })
     end)
 
-    local ok, ffi = pcall(require, 'ffi')
-    if ok and ffi then
-      test(':mapData FFI', function()
-        buffer = lovr.graphics.newBuffer('float')
-        ffi.cast('float*', buffer:mapData())[0] = 7
-        expect(buffer:getData()).to.equal(7)
-      end)
-    end
-
     test('Pass:send uniform formats', function()
       shader = lovr.graphics.newShader([[
         struct S { int a, b, c; };

@@ -514,6 +514,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   gltfImage* images = NULL;
   ImageJob* imageJobs = NULL;
   gltfTexture* textures = NULL;
+  uint32_t* meshVertexCounts = NULL;
   gltfScene* scenes = NULL;
   int animationSamplerCount = 0;
   int rootScene = 0;
@@ -693,6 +694,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
     } else if (STR_EQ(key, "meshes")) {
       info.meshes = token;
       meta->meshCount = token->size;
+      meshVertexCounts = lovrCalloc(meta->meshCount * sizeof(uint32_t));
       token = NOM(token);
 
     } else if (STR_EQ(key, "nodes")) {
@@ -752,7 +754,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   // Iterate over meshes and tally up vertex/index/blendshape counts (now that we have accessors)
   if (info.meshes) {
     jsmntok_t* token = info.meshes;
-    for (int i = (token++)->size, group = 0; i > 0; i--, group++) {
+    for (int i = (token++)->size, index = 0; i > 0; i--, index++) {
       uint32_t blendShapeCount = 0;
       uint32_t maxUnindexedVertexCount = 0;
       bool indexed = false;
@@ -787,6 +789,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                 token = NOM(token);
               }
             }
+            meshVertexCounts[index] += vertexCount;
             meta->vertexCount += vertexCount;
             meta->indexCount += indexCount;
             meta->skinnedVertexCount += hasJoints ? vertexCount : 0;
@@ -1112,9 +1115,12 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
               } else if (STR_EQ(key, "indices")) {
                 indices = &accessors[NOM_U32(json, token)];
               } else if (STR_EQ(key, "targets")) {
-                if (mesh->blendShapeCount == 0) mesh->blendShapeCount = token->size;
-                mesh->blendDataOffset = blendDataOffset;
-                for (int t = (token++)->size; t > 0; t--) {
+                if (mesh->blendShapeCount == 0) {
+                  mesh->blendShapeCount = token->size;
+                  mesh->blendDataOffset = blendDataOffset;
+                }
+
+                for (int t = (token++)->size, index = 0; t > 0; t--, index++) {
                   gltfAccessor* blendPositions = NULL;
                   gltfAccessor* blendNormals = NULL;
                   gltfAccessor* blendTangents = NULL;
@@ -1129,7 +1135,11 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
                     count = accessors[accessor].count;
                   }
 
-                  BlendData* blendData = model->blendData + blendDataOffset;
+                  // Blend shape data must be deinterleaved because model->blendData is grouped by
+                  // blend shape, not by primitive
+                  uint32_t offset = mesh->vertexCount; // The vertex count so far
+                  uint32_t stride = meshVertexCounts[mesh - meta->meshes]; // Total number of vertices in mesh
+                  BlendData* blendData = model->blendData + mesh->blendDataOffset + index * stride + offset;
                   copyAttribute(blendData, blendPositions, F32, 3, false, 0, sizeof(BlendData), count, 0);
                   copyAttribute(blendData, blendNormals, F32, 3, false, 12, sizeof(BlendData), count, 0);
                   copyAttribute(blendData, blendTangents, F32, 3, false, 24, sizeof(BlendData), count, 0);
@@ -1419,6 +1429,7 @@ bool lovrModelDataInitGltf(ModelData** result, Blob* source, ModelDataIO* io) {
   lovrFree(animationSamplers);
   lovrFree(images);
   lovrFree(textures);
+  lovrFree(meshVertexCounts);
   lovrFree(scenes);
   lovrFree(heapTokens);
   *result = model;
@@ -1450,6 +1461,7 @@ fail:
   lovrFree(animationSamplers);
   lovrFree(images);
   lovrFree(textures);
+  lovrFree(meshVertexCounts);
   lovrFree(scenes);
   lovrFree(heapTokens);
   lovrModelDataDestroy(model);

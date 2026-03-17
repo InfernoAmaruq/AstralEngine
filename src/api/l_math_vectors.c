@@ -252,6 +252,12 @@ static int l_lovrVec2Length(lua_State* L) {
   return 1;
 }
 
+static int l_lovrVec2SqrLength(lua_State* L){
+    float* v = luax_checkvector(L, 1, V_VEC2, NULL);
+    lua_pushnumber(L, vec2_sqrLength(v));
+    return 1;
+}
+
 static int l_lovrVec2Normalize(lua_State* L) {
   float* v = luax_checkvector(L, 1, V_VEC2, NULL);
   vec2_normalize(v);
@@ -514,6 +520,7 @@ const luaL_Reg lovrVec2[] = {
   { "mul", l_lovrVec2Mul },
   { "div", l_lovrVec2Div },
   { "length", l_lovrVec2Length },
+  { "sqrLength", l_lovrVec2SqrLength },
   { "normalize", l_lovrVec2Normalize },
   { "distance", l_lovrVec2Distance },
   { "dot", l_lovrVec2Dot },
@@ -614,6 +621,12 @@ static int l_lovrVec3Div(lua_State* L) {
 static int l_lovrVec3Length(lua_State* L) {
   vec3 v = luax_checkvector(L, 1, V_VEC3, NULL);
   lua_pushnumber(L, vec3_length(v));
+  return 1;
+}
+
+static int l_lovrVec3SqrLength(lua_State* L){
+  vec3 v = luax_checkvector(L, 1, V_VEC3, NULL);
+  lua_pushnumber(L, vec3_sqrLength(v));
   return 1;
 }
 
@@ -913,6 +926,7 @@ const luaL_Reg lovrVec3[] = {
   { "mul", l_lovrVec3Mul },
   { "div", l_lovrVec3Div },
   { "length", l_lovrVec3Length },
+  { "sqrLength", l_lovrVec2SqrLength },
   { "normalize", l_lovrVec3Normalize },
   { "distance", l_lovrVec3Distance },
   { "dot", l_lovrVec3Dot },
@@ -1004,6 +1018,12 @@ static int l_lovrVec4Div(lua_State* L) {
 static int l_lovrVec4Length(lua_State* L) {
   float* v = luax_checkvector(L, 1, V_VEC4, NULL);
   lua_pushnumber(L, vec4_length(v));
+  return 1;
+}
+
+static int l_lovrVec4SqrLength(lua_State* L) {
+  float* v = luax_checkvector(L, 1, V_VEC4, NULL);
+  lua_pushnumber(L, vec4_sqrLength(v));
   return 1;
 }
 
@@ -1308,6 +1328,7 @@ const luaL_Reg lovrVec4[] = {
   { "mul", l_lovrVec4Mul },
   { "div", l_lovrVec4Div },
   { "length", l_lovrVec4Length },
+  { "sqrLength", l_lovrVec4SqrLength },
   { "normalize", l_lovrVec4Normalize },
   { "distance", l_lovrVec4Distance },
   { "dot", l_lovrVec4Dot },

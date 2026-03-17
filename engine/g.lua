@@ -20,7 +20,14 @@ local ParamProcess = {
         DATA.spawn = wrapself(SCHEDULER, SCHEDULER.Spawn, false)
         DATA.waitfor = wrapself(SCHEDULER, SCHEDULER.WaitFor)
         DATA.spawnat = wrapself(SCHEDULER, SCHEDULER.SpawnAt)
-        DATA.escape = wrapself(SCHEDULER, SCHEDULER.Escape, false)
+        DATA.escape = wrapself(SCHEDULER, SCHEDULER.Escape)
+
+        DATA.raw = {
+            wait = wrapself(SCHEDULER, SCHEDULER.Wait, true),
+            delay = wrapself(SCHEDULER, SCHEDULER.Delay, true),
+            defer = wrapself(SCHEDULER, SCHEDULER.Defer, true),
+            spawn = wrapself(SCHEDULER, SCHEDULER.Spawn, true),
+        }
 
         return "task", DATA
     end,

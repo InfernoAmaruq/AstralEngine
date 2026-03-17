@@ -62,6 +62,10 @@ MAF float vec2_length(vec2 v) {
   return sqrtf(v[0] * v[0] + v[1] * v[1]);
 }
 
+MAF float vec2_sqrLength(vec2 v){
+    return (v[0] * v[0] + v[1] * v[1]);
+}
+
 MAF vec2 vec2_normalize(vec2 v) {
   float length = vec2_length(v);
   return length == 0.f ? v : vec2_scale(v, 1.f / length);
@@ -149,6 +153,10 @@ MAF vec3 vec3_scale(vec3 v, float s) {
 
 MAF float vec3_length(const vec3 v) {
   return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
+MAF float vec3_sqrLength(const vec3 v) {
+    return (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 
 MAF vec3 vec3_normalize(vec3 v) {
@@ -260,6 +268,10 @@ MAF vec4 vec4_scale(vec4 v, float s) {
 
 MAF float vec4_length(vec4 v) {
   return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]);
+}
+
+MAF float vec4_sqrLength(vec4 v) {
+  return (v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]);
 }
 
 MAF vec4 vec4_normalize(vec4 v) {

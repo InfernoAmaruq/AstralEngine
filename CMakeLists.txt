@@ -42,7 +42,7 @@ option(LOVR_SYSTEM_OPENXR "Use the system-provided OpenXR" OFF)
 option(LOVR_BUILD_EXE "Build an executable (or an apk on Android)" ON)
 option(LOVR_BUILD_SHARED "Build a shared library (takes precedence over LOVR_BUILD_EXE)" OFF)
 option(LOVR_BUILD_BUNDLE "On macOS, build a .app bundle instead of a raw program" OFF)
-option(LOVR_BUILD_WITH_SYMBOLS "Build with C function symbols exposed" OFF)
+option(LOVR_BUILD_WITH_SYMBOLS "Build with C function symbols exposed" ON)
 
 # Setup
 if(EMSCRIPTEN)
@@ -580,7 +580,7 @@ else()
 endif()
 
 if(LOVR_ENABLE_THREAD)
-  target_sources(${ASTRAL_TARGET} PRIVATE
+    target_sources(${ASTRAL_TARGET} PUBLIC
     src/core/job.c
     src/modules/thread/thread.c
     src/api/l_thread.c
@@ -983,6 +983,8 @@ function(build_lua_module SRC)
     target_include_directories(${MODULE_NAME} PRIVATE
         ${LUA_INCLUDE_DIR}
         ${CMAKE_SOURCE_DIR}/engine
+        ${CMAKE_SOURCE_DIR}/src/api
+        ${CMAKE_SOURCE_DIR}/src/modules
     )
 
     target_link_libraries(${MODULE_NAME} PRIVATE lua)
@@ -997,7 +999,7 @@ function(build_lua_module SRC)
     else()
     set_target_properties(${MODULE_NAME} PROPERTIES
         PREFIX ""
-	LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
+        LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
         RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
         ARCHIVE_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
     )

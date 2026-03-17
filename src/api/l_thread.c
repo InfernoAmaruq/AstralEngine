@@ -12,7 +12,7 @@ static char* threadRunner(Thread* thread, Blob* body, Variant* arguments, uint32
   lua_State* L = luaL_newstate();
   luaL_openlibs(L);
   luax_preload(L);
-
+  
   lua_pushcfunction(L, luax_getstack);
   int errhandler = lua_gettop(L);
 

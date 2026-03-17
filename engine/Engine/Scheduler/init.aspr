@@ -1,4 +1,4 @@
-local RESUME, STATUS, CREATE, YIELD = coroutine.resume, coroutine.status, coroutine.create, coroutine.yield
+local RESUME, STATUS, CREATE = coroutine.resume, coroutine.status, coroutine.create
 local ALLOCATE = table.alloc
 
 coroutine.isyieldable = function(CO)
@@ -40,9 +40,8 @@ function Scheduler.New(Clock, budget)
     return setmetatable({
         Budget   = budget or 0.01,
         Routines = ALLOCATE(200,0),
-        ResumeAt = ALLOCATE(200,0),
+        ResumeAt = ALLOCATE(0,200),
         Queue    = ALLOCATE(200,0),
-        __TEMP   = {},
         Clock    = Clock,
         ExternQueued = {}
     }, Scheduler)
@@ -91,12 +90,13 @@ function Scheduler:SpawnAt(Priority,Task)
 end
 
 function Scheduler:Wait(RAW,s)
-    if not RAW then
-        
-    end
     -- USE W CTX
     local co = coroutine.running()
-    if not co then return end
+    if not co or co == AstralEngine.__ENGINETHREAD then return end
+
+    if not RAW and _G.CONTEXT then
+        _G.CONTEXT:BindToContext("Tasks",co)
+    end
 
     local Exists = false
     for _, v in rpairs(self.Routines) do
@@ -116,9 +116,6 @@ function Scheduler:Wait(RAW,s)
 end
 
 function Scheduler:Spawn(RAW, f, ...)
-    if not RAW then
-        
-    end
     -- USE W CTX
     local co = CREATE(f)
     local Ok, Err = RESUME(co,...)
@@ -127,16 +124,17 @@ function Scheduler:Spawn(RAW, f, ...)
     end
     local Status = STATUS(co)
     if Status ~= "dead" then
+
+        if not RAW and _G.CONTEXT then
+            _G.CONTEXT:BindToContext("Tasks",co)
+        end
+
         self.Routines[#self.Routines + 1] = co
     end
     return co, Status
 end
 
-function Scheduler:Escape(RAW, co)
-    if not RAW then
-        
-    end
-    -- USE W CTX
+function Scheduler:Escape(co)
     co = co or coroutine.running()
     local t = self.Routines
     SafeRemove(co,t)
@@ -149,11 +147,13 @@ function Scheduler:Defer(RAW, f, ...)
 end
 
 function Scheduler:Delay(RAW, s, f)
-    if not RAW then
-        
-    end
     -- USE W CTX
     local co = coroutine.create(f)
+
+    if not RAW and _G.CONTEXT then
+        _G.CONTEXT:BindToContext("Tasks", co)
+    end
+
     self.ResumeAt[co] = self.Clock() + s
     self.Routines[#self.Routines + 1] = co
 end
@@ -177,21 +177,6 @@ function Scheduler:Update()
         return
     end
     }
-
-    --[[for i,Co in rpairs(self.Routines) do
-        if self.Clock() - Now > self.Budget then return end
-        if self.ExternQueued[Co] then continue end
-        local Wake = self.ResumeAt[Co]
-        if Wake and Wake > Now then continue end
-
-        if coroutine.status(Co) == "dead" then
-            table.remove(self.Routines, i)
-            continue
-        end
-
-        local Ok, Err = RESUME(Co,nil)
-        if not Ok then print("[Scheduler] Error: ", debug.traceback(Co,Err)) end
-    end]]
 
     local r = self.Routines
     local ResAt = self.ResumeAt
@@ -223,10 +208,10 @@ function Scheduler:Update()
         end
     end
 
-    local Upd = false
-
-    for i, q in ipairs(self.Queue) do
-        if self.Clock() - Now > Budget then break end
+    local Queue = self.Queue
+    for i = #Queue, 1, -1 do
+        local q = Queue[i]
+        if C() - Now > Budget then break end
         local co = CREATE(q.F)
         local CTX = _G.CONTEXT
         if CTX and q.CTX == CTX.Gen then
@@ -241,6 +226,11 @@ function Scheduler:Update()
         end
         local Status = STATUS(co)
         if Status == "dead" then continue end
+
+        if q.CTX and _G.CONTEXT then
+            _G.CONTEXT:BindToContext("Tasks",co)
+        end
+
         if self.Routines[#self.Routines] == co then continue end
         local Found = false
         for _,MiscCo in ipairs(self.Routines) do
@@ -248,21 +238,6 @@ function Scheduler:Update()
         end
         if Found then continue end
         self.Routines[#self.Routines + 1] = co
-    end
-
-    if not Upd then return end
-
-    local TEMP = self.__TEMP
-    local j = 0
-    for i,v in pairs(self.Queue) do
-        j++
-        TEMP[j] = v
-        self.Queue[i] = nil
-    end
-
-    for i, v in rpairs(self.__TEMP) do
-        self.__TEMP[i] = nil
-        self.Queue[i] = v
     end
 end
 }

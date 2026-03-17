@@ -43,7 +43,7 @@ function Scheduler.New(Clock, budget)
         ResumeAt = ALLOCATE(0,200),
         Queue    = ALLOCATE(200,0),
         Clock    = Clock,
-        ExternQueued = {}
+        ExternQueued = ALLOCATE(0,200)
     }, Scheduler)
 end
 

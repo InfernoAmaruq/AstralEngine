@@ -99,7 +99,7 @@ function Scheduler:Wait(RAW,s)
     end
 
     local Exists = false
-    for _, v in rpairs(self.Routines) do
+    for _, v in pairs(self.Routines) do
         if v == co then
             Exists = true
             break
@@ -169,7 +169,7 @@ function Scheduler:Update()
 
     @ifdef<Sched.UseAuto>{
     local Count = 0
-    for _ in rpairs(self.Routines) do
+    for _ in pairs(self.Routines) do
         Count = Count + 1
     end
     if Count > 30 then

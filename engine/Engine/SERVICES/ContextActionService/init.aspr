@@ -11,14 +11,14 @@ return function(D)
             SortedArray[i] = nil
         end
 
-        for _, PRIGROUP in rpairs(DATA.__BOUND) do
-            for _, BIND in rpairs(PRIGROUP) do
+        for _, PRIGROUP in pairs(DATA.__BOUND) do
+            for _, BIND in pairs(PRIGROUP) do
                 if #BIND.C == 1 then
                     local Key = BIND.C[1]
                     SortedArray[Key] = SortedArray[Key] or {}
                     SortedArray[Key][#SortedArray[Key] + 1] = BIND.F
                 else
-                    for _, Key in rpairs(BIND.C) do
+                    for _, Key in pairs(BIND.C) do
                         SortedArray[Key] = SortedArray[Key] or {}
                         SortedArray[Key][#SortedArray[Key] + 1] = BIND.F
                     end

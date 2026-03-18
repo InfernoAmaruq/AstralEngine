@@ -92,7 +92,7 @@ local function NewEnum(_, t, Name, Options, Header)
     if Opt.CanAppend then
         Append = function(k, val)
             if type(k) == "table" then -- using a table
-                for i, v in rpairs(k) do
+                for i, v in pairs(k) do
                     DATA[i] = ProcessMember(i, v, Name, Head)
                 end
             else -- just a single value

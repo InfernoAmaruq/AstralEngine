@@ -20,6 +20,8 @@ typedef enum {
   TM_NEWINDEX,
   TM_GC,
   TM_MODE,
+  TM_PAIRS,
+  TM_IPAIRS,
   TM_EQ,  /* last tag method with `fast' access */
   TM_ADD,
   TM_SUB,

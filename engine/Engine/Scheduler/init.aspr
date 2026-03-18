@@ -39,11 +39,11 @@ function Scheduler.New(Clock, budget)
 
     return setmetatable({
         Budget   = budget or 0.01,
-        Routines = ALLOCATE(200,0),
-        ResumeAt = ALLOCATE(0,200),
-        Queue    = ALLOCATE(200,0),
+        Routines = ALLOCATE(100,0),
+        ResumeAt = ALLOCATE(0,100),
+        Queue    = ALLOCATE(100,0),
         Clock    = Clock,
-        ExternQueued = ALLOCATE(0,200)
+        ExternQueued = ALLOCATE(0,100)
     }, Scheduler)
 end
 

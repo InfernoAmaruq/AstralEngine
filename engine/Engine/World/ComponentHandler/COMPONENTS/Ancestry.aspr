@@ -46,21 +46,12 @@ Ancestry.Name = "Ancestry"
 Ancestry.FastFetch = { "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById", "GetChildren", "GetChildrenIds", "IterChildren" }
 Ancestry.Metadata = {}
 
-local IteratorStack = table.alloc(10,0)
-local IteratorStackTop = 0
-
-local function ITERATOR()
-    local self = IteratorStack[IteratorStackTop]
-    self.__ITERIDXCACHE = self.__ITERIDXCACHE + 1
-    local Id = self[&CHILD_PTR][self.__ITERIDXCACHE]
+local function ITERATOR(self,idx)
+    idx = idx + 1
+    local Id = self[idx]
     local e = World.GetEntityFromId(Id)
-    if e and Id then
-        return e, Id
-    else
-        IteratorStack[IteratorStackTop] = nil
-        IteratorStackTop = IteratorStackTop - 1
-        return nil
-    end
+    if not Id or not e then return nil end
+    return idx, e, Id
 end
 
 -- //\\// Private Methods \\//\\
@@ -142,12 +133,7 @@ local PublicMethods = {
 
     IterChildren = function(self)
         self = GetSelf(self)
-        rawset(self,"__ITERIDXCACHE",0)
-
-        IteratorStackTop = IteratorStackTop + 1
-        IteratorStack[IteratorStackTop] = self
-
-        return ITERATOR
+        return ITERATOR, self[&CHILD_PTR], 0
     end,
     GetChildren = function(self)
         self = GetSelf(self)

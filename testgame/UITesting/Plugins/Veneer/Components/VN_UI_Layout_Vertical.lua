@@ -73,7 +73,7 @@ local Methods = {
 
         local Spacing = OffsetSpacing + OwnSize * ScaleSpacing
 
-        for Child in Anc:IterChildren() do
+        for _, Child in Anc:IterChildren() do
             local UIRoot = Child:GetComponent("UIRoot")
             if UIRoot then
                 TempTable[#TempTable + 1] = UIRoot

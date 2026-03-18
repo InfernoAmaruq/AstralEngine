@@ -122,7 +122,7 @@ local Methods = {
             -- we terminate here, because we want :RebuldChildren() of the layout element to take over here
         else
             -- new matrix set! propagate!
-            for Child in SelfAncestry:IterChildren() do
+            for _, Child in SelfAncestry:IterChildren() do
                 local ChildUIRoot = Child:GetComponent("UIRoot")
                 if ChildUIRoot then
                     ChildUIRoot:RebuildMatrix(Mat,Scale)
@@ -338,7 +338,7 @@ local Mt = {
                     self[Pointers.__HasLayoutElement] = false
 
                     -- default rebuild
-                    for Child in Ancestry:IterChildren() do
+                    for _, Child in Ancestry:IterChildren() do
                         local ChildRoot = Child:GetComponent("UIRoot")
                         if ChildRoot then
                             ChildRoot:RebuildMatrix(self[Pointers.Matrix])

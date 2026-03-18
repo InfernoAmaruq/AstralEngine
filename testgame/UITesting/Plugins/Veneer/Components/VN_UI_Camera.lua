@@ -183,7 +183,7 @@ local Methods = {
                 OwnTransform.__ClipDepth = ParentClipDepth
             end
 
-            for Child in Top.Ancestry:IterChildren() do
+            for _, Child in Top.Ancestry:IterChildren() do
                 local UIRoot = Child:GetComponent("UIRoot")
 
                 if UIRoot and UIRoot.__HasUIElement then
@@ -206,7 +206,7 @@ local Methods = {
             QueryHover(UserMouse.GetPosition())
         end
 
-        for Child in SelfEnt.Ancestry:IterChildren() do
+        for _, Child in SelfEnt.Ancestry:IterChildren() do
             local Root = Child:GetComponent("UIRoot")
             if Root and Root[1][4] == 1 then
                 Root:RebuildMatrix()

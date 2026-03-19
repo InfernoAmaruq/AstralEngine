@@ -43,8 +43,8 @@ return {
             FrameRate = 165,
             CPU = 240,
             EventRate = 240,
-            GC = 3,
-            GCCollect = 20,
+            GC = 5,
+            GCCollect = 30,
         },
     },
     Enums = {

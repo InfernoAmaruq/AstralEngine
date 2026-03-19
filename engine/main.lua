@@ -164,11 +164,11 @@ function lovr.run()
     }
 
     @ifdef<GC.UseAstr>{
-        local GCTime = 0
+        local GCTime = -1
         local GCRate = 1/CONFIG.CONFIG.GCRATE
         local GCReap = CONFIG.CONFIG.GCCollect
         collectgarbage("stop")
-        @macro<L,!USEBRACK>:M_GCTick(&_SINK) = collectgarbage("step",GCReap)
+        @macro<L,!USEBRACK>:M_GCTick(&_SINK) = collectgarbage("step",GCReap);
     }
 
     local Drain = lovr.math.drain
@@ -331,7 +331,8 @@ function lovr.run()
         COUNTER = COUNTER + 1
         if TICK > 1 then
             local osc, cpuc = os.clock(), debug.cpuclock()
-            print("TPS:",COUNTER,osc,cpuc,cpuc/osc*100,cpuc-LASTCPUT)
+            print("TPS:",COUNTER,osc,cpuc,cpuc/osc*100,cpuc-LASTCPUT,collectgarbage"count")
+            collectgarbage"restart"
             TICK = 0
             COUNTER = 0
             LASTCPUT = cpuc

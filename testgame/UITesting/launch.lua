@@ -10,6 +10,28 @@ local CamComp = CameraEnt:AddComponent("Camera", {
 
 coroutine.yield()
 
+local f = function()
+    print("CREATE GARBAGE")
+    local mem = collectgarbage("count")
+    for i = 1, 10000 do
+        local t = { i = i }
+    end
+    local cur = collectgarbage("count")
+    print(mem, cur, cur - mem)
+end
+f()
+f = nil
+print("wait")
+
+task.wait(10)
+
+print("end")
+for i = 1, 10000 do
+    local a = 1 + 1
+end
+
+print(collectgarbage("count"))
+
 local IntroMod = require("BaseIntro")
 --local Int = IntroMod.Load(CameraEnt)
 
@@ -150,3 +172,5 @@ local Loose = EntityService.New("E")
 Loose:AddComponent("Ancestry")
 Loose:AddComponent("UIRoot", { Size = { Scale = vec2(1, 1) } })
 Loose:AddComponent("UICanvas", { Color = color.fromRGB(255, 0, 0) })
+
+print("COL:", collectgarbage("count"))

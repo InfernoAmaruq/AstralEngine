@@ -1,3 +1,4 @@
+#include <stdio.h>
 /*
 ** $Id: lapi.c,v 2.52 2005/12/22 16:19:56 roberto Exp roberto $
 ** Lua API
@@ -890,6 +891,7 @@ LUA_API int  lua_status (lua_State *L) {
 */
 
 LUA_API int lua_gc (lua_State *L, int what, int data) {
+  // <FA> Added int stopped to GCCOLLECT and GCSWEEP. Checks if GC was stopped before and maintains state
   int res = 0;
   global_State *g;
   lua_lock(L);
@@ -904,7 +906,11 @@ LUA_API int lua_gc (lua_State *L, int what, int data) {
       break;
     }
     case LUA_GCCOLLECT: {
+      int stopped = (g->GCthreshold == MAX_LUMEM);
+
       luaC_fullgc(L);
+
+      if (stopped) {g->GCthreshold = MAX_LUMEM; printf("\n\nLUA STOP GC\n\n");}
       break;
     }
     case LUA_GCCOUNT: {
@@ -917,6 +923,8 @@ LUA_API int lua_gc (lua_State *L, int what, int data) {
       break;
     }
     case LUA_GCSTEP: {
+      int stopped = (g->GCthreshold == MAX_LUMEM);
+
       lu_mem a = (cast(lu_mem, data) << 10);
       if (a <= g->totalbytes)
         g->GCthreshold = g->totalbytes - a;
@@ -926,6 +934,9 @@ LUA_API int lua_gc (lua_State *L, int what, int data) {
         luaC_step(L);
       if (g->gcstate == GCSpause)  /* end of cycle? */
         res = 1;  /* signal it */
+
+      if (stopped) {g->GCthreshold = MAX_LUMEM; printf("\n\nLUA STOP GC\n\n");}
+
       break;
     }
     case LUA_GCSETPAUSE: {

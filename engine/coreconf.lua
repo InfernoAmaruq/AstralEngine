@@ -8,7 +8,16 @@ return {
             -- UseAuto is fast but less predicable
         },
         GC = {
-            "UseAstr", -- or nil for Lua GC
+            --"UseAstr", -- or nil for Lua GC
+
+            -- Lua GC runs whenever Lua GC runs, but AstralGC runs at frame boundaries, which should make code more deterministic
+
+            -- if you'd like no GC, use lua gc and disable it in your launch.lua file
+
+            --[[
+            -- lua gc is generally recommended. AstralGC is there for specific circumstances
+            -- with AstralGC, lua gc is not disabled, you can call collectgarbage"restart" and collectgarbage"stop" if you're doing a lot of alloc-heavy work without yielding
+            --]]
         },
         Render = {
             "LoadShadowmap",
@@ -43,8 +52,12 @@ return {
             FrameRate = 165,
             CPU = 240,
             EventRate = 240,
-            GC = 5,
-            GCCollect = 30,
+
+            GC = 3, -- how often to run GC
+
+            GCPause = 110, -- GCPause will *only* apply to Lua GC or Astral soft GC
+            GCStepMul = 350, -- will apply to all GC configs, lua and Astral, except for HardGC
+            -- these are recommended settings. Lua's base settings are not very good for games
         },
     },
     Enums = {

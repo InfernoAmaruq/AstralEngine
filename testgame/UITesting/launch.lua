@@ -2,18 +2,19 @@ local AssetService = GetService("AssetMapService")
 local EntityService = GetService("Entity")
 
 -- declare camera
+
+coroutine.yield()
+
 local CameraEnt = EntityService.New("CameraEnt")
 local CamComp = CameraEnt:AddComponent("Camera", {
     FOV = 90,
     DrawToScreen = true,
 })
 
-coroutine.yield()
-
 local f = function()
     print("CREATE GARBAGE")
     local mem = collectgarbage("count")
-    for i = 1, 10000 do
+    for i = 1, 400000 do
         local t = { i = i }
     end
     local cur = collectgarbage("count")
@@ -26,10 +27,12 @@ print("wait")
 task.wait(10)
 
 print("end")
-for i = 1, 10000 do
+for i = 1, 1000000 do
     local a = 1 + 1
 end
 
+print(collectgarbage("count"))
+collectgarbage("collect")
 print(collectgarbage("count"))
 
 local IntroMod = require("BaseIntro")

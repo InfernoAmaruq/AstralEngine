@@ -257,7 +257,8 @@ CONF.CONFIG = {
     CPURATE = AstralEngine._CONFIG.Astral.Tick.CPU,
     EVENTRATE = AstralEngine._CONFIG.Astral.Tick.EventRate,
     GCRATE = AstralEngine._CONFIG.Astral.Tick.GC,
-    GCCollect = AstralEngine._CONFIG.Astral.Tick.GCCollect,
+    GCPAUSE = AstralEngine._CONFIG.Astral.Tick.GCPause,
+    GCSTEPMUL = AstralEngine._CONFIG.Astral.Tick.GCStepMul,
 }
 
 lovr.identitySet = function()

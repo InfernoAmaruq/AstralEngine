@@ -99,6 +99,9 @@ local function COMPILE_LOADSTRING(c, NAME)
         until not Dirs or #Dirs == 0 or Passes > Recompiler.MaxPasses
         local n = 0
         Free(N)
+        if NAME:find("main") then
+            print(c)
+        end
         local t = c:gsub("\n", function(a)
             n = n + 1
             return "-- LINE: " .. n .. "\n"

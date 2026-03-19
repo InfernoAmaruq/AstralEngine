@@ -163,12 +163,23 @@ function lovr.run()
         }
     }
 
+    collectgarbage("setpause",CONFIG.CONFIG.GCPAUSE)
+    -- stepmul affects everything so is unconditional
+    collectgarbage("setstepmul",CONFIG.CONFIG.GCSTEPMUL)
     @ifdef<GC.UseAstr>{
+        local GCPause = CONFIG.CONFIG.GCPAUSE
         local GCTime = -1
         local GCRate = 1/CONFIG.CONFIG.GCRATE
-        local GCReap = CONFIG.CONFIG.GCCollect
         collectgarbage("stop")
-        @macro<L,!USEBRACK>:M_GCTick(&_SINK) = collectgarbage("step",GCReap);
+
+        local LastSize = collectgarbage"count"
+
+        @macro<L,!USEBRACK>{M_GCTick(&_SINK)=
+            if collectgarbage("count") >= LastSize * (GCPause / 100) then
+                collectgarbage("step", collectgarbage("count") * 0.05)
+                LastSize = collectgarbage"count"
+            end
+        }
     }
 
     local Drain = lovr.math.drain
@@ -181,11 +192,20 @@ function lovr.run()
         SetEventRate = MacAssignTickrate(EventTickrate),
         SetPhysRate = MacAssignTickrate(PhysicsRate),
         @ifdef<GC.UseAstr>{
-        SetGCCollect = function(n)
-            GCReap = n
-        end,
         SetGCRate = MacAssignTickrate(GCRate),
+        SetGCPause = function(n)
+            collectgarbage("setpause",n)
+            GCPause = n
+        end,
         }
+        @ifdef<!GC.UseAstr>{
+        SetGCPause = function(n)
+            collectgarbage("setpause",n)
+        end,
+        }
+        SetGCStepMul = function(n)
+            collectgarbage("setstepmul",n)
+        end
     }
 
     @macro<L,!USEBRACK>{GETTICK(&DT,&CT,&Time,&Tickrate,&CALL,&CV1)=
@@ -332,7 +352,6 @@ function lovr.run()
         if TICK > 1 then
             local osc, cpuc = os.clock(), debug.cpuclock()
             print("TPS:",COUNTER,osc,cpuc,cpuc/osc*100,cpuc-LASTCPUT,collectgarbage"count")
-            collectgarbage"restart"
             TICK = 0
             COUNTER = 0
             LASTCPUT = cpuc

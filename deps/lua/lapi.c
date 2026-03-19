@@ -910,7 +910,7 @@ LUA_API int lua_gc (lua_State *L, int what, int data) {
 
       luaC_fullgc(L);
 
-      if (stopped) {g->GCthreshold = MAX_LUMEM; printf("\n\nLUA STOP GC\n\n");}
+      if (stopped) {g->GCthreshold = MAX_LUMEM;}
       break;
     }
     case LUA_GCCOUNT: {
@@ -935,7 +935,7 @@ LUA_API int lua_gc (lua_State *L, int what, int data) {
       if (g->gcstate == GCSpause)  /* end of cycle? */
         res = 1;  /* signal it */
 
-      if (stopped) {g->GCthreshold = MAX_LUMEM; printf("\n\nLUA STOP GC\n\n");}
+      if (stopped) {g->GCthreshold = MAX_LUMEM;}
 
       break;
     }

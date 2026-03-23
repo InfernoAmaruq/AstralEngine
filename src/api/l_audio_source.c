@@ -240,7 +240,7 @@ static int l_lovrSourceGetCone(lua_State* L) {
 static int l_lovrSourceSetCone(lua_State* L) {
   Source* source = luax_checktype(L, 1, Source);
   if (!lua_toboolean(L, 2)) {
-    lovrSourceSetCone(source, (float) M_PI, (float) M_PI, 1.f);
+    lovrSourceSetCone(source, (float) 0.f, (float) 0.f, 1.f);
   } else if (lua_isboolean(L, 2)) {
     lovrSourceSetCone(source, 0.f, (float) M_PI, 0.f);
   } else {

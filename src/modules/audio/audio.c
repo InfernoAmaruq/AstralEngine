@@ -99,7 +99,6 @@ static struct {
   bool simulatorDirty;
   float position[3];
   float orientation[4];
-  float reverb;
 #ifdef LOVR_USE_PHONON
   IPLContext phonon;
   IPLAudioSettings audioSettings;
@@ -140,7 +139,6 @@ static bool phonon_init(void);
 static void phonon_destroy(void);
 static void phonon_update(float dt);
 static bool phonon_set_hrtf(Blob* blob);
-static void phonon_set_reverb(float reverb);
 static void phonon_mix_begin(void);
 static bool phonon_mix_source(Source* source, float* src, float* dst);
 static void phonon_mix_reverb(float* dst);
@@ -323,8 +321,6 @@ bool lovrAudioInit(AudioConfig* config) {
     lovrAudioDestroy();
     return false;
   }
-
-  state.reverb = 1.f;
 
   quat_identity(state.orientation);
   lovrModuleReady(&ref);
@@ -542,16 +538,6 @@ void lovrAudioSetPose(float position[3], float orientation[4]) {
 
 bool lovrAudioSetHRTF(Blob* blob) {
   return phonon_set_hrtf(blob);
-}
-
-float lovrAudioGetReverb(void) {
-  return state.reverb;
-}
-
-void lovrAudioSetReverb(float reverb) {
-  phonon_set_reverb(reverb);
-  state.reverb = reverb;
-  state.simulatorDirty = true;
 }
 
 // Source
@@ -1159,10 +1145,16 @@ static void phonon_update(float dt) {
       if (source->spatial && source->reverb > 0.f) {
         if (source->reverbMode == REVERB_SOURCE) {
           sourceReverbMask |= (1u << source->slot);
-        } else if (state.reverb > 0.f) {
+        } else {
           listenerReverbMask |= (1u << source->slot);
         }
       }
+    }
+
+    if (listenerReverbMask && !state.listenerReverbMask) {
+      iplSourceAdd(state.listener, state.simulator);
+    } else if (!listenerReverbMask && state.listenerReverbMask) {
+      iplSourceRemove(state.listener, state.simulator);
     }
 
     if (state.reverbFinished && (sourceReverbMask || listenerReverbMask)) {
@@ -1227,16 +1219,6 @@ static bool phonon_set_hrtf(Blob* blob) {
   }
 
   return true;
-}
-
-static void phonon_set_reverb(float reverb) {
-  if (state.reverb > 0.f && reverb <= 0.f) {
-    iplSourceRemove(state.listener, state.simulator);
-    state.simulatorDirty = true;
-  } else if (state.reverb <= 0.f && reverb > 0.f) {
-    iplSourceAdd(state.listener, state.simulator);
-    state.simulatorDirty = true;
-  }
 }
 
 static void phonon_mix_begin(void) {
@@ -1309,7 +1291,7 @@ static bool phonon_mix_source_ambisonic(Source* source, float* src, float* dst) 
         tail |= !iplReflectionEffectApply(source->reflectionEffect, &outputs.reflections, &reverbInput, &out, NULL);
         iplAudioBufferMix(state.phonon, &out, &state.parametricReverb);
       }
-    } else if (state.reverb > 0.f) {
+    } else {
       iplAudioBufferMix(state.phonon, &reverbInput, &state.listenerReverb);
     }
   }
@@ -1421,7 +1403,7 @@ static bool phonon_mix_source(Source* source, float* src, float* dst) {
         tail |= !iplReflectionEffectApply(source->reflectionEffect, &outputs.reflections, &reverbInput, &out, NULL);
         iplAudioBufferMix(state.phonon, &out, &state.parametricReverb);
       }
-    } else if (state.reverb > 0.f) {
+    } else {
       iplAudioBufferMix(state.phonon, &reverbInput, &state.listenerReverb);
     }
   }
@@ -1486,7 +1468,7 @@ static void phonon_mix_reverb(float* dst) {
   bool anyReverb = state.sourceReverbMask || state.listenerReverbMask || state.reverbDecay > 0.f;
 
   // Listener-centric reverb
-  if ((state.reverb > 0.f && state.listenerReverbMask) || state.reverbDecay > 0.f) {
+  if (state.listenerReverbMask || state.reverbDecay > 0.f) {
     IPLSimulationOutputs outputs = { 0 };
     iplSourceGetOutputs(state.listener, IPL_SIMULATIONFLAGS_REFLECTIONS, &outputs);
 
@@ -1808,7 +1790,6 @@ static bool phonon_init(void) { return true; }
 static void phonon_destroy(void) {}
 static void phonon_update(float dt) {}
 static bool phonon_set_hrtf(Blob* blob) { return true; }
-static void phonon_set_reverb(float reverb) {}
 static void phonon_mix_begin(void) {}
 static bool phonon_mix_source(Source* source, float* src, float* dst) { return false; }
 static void phonon_mix_reverb(float* dst) {}

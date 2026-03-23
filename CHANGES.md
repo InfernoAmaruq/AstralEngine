@@ -17,7 +17,6 @@ dev
 - Add `AudioMesh` and `lovr.audio.newAudioMesh`.
 - Add support for ambisonic source playback.
 - Add `lovr.audio.setHRTF` to set a custom HRTF.
-- Add `lovr.audio.get/setReverb`.
 - Add `Source:get/setAbsorption`.
 - Add `Source:get/setCone`.
 - Add `Source:get/setFalloff`.

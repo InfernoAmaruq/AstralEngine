@@ -212,18 +212,6 @@ static int l_lovrAudioSetHRTF(lua_State* L) {
   return 0;
 }
 
-static int l_lovrAudioGetReverb(lua_State* L) {
-  float reverb = lovrAudioGetReverb();
-  lua_pushnumber(L, reverb);
-  return 1;
-}
-
-static int l_lovrAudioSetReverb(lua_State* L) {
-  float reverb = luax_optfloat(L, 1, 0.f);
-  lovrAudioSetReverb(reverb);
-  return 0;
-}
-
 static int l_lovrAudioNewSource(lua_State* L) {
   bool decode = false;
   bool pitchable = true;
@@ -318,8 +306,6 @@ static const luaL_Reg lovrAudio[] = {
   { "getPose", l_lovrAudioGetPose },
   { "setPose", l_lovrAudioSetPose },
   { "setHRTF", l_lovrAudioSetHRTF },
-  { "getReverb", l_lovrAudioGetReverb },
-  { "setReverb", l_lovrAudioSetReverb },
   { "newSource", l_lovrAudioNewSource },
   { "newAudioMesh", l_lovrAudioNewAudioMesh },
   { NULL, NULL }

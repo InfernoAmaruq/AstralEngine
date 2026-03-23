@@ -449,7 +449,7 @@ void os_get_mouse_position(double* x, double* y) {
 }
 
 os_mouse_mode os_get_mouse_mode(void) {
-  return MOUSE_MODE_NORMAL;
+  return OS_MOUSE_NORMAL;
 }
 
 void os_set_mouse_mode(os_mouse_mode mode) {

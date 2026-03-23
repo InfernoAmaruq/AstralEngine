@@ -340,7 +340,7 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM param, LPAR
       state.focused = true;
       break;
     case WM_KILLFOCUS:
-      os_set_mouse_mode(MOUSE_MODE_NORMAL);
+      os_set_mouse_mode(OS_MOUSE_NORMAL);
       if (state.onFocus) state.onFocus(false);
       state.focused = false;
       break;
@@ -412,7 +412,7 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM param, LPAR
     case WM_RBUTTONUP: mouseReleased(1); break;
     case WM_MBUTTONUP: mouseReleased(2); break;
     case WM_MOUSEMOVE: {
-      if (state.mouseMode == MOUSE_MODE_NORMAL) {
+      if (state.mouseMode == OS_MOUSE_NORMAL) {
         double x = GET_X_LPARAM(lparam);
         double y = GET_Y_LPARAM(lparam);
         if (x != state.mouseX || y != state.mouseY) {
@@ -424,7 +424,7 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM param, LPAR
       break;
     }
     case WM_INPUT: {
-      if (state.mouseMode == MOUSE_MODE_GRABBED) {
+      if (state.mouseMode == OS_MOUSE_RELATIVE) {
         uint32_t size = sizeof(RAWINPUT);
         static uint8_t buffer[sizeof(RAWINPUT)];
         if (GetRawInputData((HRAWINPUT) lparam, RID_INPUT, buffer, &size, sizeof(RAWINPUTHEADER)) == -1) {
@@ -604,7 +604,7 @@ void os_set_mouse_mode(os_mouse_mode mode) {
     return;
   }
 
-  if (mode == MOUSE_MODE_GRABBED && state.focused) {
+  if (mode == OS_MOUSE_RELATIVE && state.focused) {
     RAWINPUTDEVICE device = { 0x01, 0x02, 0, state.window };
     RegisterRawInputDevices(&device, 1, sizeof(device));
     POINT position;
@@ -613,7 +613,7 @@ void os_set_mouse_mode(os_mouse_mode mode) {
     state.grabX = position.x;
     state.grabY = position.y;
     ShowCursor(FALSE);
-  } else if (mode == MOUSE_MODE_NORMAL) {
+  } else if (mode == OS_MOUSE_NORMAL) {
     RAWINPUTDEVICE device = { 0x01, 0x02, RIDEV_REMOVE, NULL };
     RegisterRawInputDevices(&device, 1, sizeof(device));
     ClipCursor(NULL);

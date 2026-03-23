@@ -81,7 +81,7 @@ static EM_BOOL onMouseButton(int type, const EmscriptenMouseEvent* data, void* u
 }
 
 static EM_BOOL onMouseMove(int type, const EmscriptenMouseEvent* data, void* userdata) {
-  if (state.mouseMode == MOUSE_MODE_GRABBED) {
+  if (state.mouseMode == OS_MOUSE_RELATIVE) {
     state.mouseX += data->movementX;
     state.mouseY += data->movementY;
   } else {
@@ -416,7 +416,7 @@ os_mouse_mode os_get_mouse_mode(void) {
 void os_set_mouse_mode(os_mouse_mode mode) {
   if (state.mouseMode != mode) {
     state.mouseMode = mode;
-    if (mode == MOUSE_MODE_GRABBED) {
+    if (mode == OS_MOUSE_RELATIVE) {
       emscripten_run_script("Module['canvas'].requestPointerLock();");
     } else {
       emscripten_run_script("document.exitPointerLock();");

@@ -74,7 +74,7 @@ void os_get_mouse_position(double* x, double* y) {
 }
 
 os_mouse_mode os_get_mouse_mode(void) {
-  return MOUSE_MODE_NORMAL;
+  return OS_MOUSE_NORMAL;
 }
 
 void os_set_mouse_mode(os_mouse_mode mode) {
@@ -313,14 +313,6 @@ static void onMouseWheelMove(GLFWwindow* window, double deltaX, double deltaY) {
   }
 }
 
-static int convertMouseButton(os_mouse_button button) {
-  switch (button) {
-    case MOUSE_LEFT: return GLFW_MOUSE_BUTTON_LEFT;
-    case MOUSE_RIGHT: return GLFW_MOUSE_BUTTON_RIGHT;
-    default: return (int) button;
-  }
-}
-
 static int convertKey(os_key key) {
   switch (key) {
     case OS_KEY_W: return GLFW_KEY_W;
@@ -530,15 +522,15 @@ void os_get_mouse_position(double* x, double* y) {
 
 os_mouse_mode os_get_mouse_mode(void) {
   if (glfwGetInputMode(glfwState.window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
-    return MOUSE_MODE_GRABBED;
+    return OS_MOUSE_RELATIVE;
   } else {
-    return MOUSE_MODE_NORMAL;
+    return OS_MOUSE_NORMAL;
   }
 }
 
 void os_set_mouse_mode(os_mouse_mode mode) {
   if (glfwState.window) {
-    int m = (mode == MOUSE_MODE_GRABBED) ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL;
+    int m = mode == OS_MOUSE_RELATIVE ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL;
     glfwSetInputMode(glfwState.window, GLFW_CURSOR, m);
   }
 }

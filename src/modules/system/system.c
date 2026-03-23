@@ -222,14 +222,17 @@ bool lovrSystemWasMouseReleased(int button) {
   return state.prevMouseState[button] && !state.mouseState[button];
 }
 
-bool lovrSystemIsMouseGrabbed(void) {
-  return os_get_mouse_mode() == MOUSE_MODE_GRABBED;
+MouseMode lovrSystemGetMouseMode(void) {
+  switch (os_get_mouse_mode()) {
+    case OS_MOUSE_NORMAL: return MOUSE_NORMAL;
+    case OS_MOUSE_RELATIVE: return MOUSE_RELATIVE;
+  }
 }
 
-void lovrSystemSetMouseGrabbed(bool grabbed) {
-  os_set_mouse_mode(grabbed ? MOUSE_MODE_GRABBED : MOUSE_MODE_NORMAL);
+void lovrSystemSetMouseMode(MouseMode mode) {
+  os_set_mouse_mode(mode == MOUSE_RELATIVE ? OS_MOUSE_RELATIVE : OS_MOUSE_NORMAL);
 
-  if (!grabbed) {
+  if (mode == MOUSE_NORMAL) {
     os_get_mouse_position(&state.mouseX, &state.mouseY);
   }
 }

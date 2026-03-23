@@ -19,13 +19,8 @@ typedef struct os_window_config {
 } os_window_config;
 
 typedef enum {
-  MOUSE_LEFT,
-  MOUSE_RIGHT
-} os_mouse_button;
-
-typedef enum {
-  MOUSE_MODE_NORMAL,
-  MOUSE_MODE_GRABBED
+  OS_MOUSE_NORMAL,
+  OS_MOUSE_RELATIVE
 } os_mouse_mode;
 
 typedef enum {

@@ -111,6 +111,12 @@ StringEntry lovrKeyboardKey[] = {
   { 0 }
 };
 
+StringEntry lovrMouseMode[] = {
+  [MOUSE_NORMAL] = ENTRY("normal"),
+  [MOUSE_RELATIVE] = ENTRY("relative"),
+  { 0 }
+};
+
 StringEntry lovrPermission[] = {
   [PERMISSION_AUDIO_CAPTURE] = ENTRY("audiocapture"),
   { 0 }
@@ -345,15 +351,15 @@ static int l_lovrSystemWasMouseReleased(lua_State* L) {
   return 1;
 }
 
-static int l_lovrSystemIsMouseGrabbed(lua_State* L) {
-  bool grabbed = lovrSystemIsMouseGrabbed();
-  lua_pushboolean(L, grabbed);
+static int l_lovrSystemGetMouseMode(lua_State* L) {
+  MouseMode mode = lovrSystemGetMouseMode();
+  luax_pushenum(L, MouseMode, mode);
   return 1;
 }
 
-static int l_lovrSystemSetMouseGrabbed(lua_State* L) {
-  bool grabbed = lua_toboolean(L, 1);
-  lovrSystemSetMouseGrabbed(grabbed);
+static int l_lovrSystemSetMouseMode(lua_State* L) {
+  MouseMode mode = luax_checkenum(L, 1, MouseMode, NULL);
+  lovrSystemSetMouseMode(mode);
   return 0;
 }
 
@@ -400,8 +406,8 @@ static const luaL_Reg lovrSystem[] = {
   { "isMouseDown", l_lovrSystemIsMouseDown },
   { "wasMousePressed", l_lovrSystemWasMousePressed },
   { "wasMouseReleased", l_lovrSystemWasMouseReleased },
-  { "isMouseGrabbed", l_lovrSystemIsMouseGrabbed },
-  { "setMouseGrabbed", l_lovrSystemSetMouseGrabbed },
+  { "getMouseMode", l_lovrSystemGetMouseMode },
+  { "setMouseMode", l_lovrSystemSetMouseMode },
   { "getClipboardText", l_lovrSystemGetClipboardText },
   { "setClipboardText", l_lovrSystemSetClipboardText },
   { "_getScrollDelta", l_lovrSystemGetScrollDelta },

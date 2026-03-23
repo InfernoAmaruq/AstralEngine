@@ -601,7 +601,7 @@ void os_set_mouse_mode(os_mouse_mode mode) {
   rawInput.mask = mode == MOUSE_MODE_GRABBED ? XCB_INPUT_XI_EVENT_MASK_RAW_MOTION : 0;
   xcb_input_xi_select_events(state.connection, state.screen->root, 1, &rawInput.info);
 
-  if (mode == MOUSE_MODE_GRABBED) {
+  if (mode == OS_MOUSE_RELATIVE) {
     if (!state.hiddenCursor) {
       state.hiddenCursor = xcb_generate_id(state.connection);
       xcb_pixmap_t pixmap = xcb_generate_id(state.connection);

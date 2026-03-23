@@ -88,7 +88,7 @@ dev
 
 - Add `t.window.centered`.
 - Add `lovr.system.is/setWindowFullscreen`.
-- Add `lovr.system.is/setMouseGrabbed`.
+- Add `lovr.system.get/setMouseMode`.
 
 ### Change
 

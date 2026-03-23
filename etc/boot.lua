@@ -248,7 +248,7 @@ function lovr.simulate(dt)
 
   local click = lovr.system.isMouseDown(1)
 
-  lovr.system.setMouseGrabbed(click)
+  lovr.system.setMouseMode(click and 'relative' or 'normal')
 
   local lastX, lastY = mouseX, mouseY
   mouseX, mouseY = lovr.system.getMousePosition()

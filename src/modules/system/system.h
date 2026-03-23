@@ -6,6 +6,11 @@
 struct os_window_config;
 
 typedef enum {
+  MOUSE_NORMAL,
+  MOUSE_RELATIVE
+} MouseMode;
+
+typedef enum {
   PERMISSION_AUDIO_CAPTURE
 } Permission;
 
@@ -33,8 +38,8 @@ void lovrSystemGetMousePosition(double* x, double* y);
 bool lovrSystemIsMouseDown(int button);
 bool lovrSystemWasMousePressed(int button);
 bool lovrSystemWasMouseReleased(int button);
-bool lovrSystemIsMouseGrabbed(void);
-void lovrSystemSetMouseGrabbed(bool grabbed);
+MouseMode lovrSystemGetMouseMode(void);
+void lovrSystemSetMouseMode(MouseMode mode);
 float lovrSystemGetScrollDelta(void);
 const char* lovrSystemGetClipboardText(void);
 void lovrSystemSetClipboardText(const char* text);

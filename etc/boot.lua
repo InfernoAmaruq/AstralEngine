@@ -126,13 +126,13 @@ function lovr.boot()
     ok, failure = false, ('No %s file found%s.\nThe project may be packaged incorrectly.'):format(main, location)
   else
     lovr.filesystem.setSource(source)
-    if bundle and source ~= bundle then lovr.filesystem.unmount(bundle) end
-    if _VERSION == "Luau" then
-      if lovr.filesystem.isFile('conf.lua') or lovr.filesystem.isFile('conf.luau') then ok, failure = pcall(require, 'conf') end
-    else
-      if lovr.filesystem.isFile('conf.lua') then ok, failure = pcall(require, 'conf') end
+    local confPath = _VERSION == 'Luau' and lovr.filesystem.isFile('conf.luau') and 'conf.luau' or 'conf.lua'
+    if lovr.filesystem.getRealDirectory(confPath) == source then
+      ok, failure = pcall(require, 'conf')
+      if ok and lovr.conf then
+        ok, failure = pcall(lovr.conf, conf)
+      end
     end
-    if ok and lovr.conf then ok, failure = pcall(lovr.conf, conf) end
   end
 
   lovr._setConf(conf)
@@ -316,95 +316,6 @@ function lovr.simulate(dt)
   lovr.headset.setPose('hand/left/point', handPosition, handOrientation)
 end
 
-local function formatTraceback(s)
-  return s:gsub('\n[^\n]+$', ''):gsub('\t', ''):gsub('stack traceback:', '\nStack:\n')
-end
-
-function lovr.errhand(message)
-  message = 'Error:\n\n' .. tostring(message) .. formatTraceback(debug and debug.traceback('', 4) or '')
-
-  print(message)
-
-  if not lovr.graphics or not lovr.graphics.isInitialized() then
-    return function() return 1 end
-  end
-
-  if lovr.audio then lovr.audio.stop() end
-
-  if not lovr.headset or lovr.headset.getPassthrough() == 'opaque' then
-    lovr.graphics.setBackgroundColor(.11, .10, .14)
-  else
-    lovr.graphics.setBackgroundColor(0, 0, 0, 0)
-  end
-
-  if lovr.headset then
-    lovr.headset.setLayers()
-  end
-
-  local font = lovr.graphics.getDefaultFont()
-
-  return function()
-    lovr.system.pollEvents()
-
-    for name, a in lovr.event.poll() do
-      if name == 'quit' then return a or 1
-      elseif name == 'restart' then return 'restart', lovr.restart and lovr.restart()
-      elseif name == 'keypressed' and a == 'f5' then lovr.event.restart()
-      elseif name == 'filechanged' then lovr.event.restart()
-      elseif name == 'keypressed' and a == 'escape' then lovr.event.quit() end
-    end
-
-    if lovr.headset and lovr.headset.isActive() then
-      lovr.headset.update()
-      local pass = lovr.headset.getPass()
-      if pass then
-        font:setPixelDensity()
-
-        local scale = .35
-        local font = lovr.graphics.getDefaultFont()
-        local wrap = .7 * font:getPixelDensity()
-        local lines = font:getLines(message, wrap)
-        local maxWidth = 0
-        for i, line in ipairs(lines) do maxWidth = math.max(maxWidth, font:getWidth(line)) end
-        local width = maxWidth * scale
-        local height = .8 + #lines * font:getHeight() * scale
-        local x = -width / 2
-        local y = math.min(height / 2, 10)
-        local z = -10
-
-        pass:setColor(.95, .95, .95)
-        pass:text(message, x, y, z, scale, 0, 0, 0, 0, wrap, 'left', 'top')
-
-        lovr.graphics.submit(pass)
-        lovr.headset.submit()
-      end
-    end
-
-    if lovr.system.isWindowOpen() then
-      local pass = lovr.graphics.getWindowPass()
-      if pass then
-        local w, h = lovr.system.getWindowDimensions()
-        pass:setProjection(1, mat4():orthographic(w, h))
-        font:setPixelDensity(1)
-
-        local scale = .6
-        local wrap = w * .8 / scale
-        local lines = font:getLines(message, wrap)
-        local maxWidth = 0
-        for i, line in ipairs(lines) do maxWidth = math.max(maxWidth, font:getWidth(line)) end
-        local width = maxWidth * scale
-        local x = w / 2 - width / 2
-
-        pass:setColor(.95, .95, .95)
-        pass:text(message, x, h / 2, 0, scale, 0, 0, 0, 0, wrap, 'left', 'middle')
-
-        lovr.graphics.submit(pass)
-        lovr.graphics.present()
-      end
-    end
-  end
-end
-
 function lovr.threaderror(thread, err)
   error('Thread error\n\n' .. err, 0)
 end
@@ -429,8 +340,14 @@ lovr.handlers = setmetatable({}, { __index = lovr })
 return coroutine.create(function()
   local function onerror(...)
     onerror = function(...)
-      print('Error:\n\n' .. tostring(...) .. formatTraceback(debug and debug.traceback('', 1) or ''))
+      local traceback = debug and debug.traceback('', 1) or ''
+      traceback = traceback:gsub('\n[^\n]+$', ''):gsub('\t', ''):gsub('stack traceback:', '\nStack:\n')
+      print('Error:\n\n' .. tostring(...) .. traceback)
       return function() return 1 end
+    end
+
+    if not lovr.errhand and lovr.filesystem.isFile('errhand.lua') then
+      pcall(require, 'errhand')
     end
 
     local ok, result = pcall(lovr.errhand or onerror, ...)

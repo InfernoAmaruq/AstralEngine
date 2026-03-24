@@ -5,6 +5,7 @@
 #define MINIMP3_FLOAT_OUTPUT
 #define MINIMP3_NO_STDIO
 #include "lib/minimp3/minimp3_ex.h"
+#include <math.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -136,7 +137,7 @@ static bool loadOgg(Sound** result, Blob* blob, bool decode) {
 // - mono (1), stereo (2), or first-order full-sphere ambisonic (4) channel layouts
 // - Ambisonic formats:
 //   - AMB: AMBISONIC_B_FORMAT extensible format GUIDs (Furse-Malham channel ordering/normalization)
-//   - AmbiX: All other 4 channel files assume ACN channel ordering and SN3D normalization
+//   - AmbiX: All other 4/9/16 channel files assume ACN channel ordering and SN3D normalization
 static bool loadWAV(Sound** result, Blob* blob, bool decode) {
   if (blob->size < 64 || memcmp(blob->data, "RIFF", 4)) return true;
 
@@ -233,24 +234,48 @@ static bool loadWAV(Sound** result, Blob* blob, bool decode) {
   }
 
   // Reorder/normalize Furse-Malham channels to ACN/SN3D
+  // https://en.wikipedia.org/wiki/Ambisonic_data_exchange_formats
   if (amb) {
+    // FuMa -> ACN channel map/scale
+    uint32_t channelMap[] = { 0, 3, 1, 2, 6, 7, 5, 8, 4, 12, 13, 11, 14, 10, 15, 9 };
+    float channelScale[] = {
+      sqrtf(2.f),
+      1.f,
+      1.f,
+      1.f,
+      1.f,
+      sqrtf(3.f) / 2.f,
+      sqrtf(3.f) / 2.f,
+      sqrtf(3.f) / 2.f,
+      sqrtf(3.f) / 2.f,
+      1.f,
+      sqrtf(32.f / 45.f),
+      sqrtf(32.f / 45.f),
+      sqrtf(5.f) / 3.f,
+      sqrtf(5.f) / 3.f,
+      sqrtf(5.f / 8.f),
+      sqrtf(5.f / 8.f)
+    };
+
     if (sound->format == SAMPLE_I16) {
-      short* f = raw;
-      for (size_t i = 0; i < samples; i += 4) {
-        short tmp = f[1];
-        f[0] = f[0] * 1.414213562 + .5;
-        f[1] = f[2];
-        f[2] = f[3];
-        f[3] = tmp;
+      short tmp[16];
+      short* out = raw;
+      for (uint32_t f = 0; f < sound->frames; f++) {
+        memcpy(tmp, out, sound->channels * sizeof(short));
+        for (uint32_t c = 0; c < sound->channels; c++) {
+          out[channelMap[c]] = tmp[c] * channelScale[c] + .5f;
+        }
+        out += sound->channels;
       }
     } else if (sound->format == SAMPLE_F32) {
-      float* f = raw;
-      for (size_t i = 0; i < samples; i += 4) {
-        float tmp = f[1];
-        f[0] = f[0] * 1.414213562f;
-        f[1] = f[2];
-        f[2] = f[3];
-        f[3] = tmp;
+      float tmp[16];
+      float* out = raw;
+      for (uint32_t f = 0; f < sound->frames; f++) {
+        memcpy(tmp, out, sound->channels * sizeof(float));
+        for (uint32_t c = 0; c < sound->channels; c++) {
+          out[channelMap[c]] = tmp[c] * channelScale[c];
+        }
+        out += sound->channels;
       }
     }
   }

@@ -462,7 +462,10 @@ void os_window_set_fullscreen(bool fullscreen) {
 }
 
 void os_window_get_size(uint32_t* width, uint32_t* height) {
-  glfwGetWindowSize(glfwState.window, width, height);
+  int w, h;
+  glfwGetWindowSize(glfwState.window, &w, &h);
+  *width = w;
+  *height = h;
 }
 
 float os_window_get_pixel_density(void) {

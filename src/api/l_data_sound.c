@@ -93,6 +93,7 @@ static int l_lovrSoundGetFrame(lua_State* L) {
   Sound* sound = luax_checktype(L, 1, Sound);
   uint32_t frame = luax_checku32(L, 2);
   uint32_t channels = lovrSoundGetChannelCount(sound);
+  luax_check(L, frame < lovrSoundGetFrameCount(sound), "Frame offset is out of range");
 
   if (lovrSoundGetFormat(sound) == SAMPLE_I16) {
     int16_t samples[MAX_CHANNELS];
@@ -115,6 +116,7 @@ static int l_lovrSoundSetFrame(lua_State* L) {
   Sound* sound = luax_checktype(L, 1, Sound);
   uint32_t frame = luax_checku32(L, 2);
   uint32_t channels = lovrSoundGetChannelCount(sound);
+  luax_check(L, frame < lovrSoundGetFrameCount(sound), "Frame offset is out of range");
 
   if (lovrSoundGetFormat(sound) == SAMPLE_I16) {
     int16_t samples[MAX_CHANNELS];

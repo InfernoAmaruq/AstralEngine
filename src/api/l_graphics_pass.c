@@ -11,7 +11,7 @@
 static int l_lovrPassReset(lua_State* L) {
   Pass* pass = luax_checktype(L, 1, Pass);
   lovrPassReset(pass);
-  return 1;
+  return 0;
 }
 
 static int l_lovrPassGetStats(lua_State* L) {

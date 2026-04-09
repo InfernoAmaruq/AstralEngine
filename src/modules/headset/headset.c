@@ -230,6 +230,7 @@ enum {
   ACTION_THUMBSTICK_AXIS,
   ACTION_THUMBREST_TOUCH,
   ACTION_THUMBREST_AXIS,
+  ACTION_THUMBTAP_DOWN,
   ACTION_MENU_DOWN,
   ACTION_MENU_TOUCH,
   ACTION_GRIP_DOWN,
@@ -796,7 +797,8 @@ bool lovrHeadsetConnect(void) {
     { 0, NULL, "thumbstick_touch", XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Thumbstick Touch" },
     { 0, NULL, "thumbstick_axis" , XR_ACTION_TYPE_VECTOR2F_INPUT,   2, hands, "Thumbstick Axis" },
     { 0, NULL, "thumbrest_touch",  XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Thumbrest Touch" },
-    { 0, NULL, "thumbrest_axis",   XR_ACTION_TYPE_FLOAT_INPUT  ,    2, hands, "Thumbrest Axis" },
+    { 0, NULL, "thumbrest_axis",   XR_ACTION_TYPE_FLOAT_INPUT,      2, hands, "Thumbtap Down" },
+    { 0, NULL, "thumbtap_down",    XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Thumbrest Axis" },
     { 0, NULL, "menu_down",        XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Menu Down" },
     { 0, NULL, "menu_touch",       XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Menu Touch" },
     { 0, NULL, "grip_down",        XR_ACTION_TYPE_BOOLEAN_INPUT,    2, hands, "Grip Down" },
@@ -1337,6 +1339,8 @@ bool lovrHeadsetConnect(void) {
       { ACTION_DPAD_LEFT_DOWN, "/user/hand/right/input/swipe_left_meta/click" },
       { ACTION_DPAD_RIGHT_DOWN, "/user/hand/left/input/swipe_right_meta/click" },
       { ACTION_DPAD_RIGHT_DOWN, "/user/hand/right/input/swipe_right_meta/click" },
+      { ACTION_THUMBTAP_DOWN, "/user/hand/left/input/tap_thumb_meta/click" },
+      { ACTION_THUMBTAP_DOWN, "/user/hand/right/input/tap_thumb_meta/click" },
       { 0, NULL }
     },
     [PROFILE_FRAME] = (Binding[]) {
@@ -1478,8 +1482,8 @@ bool lovrHeadsetConnect(void) {
   if (!state.extensions.microgestures) {
     for (uint32_t i = 0; i < bindingCount[PROFILE_HAND]; i++) {
       if (bindings[PROFILE_HAND][i].action == ACTION_DPAD_UP_DOWN) {
-        REMOVE_BINDINGS(bindings[PROFILE_HAND], bindingCount[PROFILE_HAND], i, 8);
-        bindingCount[PROFILE_HAND] -= 8;
+        REMOVE_BINDINGS(bindings[PROFILE_HAND], bindingCount[PROFILE_HAND], i, 10);
+        bindingCount[PROFILE_HAND] -= 10;
         break;
       }
     }

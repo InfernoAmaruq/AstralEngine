@@ -134,6 +134,8 @@ int luax_pushsuccess(lua_State* L, bool success);
 void luax_pushconf(lua_State* L);
 int luax_setconf(lua_State* L);
 void luax_pushstash(lua_State* L, const char* name);
+void* luax_getthreaddata(lua_State* L);
+void luax_setthreaddata(lua_State* L, void* data);
 void luax_setmainthread(lua_State* L);
 void luax_atexit(lua_State* L, void (*finalizer)(void));
 void luax_close(lua_State* L);
@@ -201,4 +203,10 @@ struct Shape* luax_newcylindershape(lua_State* L, int index);
 struct Shape* luax_newconvexshape(lua_State* L, int index);
 struct Shape* luax_newmeshshape(lua_State* L, int index);
 struct Shape* luax_newterrainshape(lua_State* L, int index);
+#endif
+
+#ifndef LOVR_DISABLE_TASK
+#include "task/task.h"
+int luax_yieldpoll(lua_State* L, fn_task* poll, fn_task* block, fn_continuation* continuation, void* context);
+int luax_yieldjob(lua_State* L, fn_task* fn, fn_continuation* continuation, void* context, uint32_t count);
 #endif

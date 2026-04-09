@@ -663,6 +663,30 @@ static int l_lovrHeadsetGetModelKeys(lua_State* L) {
   return 1;
 }
 
+static bool luax_loadmodel(void** context) {
+  uint64_t key = (uint64_t) (uintptr_t) *context;
+  ModelData* modelData = lovrHeadsetNewModelData(key);
+  if (!modelData) return false;
+
+  ModelInfo info = {
+    .data = modelData,
+    .materials = true,
+    .mipmaps = true
+  };
+
+  Model* model = lovrModelCreate(&info);
+  lovrRelease(modelData, lovrModelDataDestroy);
+  *context = model;
+  return !!model;
+}
+
+static int luax_pushmodel(lua_State* L, bool success, void* context) {
+  if (!success) return 0;
+  luax_pushtype(L, Model, context);
+  lovrRelease(context, lovrModelDestroy);
+  return 1;
+}
+
 static int l_lovrHeadsetNewModel(lua_State* L) {
   uint64_t key;
 
@@ -678,24 +702,7 @@ static int l_lovrHeadsetNewModel(lua_State* L) {
     return luax_typeerror(L, 1, "lightuserdata");
   }
 
-  ModelData* modelData = lovrHeadsetNewModelData(key);
-
-  if (modelData) {
-    ModelInfo info = {
-      .data = modelData,
-      .materials = true,
-      .mipmaps = true
-    };
-
-    Model* model = lovrModelCreate(&info);
-    lovrRelease(modelData, lovrModelDataDestroy);
-    luax_assert(L, model);
-    luax_pushtype(L, Model, model);
-    lovrRelease(model, lovrModelDestroy);
-    return 1;
-  }
-
-  return 0;
+  return luax_yieldjob(L, luax_loadmodel, luax_pushmodel, (void*) (uintptr_t) key, 1);
 }
 
 static int l_lovrHeadsetAnimate(lua_State* L) {

@@ -111,6 +111,21 @@ static int l_lovrDataNewBlobView(lua_State* L) {
   return 1;
 }
 
+static bool luax_loadimage(void** context) {
+  Blob* blob = *context;
+  Image* image = lovrImageCreateFromFile(blob);
+  lovrRelease(blob, lovrBlobDestroy);
+  *context = image;
+  return !!image;
+}
+
+static int luax_pushimage(lua_State* L, bool success, void* context) {
+  if (!success) return 0;
+  luax_pushtype(L, Image, context);
+  lovrRelease(context, lovrImageDestroy);
+  return 1;
+}
+
 static int l_lovrDataNewImage(lua_State* L) {
   Image* image = NULL;
   if (lua_type(L, 1) == LUA_TNUMBER) {
@@ -139,9 +154,7 @@ static int l_lovrDataNewImage(lua_State* L) {
       memcpy(lovrImageGetLayerData(image, 0, 0), lovrImageGetLayerData(source, 0, 0), lovrImageGetLayerSize(image, 0));
     } else {
       Blob* blob = luax_readblob(L, 1, "Texture");
-      image = lovrImageCreateFromFile(blob);
-      lovrRelease(blob, lovrBlobDestroy);
-      luax_assert(L, image);
+      return luax_yieldjob(L, luax_loadimage, luax_pushimage, blob, 1);
     }
   }
 
@@ -150,14 +163,24 @@ static int l_lovrDataNewImage(lua_State* L) {
   return 1;
 }
 
-static int l_lovrDataNewModelData(lua_State* L) {
-  Blob* blob = luax_readblob(L, 1, "Model");
+static bool luax_loadmodel(void** context) {
+  Blob* blob = *context;
   ModelData* modelData = lovrModelDataCreate(blob, luax_readfile);
   lovrRelease(blob, lovrBlobDestroy);
-  luax_assert(L, modelData);
-  luax_pushtype(L, ModelData, modelData);
-  lovrRelease(modelData, lovrModelDataDestroy);
+  *context = modelData;
+  return !!modelData;
+}
+
+static int luax_pushmodel(lua_State* L, bool success, void* context) {
+  if (!success) return 0;
+  luax_pushtype(L, ModelData, context);
+  lovrRelease(context, lovrModelDataDestroy);
   return 1;
+}
+
+static int l_lovrDataNewModelData(lua_State* L) {
+  Blob* blob = luax_readblob(L, 1, "Model");
+  return luax_yieldjob(L, luax_loadmodel, luax_pushmodel, blob, 1);
 }
 
 static int l_lovrDataNewRasterizer(lua_State* L) {
@@ -176,6 +199,21 @@ static int l_lovrDataNewRasterizer(lua_State* L) {
   luax_assert(L, rasterizer);
   luax_pushtype(L, Rasterizer, rasterizer);
   lovrRelease(rasterizer, lovrRasterizerDestroy);
+  return 1;
+}
+
+static bool luax_loadsound(void** context) {
+  Blob* blob = *context;
+  Sound* sound = lovrSoundLoad(blob, true);
+  lovrRelease(blob, lovrBlobDestroy);
+  *context = sound;
+  return !!sound;
+}
+
+static int luax_pushsound(lua_State* L, bool success, void* context) {
+  if (!success) return 0;
+  luax_pushtype(L, Sound, context);
+  lovrRelease(context, lovrSoundDestroy);
   return 1;
 }
 
@@ -206,12 +244,16 @@ static int l_lovrDataNewSound(lua_State* L) {
   Blob* blob = luax_readblob(L, 1, "Sound");
   bool decode = lua_toboolean(L, 2);
 
-  Sound* sound = lovrSoundLoad(blob, decode);
-  lovrRelease(blob, lovrBlobDestroy);
-  luax_assert(L, sound);
-  luax_pushtype(L, Sound, sound);
-  lovrRelease(sound, lovrSoundDestroy);
-  return 1;
+  if (decode) {
+    return luax_yieldjob(L, luax_loadsound, luax_pushsound, blob, 1);
+  } else {
+    Sound* sound = lovrSoundLoad(blob, decode);
+    lovrRelease(blob, lovrBlobDestroy);
+    luax_assert(L, sound);
+    luax_pushtype(L, Sound, sound);
+    lovrRelease(sound, lovrSoundDestroy);
+    return 1;
+  }
 }
 
 static const luaL_Reg lovrData[] = {

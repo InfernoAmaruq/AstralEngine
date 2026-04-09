@@ -102,6 +102,27 @@ static int l_lovrTextureNewReadback(lua_State* L) {
   return 1;
 }
 
+static bool luax_pollreadback(void** context) {
+  return lovrReadbackPoll(*context);
+}
+
+static bool luax_waitreadback(void** context) {
+  return lovrReadbackWait(*context);
+}
+
+static int luax_pushreadbackimage(lua_State* L, bool success, void* readback) {
+  if (success) {
+    Image* image = lovrReadbackGetImage(readback);
+    lovrRelease(readback, lovrReadbackDestroy);
+    luax_assert(L, image);
+    luax_pushtype(L, Image, image);
+    return 1;
+  } else {
+    lovrRelease(readback, lovrReadbackDestroy);
+    return 0;
+  }
+}
+
 static int l_lovrTextureGetPixels(lua_State* L) {
   Texture* texture = luax_checktype(L, 1, Texture);
   uint32_t offset[4], extent[3];
@@ -112,11 +133,11 @@ static int l_lovrTextureGetPixels(lua_State* L) {
   extent[0] = luax_optu32(L, 6, ~0u);
   extent[1] = luax_optu32(L, 7, ~0u);
   extent[2] = 1;
-  Image* image = lovrTextureGetPixels(texture, offset, extent);
-  luax_assert(L, image);
-  luax_pushtype(L, Image, image);
-  lovrRelease(image, lovrImageDestroy);
-  return 1;
+
+  Readback* readback = lovrReadbackCreateTexture(texture, offset, extent);
+  luax_assert(L, readback);
+
+  return luax_yieldpoll(L, luax_pollreadback, luax_waitreadback, luax_pushreadbackimage, readback);
 }
 
 static int l_lovrTextureSetPixels(lua_State* L) {

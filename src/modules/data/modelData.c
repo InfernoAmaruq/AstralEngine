@@ -43,16 +43,6 @@ void lovrModelDataDestroy(void* ref) {
   lovrFree(model);
 }
 
-static uint32_t nextPo2(uint32_t x) {
-  x--;
-  x |= x >> 1;
-  x |= x >> 2;
-  x |= x >> 4;
-  x |= x >> 8;
-  x |= x >> 16;
-  return x + 1;
-}
-
 // Batches allocations for all the ModelData arrays
 void lovrModelDataAllocate(ModelData* model) {
   ModelMetadata* meta = &model->meta;

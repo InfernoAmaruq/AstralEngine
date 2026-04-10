@@ -8,6 +8,7 @@ dev
 
 #### General
 
+- Add `lovr.task` module and `lovr.taskready` callback.
 - Add support for compiling with Luau as the Lua implementation, instead of Lua/LuaJIT.
 - Add support for passing Luau `vector` and `quaternion` types to functions.
 - Add `vector` and `quaternion` modules.
@@ -58,6 +59,7 @@ dev
 - Add `Mesh:get/setBaseVertex`.
 - Add support for custom array strides in buffer formats.
 - Add `bgra8` TextureFormat.
+- Add `Buffer:newBlob`.
 
 #### `lovr.headset`
 
@@ -90,6 +92,11 @@ dev
 - Add `lovr.system.is/setWindowFullscreen`.
 - Add `lovr.system.get/setMouseMode`.
 
+#### `lovr.thread`
+
+- Add `lovr.thread.call`.
+- Add `lovr.thread.getWorkerCount`.
+
 ### Change
 
 - Change model loading to use multiple threads to load images.
@@ -99,6 +106,7 @@ dev
 - Change `require` to have better errors when files/plugins aren't found.
 - Change default require path to also search for `.luau` files, when using Luau.
 - Change `lovr.headset.newModel` to also take a lightuserdata.
+- Change `lovr.headset.newModel` to be async.
 - Change `lovr.headset.isTracked` to also take a `Model`.
 - Change `lovr.headset.getPosition/Orientation/Direction/Pose` to also take a `Model`.
 - Change `TerrainShape` to support `nil` heights (treated as holes).
@@ -117,6 +125,13 @@ dev
 - Change `lovr.audio.newSource` to also accept an `AudioStream`.
 - Change audio device to start when playing a Source for the first time, instead of immediately.
 - Change `lovr.data.newSound` to take a channel count instead of a channel layout.
+- Change `lovr.data.newSound` and `lovr.audio.newSource` to be async.
+- Change `lovr.data.newImage` and `lovr.graphics.newTexture` to be async.
+- Change `lovr.data.newModelData` and `lovr.graphics.newModel` to be async.
+- Change `lovr.graphics.compileShader` and `lovr.graphics.newShader` to be async.
+- Change `Buffer:getData` and `Texture:getPixels` to be async.
+- Change `lovr.timer.sleep` to be async.
+- Change `Mesh:getVertices` and `Mesh:getIndices` to return `nil` for meshes with `gpu` storage.
 
 ### Fix
 

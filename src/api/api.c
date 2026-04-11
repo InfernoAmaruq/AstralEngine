@@ -572,7 +572,7 @@ static void _luax_checkvariant(lua_State* L, int index, Variant* variant, int de
         variant->string.pointer = lovrMalloc(length + 1);
         memcpy(variant->string.pointer, string, length);
         variant->string.pointer[length] = '\0';
-        variant->string.length = length;
+        variant->string.length = (uint32_t) length;
       }
       break;
     }
@@ -595,7 +595,7 @@ static void _luax_checkvariant(lua_State* L, int index, Variant* variant, int de
       luaL_checkstack(L, 2, "Lua stack overflow when serializing table (maybe it contains a cycle?)");
 
       lua_pushnil(L);
-      size_t count = 0;
+      uint32_t count = 0;
       while (lua_next(L, index) != 0) {
         count++;
         lua_pop(L, 1);

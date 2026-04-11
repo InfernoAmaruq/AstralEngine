@@ -4794,6 +4794,7 @@ bool lovrMeshGetIndices(Mesh* mesh, void** indices, uint32_t* count, DataType* t
   *count = mesh->indexCount;
   *type = mesh->indexBuffer->info.format->type;
   *indices = mesh->indices;
+  return true;
 }
 
 void* lovrMeshSetIndices(Mesh* mesh, uint32_t count, DataType type) {

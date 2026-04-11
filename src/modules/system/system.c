@@ -164,7 +164,7 @@ bool lovrSystemIsWindowFullscreen(void) {
 }
 
 void lovrSystemSetWindowFullscreen(bool fullscreen) {
-  return os_window_set_fullscreen(fullscreen);
+  os_window_set_fullscreen(fullscreen);
 }
 
 void lovrSystemGetWindowSize(uint32_t* width, uint32_t* height) {
@@ -224,7 +224,7 @@ bool lovrSystemWasMouseReleased(int button) {
 
 MouseMode lovrSystemGetMouseMode(void) {
   switch (os_get_mouse_mode()) {
-    case OS_MOUSE_NORMAL: return MOUSE_NORMAL;
+    case OS_MOUSE_NORMAL: default: return MOUSE_NORMAL;
     case OS_MOUSE_RELATIVE: return MOUSE_RELATIVE;
   }
 }

@@ -322,7 +322,6 @@ static struct {
   bool mounted;
   XrDebugUtilsMessengerEXT messenger;
   struct {
-    bool controllerModel;
     bool debug;
     bool depth;
     bool foveatedInset;
@@ -1556,7 +1555,7 @@ void lovrHeadsetGetFeatures(HeadsetFeatures* features) {
   features->keyboardTracking = state.extensions.keyboardTracking;
   features->viveTrackers = state.extensions.viveTrackers;
   features->handModel = state.extensions.handTrackingMesh;
-  features->controllerModel = state.extensions.controllerModel;
+  features->controllerModel = state.extensions.renderModel;
   features->controllerSkeleton = state.extensions.handTrackingDataSource && state.extensions.handTrackingMotionRange;
   features->cubeBackground = state.extensions.layerCube;
   features->equirectBackground = state.extensions.layerEquirect || state.extensions.layerEquirect2;

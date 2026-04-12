@@ -38,6 +38,7 @@ typedef struct {
 
 typedef struct {
   bool overlay;
+  bool battery;
   bool proximity;
   bool passthrough;
   bool refreshRate;
@@ -214,6 +215,7 @@ bool lovrHeadsetIsDown(Device device, DeviceButton button, bool* down, bool* cha
 bool lovrHeadsetIsTouched(Device device, DeviceButton button, bool* touched);
 bool lovrHeadsetGetAxis(Device device, DeviceAxis axis, float* value);
 bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source);
+bool lovrHeadsetGetBattery(Device device, float* level, bool* charging);
 bool lovrHeadsetVibrate(Device device, float strength, float duration, float frequency);
 void lovrHeadsetStopVibration(Device device);
 uint64_t* lovrHeadsetGetModelKeys(uint32_t* count);

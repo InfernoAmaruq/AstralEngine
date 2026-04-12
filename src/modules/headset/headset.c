@@ -102,6 +102,7 @@ uintptr_t gpu_vk_get_queue(uint32_t* queueFamilyIndex, uint32_t* queueIndex);
   X(xrCreateAction)\
   X(xrDestroyAction)\
   X(xrSuggestInteractionProfileBindings)\
+  X(xrGetCurrentInteractionProfile)\
   X(xrAttachSessionActionSets)\
   X(xrGetActionStateBoolean)\
   X(xrGetActionStateFloat)\
@@ -114,9 +115,6 @@ uintptr_t gpu_vk_get_queue(uint32_t* queueFamilyIndex, uint32_t* queueIndex);
   X(xrCreateHandTrackerEXT)\
   X(xrDestroyHandTrackerEXT)\
   X(xrLocateHandJointsEXT)\
-  X(xrCreateBodyTrackerBD)\
-  X(xrDestroyBodyTrackerBD)\
-  X(xrLocateBodyJointsBD)\
   X(xrCreateRenderModelEXT)\
   X(xrDestroyRenderModelEXT)\
   X(xrGetRenderModelPropertiesEXT)\
@@ -127,6 +125,9 @@ uintptr_t gpu_vk_get_queue(uint32_t* queueFamilyIndex, uint32_t* queueIndex);
   X(xrGetRenderModelAssetDataEXT)\
   X(xrGetRenderModelStateEXT)\
   X(xrEnumerateInteractionRenderModelIdsEXT)\
+  X(xrCreateBodyTrackerBD)\
+  X(xrDestroyBodyTrackerBD)\
+  X(xrLocateBodyJointsBD)\
   X(xrGetHandMeshFB)\
   X(xrGetDisplayRefreshRateFB)\
   X(xrEnumerateDisplayRefreshRatesFB)\
@@ -322,6 +323,7 @@ static struct {
   bool mounted;
   XrDebugUtilsMessengerEXT messenger;
   struct {
+    bool battery;
     bool debug;
     bool depth;
     bool foveatedInset;
@@ -502,6 +504,7 @@ bool lovrHeadsetConnect(void) {
     { "XR_EXT_hand_joints_motion_range", &state.extensions.handTrackingMotionRange, true },
     { "XR_EXT_hand_tracking", &state.extensions.handTracking, true },
     { "XR_EXT_hand_tracking_data_source", &state.extensions.handTrackingDataSource, true },
+    { "XR_EXT_interaction_profile_battery_state_display", &state.extensions.battery, true },
     { "XR_EXT_interaction_render_model", &state.extensions.interactionRenderModel, true },
     { "XR_EXT_local_floor", &state.extensions.localFloor, true },
     { "XR_EXT_palm_pose", &state.extensions.palmPose, true },
@@ -1544,6 +1547,7 @@ bool lovrHeadsetGetDriver(char* name, size_t length) {
 
 void lovrHeadsetGetFeatures(HeadsetFeatures* features) {
   features->overlay = state.extensions.overlay;
+  features->battery = state.extensions.battery;
   features->proximity = state.extensions.presence;
   features->passthrough = lovrHeadsetIsPassthroughSupported(PASSTHROUGH_BLEND) || lovrHeadsetIsPassthroughSupported(PASSTHROUGH_ADD);
   features->refreshRate = state.extensions.refreshRate;
@@ -2787,6 +2791,35 @@ bool lovrHeadsetGetSkeleton(Device device, float* poses, SkeletonSource* source)
     *source = SOURCE_UNKNOWN;
   }
 
+  return true;
+}
+
+bool lovrHeadsetGetBattery(Device device, float* level, bool* charging) {
+  if (!state.extensions.battery) {
+    return false;
+  }
+
+  XrBatteryStateDisplayEXT battery = {
+    .type = XR_TYPE_BATTERY_STATE_DISPLAY_EXT
+  };
+
+  XrInteractionProfileState profile = {
+    .type = XR_TYPE_INTERACTION_PROFILE_STATE,
+    .next = &battery
+  };
+
+  XrPath path = state.actionFilters[device];
+
+  if (XR_FAILED(xrGetCurrentInteractionProfile(state.session, path, &profile))) {
+    return false;
+  }
+
+  if (~battery.stateFlags & (XR_BATTERY_STATE_DISPLAY_STATE_VALID_BIT_EXT | XR_BATTERY_STATE_DISPLAY_STATE_NO_BATTERY_BIT_EXT)) {
+    return false;
+  }
+
+  *level = battery.batteryLevel;
+  *charging = !!(battery.stateFlags & XR_BATTERY_STATE_DISPLAY_STATE_CHARGING_BIT_EXT);
   return true;
 }
 

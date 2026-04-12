@@ -133,6 +133,7 @@ static int l_lovrHeadsetGetFeatures(lua_State* L) {
   HeadsetFeatures features = { 0 };
   lovrHeadsetGetFeatures(&features);
   lua_newtable(L);
+  lua_pushboolean(L, features.battery), lua_setfield(L, -2, "battery");
   lua_pushboolean(L, features.overlay), lua_setfield(L, -2, "overlay");
   lua_pushboolean(L, features.proximity), lua_setfield(L, -2, "proximity");
   lua_pushboolean(L, features.passthrough), lua_setfield(L, -2, "passthrough");
@@ -637,6 +638,20 @@ static int l_lovrHeadsetGetSkeleton(lua_State* L) {
   return 1;
 }
 
+static int l_lovrHeadsetGetBattery(lua_State* L) {
+  Device device = luax_optdevice(L, 1);
+  float level;
+  bool charging;
+  if (lovrHeadsetGetBattery(device, &level, &charging)) {
+    lua_pushnumber(L, level);
+    lua_pushboolean(L, charging);
+    return 2;
+  } else {
+    lua_pushnil(L);
+    return 1;
+  }
+}
+
 static int l_lovrHeadsetVibrate(lua_State* L) {
   Device device = luax_optdevice(L, 1);
   float strength = luax_optfloat(L, 2, 1.f);
@@ -1046,6 +1061,7 @@ static const luaL_Reg lovrHeadset[] = {
   { "isTouched", l_lovrHeadsetIsTouched },
   { "getAxis", l_lovrHeadsetGetAxis },
   { "getSkeleton", l_lovrHeadsetGetSkeleton },
+  { "getBattery", l_lovrHeadsetGetBattery },
   { "vibrate", l_lovrHeadsetVibrate },
   { "stopVibration", l_lovrHeadsetStopVibration },
   { "getModelKeys", l_lovrHeadsetGetModelKeys },

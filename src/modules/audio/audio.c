@@ -22,7 +22,7 @@
 #define FOREACH_SOURCE(mask, s) for (uint64_t m = mask; s = m ? state.activeSources[CTZL(m)] : NULL, m; m ^= (m & -m))
 #define AMBISONIC_ORDER(channels) ((channels / 6) + 1)
 #define OUTPUT_FORMAT SAMPLE_F32
-#define MAX_OCCLUSION_SAMPLES 16
+#define MAX_OCCLUSION_SAMPLES 64
 #define NO_HRTF ((IPLHRTF) (uintptr_t) ~0ull)
 #define BUFFER_SIZE 256
 #define MAX_SOURCES 64

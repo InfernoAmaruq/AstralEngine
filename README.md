@@ -121,18 +121,6 @@ Resources
 - [**Contributing**](https://lovr.org/docs/Contributing): Guide for helping out with development 💜
 - [**LÖVE**](https://love2d.org): LÖVR is heavily inspired by LÖVE, a 2D game framework.
 
-Contributors
----
-
-- [@bjornbytes](https://github.com/bjornbytes)
-- [@shakesoda](https://github.com/shakesoda)
-- [@bcampbell](https://github.com/bcampbell)
-- [@mcclure](https://github.com/mcclure)
-- [@nevyn](https://github.com/nevyn)
-- [@porglezomp](https://github.com/porglezomp)
-- [@jmiskovic](https://github.com/jmiskovic)
-- [@wallbraker](https://github.com/wallbraker)
-
 License
 ---
 

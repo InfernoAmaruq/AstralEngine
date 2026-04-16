@@ -343,6 +343,7 @@ int l_lovrModelMetaGetMaterialName(lua_State* L);
 const luaL_Reg lovrModel[] = {
   { "clone", l_lovrModelClone },
   { "getMetadata", l_lovrModelMetaGetMetadata },
+
   { "getRootNode", l_lovrModelMetaGetRootNode },
   { "getNodeCount", l_lovrModelMetaGetNodeCount },
   { "getNodeName", l_lovrModelMetaGetNodeName },
@@ -364,22 +365,26 @@ const luaL_Reg lovrModel[] = {
   { "getNodeTransform", l_lovrModelGetNodeTransform },
   { "setNodeTransform", l_lovrModelSetNodeTransform },
   { "resetNodeTransforms", l_lovrModelResetNodeTransforms },
+
   { "getAnimationCount", l_lovrModelMetaGetAnimationCount },
   { "getAnimationName", l_lovrModelMetaGetAnimationName },
   { "getAnimationDuration", l_lovrModelMetaGetAnimationDuration },
   { "hasJoints", l_lovrModelHasJoints },
   { "animate", l_lovrModelAnimate },
+
   { "getBlendShapeCount", l_lovrModelMetaGetBlendShapeCount },
   { "getBlendShapeName", l_lovrModelMetaGetBlendShapeName },
   { "getBlendShapeWeight", l_lovrModelGetBlendShapeWeight },
   { "setBlendShapeWeight", l_lovrModelSetBlendShapeWeight },
   { "resetBlendShapes", l_lovrModelResetBlendShapes },
+
   { "getWidth", l_lovrModelMetaGetWidth },
   { "getHeight", l_lovrModelMetaGetHeight },
   { "getDepth", l_lovrModelMetaGetDepth },
   { "getDimensions", l_lovrModelMetaGetDimensions },
   { "getCenter", l_lovrModelMetaGetCenter },
   { "getBoundingBox", l_lovrModelMetaGetBoundingBox },
+
   { "getMeshCount", l_lovrModelMetaGetMeshCount },
   { "getMeshVertexCount", l_lovrModelMetaGetMeshVertexCount },
   { "getMeshIndexCount", l_lovrModelMetaGetMeshIndexCount },
@@ -387,11 +392,13 @@ const luaL_Reg lovrModel[] = {
   { "getMeshDrawMode", l_lovrModelMetaGetMeshDrawMode },
   { "getMeshDrawRange", l_lovrModelMetaGetMeshDrawRange },
   { "getMeshMaterial", l_lovrModelMetaGetMeshMaterial },
+
   { "getTextureCount", l_lovrModelMetaGetImageCount },
   { "getTexture", l_lovrModelGetTexture },
   { "getMaterialCount", l_lovrModelMetaGetMaterialCount },
   { "getMaterialName", l_lovrModelMetaGetMaterialName },
   { "getMaterial", l_lovrModelGetMaterial },
+
   { "buildRaytracer", l_lovrModelBuildRaytracer },
 
   { "getVertexBuffer", l_lovrModelGetVertexBuffer }, // Deprecated

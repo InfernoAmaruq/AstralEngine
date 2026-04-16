@@ -817,5 +817,8 @@ const luaL_Reg lovrModelData[] = {
   { "getSkinJoints", l_lovrModelMetaGetSkinJoints },
   { "getSkinInverseBindMatrix", l_lovrModelMetaGetSkinInverseBindMatrix },
 
+  { "getBlendShapeCount", l_lovrModelMetaGetBlendShapeCount },
+  { "getBlendShapeName", l_lovrModelMetaGetBlendShapeName },
+
   { NULL, NULL }
 };

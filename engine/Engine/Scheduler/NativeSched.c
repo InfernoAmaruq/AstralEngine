@@ -5,7 +5,7 @@
 #define DEFAULT_BUDGET 1
 
 #define KillRoutine(L,RIdx) (lua_pushvalue(L.-1);lua_pushnil(L);lua_settable(L,RIdx);)
-#define GetTime() ;//lovrTimerGetTime();
+#define GetTime() lovrTimerGetTime();
 
 int DoRoutines(lua_State* L, double Budget, double Start){
     return 0;
@@ -20,13 +20,13 @@ int l_astralSchedUpd(lua_State* L){
 
     lua_pushvalue(L,1);
     const int withinBudget = 1;
-    float curTime = GetTime();
+    //float curTime = GetTime();
 
     lua_getfield(L,-1,"Budget");
     double budget = lua_tonumber(L,-1);
     lua_pop(L,1);
 
-    DoRoutines(L, budget, curTime);
+    //DoRoutines(L, budget, curTime);
 
 defer:
     const int top = lua_gettop(L);

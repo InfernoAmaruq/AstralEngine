@@ -1,4 +1,3 @@
-#include <stdatomic.h>
 #include <stdlib.h>
 #include "stdint.h"
 
@@ -37,7 +36,7 @@ typedef struct {
 } CValue;
 
 typedef struct CStruct {
-    _Atomic uint32_t RefCount;
+    uint32_t RefCount;
     uint32_t Size;
     uint32_t Length;
     CValue* Data;

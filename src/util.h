@@ -9,6 +9,12 @@
 #define LOVR_VERSION_PATCH 0
 #define LOVR_VERSION_ALIAS "Dream Eater"
 
+#ifdef _WIN32
+#define LOVR_EXPORT __declspec(dllexport)
+#else
+#define LOVR_EXPORT __attribute__((visibility("default")))
+#endif
+
 #ifdef __cplusplus
 #define LOVR_NORETURN [[noreturn]]
 #else

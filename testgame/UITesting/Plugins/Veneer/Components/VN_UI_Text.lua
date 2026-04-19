@@ -9,7 +9,7 @@ DefaultFont:setPixelDensity(1)
 Text.Name = "UIText"
 Text.Metadata = {
     UIDrawableObject = true,
-    HardDependency = { UIRoot = true },
+    SoftDependency = { UIRoot = true },
 }
 
 local AlignPos = EnumData.AlignPosition

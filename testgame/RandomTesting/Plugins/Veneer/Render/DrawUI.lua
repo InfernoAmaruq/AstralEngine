@@ -17,6 +17,8 @@ Renderer.VeneerUI.UnbindUICamera = function(Camera)
     local Idx = table.find(Renderer.VeneerUI.UICameras, Camera)
     if Idx then
         table.remove(Renderer.VeneerUI.UICameras, Idx)
+
+        Renderer.PassStorage.RemovePass(Camera[1])
     end
 end
 
@@ -42,8 +44,6 @@ Renderer.Late[#Renderer.Late + 1] = function()
         Include = {},
     })
 
-    print("SHADER:", V, F)
-
     local MainUIShader = lovr.graphics.newShader(V, F)
 
     local ComponentManager = GetService("Component")
@@ -60,6 +60,7 @@ Renderer.Late[#Renderer.Late + 1] = function()
 
         for i = 1, #UICams do
             local Cam = UICams[i]
+
             local Pass = Cam[1]
             local Objects = Cam[7]
             local ObjCount = #Objects

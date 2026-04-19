@@ -8,8 +8,6 @@ return {
     Scripts = {
         ScriptsFldr .. "TestScript.lua",
         "../Scripts/CoolScript.lua",
-        "../Scripts/TilemapTest.lua",
-        ScriptsFldr .. "UITest.lua",
     },
     ScriptValues = {},
 }

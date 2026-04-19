@@ -6,8 +6,7 @@ local STRICT_LOAD = meta.getdefined("Asset", "StrictLoad")
 local NormalizePath = lovr.filesystem.normalize
 
 local function GetPath(Path, Stack)
-    local Cur = lovr.filesystem.getCurrentPath(4 + (Stack or 0))
-    return NormalizePath(lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath(4 + (Stack or 0))) .. Path)
+    return NormalizePath(lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath(3 + (Stack or 0))) .. Path)
 end
 
 local AssetManager = {}

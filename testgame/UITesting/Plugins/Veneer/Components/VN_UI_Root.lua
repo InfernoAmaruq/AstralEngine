@@ -6,7 +6,7 @@ local UIRoot = {}
 
 UIRoot.Name = "UIRoot"
 UIRoot.Metadata = {
-    HardDependency = { Ancestry = true },
+    SoftDependency = { Ancestry = true },
 }
 
 -- bind rebuild
@@ -385,6 +385,10 @@ local Mt = {
 }
 
 UIRoot.Metadata.__create = function(InputTransform, Ent)
+    if not Component.HasComponent(Ent,"Ancestry") then
+        Component.AddComponent(Ent,"Ancestry")
+    end
+
     local Rotation = InputTransform and InputTransform.Rotation or 0
 
     local PosTable = InputTransform and InputTransform.Position
@@ -446,6 +450,8 @@ UIRoot.Metadata.__create = function(InputTransform, Ent)
 
     setmetatable(Data, Mt)
     Data[Pointers.Matrix][4] = 1
+
+    Methods.RebuildMatrix(Data)
 
     return Data
 end

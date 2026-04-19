@@ -119,6 +119,19 @@ Entity.OnAncestryChanged:Connect(function(...)
     end
 end)
 
+ComponentService.ComponentAdded:Connect(function(Ent, ComponentName)
+    if ComponentName ~= "UIRoot" then
+        return
+    end
+
+    local Anc = Ent.Ancestry
+    local ParentWithCam = Anc and Anc:FindFirstAncestorWithComponent("UICamera")
+
+    if ParentWithCam then
+        ParentWithCam:GetComponent("UICamera"):RebuildRenderChain()
+    end
+end)
+
 local IdxGetter = {
     Texture = 2,
     DepthTexture = 3,

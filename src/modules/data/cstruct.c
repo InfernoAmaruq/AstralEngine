@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 
-CStruct* lovrCStructCreate(size_t size, const char* name){
+CStruct* lovrCStructCreate(size_t size){
   CStruct* Str = lovrMalloc(sizeof(CStruct));
 
   CValue* CValArray = lovrMalloc(sizeof(CValue) * size);
@@ -14,13 +14,6 @@ CStruct* lovrCStructCreate(size_t size, const char* name){
   Str->Length = 0;
   Str->Size = size;
   Str->Data = CValArray;
-
-  if (name){
-    size_t length = strlen(name);
-    char* string = lovrMalloc(length + 1);
-    memcpy(string,name,length+1);
-    Str->Name = string;
-  }
 
   return Str;
 }
@@ -41,6 +34,5 @@ void lovrCStructDestroy(void* ref){
     }
 
     lovrFree(cstruct->Data);
-    lovrFree(cstruct->Name);
     lovrFree(cstruct);
 }

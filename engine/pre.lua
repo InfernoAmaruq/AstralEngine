@@ -18,14 +18,12 @@ AstralEngine._MOUNT = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Mount.lua")
 lovr.filesystem.extractor = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Extractor.lua")()
 loadfile, require, package.loadlib = unpack(lovr.filesystem.load(package.ENG_PATH .. "/Lib/Require.lua")())
 
-if not lovr.filesystem.isFused() then
+if not lovr.filesystem.isFused() or not lovr.filesystem.isDirectory(package.GAME_PATH) then
     local mnt, err = lovr.filesystem.mount(PATH, package.GAME_PATH, true)
     if not mnt then
         print("FAILED TO MOUNT GAME PATH <" .. PATH .. ">:", err)
         return -1
     end
-else
-    print("GAME ALREADY MOUNTED!")
 end
 
 local Real = lovr.filesystem.getRealDirectory(package.ENG_PATH)

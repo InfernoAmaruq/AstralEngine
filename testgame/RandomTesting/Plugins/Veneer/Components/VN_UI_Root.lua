@@ -4,10 +4,6 @@ local Renderer = GetService("Renderer")
 local Mouse = GetService("InputService").GetMouse()
 local UIRoot = {}
 
-local Plugin = AstralEngine.Plugins.VeneerUI
-local MatrixChangeEvent = Sig.new(Sig.Type.RTC | Sig.Type.NoCtx)
-Plugin.MatrixChanged = MatrixChangeEvent
-
 UIRoot.Name = "UIRoot"
 UIRoot.Metadata = {
     HardDependency = { Ancestry = true },
@@ -29,6 +25,30 @@ GetService("Entity").OnAncestryChanged:Connect(function(...)
     end
 end)
 
+Component.ComponentAdded:Connect(function(Entity, ComponentName)
+    local Root = Entity:GetComponent("UIRoot")
+    local Metadata = Component.Components[ComponentName].Metadata
+    if Root then
+        if not Root.__HasUIElement and Metadata and Metadata.UIDrawableObject then
+            Root.__HasUIElement = ComponentName
+        elseif not Root.__HasLayoutElement and Metadata and Metadata.UILayoutObject then
+            Root.__HasLayoutElement = ComponentName
+        end
+    end
+end)
+Component.ComponentRemoved:Connect(function(Entity, ComponentName)
+    local Root = Entity:GetComponent("UIRoot")
+    local Metadata = Component.Components[ComponentName].Metadata
+
+    if Root then
+        if Metadata.UIDrawableObject and Root.__HasUIElement then
+            Root.__HasUIElement = nil
+        elseif Metadata.UIDrawableObject and Root.__HasLayoutElement then
+            Root.__HasLayoutElement = nil
+        end
+    end
+end)
+
 local Pointers = {
     Matrix = 1,
     ScalePosition = 2,
@@ -38,16 +58,20 @@ local Pointers = {
     OffsetSize = 6,
     AnchorPoint = 7,
     Owner = 8,
-    HasDrawable = 9, -- string value telling if it has or does not have another Drawable in the same entity
+    __HasUIElement = 9, -- string value telling if it has or does not have another Drawable in the same entity
     ZIndex = 10,
     EffectiveZIndex = 11,
     FuncId = 12,
     ClipDescendantInstances = 13,
     __ClipDepth = 14,
-    HasLayout = 15,
+    __HasLayoutElement = 15,
+    TransformMatrix = 16,
+    __PixelPerfectScale = 17
+    -- Matrix:getScale() has precision loss when rotated, so, we keep our pixel perfect scale separate
 }
 
-local StorageQuat = Quat()
+@flag:MATRIX_ROTATION_CACHE_IDX = 12;
+
 local CenterVec = Vec2(0.5, 0.5)
 
 local function ResolveAncestorSize(self)
@@ -63,72 +87,18 @@ local function ResolveAncestorSize(self)
     local ParentTransform = Parent and Parent:GetComponent("UIRoot")
     local ParentUICam = Parent and Parent:GetComponent("UICamera")
     if ParentTransform then
-        return ParentTransform.Matrix
+        return ParentTransform[Pointers.TransformMatrix], ParentTransform[Pointers.__PixelPerfectScale]
     elseif ParentUICam then
         local Res = ParentUICam.Resolution
-        local m = mat4(vec3(), vec3(Res.x, Res.y, 1), quat())
-        return m
+        return mat4():translate(Res.x/2,Res.y/2,0), vec2(Res.x, Res.y)
     end
 end
 
 local Methods = {
-    RebuildMatrix = function(self, AncestorTransform)
-        AncestorTransform = AncestorTransform or ResolveAncestorSize(self)
-
-        if not AncestorTransform then
-            AstralEngine.Log(
-                "Cannot rebuild UIRoot Matrix! No 'Ancestry' component found on entity! Invalidating matrix!",
-                "warn",
-                "VENEER"
-            )
-            self[Pointers.Matrix][4] = 1
-            return
-        end
-
-        local Mat = self[Pointers.Matrix]
-        local OldMatrix = mat4(Mat)
-
-        local AncestorPosition = vec2(AncestorTransform:getPosition())
-        local AncestorSize = vec2(AncestorTransform:getScale())
-
-        -- pixel sizes
-
-        local Size_Vec2Total = self[Pointers.ScaleSize] * AncestorSize + self[Pointers.OffsetSize]
-
-        local ProcessedAncestorPosition = vec2(
-            math.max(0, AncestorPosition.x - AncestorSize.x / 2),
-            math.max(0, AncestorPosition.y - AncestorSize.y / 2)
-        )
-
-        local Pos_Vec2Total = self[Pointers.ScalePosition] * AncestorSize
-            + self[Pointers.OffsetPosition]
-            + ProcessedAncestorPosition
-
-        -- anchor
-
-        local AnchorOffset = Size_Vec2Total * self[Pointers.AnchorPoint]
-        local HalfSize = Size_Vec2Total * CenterVec
-        local CenterAdjustmentAnchor = HalfSize - AnchorOffset
-
-        Pos_Vec2Total = Pos_Vec2Total + CenterAdjustmentAnchor
-
-        -- quat
-
-        local Rot = self[Pointers.Rotation]
-        StorageQuat:setEuler(0, 0, math.rad(Rot))
-
-        Mat:identity()
-        Mat:translate(Pos_Vec2Total.x, Pos_Vec2Total.y, 0)
-        Mat:translate(CenterAdjustmentAnchor.x, CenterAdjustmentAnchor.y, 0)
-        Mat:rotate(StorageQuat)
-        Mat:translate(-CenterAdjustmentAnchor.x, -CenterAdjustmentAnchor.y, 0)
-        Mat:scale(Size_Vec2Total.x, Size_Vec2Total.y, 1)
-
-        -- now query point
-
-        MatrixChangeEvent:Fire(self[Pointers.Owner], Mat)
-
-        -- id query if parent component has inputs, but that will make SimulateClick() harder later
+    __PostRebuild = function(self)
+        local SelfAncestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
+        local Mat = self[Pointers.TransformMatrix]
+        local Scale = self[Pointers.__PixelPerfectScale]
 
         local HasListeners = self.MouseLeave:GetListenerCount() > 0 or self.MouseEnter:GetListenerCount() > 0
         if self.Hovering and HasListeners then
@@ -147,15 +117,101 @@ local Methods = {
             end
         end
 
-        if not Mat:equals(OldMatrix) then
+        if self[Pointers.__HasLayoutElement] then
+            Component.HasComponent(self[Pointers.Owner], self[Pointers.__HasLayoutElement]):RebuildChildren()
+            -- we terminate here, because we want :RebuldChildren() of the layout element to take over here
+        else
             -- new matrix set! propagate!
-            for Child in SelfAncestry:IterChildren() do
+            for _, Child in SelfAncestry:IterChildren() do
                 local ChildUIRoot = Child:GetComponent("UIRoot")
                 if ChildUIRoot then
-                    ChildUIRoot:RebuildMatrix(Mat)
+                    ChildUIRoot:RebuildMatrix(Mat,Scale)
                 end
             end
         end
+    end,
+    __GetRebuildValues = function(self, AncestorTransform, AncestorSize)
+        if not AncestorTransform or not AncestorSize then
+            AncestorTransform, AncestorSize = ResolveAncestorSize(self)
+        end
+
+        if not AncestorTransform or not AncestorSize then
+            return nil
+        end
+
+        -- pixel sizes
+
+        local Size_Vec2Total = self[Pointers.ScaleSize] * AncestorSize + self[Pointers.OffsetSize]
+
+        local Pos_Vec2Total = self[Pointers.ScalePosition] * AncestorSize
+            + self[Pointers.OffsetPosition] - AncestorSize/2
+
+        -- anchor
+
+        local AnchorOffset = Size_Vec2Total * self[Pointers.AnchorPoint]
+        local HalfSize = Size_Vec2Total * CenterVec
+        local CenterAdjustmentAnchor = HalfSize - AnchorOffset
+
+        local Rot = self[Pointers.Rotation]
+        local QuatOwn = quat():setEuler(0, 0, math.rad(Rot))
+
+        return Pos_Vec2Total, Size_Vec2Total, QuatOwn, CenterAdjustmentAnchor, AncestorTransform
+    end,
+    RebuildMatrix = function(self, A, B, C, D, E)
+        local SelfAncestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
+        if SelfAncestry then
+            local Par = SelfAncestry.Parent
+            local ParUIRoot = Par and Par:GetComponent("UIRoot")
+            local ParLayout = ParUIRoot
+                and ParUIRoot[Pointers.__HasLayoutElement]
+                and (Par and Par:GetComponent(ParUIRoot[Pointers.__HasLayoutElement]))
+
+            if ParLayout and not rawget(ParLayout, ".RebuildInProgress") then
+                ParLayout:RebuildChildren()
+                return
+            end
+        end
+
+        local Pos_Vec2Total, Size_Vec2Total, Quat, CenterAdjustmentAnchor, ParentTransformMatrix
+        if A and A:type() == "Vec2" then
+            Pos_Vec2Total, Size_Vec2Total, Quat, CenterAdjustmentAnchor, ParentTransformMatrix = A, B, C, D, E
+        else
+            Pos_Vec2Total, Size_Vec2Total, Quat, CenterAdjustmentAnchor, ParentTransformMatrix =
+                self:__GetRebuildValues(A and A:type() == "Mat4" and A or nil)
+        end
+
+        local Mat = self[Pointers.Matrix]
+        local TransMat = self[Pointers.TransformMatrix]
+
+        if not Pos_Vec2Total or not Size_Vec2Total or not Quat or not CenterAdjustmentAnchor then
+            Mat[4] = 1
+            return
+        end
+
+        local _,_,OwnZ = Quat:getEuler()
+
+        Pos_Vec2Total = Pos_Vec2Total + CenterAdjustmentAnchor
+
+        TransMat:identity()
+        TransMat:set(ParentTransformMatrix)
+        TransMat:translate(Pos_Vec2Total.x,Pos_Vec2Total.y,0)
+        TransMat:rotate(Quat)
+
+ --[[       Mat:translate(Pos_Vec2Total.x, Pos_Vec2Total.y, 0)
+        Mat:translate(CenterAdjustmentAnchor.x, CenterAdjustmentAnchor.y, 0)
+        Mat:rotate(Quat)
+        Mat:translate(-CenterAdjustmentAnchor.x, -CenterAdjustmentAnchor.y, 0)]]
+
+        Mat:set(TransMat)
+        Mat:scale(Size_Vec2Total.x, Size_Vec2Total.y, 1)
+
+        self[Pointers.__PixelPerfectScale]:set(Size_Vec2Total)
+
+        Mat[&MATRIX_ROTATION_CACHE_IDX] = OwnZ
+
+        -- now query point
+
+        self:__PostRebuild()
     end,
     RequestChainRebuild = function(self)
         local Ancestry = Component.HasComponent(self[Pointers.Owner], "Ancestry")
@@ -243,17 +299,13 @@ local Mt = {
                 or Ptr == Pointers.EffectiveZIndex
                 or Ptr == Pointers.ClipDescendantInstances
                 or Ptr == Pointers.__ClipDepth
+                or Ptr == Pointers.__HasUIElement
+                or Ptr == Pointers.__HasLayoutElement
             then
                 return self[Ptr]
             else
                 return vec2(self[Ptr])
             end
-        end
-
-        if k == "__HasUIElement" then
-            return self[Pointers.HasDrawable]
-        elseif k == "__HasLayoutElement" then
-            return self[Pointers.HasLayout]
         end
 
         return Methods[k]
@@ -262,16 +314,19 @@ local Mt = {
         if Pointers[k] then
             local Val = Pointers[k]
 
+            local ShouldRebuild = false
+
             if Val == Pointers.Rotation or Val == Pointers.EffectiveZIndex or Val == Pointers.__ClipDepth then
                 self[Val] = v
+                ShouldRebuild = Val == Pointers.Rotation
             elseif Val == Pointers.Matrix then
                 self[Val]:set(v)
                 return
             elseif Val == Pointers.ClipDescendantInstances then
                 self[Val] = v
                 self:RequestChainRebuild()
-            elseif k == "__HasLayoutElement" then
-                local Cur = self[Pointers.HasLayout]
+            elseif Val == Pointers.__HasLayoutElement then
+                local Cur = self[Pointers.__HasLayoutElement]
 
                 local Ancestry = AstralEngine.Assert(
                     Component.HasComponent(self[Pointers.Owner], "Ancestry"),
@@ -280,29 +335,29 @@ local Mt = {
                 )
 
                 if Cur and not v then
-                    self[Pointers.HasLayout] = false
+                    self[Pointers.__HasLayoutElement] = false
 
                     -- default rebuild
-                    for Child in Ancestry:IterChildren() do
+                    for _, Child in Ancestry:IterChildren() do
                         local ChildRoot = Child:GetComponent("UIRoot")
                         if ChildRoot then
                             ChildRoot:RebuildMatrix(self[Pointers.Matrix])
                         end
                     end
                 elseif not Cur and v then
-                    self[Pointers.HasLayout] = v
+                    self[Pointers.__HasLayoutElement] = v
                     -- dont really need to rebuild here, cause the Layout_Vertical will handle it
                 else
                     AstralEngine.Error("CANNOT SET SEVERAL UI ELEMENTS ONTO ONE UI ENTITY", "VENEER", 3)
                 end
             elseif k == "__HasUIElement" then
-                local Cur = self[Pointers.HasDrawable]
+                local Cur = self[Pointers.__HasUIElement]
 
                 if Cur and not v then
-                    self[Pointers.HasDrawable] = v
+                    self[Pointers.__HasUIElement] = v
                     self:RequestChainRebuild()
                 elseif not Cur and v then
-                    self[Pointers.HasDrawable] = v
+                    self[Pointers.__HasUIElement] = v
 
                     local Translated = Renderer.VeneerUI.GetStackIdFromName(v)
                     self[Pointers.FuncId] = Translated
@@ -316,7 +371,12 @@ local Mt = {
 
                 self:RequestChainRebuild()
             else
+                ShouldRebuild = true
                 self[Val]:set(v)
+            end
+
+            if not ShouldRebuild then
+                return
             end
 
             Methods.RebuildMatrix(self)
@@ -357,15 +417,17 @@ UIRoot.Metadata.__create = function(InputTransform, Ent)
         [Pointers.ScaleSize] = Size_Scale,
         [Pointers.AnchorPoint] = AnchorPoint,
         [Pointers.Owner] = Ent,
-        [Pointers.HasDrawable] = InputTransform and InputTransform.__HasUIElement or false,
+        [Pointers.__HasUIElement] = InputTransform and InputTransform.__HasUIElement or false,
         [Pointers.ZIndex] = InputTransform and InputTransform.ZIndex or 1,
         [Pointers.EffectiveZIndex] = -1,
         [Pointers.FuncId] = Renderer.VeneerUI.GetStackIdFromName(
             InputTransform and InputTransform.__HasUIElement or nil
         ),
-        [Pointers.HasLayout] = false,
+        [Pointers.__HasLayoutElement] = false,
         [Pointers.ClipDescendantInstances] = InputTransform and InputTransform.ClipDescendantInstances or false,
         [Pointers.__ClipDepth] = 0,
+        [Pointers.TransformMatrix] = Mat4(),
+        [Pointers.__PixelPerfectScale] = Vec2()
     }
 
     Data.TransparentToStencil = InputTransform and InputTransform.TransparentToStencil or false
@@ -389,7 +451,7 @@ UIRoot.Metadata.__create = function(InputTransform, Ent)
 end
 
 UIRoot.Metadata.__remove = function(self, _, Forced)
-    if self[Pointers.HasDrawable] and not Forced then
+    if self[Pointers.__HasUIElement] and not Forced then
         AstralEngine.Error("CANNOT REMOVE UIROOT COMPONENT WHILST HAVING A DEPENDENT COMPONENT!", "VENEER", 3)
     end
 

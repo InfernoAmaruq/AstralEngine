@@ -177,9 +177,6 @@ local conf = {
     },
 }
 
-local Gap = "   "
-local ListOfParams = table.concat({}, "\n")
-
 local OsType = nil
 
 local function Normalize(path, full)
@@ -290,7 +287,7 @@ function lovr.boot()
         Level = Level or 1
 
         local Info = debug.getinfo(Level + 1, "S")
-        local CurPath = Info.source:sub(1, 1) == "@" and Info.source:sub(2) or Info.source
+        local CurPath = Info and (Info.source:sub(1, 1) == "@" and Info.source:sub(2) or Info.source)
         return CurPath
     end
 
@@ -413,11 +410,14 @@ function lovr.boot()
         end
     elseif not Data or (Data and not Data.Engine) then
         Mounted = IsFused
-        for _, v in ipairs({ "Engine", "ENGINE" }) do
-            local IsDir = lovr.filesystem.isDirectory(v)
-            if IsDir then
-                package.ENG_PATH = v
-                break
+
+        if not lovr.filesystem.isFile("main.lua") then
+            for _, v in ipairs({ "Engine", "ENGINE" }) do
+                local IsDir = lovr.filesystem.isDirectory(v)
+                if IsDir then
+                    package.ENG_PATH = v
+                    break
+                end
             end
         end
     elseif Data and Data.Engine then

@@ -6,7 +6,7 @@ local UITexture = {}
 UITexture.Name = "UITexture"
 UITexture.Metadata = {
     UIDrawableObject = true,
-    HardDependency = { UIRoot = true },
+    SoftDependency = { UIRoot = true },
 }
 
 local FitImage = ENUM({

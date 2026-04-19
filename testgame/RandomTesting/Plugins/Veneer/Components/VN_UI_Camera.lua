@@ -13,8 +13,6 @@ local TotalCameraEntities = {}
 
 -- PROCESSING INPUT
 
--- FLAME: NTS: RE-QUERY ENTERS ON REBUILD!
--- INVALIDATE ON TRANSFORM CHANGE?
 local IS = GetService("InputService")
 local UserMouse = IS.GetMouse()
 
@@ -87,6 +85,8 @@ end)
 
 -- PROCESSING CAMERA
 
+local function SetEnabled(Camera, State) end
+
 local ToRebuild = {}
 
 local function SortMethod(a, b)
@@ -102,6 +102,7 @@ Entity.OnAncestryChanged:Connect(function(...)
     while i <= n do
         for LocalI = 0, 1 do
             local Object = select(i + LocalI, ...)
+
             local HasEntityWithUICamera = Object
                 and Object:GetComponent("Ancestry"):FindFirstAncestorWithComponent("UICamera")
             if HasEntityWithUICamera then
@@ -122,6 +123,7 @@ local IdxGetter = {
     Texture = 2,
     DepthTexture = 3,
     ZIndex = 8,
+    Enabled = 9,
 }
 local Getters = {
     Resolution = function(self)
@@ -132,6 +134,18 @@ local Setters = {
     ZIndex = function(self, v)
         self[8] = v
         self:RebuildRenderChain()
+    end,
+    Enabled = function(self, v)
+        local Current = self[9]
+        self[9] = v
+
+        if Current == v then
+            return
+        end
+
+        if not v then
+        else
+        end
     end,
 }
 local Methods = {
@@ -169,7 +183,7 @@ local Methods = {
                 OwnTransform.__ClipDepth = ParentClipDepth
             end
 
-            for Child in Top.Ancestry:IterChildren() do
+            for _, Child in Top.Ancestry:IterChildren() do
                 local UIRoot = Child:GetComponent("UIRoot")
 
                 if UIRoot and UIRoot.__HasUIElement then
@@ -190,6 +204,13 @@ local Methods = {
         table.sort(self[7], SortMethod)
         if self.ProcessInputs then
             QueryHover(UserMouse.GetPosition())
+        end
+
+        for _, Child in SelfEnt.Ancestry:IterChildren() do
+            local Root = Child:GetComponent("UIRoot")
+            if Root and Root[1][4] == 1 then
+                Root:RebuildMatrix()
+            end
         end
     end,
 }
@@ -220,6 +241,8 @@ UICam.Metadata.__resolvesoft = function(_, Ent, Name)
 end
 
 UICam.Metadata.__create = function(Input, Entity, Skip)
+    -- errors HERE
+
     local Data = {}
 
     if not Skip and not ComponentService.HasComponent(Entity, "Ancestry") then
@@ -334,6 +357,9 @@ end
 UICam.Metadata.__remove = function(self, Ent)
     RenderService.VeneerUI.UnbindUICamera(self)
     table.remove(TotalCameraEntities, table.find(TotalCameraEntities, Ent))
+
+    local Pass = self[1][1] or self[1]
+    Pass:release()
 end
 
 return UICam

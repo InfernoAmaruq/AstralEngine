@@ -323,6 +323,10 @@ function AssetMapLoader.LoadAssetMap(Map)
         local Cache = {}
         local SoftDependencies = {}
 
+        if Val.Parent then
+            Ent:AddComponent("Ancestry")
+        end
+
         -- first pass, resolve hard dependencies and exclusions
         for Name, Data in pairs(Val.Components) do
             local COMPONENT_DATA = AstralEngine.Assert(

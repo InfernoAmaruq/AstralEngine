@@ -11,30 +11,6 @@ local CamComp = CameraEnt:AddComponent("Camera", {
     DrawToScreen = true,
 })
 
-local f = function()
-    print("CREATE GARBAGE")
-    local mem = collectgarbage("count")
-    for i = 1, 400000 do
-        local t = { i = i }
-    end
-    local cur = collectgarbage("count")
-    print(mem, cur, cur - mem)
-end
-f()
-f = nil
-print("wait")
-
-task.wait(10)
-
-print("end")
-for i = 1, 1000000 do
-    local a = 1 + 1
-end
-
-print(collectgarbage("count"))
-collectgarbage("collect")
-print(collectgarbage("count"))
-
 local IntroMod = require("BaseIntro")
 --local Int = IntroMod.Load(CameraEnt)
 
@@ -172,8 +148,12 @@ C1:AddComponent("UICanvas", { Color = color.fromRGBA(255, 255, 255, 255) })
 C2:AddComponent("UICanvas")
 
 local Loose = EntityService.New("E")
-Loose:AddComponent("Ancestry")
 Loose:AddComponent("UIRoot", { Size = { Scale = vec2(1, 1) } })
 Loose:AddComponent("UICanvas", { Color = color.fromRGB(255, 0, 0) })
+
+task.wait(1)
+
+Loose.Parent = C1
+AstralEngine.Error("AWA", "MEOW", 1)
 
 print("COL:", collectgarbage("count"))

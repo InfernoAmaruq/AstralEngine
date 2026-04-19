@@ -308,7 +308,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.W = W
     Data.H = H
     Data.Aspect = W / H
-    Data.RadFOV = Input and (Input.RadFOV or math.rad(Input.FOV)) or math.rad(90)
+    Data.RadFOV = Input and (Input.RadFOV or (Input.FOV and math.rad(Input.FOV))) or math.rad(90)
 
     OITTex.ResizeCallback = REBUILD_CALLBACK
     OITDepth.ResizeCallback = REBUILD_CALLBACK

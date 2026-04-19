@@ -5,3 +5,4 @@ build*
 *.*.h
 *.so
 *.dll
+ignore*

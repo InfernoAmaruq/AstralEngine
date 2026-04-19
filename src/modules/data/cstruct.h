@@ -44,5 +44,5 @@ typedef struct CStruct {
     char* Name;
 } CStruct;
 
-CStruct* lovrCStructCreate(size_t size, const char* name);
+CStruct* lovrCStructCreate(size_t size);
 void lovrCStructDestroy(void* ref);

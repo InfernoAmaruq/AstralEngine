@@ -206,8 +206,7 @@ static int l_lovrDataNewCStruct(lua_State* L){
 
     if (Size < 1) return luaL_argerror(L, 1, "Invalid size for CStruct creation! Size must be 1 or larger");
 
-    const char* name = luaL_optstring(L, 2, "");
-    CStruct* cstruct = lovrCStructCreate(Size, name);
+    CStruct* cstruct = lovrCStructCreate(Size);
 
     luax_assert(L, cstruct);
     luax_pushtype(L, CStruct, cstruct);

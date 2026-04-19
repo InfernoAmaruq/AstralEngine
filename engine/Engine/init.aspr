@@ -25,9 +25,6 @@ local f = setmetatable({}, {
                         Services[n][k] = v
                     end
                 end,
-                __pairs = function()
-                    return next, Services[n] or s, nil
-                end,
             }
 
             if repair then
@@ -44,7 +41,7 @@ local f = setmetatable({}, {
                                 if not k or k == repair then
                                     if k == repair then
                                         debug.setupvalue(f, j, Services[n])
-                                        AstralEngine.Log("REQUIRE REPAIR SUCCESSFUL FOR: "..k,"info","INTERNAL")
+                                        AstralEngine.Log("REQUIRE REPAIR SUCCESSFUL FOR: " .. k, "info", "INTERNAL")
                                     end
                                     break
                                 end

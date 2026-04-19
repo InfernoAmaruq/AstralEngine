@@ -4,7 +4,8 @@ local Canvas = {}
 
 Canvas.Name = "UICanvas"
 Canvas.Metadata = {
-    SoftDependency = { UIRoot = true },
+    UIDrawableObject = true,
+    HardDependency = { UIRoot = true },
 }
 
 local SetComponents = Component.SetComponents
@@ -60,9 +61,6 @@ Canvas.Metadata.__create = function(Input, Entity, Sink)
             "ENTITY " .. Entity .. " ALREADY HAS A DRAWABLE UI COMPONENT! CANNOT CREATE ANOTHER COMPONENT!",
             "VENEER"
         )
-        if Input and Input.Transform then
-            TransformComponent:Set(Input.Transform)
-        end
     elseif not Sink and not TransformComponent then
         local InputValue = Input and Input.Transform
         local UD = false

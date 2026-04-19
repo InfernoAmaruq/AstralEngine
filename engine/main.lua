@@ -326,6 +326,7 @@ function lovr.run()
 
     -- try execute core script first
     local Ok, Err = pcall(loadfile,package.GAME_PATH.."/launch.lua")
+
     if Ok then
         if Err then
             task.spawn(Err)

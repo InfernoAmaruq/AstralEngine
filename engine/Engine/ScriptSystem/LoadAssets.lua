@@ -1,3 +1,0 @@
-local AssetLoader = {}
-
-return AssetLoader

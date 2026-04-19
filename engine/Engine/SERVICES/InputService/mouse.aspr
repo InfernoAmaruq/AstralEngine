@@ -12,9 +12,6 @@ return function(D, SIGNAL)
         __newindex = function() end,
         __index = UserMouse,
         __metatable = false,
-        __pairs = function()
-            return next, UserMouse, nil
-        end,
     })
 
     DATA.GetMouse = function()

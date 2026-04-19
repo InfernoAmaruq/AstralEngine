@@ -27,6 +27,7 @@ Tilemap.SizeX = 1000
 Tilemap.SizeY = 1000
 
 _G.TILEMAP = Tilemap
+print("NEW TILEMAP:", Tilemap)
 
 print("Tex delta:", TexDelta)
 

@@ -5,7 +5,7 @@ local Canvas = {}
 Canvas.Name = "UICanvas"
 Canvas.Metadata = {
     UIDrawableObject = true,
-    HardDependency = { UIRoot = true },
+    SoftDependency = { UIRoot = true },
 }
 
 local SetComponents = Component.SetComponents

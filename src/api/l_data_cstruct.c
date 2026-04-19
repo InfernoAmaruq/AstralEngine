@@ -131,7 +131,7 @@ static int l_lovrCStructGet(lua_State* L){
     luax_check(L, index <= cstruct->Size, "CStruct index must be less than the size of the CStruct");
 
     CValue* cval = &cstruct->Data[index-1];
-    uint type = cval->Type;
+    uint8_t type = cval->Type;
     int ret = 1;
 
     switch(type){
@@ -177,7 +177,7 @@ static int l_lovrCStructGetType(lua_State* L){
     luax_check(L, index < cstruct->Size, "CStruct index must be less than the size of the CStruct");
 
     CValue* cval = &cstruct->Data[index-1];
-    uint type = cval->Type;
+    uint8_t type = cval->Type;
 
     const char* str;
 

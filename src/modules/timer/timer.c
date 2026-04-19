@@ -1,3 +1,4 @@
+#include "util.h"
 #include "timer/timer.h"
 #include "core/os.h"
 #include <stdatomic.h>
@@ -29,7 +30,7 @@ double lovrTimerGetDelta(void) {
   return state.dt;
 }
 
-double lovrTimerGetTime(void) {
+LOVR_EXPORT double lovrTimerGetTime(void) {
   return os_get_time() - state.epoch;
 }
 

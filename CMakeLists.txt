@@ -982,6 +982,7 @@ function(build_lua_module SRC)
 
     target_include_directories(${MODULE_NAME} PRIVATE
         ${LUA_INCLUDE_DIR}
+		${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/engine
         ${CMAKE_SOURCE_DIR}/src/core
         ${CMAKE_SOURCE_DIR}/src/api

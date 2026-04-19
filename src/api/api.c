@@ -12,12 +12,6 @@
 typedef void voidFn(void);
 typedef void destructorFn(void*);
 
-#ifdef _WIN32
-#define LOVR_EXPORT __declspec(dllexport)
-#else
-#define LOVR_EXPORT __attribute__((visibility("default")))
-#endif
-
 LOVR_EXPORT int luaopen_lovr(lua_State* L);
 LOVR_EXPORT int luaopen_lovr_audio(lua_State* L);
 LOVR_EXPORT int luaopen_lovr_data(lua_State* L);

@@ -1,11 +1,11 @@
 #include "lua.h"
 #include "lauxlib.h"
-#include "timer/timer.h"
+//#include "timer/timer.h"
 
 #define DEFAULT_BUDGET 1
 
 #define KillRoutine(L,RIdx) (lua_pushvalue(L.-1);lua_pushnil(L);lua_settable(L,RIdx);)
-#define GetTime() lovrTimerGetTime();
+#define GetTime() //lovrTimerGetTime();
 
 int DoRoutines(lua_State* L, double Budget, double Start){
     return 0;

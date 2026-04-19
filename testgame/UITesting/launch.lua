@@ -65,9 +65,10 @@ LCRoot.ScalePosition = vec2(0.5, 0.5)
 LCRoot.AnchorPoint = vec2(0.5, 0.5)
 LayoutContainer.Parent = CameraEnt
 LayoutContainer:AddComponent("UICanvas", { Color = color.fromRGB(180, 180, 180) })
-local Comp = LayoutContainer:AddComponent("UIVerticalLayout")
+local Comp = LayoutContainer:AddComponent("UIHorizontalLayout")
 Comp.ScalePadding = vec2(0.01, 0.01)
-Comp.AlignmentVertical = ENUM.UIAlignPosition.Top
+Comp.AlignmentVertical = ENUM.UIAlignPosition.Center
+Comp.AlignmentHorizontal = ENUM.UIAlignPosition.Right
 
 local Map = AssetService.AssetMapFromPath("./Assetmap.lua")
 
@@ -115,7 +116,7 @@ local t = debug.cpuclock()
 LayoutContainer.UIRoot.ClipDescendantInstances = true
 print(debug.cpuclock() - t)
 
-print(LayoutContainer.UIVerticalLayout, LayoutContainer.UIVerticalLayout:RebuildChildren())
+print(LayoutContainer.UIHorizontalLayout, LayoutContainer.UIHorizontalLayout:RebuildChildren())
 print("////TEST2")
 
 local C1 = EntityService.New("C1")
@@ -154,6 +155,7 @@ Loose:AddComponent("UICanvas", { Color = color.fromRGB(255, 0, 0) })
 task.wait(1)
 
 Loose.Parent = C1
-AstralEngine.Error("AWA", "MEOW", 1)
 
-print("COL:", collectgarbage("count"))
+task.wait(1)
+print("KILL")
+CameraEnt.UICamera.Enabled = false

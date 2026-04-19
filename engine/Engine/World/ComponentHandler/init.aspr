@@ -251,7 +251,7 @@ function Component.LoadComponents()
 
     for _, f in pairs(Files) do
 
-        print("LOAD COMPONENT FILE:",f)
+        AstralEngine.Log("LOAD COMPONENT FILE: "..f,"info","COMPONENT")
 
         if f:match("%.lua$") or f:match("%.aspr$") then
             local File = loadfile(f)
@@ -271,15 +271,13 @@ function Component.LoadComponents()
         end
     end
 
+    local ANSI = AstralEngine.Plugins.ANSIColor or {}
+
     if AstralEngine._CONFIG.Astral.Debug then
-        print("DEBUG: -- COMPONENT MOUNTING")
-        for i, v in pairs(Component.Components) do
-            print("LOADED COMP:", i, v)
+        AstralEngine.Log("DEBUG: -- COMPONENT MOUNTING","info","COMPONENT")
+        for i in pairs(Component.Components) do
+            AstralEngine.Log("LOADED COMP: "..ANSI.Magenta..ANSI.Underscore..i..ANSI.Clear,"success","COMPONENT")
         end
-        for i in pairs(AttemptedToLoad) do
-            print("ATTEMPTED TO LOAD:", i)
-        end
-        print("COMPONENTS MOUNTED")
     end
 end
 

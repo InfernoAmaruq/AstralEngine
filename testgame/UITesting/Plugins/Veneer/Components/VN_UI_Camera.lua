@@ -85,8 +85,6 @@ end)
 
 -- PROCESSING CAMERA
 
-local function SetEnabled(Camera, State) end
-
 local ToRebuild = {}
 
 local function SortMethod(a, b)
@@ -132,36 +130,26 @@ ComponentService.ComponentAdded:Connect(function(Ent, ComponentName)
     end
 end)
 
-local IdxGetter = {
-    Texture = 2,
-    DepthTexture = 3,
-    ZIndex = 8,
-    Enabled = 9,
-}
-local Getters = {
-    Resolution = function(self)
-        return vec2(self[6])
-    end,
-}
-local Setters = {
-    ZIndex = function(self, v)
-        self[8] = v
-        self:RebuildRenderChain()
-    end,
-    Enabled = function(self, v)
-        local Current = self[9]
-        self[9] = v
-
-        if Current == v then
+local Methods = {
+    SetEnabled = function(self, State)
+        local Cur = self[9]
+        if Cur == State then
             return
         end
 
-        if not v then
+        self[9] = State
+
+        if not State then
+            RenderService.VeneerUI.UnbindUICamera(self)
         else
+            RenderService.VeneerUI.BindUICamera(self, self[10])
         end
     end,
-}
-local Methods = {
+    SetPriority = function(self, p)
+        RenderService.VeneerUI.UnbindUICamera(self)
+        RenderService.VeneerUI.BindUICamera(self, p)
+        self[10] = p
+    end,
     RebuildProjectionMatrix = function(self)
         local CurMatrix = self[5] or Mat4()
 
@@ -228,6 +216,27 @@ local Methods = {
     end,
 }
 
+local IdxGetter = {
+    Texture = 2,
+    DepthTexture = 3,
+    ZIndex = 8,
+    Enabled = 9,
+    Priority = 10,
+}
+local Getters = {
+    Resolution = function(self)
+        return vec2(self[6])
+    end,
+}
+local Setters = {
+    ZIndex = function(self, v)
+        self[8] = v
+        self:RebuildRenderChain()
+    end,
+    Enabled = Methods.SetEnabled,
+    Priority = Methods.SetPriority,
+}
+
 local MT = {
     __index = function(self, k)
         if Methods[k] then
@@ -246,12 +255,6 @@ local MT = {
         end
     end,
 }
-
-UICam.Metadata.__resolvesoft = function(_, Ent, Name)
-    if Name == "Ancestry" then
-        Ent:AddComponent("Ancestry")
-    end
-end
 
 UICam.Metadata.__create = function(Input, Entity, Skip)
     -- errors HERE
@@ -355,12 +358,18 @@ UICam.Metadata.__create = function(Input, Entity, Skip)
     Data.ResizeWithInputTexture = Input.ResizeWithInputTexture == nil and true or Input.ResizeWithInputTexture
     Data.__Entity = Entity
     Data.ProcessInputs = Input.ProcessInputs
+    Data[9] = Input.Enabled == nil and true or false
+    Data[10] = Input.Priority
 
-    RenderService.VeneerUI.BindUICamera(Data, Input.Priority)
+    if Data[9] then
+        RenderService.VeneerUI.BindUICamera(Data, Input.Priority)
+    end
 
     setmetatable(Data, MT)
 
-    Methods.RebuildProjectionMatrix(Data)
+    if Data[9] then
+        Methods.RebuildProjectionMatrix(Data)
+    end
 
     table.insert(TotalCameraEntities, Entity)
 

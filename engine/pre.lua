@@ -112,8 +112,9 @@ end
 
 function AstralEngine.Log(Msg, Flag, Tag, Level)
     Flag = Flag and tostring(Flag) or error("Invalid flag provided!")
-    local IsErr = Flag:lower() == "error"
-    local IsFatal = Flag:lower() == "fatal"
+    local LowerFlag = Flag:lower()
+    local IsErr = LowerFlag == "error"
+    local IsFatal = LowerFlag == "fatal"
     local f = IsErr and error or print
 
     local Pre, Post = "", ""
@@ -121,8 +122,14 @@ function AstralEngine.Log(Msg, Flag, Tag, Level)
     if IsErr or IsFatal then
         Pre = AnsiColorLib.Red
         Post = AnsiColorLib.Clear
-    elseif Flag:lower() == "warn" then
+    elseif LowerFlag == "warn" then
         Pre = AnsiColorLib.Yellow
+        Post = AnsiColorLib.Clear
+    elseif LowerFlag == "log" or LowerFlag == "info" then
+        Pre = AnsiColorLib.Blue
+        Post = AnsiColorLib.Clear
+    elseif LowerFlag == "success" then
+        Pre = AnsiColorLib.Green
         Post = AnsiColorLib.Clear
     end
 

@@ -18,6 +18,11 @@ return {
     },
 
     OnLoad = function()
-        AstralEngine.Log(Name .. " version: " .. Ver .. " ready", "info", "VENEER")
+        local ANSIColor = AstralEngine.Plugins.ANSIColor
+        AstralEngine.Log(
+            "Plugin " .. ANSIColor.Cyan .. Name .. ANSIColor.Clear .. " version: " .. Ver .. " ready",
+            "info",
+            "VENEER"
+        )
     end,
 }

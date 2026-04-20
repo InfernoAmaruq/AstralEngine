@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void* TASK_OK;
+static void* TASK_ERR;
+
 static void luax_pintask(lua_State* L, Task* task) {
   lua_getfield(L, LUA_REGISTRYINDEX, "_lovrtasks");
   lua_pushlightuserdata(L, task);
@@ -198,13 +201,15 @@ static int l_lovrTaskStart(lua_State* L) {
   int status = luax_runtask(task, args);
 
   if (!task->waiting) {
-    luax_setthreaddata(T, NULL);
     lovrTaskDestroy(task);
 
     if (status != LUA_OK && status != LUA_YIELD) {
       lua_pushvalue(T, -1);
       lua_xmove(T, L, 1);
+      luax_setthreaddata(T, &TASK_ERR);
       return lua_error(L);
+    } else {
+      luax_setthreaddata(T, &TASK_OK);
     }
   }
 
@@ -219,7 +224,7 @@ static int l_lovrTaskResume(lua_State* L) {
   if (!task) {
     task = lovrTaskCreate(T);
     luax_setthreaddata(T, task);
-  } else if (task->complete) {
+  } else if (task == &TASK_OK || task == &TASK_ERR || task->complete) {
     lua_pushnil(L);
     lua_pushliteral(L, "already complete");
     return 2;
@@ -245,10 +250,10 @@ static int l_lovrTaskResume(lua_State* L) {
     return 1;
   }
 
-  luax_setthreaddata(T, NULL);
   lovrTaskDestroy(task);
 
   if (status == LUA_OK) {
+    luax_setthreaddata(T, &TASK_OK);
     lua_pushboolean(L, true);
     int n = lua_gettop(T);
     luax_check(L, lua_checkstack(T, n), "stack overflow");
@@ -258,6 +263,7 @@ static int l_lovrTaskResume(lua_State* L) {
     lua_xmove(T, L, n);
     return n + 1;
   } else if (status == LUA_YIELD) {
+    luax_setthreaddata(T, &TASK_OK);
     lua_pushboolean(L, true);
     // It yielded with coroutine.yield, return the results it yielded with
     int n = lua_gettop(T);
@@ -268,6 +274,7 @@ static int l_lovrTaskResume(lua_State* L) {
     lua_xmove(T, L, n);
     return n + 1;
   } else {
+    luax_setthreaddata(T, &TASK_ERR);
     lua_pushboolean(L, false);
     lua_pushvalue(T, -1);
     lua_xmove(T, L, 1);
@@ -294,7 +301,14 @@ static int l_lovrTaskPoll(lua_State* L) {
 
 static int luax_waittask(lua_State* L, lua_State* T) {
   Task* task = luax_getthreaddata(T);
-  luax_check(L, task, "Trying to wait on a coroutine that wasn't resumed with lovr.task.resume");
+
+  if (task == &TASK_OK) {
+    return LUA_OK;
+  } else if (task == &TASK_ERR) {
+    return LUA_ERRRUN;
+  } else {
+    luax_check(L, task, "Trying to wait on a coroutine that wasn't resumed with lovr.task.resume");
+  }
 
   if (task->complete) {
     return task->error ? LUA_ERRRUN : LUA_OK;
@@ -343,7 +357,9 @@ static int l_lovrTaskWait(lua_State* L) {
       lua_State* T = lua_tothread(L, i);
       Task* task = luax_getthreaddata(T);
       luax_check(T, task, "Trying to wait on a coroutine that wasn't resumed with lovr.task.resume");
-      luax_assert(L, lovrTaskAddDependency(self, task));
+      if (task != &TASK_OK && task != &TASK_ERR) {
+        luax_assert(L, lovrTaskAddDependency(self, task));
+      }
     }
 
     // Only yield if we're actually waiting on something.  If everything was already complete, fall
@@ -409,9 +425,9 @@ static int l_lovrTaskGetStatus(lua_State* L) {
     lua_pushliteral(L, "running");
   } else if (!task) {
     lua_pushnil(L);
-  } else if (task->complete) {
+  } else if (task == &TASK_OK || task->complete) {
     lua_pushliteral(L, "complete");
-  } else if (task->error) {
+  } else if (task == &TASK_ERR || task->error) {
     lua_pushliteral(L, "failed");
   } else if (task->waiting && atomic_load(&task->deps) > 0) {
     lua_pushliteral(L, "waiting");

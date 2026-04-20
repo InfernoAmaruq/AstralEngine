@@ -292,9 +292,9 @@ static int l_lovrTaskPoll(lua_State* L) {
   return 1;
 }
 
-static int luax_waittask(lua_State* T) {
+static int luax_waittask(lua_State* L, lua_State* T) {
   Task* task = luax_getthreaddata(T);
-  luax_check(T, task, "Trying to wait on a coroutine that wasn't resumed with lovr.task.resume");
+  luax_check(L, task, "Trying to wait on a coroutine that wasn't resumed with lovr.task.resume");
 
   if (task->complete) {
     return task->error ? LUA_ERRRUN : LUA_OK;
@@ -311,7 +311,7 @@ static int luax_waittask(lua_State* T) {
   } else {
     int n = lua_gettop(T);
     for (int i = 1; i <= n; i++) {
-      luax_waittask(lua_tothread(T, i));
+      luax_waittask(L, lua_tothread(T, i));
     }
   }
 
@@ -359,7 +359,7 @@ static int l_lovrTaskWait(lua_State* L) {
     lua_State* T = lua_tothread(L, i);
 
     for (;;) {
-      int status = luax_waittask(T);
+      int status = luax_waittask(L, T);
 
       if (status == LUA_OK) {
         break;

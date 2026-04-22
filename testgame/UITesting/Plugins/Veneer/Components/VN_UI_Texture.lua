@@ -39,8 +39,6 @@ Renderer.VeneerUI.AddToStack(UITexture.Name, function(Pass, Entity, Matrix)
     Pass:send("UIImageFit", Comp[7].RawValue)
     Pass:send("RectSize", RectSize)
 
-    -- for some reason sampling is weird so we gotta do this:
-
     Pass:setColor(Comp[1], Comp[2], Comp[3], Comp[4])
     Pass:setMaterial(Image)
     Pass:plane(Matrix)

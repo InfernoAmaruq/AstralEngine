@@ -221,6 +221,33 @@ local function CompileGraphics(GraphicsBucket)
     return Compile(GraphicsBucket[&ST_Vertex],&ST_Vertex), Compile(GraphicsBucket[&ST_Fragment],&ST_Fragment)
 end
 
+local FileEndings = {"",".glsl"}
+local GETINCLUDE_TEMP = table.alloc(3,0)
+local ShaderFolder = unpack(lovr.filesystem.getAliased("Shaders"))
+
+local function GetIncluded(Into,IncludeTable)
+    local CalledFrom = lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath(3) or "")
+    for _,v in pairs(IncludeTable) do
+        GETINCLUDE_TEMP[1] = ShaderFolder.."/"..v
+        GETINCLUDE_TEMP[2] = CalledFrom.."/"..v
+        GETINCLUDE_TEMP[3] = v
+        local Out = false
+        for _,p in ipairs(GETINCLUDE_TEMP) do
+            for _,ext in ipairs(FileEndings) do
+                local FilePath = lovr.filesystem.normalize(p..ext)
+                if lovr.filesystem.isFile(FilePath) then
+                    Out = true
+
+                    Into[#Into + 1] = FilePath
+
+                    break
+                end
+            end
+            if Out then Out = false break end
+        end
+    end
+end
+
 function ShaderService.ComposeShader(Type,Search,Params)
     Type = rtype(Type) == "number" and Type or Type.RawValue
 
@@ -232,7 +259,13 @@ function ShaderService.ComposeShader(Type,Search,Params)
         [&ST_Compute] = {}
     }
 
-    for _,a in ipairs(lovr.filesystem.getAliasedFiles("Shaders/"..Search)) do
+    local SearchIn = lovr.filesystem.getAliasedFiles("Shaders/"..Search)
+
+    if Params and Params.Include then
+        GetIncluded(SearchIn,Params.Include)
+    end
+
+    for _,a in ipairs(SearchIn) do
         if FileSystem.isFile(a) then
             local F = a:match("([^/\\]+)$")
             local _, ShaderType, FileType = F:match("([^.]+)%.?([^.]*)%.?([^.]*)")

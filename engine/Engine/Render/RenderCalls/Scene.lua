@@ -24,7 +24,7 @@ Renderer.Flags = {
 
 local ShaderService = GetService("ShaderService","ShaderService")
 local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
-    Include = {}
+    Include = {"Misc/SpriteMap.glsl"}
 })
 
 local MAINSHADER = lovr.graphics.newShader(V,F)

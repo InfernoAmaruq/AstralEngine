@@ -41,7 +41,7 @@ Renderer.Late[#Renderer.Late + 1] = function()
 
     local ShaderService = GetService("ShaderService")
     local V, F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics, "UIMain", {
-        Include = {},
+        Include = { "Misc/SpriteMap.glsl" },
     })
 
     local MainUIShader = lovr.graphics.newShader(V, F)

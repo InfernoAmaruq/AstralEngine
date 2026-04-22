@@ -67,7 +67,7 @@ LayoutContainer.Parent = CameraEnt
 LayoutContainer:AddComponent("UICanvas", { Color = color.fromRGB(180, 180, 180) })
 local Comp = LayoutContainer:AddComponent("UIHorizontalLayout")
 Comp.ScalePadding = vec2(0.01, 0.01)
-Comp.AlignmentVertical = ENUM.UIAlignPosition.Center
+Comp.AlignmentVertical = ENUM.UIAlignPosition.Top
 Comp.AlignmentHorizontal = ENUM.UIAlignPosition.Right
 
 local Map = AssetService.AssetMapFromPath("./Assetmap.lua")
@@ -83,11 +83,11 @@ local c = {
 }
 
 local s = {
-    0.5,
-    1,
+    0.2,
     0.3,
-    1.1,
-    0.9,
+    0.3,
+    0.3,
+    0.2,
 }
 
 for i = 1, 5 do
@@ -99,11 +99,10 @@ for i = 1, 5 do
     TextFrames[i] = Object
 end
 
-TextFrames[1].UIRoot.Rotation = 45
-
 task.wait(1.5)
 
-Comp.WrapInstances = true
+print("WRAP")
+LayoutContainer.UIHorizontalLayout.WrapChildren = true
 
 task.wait(1.5)
 
@@ -157,5 +156,3 @@ task.wait(1)
 Loose.Parent = C1
 
 task.wait(1)
-print("KILL")
-CameraEnt.UICamera.Enabled = false

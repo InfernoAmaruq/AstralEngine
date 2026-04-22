@@ -247,16 +247,12 @@ end
 function Component.LoadComponents()
     local Files = lovr.filesystem.getAliasedFiles("Components")
 
-    local AttemptedToLoad = {}
-
     for _, f in pairs(Files) do
 
         AstralEngine.Log("LOAD COMPONENT FILE: "..f,"info","COMPONENT")
 
         if f:match("%.lua$") or f:match("%.aspr$") then
             local File = loadfile(f)
-
-            AttemptedToLoad[f] = true
 
             if File then
                 local S, Res = pcall(File)

@@ -34,7 +34,6 @@ function Define.PARSE(Blk)
             VAL = nil
         end
         SharedMem.DEFINED[Context][v] = VAL
-        print("DEFINED:", Context, v, VAL)
     end
     return nil
 end

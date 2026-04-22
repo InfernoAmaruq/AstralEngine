@@ -71,6 +71,7 @@ vec4 lovrmain(){
     [&ST_Fragment] = {[[
 vec4 lovrmain(){
     vec4 ASTR_OUT_CLR = DefaultColor;
+    vec2 ASTR_CUR_UV = UV;
 ]],[[
     return ASTR_OUT_CLR;
 }
@@ -109,6 +110,14 @@ local LinkerKeys = {
     [&ST_Vertex] = "CurrentPosition",
     [&ST_Fragment] = "CurrentColor"
 }
+
+local LinkerSubstitution = {
+    UV = "ASTR_CUR_UV"
+}
+
+local function LinkerGsub(Word)
+    return LinkerSubstitution[Word] or Word
+end
 
 local function Link(Current,Text,Pattern)
     local T = {Text:find(LinkerName)}
@@ -210,11 +219,12 @@ local function Compile(Tab,Tag)
         Text, FlagIndex = ProcessFlags(Text,FlagIndex)
         local Linked
         Text, Linked = Link(LinkedBody,Text,Tag)
-        LinkedBody = LinkedBody..Linked
+
+        LinkedBody = LinkedBody.."\n"..Linked
         Out = Out..Text
     end
 
-    return Out.."\n//LINKED\n"..BodyStart..LinkedBody..BodyEnd
+    return Out.."\n//LINKED\n"..BodyStart..LinkedBody:gsub("%f[%w_][%w_]+%f[^%w_]",LinkerGsub)..BodyEnd
 end
 
 local function CompileGraphics(GraphicsBucket)

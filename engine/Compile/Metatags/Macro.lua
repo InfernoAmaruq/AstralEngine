@@ -163,9 +163,15 @@ local function MaskStrings(Src)
     return Src, Store
 end
 
+local s = nil
+local function UnmaskAux()
+    return s
+end
+
 local function UnmaskStrings(Src, Store)
     for k, v in pairs(Store) do
-        Src = Src:gsub(k, v)
+        s = v
+        Src = Src:gsub(k, UnmaskAux)
     end
     return Src
 end

@@ -35,7 +35,4 @@ debug.setmetatable(0,{
     end
 })
 
--- ARRAYS
-@macro<G,!USEBRACK>:[]x = table.array(x)
-
 return nil

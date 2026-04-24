@@ -380,10 +380,9 @@ static int l_lovrTaskWait(lua_State* L) {
       if (status == LUA_OK) {
         break;
       } else if (status != LUA_YIELD) {
-        lua_pushboolean(L, false);
         lua_pushvalue(T, -1);
         lua_xmove(T, L, 1);
-        return 2;
+        return lua_error(L);
       }
     }
   }
@@ -410,10 +409,7 @@ static int l_lovrTaskWait(lua_State* L) {
     }
   }
 
-  lua_pushboolean(L, true);
-  lua_insert(L, 1);
-
-  return results + 1;
+  return results;
 }
 
 static int l_lovrTaskGetStatus(lua_State* L) {

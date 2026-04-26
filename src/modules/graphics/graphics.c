@@ -610,6 +610,7 @@ static struct {
   map_t pipelineLookup;
   gpu_pipeline* pipelines;
   atomic_uint pipelineCount;
+  atomic_uint glyphJobs;
   _Atomic(Layout*) layouts;
   Layout* builtinLayout;
   Layout* materialLayout;
@@ -1961,6 +1962,10 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
     }
 
     state.newPipelines = NULL;
+  }
+
+  while (atomic_load(&state.glyphJobs) > 0) {
+    job_spin();
   }
 
   lovrAssertGoto(fail, gpu_submit(streams, streamCount, state.tick++), "Failed to submit GPU command buffers: %s", gpu_get_error());
@@ -4214,6 +4219,36 @@ void lovrFontSetLineSpacing(Font* font, float spacing) {
   font->lineSpacing = spacing;
 }
 
+typedef struct {
+  Font* font;
+  uint32_t codepoint;
+  uint32_t width;
+  uint32_t height;
+  uint8_t* dst;
+  float* src;
+} GlyphContext;
+
+static void rasterizeGlyph(void* arg) {
+  GlyphContext* ctx = arg;
+
+  lovrRasterizerGetPixels(ctx->font->info.rasterizer, ctx->codepoint, ctx->src, ctx->width, ctx->height, ctx->font->info.spread);
+
+  float* src = ctx->src;
+  uint8_t* dst = ctx->dst;
+  for (uint32_t y = 0; y < ctx->height; y++) {
+    for (uint32_t x = 0; x < ctx->width; x++) {
+      for (uint32_t c = 0; c < 4; c++) {
+        float f = *src++; // CLAMP would evaluate this multiple times
+        *dst++ = (uint8_t) (CLAMP(f, 0.f, 1.f) * 255.f + .5f);
+      }
+    }
+  }
+
+  atomic_fetch_sub(&state.glyphJobs, 1);
+  lovrFree(ctx->src);
+  lovrFree(ctx);
+}
+
 static Glyph* lovrFontGetGlyph(Font* font, uint32_t codepoint, bool* resized) {
   // TODO this could be improved a LOT (batch glyph lookups, readwrite lock, don't lock for as long, etc.)
   mtx_lock(&font->lock);
@@ -4381,23 +4416,21 @@ static Glyph* lovrFontGetGlyph(Font* font, uint32_t codepoint, bool* resized) {
 
   mtx_unlock(&state.lock);
 
-  size_t stack = stackPush(&thread.stack);
-  float* pixels = allocate(&thread.stack, pixelWidth * pixelHeight * 4 * sizeof(float));
-  lovrRasterizerGetPixels(font->info.rasterizer, codepoint, pixels, pixelWidth, pixelHeight, font->info.spread);
-  float* src = pixels;
-  uint8_t* dst = bufferView.pointer;
-  for (uint32_t y = 0; y < pixelHeight; y++) {
-    for (uint32_t x = 0; x < pixelWidth; x++) {
-      for (uint32_t c = 0; c < 4; c++) {
-        float f = *src++; // CLAMP would evaluate this multiple times
-        *dst++ = (uint8_t) (CLAMP(f, 0.f, 1.f) * 255.f + .5f);
-      }
-    }
-  }
-  stackPop(&thread.stack, stack);
-
   map_set(&font->glyphLookup, hash, font->glyphs.length++);
   mtx_unlock(&font->lock);
+
+  GlyphContext* context = lovrMalloc(sizeof(GlyphContext));
+  context->font = font;
+  context->codepoint = codepoint;
+  context->width = pixelWidth;
+  context->height = pixelHeight;
+  context->src = lovrMalloc(pixelWidth * pixelHeight * 4 * sizeof(float));
+  context->dst = bufferView.pointer;
+  atomic_fetch_add(&state.glyphJobs, 1);
+  if (!job_start(rasterizeGlyph, context)) {
+    rasterizeGlyph(context);
+  }
+
   return glyph;
 }
 

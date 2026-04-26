@@ -58,6 +58,7 @@ typedef enum {
 } ReverbMode;
 
 typedef enum {
+  REVERB_NONE,
   REVERB_CONVOLUTION,
   REVERB_PARAMETRIC
 } ReverbType;

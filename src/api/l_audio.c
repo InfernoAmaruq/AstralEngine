@@ -52,6 +52,7 @@ StringEntry lovrReverbMode[] = {
 };
 
 StringEntry lovrReverbType[] = {
+  [REVERB_NONE] = ENTRY("none"),
   [REVERB_CONVOLUTION] = ENTRY("convolution"),
   [REVERB_PARAMETRIC] = ENTRY("parametric"),
   { 0 }

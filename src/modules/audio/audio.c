@@ -265,7 +265,9 @@ static void onPlayback(ma_device* device, void* out, const void* in, uint32_t co
     }
   }
 
-  phonon_mix_reverb(dst);
+  if (state.config.reverb.type != REVERB_NONE) {
+    phonon_mix_reverb(dst);
+  }
 
   if (state.streams[AUDIO_PLAYBACK]) {
     Sound* sound = lovrAudioStreamGetSound(state.streams[AUDIO_PLAYBACK]);
@@ -971,7 +973,7 @@ static bool phonon_init(void) {
   };
 
   IPLSimulationSettings simulationSettings = {
-    .flags = IPL_SIMULATIONFLAGS_DIRECT | IPL_SIMULATIONFLAGS_REFLECTIONS,
+    .flags = IPL_SIMULATIONFLAGS_DIRECT | (state.config.reverb.type ? IPL_SIMULATIONFLAGS_REFLECTIONS : 0),
     .sceneType = IPL_SCENETYPE_DEFAULT,
     .reflectionType = reflectionSettings.type,
     .maxNumOcclusionSamples = MAX_OCCLUSION_SAMPLES,
@@ -996,39 +998,41 @@ static bool phonon_init(void) {
 
   iplSimulatorSetScene(state.simulator, state.scene);
 
-  IPLSourceSettings sourceSettings = {
-    .flags = IPL_SIMULATIONFLAGS_REFLECTIONS
-  };
-
-  if (iplSourceCreate(state.simulator, &sourceSettings, &state.listener)) {
-    return phonon_destroy(), lovrSetError("Failed to create listener source");
-  }
-
-  if (iplReflectionEffectCreate(state.phonon, &state.audioSettings, &reflectionSettings, &state.reflectionEffect)) {
-    return phonon_destroy(), lovrSetError("Failed to create reflection effect");
-  }
-
-  if (state.config.reverb.type == REVERB_CONVOLUTION) {
-    if (iplReflectionMixerCreate(state.phonon, &state.audioSettings, &reflectionSettings, &state.reflectionMixer)) {
-      return phonon_destroy(), lovrSetError("Failed to create reverb mixer");
-    }
-
-    IPLAmbisonicsDecodeEffectSettings settings = {
-      .speakerLayout.type = IPL_SPEAKERLAYOUTTYPE_STEREO,
-      .maxOrder = 1
+  if (state.config.reverb.type != REVERB_NONE) {
+    IPLSourceSettings sourceSettings = {
+      .flags = IPL_SIMULATIONFLAGS_REFLECTIONS
     };
 
-    if (iplAmbisonicsDecodeEffectCreate(state.phonon, &state.audioSettings, &settings, &state.ambisonicsDecodeEffect)) {
-      return phonon_destroy(), lovrSetError("Failed to create ambisonics decode effect");
+    if (iplSourceCreate(state.simulator, &sourceSettings, &state.listener)) {
+      return phonon_destroy(), lovrSetError("Failed to create listener source");
     }
-  }
 
-  if (iplAudioBufferAllocate(state.phonon, 1, BUFFER_SIZE, &state.listenerReverb)) {
-    return phonon_destroy(), lovrSetError("Failed to create reverb buffer");
-  }
+    if (iplReflectionEffectCreate(state.phonon, &state.audioSettings, &reflectionSettings, &state.reflectionEffect)) {
+      return phonon_destroy(), lovrSetError("Failed to create reflection effect");
+    }
 
-  if (iplAudioBufferAllocate(state.phonon, 1, BUFFER_SIZE, &state.parametricReverb)) {
-    return phonon_destroy(), lovrSetError("Failed to create reverb buffer");
+    if (state.config.reverb.type == REVERB_CONVOLUTION) {
+      if (iplReflectionMixerCreate(state.phonon, &state.audioSettings, &reflectionSettings, &state.reflectionMixer)) {
+        return phonon_destroy(), lovrSetError("Failed to create reverb mixer");
+      }
+
+      IPLAmbisonicsDecodeEffectSettings settings = {
+        .speakerLayout.type = IPL_SPEAKERLAYOUTTYPE_STEREO,
+        .maxOrder = 1
+      };
+
+      if (iplAmbisonicsDecodeEffectCreate(state.phonon, &state.audioSettings, &settings, &state.ambisonicsDecodeEffect)) {
+        return phonon_destroy(), lovrSetError("Failed to create ambisonics decode effect");
+      }
+    }
+
+    if (iplAudioBufferAllocate(state.phonon, 1, BUFFER_SIZE, &state.listenerReverb)) {
+      return phonon_destroy(), lovrSetError("Failed to create reverb buffer");
+    }
+
+    if (iplAudioBufferAllocate(state.phonon, 1, BUFFER_SIZE, &state.parametricReverb)) {
+      return phonon_destroy(), lovrSetError("Failed to create reverb buffer");
+    }
   }
 
   atomic_store(&state.reverbFinished, true);
@@ -1140,7 +1144,7 @@ static void phonon_update(float dt) {
   uint64_t sourceReverbMask = 0;
   uint64_t listenerReverbMask = 0;
 
-  if (state.enabledMeshCount > 0) {
+  if (state.config.reverb.type != REVERB_NONE && state.enabledMeshCount > 0) {
     FOREACH_SOURCE(mask, source) {
       if (source->spatial && source->reverb > 0.f) {
         if (source->reverbMode == REVERB_SOURCE) {
@@ -1232,8 +1236,10 @@ static void phonon_mix_begin(void) {
     state.hrtf[0] = newHRTF;
   }
 
-  memset(state.listenerReverb.data[0], 0, BUFFER_SIZE * sizeof(float));
-  memset(state.parametricReverb.data[0], 0, BUFFER_SIZE * sizeof(float));
+  if (state.config.reverb.type != REVERB_NONE) {
+    memset(state.listenerReverb.data[0], 0, BUFFER_SIZE * sizeof(float));
+    memset(state.parametricReverb.data[0], 0, BUFFER_SIZE * sizeof(float));
+  }
 }
 
 static bool phonon_mix_source_ambisonic(Source* source, float* src, float* dst) {
@@ -1250,7 +1256,7 @@ static bool phonon_mix_source_ambisonic(Source* source, float* src, float* dst) 
       memset(dst, 0, 2 * BUFFER_SIZE * sizeof(float));
     }
 
-    if (iplReflectionEffectGetTailSize(source->reflectionEffect) > 0) {
+    if (state.config.reverb.type != REVERB_NONE && iplReflectionEffectGetTailSize(source->reflectionEffect) > 0) {
       if (state.config.reverb.type == REVERB_CONVOLUTION) {
         tail |= !iplReflectionEffectGetTail(source->reflectionEffect, &output, state.reflectionMixer);
       } else {
@@ -1268,7 +1274,7 @@ static bool phonon_mix_source_ambisonic(Source* source, float* src, float* dst) 
   iplAudioBufferConvertAmbisonics(state.phonon, IPL_AMBISONICSTYPE_SN3D, IPL_AMBISONICSTYPE_N3D, &input, &input);
 
   // Reverb
-  if (source->reverb > 0.f && state.enabledMeshCount > 0) {
+  if (source->reverb > 0.f && state.config.reverb.type != REVERB_NONE && state.enabledMeshCount > 0) {
     IPLAudioBuffer reverbInput = { 1, BUFFER_SIZE };
 
     if (source->reverb == 1.f) {
@@ -1355,7 +1361,7 @@ static bool phonon_mix_source(Source* source, float* src, float* dst) {
       memset(dst, 0, 2 * BUFFER_SIZE * sizeof(float));
     }
 
-    if (iplReflectionEffectGetTailSize(source->reflectionEffect) > 0) {
+    if (state.config.reverb.type != REVERB_NONE && iplReflectionEffectGetTailSize(source->reflectionEffect) > 0) {
       if (state.config.reverb.type == REVERB_CONVOLUTION) {
         tail |= !iplReflectionEffectGetTail(source->reflectionEffect, &buffer, state.reflectionMixer);
       } else {
@@ -1379,7 +1385,7 @@ static bool phonon_mix_source(Source* source, float* src, float* dst) {
   }
 
   // Reverb input
-  if (source->reverb > 0.f && state.enabledMeshCount > 0) {
+  if (source->reverb > 0.f && state.config.reverb.type != REVERB_NONE && state.enabledMeshCount > 0) {
     if (channels == 2) {
       for (uint32_t i = 0; i < BUFFER_SIZE; i++) {
         src[i] = (left[i] + right[i]) * .5f * source->reverb;

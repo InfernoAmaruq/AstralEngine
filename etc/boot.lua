@@ -490,8 +490,6 @@ function lovr.boot()
 
     -- Boot!
 
-    assert(("Hello World"):match("%w+") == "Hello")
-
     for module in pairs(conf.modules) do
         if conf.modules[module] then
             local loaded, result = pcall(require, "lovr." .. module)
@@ -502,8 +500,6 @@ function lovr.boot()
             end
         end
     end
-
-    assert(("Hello World"):match("%w+") == "Hello")
 
     if lovr.headset and conf.headset.connect then
         local ok, message = lovr.headset.connect()
@@ -537,8 +533,6 @@ function lovr.boot()
             end
         end
     end
-
-    assert(("Hello World"):match("%w+") == "Hello")
 
     if lovr.graphics then
         lovr.graphics.initialize()

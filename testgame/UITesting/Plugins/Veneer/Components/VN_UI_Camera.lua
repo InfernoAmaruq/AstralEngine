@@ -53,6 +53,9 @@ local function GetMouseInpFunc(Event)
             if UICamComp.ProcessInputs then
                 for _, Object in ipairs(UICamComp[7]) do
                     local UIRoot = ComponentService.HasComponent(Object, "UIRoot")
+                    if UIRoot and not UIRoot.Enabled then
+                        continue
+                    end
                     if
                         UIRoot.MouseButton:GetListenerCount() > 0 and (UIRoot.Hovering and UIRoot:ContainsPoint(x, y))
                     then
@@ -174,6 +177,7 @@ local Methods = {
             local Top = table.remove(Stack)
 
             local OwnTransform = Top:GetComponent("UIRoot")
+
             local OwnIndex = OwnTransform and OwnTransform.EffectiveZIndex
             local ParentClipDepth = OwnTransform and OwnTransform.__ClipDepth or 0
 
@@ -187,7 +191,7 @@ local Methods = {
             for _, Child in Top.Ancestry:IterChildren() do
                 local UIRoot = Child:GetComponent("UIRoot")
 
-                if UIRoot and UIRoot.__HasUIElement then
+                if UIRoot and UIRoot.__HasUIElement and UIRoot.Enabled then
                     if ToClip or ParentClipDepth > 0 then
                         local ClipDepth = ParentClipDepth
                         UIRoot.__ClipDepth = ClipDepth

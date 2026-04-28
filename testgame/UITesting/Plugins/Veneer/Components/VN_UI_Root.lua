@@ -66,7 +66,8 @@ local Pointers = {
     __ClipDepth = 14,
     __HasLayoutElement = 15,
     TransformMatrix = 16,
-    __PixelPerfectScale = 17
+    __PixelPerfectScale = 17,
+    Enabled = 18
     -- Matrix:getScale() has precision loss when rotated, so, we keep our pixel perfect scale separate
 }
 
@@ -301,6 +302,7 @@ local Mt = {
                 or Ptr == Pointers.__ClipDepth
                 or Ptr == Pointers.__HasUIElement
                 or Ptr == Pointers.__HasLayoutElement
+                or Ptr == Pointers.Enabled
             then
                 return self[Ptr]
             else
@@ -366,8 +368,8 @@ local Mt = {
                 elseif Cur and v then
                     AstralEngine.Error("CANNOT SET SEVERAL DRAWABLE ELEMENTS ONTO ONE UI ENTITY", "VENEER", 3)
                 end
-            elseif Val == Pointers.ZIndex then
-                self[Pointers.ZIndex] = v
+            elseif Val == Pointers.ZIndex or Val == Pointers.Enabled then
+                self[Val] = v
 
                 self:RequestChainRebuild()
             else
@@ -431,7 +433,8 @@ UIRoot.Metadata.__create = function(InputTransform, Ent)
         [Pointers.ClipDescendantInstances] = InputTransform and InputTransform.ClipDescendantInstances or false,
         [Pointers.__ClipDepth] = 0,
         [Pointers.TransformMatrix] = Mat4(),
-        [Pointers.__PixelPerfectScale] = Vec2()
+        [Pointers.__PixelPerfectScale] = Vec2(),
+        [Pointers.Enabled] = InputTransform.Enabled == nil and true or InputTransform.Enabled
     }
 
     Data.TransparentToStencil = InputTransform and InputTransform.TransparentToStencil or false

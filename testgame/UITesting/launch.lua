@@ -67,8 +67,8 @@ LayoutContainer.Parent = CameraEnt
 LayoutContainer:AddComponent("UICanvas", { Color = color.fromRGB(180, 180, 180) })
 local Comp = LayoutContainer:AddComponent("UIHorizontalLayout")
 Comp.ScalePadding = vec2(0.01, 0.01)
-Comp.AlignmentVertical = ENUM.UIAlignPosition.Top
-Comp.AlignmentHorizontal = ENUM.UIAlignPosition.Right
+Comp.AlignmentVertical = ENUM.UIAlignPosition.Center
+Comp.AlignmentHorizontal = ENUM.UIAlignPosition.Center
 
 local Map = AssetService.AssetMapFromPath("./Assetmap.lua")
 
@@ -90,11 +90,16 @@ local s = {
     0.2,
 }
 
-for i = 1, 5 do
+local Max = 12
+for i = 1, Max do
+    local j = (i + Max) % 5 + 1
     local Object = AssetService.LoadAssetMap(Map).ROOT
-    Object.UICanvas.Color = c[i]
+    Object.UICanvas.Color = c[j]
     local CurSize = Object.UIRoot.ScaleSize
-    Object.UIRoot.ScaleSize = vec2(s[i], CurSize.y)
+    local _, C = Object.Ancestry:FindFirstChildWithComponent("UIText")
+    C.Text = Max - i + 1
+    Object.UIRoot.ScaleSize = vec2(s[j], CurSize.y)
+    rawset(Object.UIRoot, "LayoutOrder", i)
     Object.Parent = LayoutContainer
     TextFrames[i] = Object
 end
@@ -104,7 +109,7 @@ task.wait(1.5)
 print("WRAP")
 LayoutContainer.UIHorizontalLayout.WrapChildren = true
 
-task.wait(1.5)
+task.wait(100)
 
 TextFrames[3].UIRoot.OffsetSize = TextFrames[3].UIRoot.OffsetSize + vec2(0, 50)
 

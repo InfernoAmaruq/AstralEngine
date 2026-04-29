@@ -55,7 +55,6 @@ if not ok then
 end
 
 local Sigma = CameraEnt
-local Streng = ("Hello {Sigma}"):interpolate()
 
 local LayoutContainer = EntityService.New("LayoutContainer")
 LayoutContainer:AddComponent("Ancestry")
@@ -65,7 +64,7 @@ LCRoot.ScalePosition = vec2(0.5, 0.5)
 LCRoot.AnchorPoint = vec2(0.5, 0.5)
 LayoutContainer.Parent = CameraEnt
 LayoutContainer:AddComponent("UICanvas", { Color = color.fromRGB(180, 180, 180) })
-local Comp = LayoutContainer:AddComponent("UIHorizontalLayout")
+local Comp = LayoutContainer:AddComponent("UIVerticalLayout")
 Comp.ScalePadding = vec2(0.01, 0.01)
 Comp.AlignmentVertical = ENUM.UIAlignPosition.Center
 Comp.AlignmentHorizontal = ENUM.UIAlignPosition.Center
@@ -90,7 +89,7 @@ local s = {
     0.2,
 }
 
-local Max = 12
+local Max = 5
 for i = 1, Max do
     local j = (i + Max) % 5 + 1
     local Object = AssetService.LoadAssetMap(Map).ROOT
@@ -99,15 +98,21 @@ for i = 1, Max do
     local _, C = Object.Ancestry:FindFirstChildWithComponent("UIText")
     C.Text = Max - i + 1
     Object.UIRoot.ScaleSize = vec2(s[j], CurSize.y)
-    rawset(Object.UIRoot, "LayoutOrder", i)
+    Object.UIRoot.LayoutOrder = i
     Object.Parent = LayoutContainer
     TextFrames[i] = Object
 end
 
 task.wait(1.5)
 
+task.wait(1.5)
+
 print("WRAP")
-LayoutContainer.UIHorizontalLayout.WrapChildren = true
+LayoutContainer.UIVerticalLayout.WrapChildren = true
+
+task.wait(1)
+print("KILL")
+LayoutContainer:RemoveComponent("UIVerticalLayout")
 
 task.wait(100)
 
@@ -120,7 +125,7 @@ local t = debug.cpuclock()
 LayoutContainer.UIRoot.ClipDescendantInstances = true
 print(debug.cpuclock() - t)
 
-print(LayoutContainer.UIHorizontalLayout, LayoutContainer.UIHorizontalLayout:RebuildChildren())
+print(LayoutContainer.UIVerticalLayout, LayoutContainer.UIVerticalLayout:RebuildChildren())
 print("////TEST2")
 
 local C1 = EntityService.New("C1")

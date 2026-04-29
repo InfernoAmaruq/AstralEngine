@@ -67,7 +67,8 @@ local Pointers = {
     __HasLayoutElement = 15,
     TransformMatrix = 16,
     __PixelPerfectScale = 17,
-    Enabled = 18
+    Enabled = 18,
+    LayoutOrder = 19
     -- Matrix:getScale() has precision loss when rotated, so, we keep our pixel perfect scale separate
 }
 
@@ -303,6 +304,7 @@ local Mt = {
                 or Ptr == Pointers.__HasUIElement
                 or Ptr == Pointers.__HasLayoutElement
                 or Ptr == Pointers.Enabled
+                or Ptr == Pointers.LayoutOrder
             then
                 return self[Ptr]
             else
@@ -327,6 +329,19 @@ local Mt = {
             elseif Val == Pointers.ClipDescendantInstances then
                 self[Val] = v
                 self:RequestChainRebuild()
+            elseif Val == Pointers.LayoutOrder then
+                self[Val] = v
+                local Ancestry = AstralEngine.Assert(
+                    Component.HasComponent(self[Pointers.Owner], "Ancestry"),
+                    "NO ANCESTRY AVAILABLE! CANNOT REBUILD MATRIX",
+                    "VENEER"
+                )
+
+                local Parent = Ancestry.Parent
+                local ParentRoot = Parent and Parent:GetComponent("UIRoot")
+                if ParentRoot and ParentRoot.__HasLayoutElement then
+                    self:RebuildMatrix()
+                end
             elseif Val == Pointers.__HasLayoutElement then
                 local Cur = self[Pointers.__HasLayoutElement]
 
@@ -434,7 +449,8 @@ UIRoot.Metadata.__create = function(InputTransform, Ent)
         [Pointers.__ClipDepth] = 0,
         [Pointers.TransformMatrix] = Mat4(),
         [Pointers.__PixelPerfectScale] = Vec2(),
-        [Pointers.Enabled] = InputTransform.Enabled == nil and true or InputTransform.Enabled
+        [Pointers.Enabled] = InputTransform and ( InputTransform.Enabled == nil and true or InputTransform.Enabled ) or true,
+        [Pointers.LayoutOrder] = InputTransform and InputTransform.LayoutOrder or 0
     }
 
     Data.TransparentToStencil = InputTransform and InputTransform.TransparentToStencil or false

@@ -103,8 +103,6 @@ local function RebuildChildren(self)
                     Count = CurChild,
                 }
 
-                print(Layers[WrapCount].From, Layers[WrapCount].Count)
-
                 TopChild = CurChild + TopChild
                 TotalHeight = TotalHeight + MaxLocalHeight
                 MaxLocalHeight = 0
@@ -186,80 +184,6 @@ local function RebuildChildren(self)
 
         WrapOffset = WrapOffset + LayerData.Height + Spacing.y
     end
-
-    --[[local NChildren = #TempTable
-
-    TotalWidth = TotalWidth + ((NChildren - 1) * Spacing.x)
-
-    local StartY
-    local StartX
-    if HAlign == LayoutEnum.Left then
-        StartX = OwnPosition.x - OwnSize.x / 2
-    elseif HAlign == LayoutEnum.Right then
-        StartX = OwnPosition.x + OwnSize.x / 2 - TotalWidth
-    else
-        StartX = OwnPosition.x - TotalWidth / 2
-    end
-
-    if VAlign == LayoutEnum.Top then
-    elseif VAlign == LayoutEnum.Center then
-    else
-    end
-
-    -- wrapping math
-    local Wraps = self[Index.WrapChildren] and math.ceil(math.max(1, TotalWidth / OwnSize.x)) or 1
-    local CurWrap = 1
-    local WrapCounter = 0
-    local WrapAt = OwnSize.x
-
-    local LargestY = -math.huge
-    local WrapOffset = 0
-
-    -- start
-    local CurrentX = StartX
-    for i = NChildren, 1, -1 do
-        local ChildRoot = TempTable[i]
-        TempTable[i] = nil
-        local ChildMat = ChildRoot[1]
-        local P = vec2(ChildMat:getPosition())
-        local S = vec2(ChildMat:getScale())
-        -- now decode euler angle we decoded previously
-        local Q = quat():setEuler(0, 0, ChildMat[4])
-
-        if Wraps > 1 then
-            if S.y > LargestY then
-                LargestY = S.y
-            end
-
-            WrapCounter = WrapCounter + S.x
-            if WrapCounter >= WrapAt then
-                WrapOffset = WrapOffset + LargestY
-                LargestY = 0
-                WrapCounter = 0
-                CurrentX = StartX
-            end
-        end
-
-        local ChildX = CurrentX + S.x / 2
-        local ChildY
-
-        if VAlign == LayoutEnum.Top then
-            ChildY = -OwnSize.y / 2 + S.y / 2 + WrapOffset
-        elseif VAlign == LayoutEnum.Center then
-            ChildY = WrapOffset / 2
-            print("MUST SHIFT HALF UP PREV LAYER, MUST PRECOMPUTE TOTAL Y")
-            print("WRAPPING")
-        else
-            ChildY = OwnSize.y / 2 - S.y / 2 - WrapOffset
-        end
-
-        P.x = ChildX
-        P.y = ChildY + OwnPosition.y
-
-        ChildRoot:RebuildMatrix(P, S, Q, vec2())
-
-        CurrentX = CurrentX + S.x + Spacing.x
-    end]]
 
     rawset(self, ".RebuildInProgress", nil)
 end

@@ -64,10 +64,12 @@ LCRoot.ScalePosition = vec2(0.5, 0.5)
 LCRoot.AnchorPoint = vec2(0.5, 0.5)
 LayoutContainer.Parent = CameraEnt
 LayoutContainer:AddComponent("UICanvas", { Color = color.fromRGB(180, 180, 180) })
-local Comp = LayoutContainer:AddComponent("UIVerticalLayout")
+local Comp = LayoutContainer:AddComponent("UIGridLayout")
 Comp.ScalePadding = vec2(0.01, 0.01)
 Comp.AlignmentVertical = ENUM.UIAlignPosition.Center
 Comp.AlignmentHorizontal = ENUM.UIAlignPosition.Center
+
+Comp.OffsetCellSize = vec2(100, 100)
 
 local Map = AssetService.AssetMapFromPath("./Assetmap.lua")
 
@@ -89,7 +91,7 @@ local s = {
     0.2,
 }
 
-local Max = 5
+local Max = 6
 for i = 1, Max do
     local j = (i + Max) % 5 + 1
     local Object = AssetService.LoadAssetMap(Map).ROOT
@@ -108,11 +110,11 @@ task.wait(1.5)
 task.wait(1.5)
 
 print("WRAP")
-LayoutContainer.UIVerticalLayout.WrapChildren = true
+LayoutContainer.UIGridLayout.WrapChildren = true
 
 task.wait(1)
 print("KILL")
-LayoutContainer:RemoveComponent("UIVerticalLayout")
+LayoutContainer:RemoveComponent("UIGridLayout")
 
 task.wait(100)
 
@@ -125,7 +127,7 @@ local t = debug.cpuclock()
 LayoutContainer.UIRoot.ClipDescendantInstances = true
 print(debug.cpuclock() - t)
 
-print(LayoutContainer.UIVerticalLayout, LayoutContainer.UIVerticalLayout:RebuildChildren())
+print(LayoutContainer.UIGridLayout, LayoutContainer.UIGridLayout:RebuildChildren())
 print("////TEST2")
 
 local C1 = EntityService.New("C1")

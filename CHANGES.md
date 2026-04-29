@@ -160,6 +160,7 @@ dev
 - Fix issue with `Shape:containsPoint`.
 - Fix `Collider:moveKinematic` when called on a kinematic collider.
 - Fix fixed foveated rendering on Quest 3.
+- Fix `lovr.math.randomNormal` returning incorrect results after reseeding.
 
 ### Deprecate
 

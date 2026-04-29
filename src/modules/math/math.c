@@ -346,6 +346,7 @@ void lovrRandomGeneratorSetSeed(RandomGenerator* generator, Seed seed) {
   } while (seed.b64 == 0);
 
   generator->state = seed;
+  generator->lastRandomNormal = HUGE_VAL;
 }
 
 void lovrRandomGeneratorGetState(RandomGenerator* generator, char* state, size_t length) {
@@ -360,6 +361,7 @@ int lovrRandomGeneratorSetState(RandomGenerator* generator, const char* state) {
     return 1;
   } else {
     generator->state = newState;
+    generator->lastRandomNormal = HUGE_VAL;
     return 0;
   }
 }

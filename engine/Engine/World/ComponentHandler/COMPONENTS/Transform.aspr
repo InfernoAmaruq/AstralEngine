@@ -8,11 +8,13 @@ Transform.FastFetch = {
     "Orientation",
     "Rotation",
     "Matrix",
+    "Size",
 }
 Transform.Pattern = {
     Position = Vec3,
     Orientation = Quat,
     Rotation = Vec3,
+    Size = Vec3,
     Matrix = Mat4,
 }
 Transform.Metadata = {}
@@ -54,6 +56,7 @@ local IndexFields = {
     Orientation = 2,
     Matrix = 3,
     Rotation = 4,
+    Size = 5,
 }
 
 local BaseMethods = {
@@ -68,7 +71,7 @@ local function MTIndex(T, k)
     end
     local KEY = IndexFields[k]
     if KEY then
-        if KEY == 1 or KEY == 4 then
+        if KEY == 1 or KEY == 4 or KEY == 5 then
             return vec3(T[KEY])
         elseif KEY == 2 then
             return quat(T[KEY])

@@ -313,10 +313,17 @@ static int l_lovrPassSetViewPose(lua_State* L) {
   VectorType type;
   float* p = luax_tovector(L, 3, &type);
   if (p && type == V_MAT4) {
-    float matrix[16];
-    mat4_init(matrix, p);
+    float position[3], angle, ax, ay, az, orientation[4], matrix[16];
     bool inverted = lua_toboolean(L, 4);
+
+    // turn this to a scale-less matrix
+    mat4_getAngleAxis(p,&angle,&ax,&ay,&az);
+    quat_fromAngleAxis(orientation,angle,ax,ay,az);
+    mat4_getPosition(p,position);
+    mat4_fromPose(matrix,position,orientation);
+
     if (!inverted) mat4_invert(matrix);
+
     luax_assert(L, lovrPassSetViewMatrix(pass, view, matrix));
   } else {
     int index = 3;

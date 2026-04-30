@@ -137,6 +137,8 @@ function Renderer.AppendRenderTTP(Enum, Func)
     TYPETOPROCESS[Val] = Func
 end
 
+local GetMatrixPose = mat4().getPose
+
 @macro<L,!USEBRACK>{SETPASSPARAMS(&PV) =
         &PV:reset()
         &PV:setViewPose(1, MATRIX)
@@ -179,6 +181,8 @@ function Renderer.DrawSolid()
 
     local HalfH = H / 2
     local HalfW = W / 2
+
+    local GetMatrixPose = GetMatrixPose
 
     for cind = 1, #Cams do
         local e = Cams[cind]

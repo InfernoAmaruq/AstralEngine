@@ -8,13 +8,13 @@ Transform.FastFetch = {
     "Orientation",
     "Rotation",
     "Matrix",
-    "Size",
+    "Scale",
 }
 Transform.Pattern = {
     Position = Vec3,
     Orientation = Quat,
     Rotation = Vec3,
-    Size = Vec3,
+    Scale = Vec3,
     Matrix = Mat4,
 }
 Transform.Metadata = {}
@@ -29,15 +29,15 @@ local function GetOrientation(Comp)
 end
 
 local function GetMatrix(Comp)
-    Comp[3]:set(Comp[1], Comp[2])
+    Comp[3]:set(Comp[1], Comp[5], Comp[2])
     return Comp[3]
 end
 
 local function FromPose(T, x, y, z, a, ax, ay, az)
-    local P, O, M, R = T[1], T[2], T[3], T[4]
+    local P, O, M, R, S = T[1], T[2], T[3], T[4], T[5]
     P:set(x, y, z)
     O:set(a, ax, ay, az)
-    M:set(P, O)
+    M:set(P, S, O)
     local ex, ey, ez = O:getEuler()
     R:set(ex, ey, ez)
 end
@@ -46,7 +46,6 @@ local function GetVector(self, Type)
     local V = Type == "UpVector" and vec3.up or (Type == "RightVector" and vec3.right) or vec3.forward
 
     return (self[2] * V):normalize()
-    -- quat * vector normalized
 end
 
 -- meta stuff
@@ -56,7 +55,7 @@ local IndexFields = {
     Orientation = 2,
     Matrix = 3,
     Rotation = 4,
-    Size = 5,
+    Scale = 5,
 }
 
 local BaseMethods = {

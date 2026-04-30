@@ -91,7 +91,7 @@ local s = {
     0.2,
 }
 
-local Max = 6
+local Max = 14
 for i = 1, Max do
     local j = (i + Max) % 5 + 1
     local Object = AssetService.LoadAssetMap(Map).ROOT
@@ -110,6 +110,7 @@ task.wait(1.5)
 task.wait(1.5)
 
 print("WRAP")
+LayoutContainer.UIGridLayout.FillDirection = ENUM.UIFillDirection.Vertical
 LayoutContainer.UIGridLayout.WrapChildren = true
 
 task.wait(1)

@@ -152,7 +152,10 @@ local LT = ENUM({
 local RT = ENUM({}, "RenderType", { CanAppend = true, Strict = true })
 
 for _, File in ipairs(lovr.filesystem.getAliasedFiles("RenderCalls")) do
-    loadfile(File)(Renderer)
+    local f = loadfile(File)(Renderer)
+    if f then
+        Renderer.Late[#Renderer.Late+1] = f
+    end
 end
 
 GetService.AddService("Renderer", Renderer)

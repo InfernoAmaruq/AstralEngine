@@ -104,7 +104,6 @@ lovr.mirror = nil
 lovr.draw = nil
 
 function lovr.run()
-    print("TEST STRING: %w+")
     if lovr.load then lovr.load() end
     collectgarbage("collect")
     _G.AstralEngine.__ENGINETHREAD = coroutine.running()

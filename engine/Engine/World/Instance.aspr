@@ -3,6 +3,9 @@ return function(Components)
 
     Instance.__type = "Entity"
     Instance.__ISINST = true
+    Instance.__pairs = function(self)
+        return next, Components.GetComponents(self), nil
+    end
 
     local INSTMETHODS = {}
 

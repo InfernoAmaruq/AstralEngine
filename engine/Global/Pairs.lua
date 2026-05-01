@@ -7,10 +7,10 @@ pairs = function(t)
     local mt = GetMt(t)
     local p = mt and mt.__pairs
     if p then
-        local t = type(p)
+        local Type = rtype(p)
 
-        if t == "table" then
-            return OgPairs(p)
+        if Type == "table" then
+            return OgPairs(t)
         else
             return p(t)
         end
@@ -23,9 +23,9 @@ ipairs = function(t)
     local mt = GetMt(t)
     local p = mt and mt.__ipairs
     if p then
-        local t = type(p)
+        local Type = rtype(p)
 
-        if t == "table" then
+        if Type == "table" then
             return OgPairs(p)
         else
             return p(t)

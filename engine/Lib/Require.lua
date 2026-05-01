@@ -174,24 +174,6 @@ local Methods = {
 
         local old = package.cpath
         if CurDir then
-            -- since LoadFile failed, we could be trying for a c lib
-            --[[local OSP = lovr.filesystem.getRealDirectory(CurPath)
-            local PhysPath = OSP .. "/" .. CurDir .. "/"
-            local TryPath = PhysPath .. Path .. package.clibtag
-            local List = DotFix(Path):split("/")
-            local Name = List[#List]
-            local Lib = package.loadlib(TryPath, "luaopen_" .. Name)
-            if Lib and type(Lib) == "function" then
-                local a, b, c, d, e = Lib()
-                package.loaded[Canon] = { a, b, c, d, e }
-                if _G.CONTEXT and NEXT_CONTEXTUAL then
-                    _G.CONTEXT:BindToContext("Require", package.loaded[Canon], Canon)
-                end
-                return true, a, b, c, d, e
-            end]]
-
-            -- nts: try all paths
-
             local Normalized = Normalize(CurDir .. "/" .. Path)
             local ToTry = {
                 Path,

@@ -3,7 +3,10 @@ return function(D, SIGNAL)
 
     UserKB.IsKeyDown = D.ISDOWN
 
-    local KBProxy = setmetatable({}, { __index = UserKB, __newindex = function() end, __metatable = false })
+    local KBProxy = setmetatable(
+        {},
+        { __index = UserKB, __newindex = function() end, __metatable = false, __pairs = UserKB }
+    )
 
     local DATA = {}
 

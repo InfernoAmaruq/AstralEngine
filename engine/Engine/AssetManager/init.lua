@@ -175,6 +175,7 @@ function AssetManager.GetDefaultFont() end
 -- UTIL
 function AssetManager.Alias() end
 
+local L
 GetService.AddService("AssetService", AssetManager)
 
 return AssetManager

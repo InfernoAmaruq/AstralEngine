@@ -129,6 +129,11 @@ function AssetMapLoader.AssetMapFromPath(Path)
         )
     else
         for i, Val in pairs(Res) do
+            AstralEngine.Assert(
+                type(i) == "number",
+                "INVALID KEY PROVIDED TO ASSET MAP: " .. tostring(i) .. " DID YOU MEAN TO DO RES[" .. i .. "]?",
+                "SCENEMANAGER"
+            )
             local RawId = i
             i = i & ID_MASK
             local Tag = RawId & TAG_MASK
@@ -298,7 +303,11 @@ function AssetMapLoader.LoadAssetMap(Map)
         ENTITIES[Val.Map] = ENTITIES[Val.Map] or {}
 
         ENTITIES[Val.Map][Val.Idx] = {
-            ENT = AstralEngine.Assert(Ent, ("Entity creation failed for entity: " .. Val.Name), "SCENEMANAGER"),
+            ENT = AstralEngine.Assert(
+                Ent,
+                ("Entity creation failed for entity: " .. (Val.Name or "<UNNAMED>")),
+                "SCENEMANAGER"
+            ),
             VAL = Val,
         }
 

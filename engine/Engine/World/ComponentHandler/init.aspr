@@ -31,6 +31,10 @@ function Component.NewComponent(Name, Pattern, Metadata, FastFetch)
     end
 end
 
+function Component.GetName(Comp)
+    return getmetatable(Comp).__CName
+end
+
 @execute<UNSAFE>{ -- so, it used to be solobj, then astralobj, then engineobj... its a fuckin mess dude with all the renaming, so i just make it a flag!
     local NAME = type.EngineObj
     return "@flag:TYPE='"..NAME.."';"

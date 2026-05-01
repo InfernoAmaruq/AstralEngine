@@ -5,8 +5,15 @@ local GetMt = debug.getmetatable
 
 pairs = function(t)
     local mt = GetMt(t)
-    if mt and mt.__pairs then
-        return mt.__pairs(t)
+    local p = mt and mt.__pairs
+    if p then
+        local t = type(p)
+
+        if t == "table" then
+            return OgPairs(p)
+        else
+            return p(t)
+        end
     else
         return OgPairs(t)
     end
@@ -14,8 +21,15 @@ end
 
 ipairs = function(t)
     local mt = GetMt(t)
-    if mt and mt.__ipairs then
-        return mt.__ipairs(t)
+    local p = mt and mt.__ipairs
+    if p then
+        local t = type(p)
+
+        if t == "table" then
+            return OgPairs(p)
+        else
+            return p(t)
+        end
     else
         return OgPairs(t)
     end

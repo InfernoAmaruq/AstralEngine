@@ -101,7 +101,7 @@ local SHAREDT = {
         self.ColRef:moveKinematic(Pos,Quat,dt)
     end,
 
-    OnDrawComponentResize = function(self,v)
+    OnObjectResize = function(self,v)
         if self.OnResize then
             self:OnResize(v)
         end
@@ -243,7 +243,7 @@ function mt.__create(DATA, e)
     local InheritanceMethod = DATA.InheritanceMethod or INHM.Root
 
     local Shapes = DATA.Shapes or {DATA.Shape or Physics.Shapes.NewShape(ENUM.ColliderShape.Box)}
-    local Size = DATA.Size or Physics.GetObjSize(e)
+    local Size = Transform.Scale
 
     if InheritanceMethod.RawValue & INHM.Root.RawValue ~= 0 then
         Shapes[1]:SetSize(Size)

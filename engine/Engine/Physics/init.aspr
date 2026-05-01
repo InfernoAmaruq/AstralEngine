@@ -127,23 +127,6 @@ function Physics.DestroyWorld(WorldEntity, KillEntity, FromComp)
     end
 end
 
-local StoredComponents = {
-    --[COMPONENTNAME] = SIZEFIELD
-}
-
-function Physics.BindSizeComponent(ComponentName, Field)
-    StoredComponents[ComponentName] = Field
-end
-
-function Physics.GetObjSize(e)
-    for i, v in pairs(Component.SetComponents[e]) do
-        if StoredComponents[i] then
-            return v[StoredComponents[i]]
-        end
-    end
-    return nil
-end
-
 local FF_GetPose, FF_FromPose, CC_SetPose, CC_SetVel, CC_SetAngVel
 
 local FieldToFlag = {

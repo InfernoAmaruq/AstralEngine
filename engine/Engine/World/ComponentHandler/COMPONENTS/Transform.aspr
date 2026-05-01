@@ -98,6 +98,11 @@ local function MTNewIndex(Ret, k, v)
 
     if k == "Rotation" then
         GetOrientation(Ret)
+    elseif k == "Scale" then
+        local c = Component.HasComponent(self[9], "Collider")
+        if c then
+            c:OnObjectResize(self[5])
+        end
     elseif k == "Orientation" then
         Ret[4]:set(Ret[3]:getEuler())
     end

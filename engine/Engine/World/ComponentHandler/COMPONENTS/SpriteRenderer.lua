@@ -112,10 +112,6 @@ SpriteRenderer.Metadata.__remove = function(_,e)
     end
 end
 
-SpriteRenderer.FinalProcessing = function()
-   GetService"Physics".BindSizeComponent("SpriteRenderer",2)
-end
-
 SpriteRenderer.Metadata.SoftDependency = {
     Transform = true
 }

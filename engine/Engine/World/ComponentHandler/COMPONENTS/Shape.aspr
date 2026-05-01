@@ -142,8 +142,4 @@ Shape.Metadata.SoftDependency = {
     Transform = true
 }
 
-Shape.FinalProcessing = function()
-    GetService"Physics".BindSizeComponent("Shape","Size")
-end
-
 return Shape

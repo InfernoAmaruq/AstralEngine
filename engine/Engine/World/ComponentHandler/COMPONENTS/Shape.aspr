@@ -13,7 +13,7 @@ local E = ENUM({
 
 local P_SetColor, P_Box, P_Sphere, P_Capsule, P_Plane, P_Cylinder
 do
-    local TMPPASS = AstralEngine.Graphics.NewRawPass() -- inside a DO block for GC
+    local TMPPASS = AstralEngine.Graphics.NewRawPass()
     P_SetColor = TMPPASS.setColor
     P_Box = TMPPASS.box
     P_Sphere = TMPPASS.sphere
@@ -25,33 +25,33 @@ end
 local Processors = {
     [E.Box.Value] = function(p, _, c)
         local comp = c.Shape
-        P_SetColor(p,comp[4],comp[5],comp[6],comp[7])
+        P_SetColor(p,comp[3],comp[4],comp[5],comp[6])
         local t = c.Transform
-        P_Box(p,t[1], comp[2], t[2])
+        P_Box(p,t[3])
     end,
     [E.Sphere.Value] = function(p, _, c)
         local comp = c.Shape
-        P_SetColor(p,comp[4],comp[5],comp[6],comp[7])
+        P_SetColor(p,comp[3],comp[4],comp[5],comp[6])
         local t = c.Transform
-        P_Sphere(p,t[1], comp[2] ,t[2])
+        P_Sphere(p,t[3])
     end,
     [E.Capsule.Value] = function(p, _, c)
         local comp = c.Shape
-        P_SetColor(p,comp[4],comp[5],comp[6],comp[7])
+        P_SetColor(p,comp[3],comp[4],comp[5],comp[6])
         local t = c.Transform
-        P_Capsule(p,t[1],comp[2].x,comp[2].y,t[2])
+        P_Capsule(p,t[3])
     end,
     [E.Plane.Value] = function(p, _, c)
         local comp = c.Shape
-        P_SetColor(p,comp[4],comp[5],comp[6],comp[7])
+        P_SetColor(p,comp[3],comp[4],comp[5],comp[6])
         local t = c.Transform
-        P_Plane(p,t[1],comp[2].xy,t[2])
+        P_Plane(p,t[3])
     end,
     [E.Cylinder.Value] = function(p,_,c)
         local comp = c.Shape
-        P_SetColor(p,comp[4],comp[5],comp[6],comp[7])
+        P_SetColor(p,comp[3],comp[4],comp[5],comp[6])
         local t = c.Transform
-        P_Cylinder(p,t[1],comp[2].x,comp[2].y,t[2])
+        P_Cylinder(p,t[3])
     end
 }
 
@@ -68,22 +68,17 @@ for i, v in pairs(E) do
     Render.AppendRenderTTP(REnum[i], Processors[v.Value])
 end
 
-@macro<L,!USEBRACK>:WRITECOLOR(&C) = Comp[4], Comp[5], Comp[6], Comp[7] = color.unpack(&C);
+@macro<L,!USEBRACK>:WRITECOLOR(&C) = Comp[3], Comp[4], Comp[5], Comp[6] = color.unpack(&C);
 
 local IdxFields = {
     Shape = 1,
-    Size = 2,
-    Color = 3,
+    Color = 2,
 }
 
 
 local MT = {
     __index = function(self,k)
-        if k == "Size" then
-            return vec3(self[IdxFields.Size])
-        elseif k == "Shape" or k == "Color" then
-            return self[IdxFields[k]]
-        end
+        return self[IdxFields[k]]
     end,
     __newindex = function(Comp, k, v)
         local RT = Comp.__RenderTypePtr
@@ -92,18 +87,12 @@ local MT = {
                 "Attempt to set 'Shape' field of component " .. tostring(Comp) .. ": " .. debug.getaddress(Comp) .. " to non-enum")
             Comp[IdxFields.Shape] = v
             RT.__RenderType = v.RawValue
-        elseif k == "Size" then
-            local ColComp = Component.HasComponent(Comp.__Ent,"Collider")
-            Comp[2]:set(v)
-            if ColComp then
-                ColComp:OnDrawComponentResize(v)
-            end
         elseif k == "Color" then
             assert(color.validate(v), v .. " IS NOT A VALID COLOR")
-            local OldAlpha = Comp[7]
+            local OldAlpha = Comp[6]
             WRITECOLOR(v)
             Comp[IdxFields.Color] = v
-            local nc = Comp[7]
+            local nc = Comp[6]
             if OldAlpha ~= nc then
                 RT[".SwapStacks"](RT,nc == 1)
             end
@@ -114,8 +103,6 @@ local MT = {
 Shape.Metadata = {}
 Shape.Metadata.__create = function(DATA, e, ShouldSink)
     AstralEngine.Assert(not Component.HasComponent(e,"RenderTarget"), "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!")
-    local Size = Vec3(DATA.Size or 1)
-
     local ShapeEnum = (DATA.Shape or E.Box)
     local S = ShapeEnum.RawValue
 
@@ -132,7 +119,6 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
 
     local Comp = {
         [IdxFields.Shape] = Shape,
-        [IdxFields.Size] = Size,
         [IdxFields.Color] = Color
     }
 

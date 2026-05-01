@@ -140,7 +140,11 @@ Transform.Metadata.__create = function(DATA, Entity)
             continue
         end
         if IndexFields[i] then
-            Ret[IndexFields[i]] = type(v) == "function" and v() or v
+            if i == "Scale" then
+                Ret[IndexFields[i]] = Vec3(1, 1, 1)
+            else
+                Ret[IndexFields[i]] = type(v) == "function" and v() or v
+            end
         end
     end
 

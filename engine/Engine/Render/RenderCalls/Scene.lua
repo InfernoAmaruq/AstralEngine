@@ -137,8 +137,6 @@ function Renderer.AppendRenderTTP(Enum, Func)
     TYPETOPROCESS[Val] = Func
 end
 
-local GetMatrixPose = mat4().getPose
-
 @macro<L,!USEBRACK>{SETPASSPARAMS(&PV) =
         &PV:reset()
         &PV:setViewPose(1, MATRIX)

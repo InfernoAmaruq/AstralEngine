@@ -32,7 +32,7 @@ end
 
 local REnum = ENUM.RenderType
 local Top = REnum:GetTop()
-REnum.__Append("SpriteRenderer", Top)
+REnum.__Append("SpriteRenderer", Top + 1)
 REND.AppendRenderTTP(REnum["SpriteRenderer"], ProcessorFunc)
 
 local SRMT = {

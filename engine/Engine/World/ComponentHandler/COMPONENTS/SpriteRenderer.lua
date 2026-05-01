@@ -6,14 +6,15 @@ local SpriteRenderer = {}
 local NULL_BUFFER = lovr.graphics.newBuffer("i32x4",{-1,-1,-1,-1})
 local ProcessorFunc = function(p, _, c)
     local SR = c.SpriteRenderer
-    if not SR[1] then
+    local Img = SR[1]
+    if not Img then
         return
     end
     p:push('state')
     p:setColor(SR[3],SR[4],SR[5],SR[6])
     local TRANSFORM = c.Transform
-    if rawget(SR[1],2) then
-        p:send("AtlasData",SR[1][2])
+    if rawget(Img,2) then
+        p:send("AtlasData",Img[2])
     else
         p:send("AtlasData",NULL_BUFFER)
     end
@@ -22,10 +23,10 @@ local ProcessorFunc = function(p, _, c)
     if Sampler then p:setSampler"nearest" end
 
     if SR[8] then
-        p:draw(SR[1][1] or SR[1], TRANSFORM[1], SR[2], TRANSFORM[2])
+        p:draw(Img[1] or Img, TRANSFORM[3])
     else
-        p:setMaterial(SR[1][1] or SR[1])
-        p:plane(TRANSFORM[1], SR[2], TRANSFORM[2])
+        p:setMaterial(Img[1] or Img)
+        p:plane(TRANSFORM[3])
     end
     p:pop('state')
 end
@@ -92,7 +93,7 @@ SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
     local RawVec = DATA.Size or vec2(1,1)
     local RealSize = Vec3(RawVec.x,RawVec.y,1e-7) -- make Z incredibly thin so collider can read from it
 
-    local RT = COMP.AddComponent(Entity, "RenderTarget", { Value = Top, Solid = false })
+    local RT = COMP.AddComponent(Entity, "RenderTarget", { Value = Top + 1, Solid = false })
     if not COMP.HasComponent(Entity, "Transform") and not ShouldSink then
         COMP.AddComponent(Entity, "Transform")
     end

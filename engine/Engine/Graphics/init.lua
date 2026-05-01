@@ -78,7 +78,6 @@ AstralEngine.Graphics = {
     NewTexture = lovr.graphics.newTexture,
     NewPass = lovr.graphics.newPass,
     NewTilemap = Tilemap.New,
-    Balls = function() end,
 }
 
 function AstralEngine.Window.__WindowResizedPasses(...)

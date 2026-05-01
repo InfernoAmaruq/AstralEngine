@@ -9,6 +9,15 @@ local function GetPath(Path, Stack)
     return NormalizePath(lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath(3 + (Stack or 0))) .. Path)
 end
 
+local function FNV1A32(Str)
+    local Hash = 0x811c9dc5
+    for i = 1, #Str do
+        Hash = (Hash ^^ string.byte(Str, i)) * 0x01000193
+        Hash = Hash & 0xFFFFFFFF
+    end
+    return string.format("%08x", Hash)
+end
+
 local AssetManager = {}
 
 local TypeEnum = ENUM({
@@ -20,6 +29,7 @@ local TypeEnum = ENUM({
     Sound = 6,
     Source = 7,
     RawBlob = 8,
+    Material = 9,
 }, "AssetType")
 
 -- All offspin values are mutable and allocated individually
@@ -117,7 +127,7 @@ local function GetRawImageData(ImagePath)
                 CTX = _G.CONTEXT and _G.CONTEXT.Gen or 0,
             }
 
-            Cache[TypeEnum.ImageData][ImagePath] = Table
+            Cache[TypeEnum.ImageData][FNV1A32(ImagePath)] = Table
             return Table
         end
     end
@@ -153,7 +163,94 @@ function AssetManager.NewTexture(Path, Options)
     end
 end
 
-function AssetManager.NewMaterial() end
+local MaterialKeyArray = {
+    "Color",
+    "Glow",
+    "UvShift",
+    "UvScale",
+    "Metalness",
+    "Roughness",
+    "Clearcoat",
+    "ClearcoatRoughness",
+    "OcclusionStrength",
+    "NormalScale",
+    "AlphaCutoff",
+    "Texture",
+    "GlowTexture",
+    "MetalnessTexture",
+    "RoughnessTexture",
+    "ClearcoatTexture",
+    "OcclusionTexture",
+    "NormalTexture",
+}
+
+function AssetManager.NewMaterial(Input)
+    -- tokenize
+    local Str = ""
+
+    local InputProcessed = {}
+
+    for i, v in pairs(Input) do
+        if i == "Color" or i == "Glow" then
+            local r, g, b, a
+
+            local t = rtype(v)
+            if t == "table" then
+                r, g, b, a = unpack(t)
+            else
+                r, g, b, a = v:unpack()
+            end
+
+            InputProcessed[i] = { r, g, b, a }
+        elseif i == "UvShift" or i == "UvScale" then
+            local x, y
+
+            local t = rtype(v)
+            if t == "table" then
+                x, y = unpack(t)
+            elseif t == "number" then
+                x = v
+                y = v
+            else
+                x, y = v:unpack()
+            end
+
+            InputProcessed[i] = { x, y }
+        elseif i:match("[%w_]*[Tt]exture[%w_]*") then
+            local t = AssetManager.NewTexture(v)
+            InputProcessed[i] = t and t[1] or nil -- NewTexture gives wrapped texture, we need unwrapped
+        else
+            InputProcessed[i] = v
+        end
+    end
+
+    for _, Field in ipairs(MaterialKeyArray) do
+        local Lower = Field:sub(1, 1):lower() .. Field:sub(2)
+        local Val = InputProcessed[Field]
+
+        InputProcessed[Field] = nil
+        InputProcessed[Lower] = Val -- lovr likes camelCase, i like pascalCase
+
+        local SubStr = "[" .. Field .. "]="
+        local Type = rtype(Val)
+
+        if Type == "number" then
+            SubStr = SubStr .. tostring(Val) .. ";"
+        elseif Type == "table" then
+            local Len = #Val
+            for i, TableValue in ipairs(Val) do -- always array, always number
+                SubStr = SubStr .. tostring(TableValue) .. (i == Len and ";" or ",")
+            end
+        else
+            SubStr = SubStr .. debug.getaddress(Val) .. ";"
+        end
+
+        Str = Str .. SubStr
+    end
+
+    local Hashed = FNV1A32(Str)
+    print(Hashed)
+end
 
 function AssetManager.NewMesh() end
 
@@ -169,13 +266,11 @@ function AssetManager.LoadAsset() end
 function AssetManager.KillCachedAsset() end
 
 -- GETTERS
-
 function AssetManager.GetDefaultFont() end
 
 -- UTIL
 function AssetManager.Alias() end
 
-local L
 GetService.AddService("AssetService", AssetManager)
 
 return AssetManager

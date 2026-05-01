@@ -11,18 +11,18 @@ local ProcessorFunc = function(p, _, c)
         return
     end
     p:push('state')
-    p:setColor(SR[3],SR[4],SR[5],SR[6])
+    p:setColor(SR[2],SR[3],SR[4],SR[5])
     local TRANSFORM = c.Transform
     if rawget(Img,2) then
         p:send("AtlasData",Img[2])
     else
         p:send("AtlasData",NULL_BUFFER)
     end
-    local Sampler = SR[7]
+    local Sampler = SR[6]
 
     if Sampler then p:setSampler"nearest" end
 
-    if SR[8] then
+    if SR[7] then
         p:draw(Img[1] or Img, TRANSFORM[3])
     else
         p:setMaterial(Img[1] or Img)
@@ -40,33 +40,25 @@ local SRMT = {
     __index = function(self, k)
         if k == "Texture" then
             return self[1]
-        elseif k == "Size" then
-            return self[2].xy
         elseif k == "Color" then
             return self.__ClrVal
         elseif k == "UseNearest" then
-            return self[7]
+            return self[6]
         elseif k == "ScaleWithAspect" then
-            return self[8]
+            return self[7]
         end
     end,
     __newindex = function(SR, k, v)
         if k == "Texture" then
             rawset(SR, 1, v)
         elseif k == "UseNearest" then
-            SR[7] = v
-        elseif k == "Size" then
-            SR[2]:set(v.x,v.y,1e-7)
-            local ColComp = COMP.HasComponent(SR.__Ent,"Collider")
-            if ColComp then
-                ColComp:OnDrawComponentResize(vec3(SR[2]))
-            end
+            SR[6] = v
         elseif k == "Color" then
             assert(color.validate(v), v.." IS NOT A VALID COLOR")
             SR.__ClrVal = v
-            local OldAlpha = SR[6]
+            local OldAlpha = SR[5]
             WRITECOLOR(v)
-            local NewAlpha = SR[6]
+            local NewAlpha = SR[5]
             local RT = self.__RenderTypePtr
             if OldAlpha == 1 and NewAlpha < 1 then
                 RT[".ToStack"](RT,true)
@@ -74,12 +66,12 @@ local SRMT = {
                 RT[".FromStack"](RT,true)
             end
         elseif k == "ScaleWithAspect" then
-            SR[8] = v
+            SR[7] = v
         end
     end,
 }
 
-@macro<L,!USEBRACK>:WRITECOLOR(&C) = SR[3], SR[4], SR[5], SR[6] = color.unpack(&C);
+@macro<L,!USEBRACK>:WRITECOLOR(&C) = SR[2], SR[3], SR[4], SR[5] = color.unpack(&C);
 
 SpriteRenderer.Name = "SpriteRenderer"
 SpriteRenderer.Pattern = {}
@@ -90,8 +82,6 @@ SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
     local Image = DATA.Texture
 
     local SR = {}
-    local RawVec = DATA.Size or vec2(1,1)
-    local RealSize = Vec3(RawVec.x,RawVec.y,1e-7) -- make Z incredibly thin so collider can read from it
 
     local RT = COMP.AddComponent(Entity, "RenderTarget", { Value = Top + 1, Solid = false })
     if not COMP.HasComponent(Entity, "Transform") and not ShouldSink then
@@ -101,15 +91,14 @@ SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
     local Color = DATA.Color or color.fromRGBA(255,255,255,255)
     WRITECOLOR(Color)
 
-    if SR[6] == 1 then
+    if SR[5] == 1 then
         RT[".ToStack"](RT,true)
     end
 
     SR.__ClrVal = Color
-    SR[2] = RealSize
     SR[1] = Image
-    SR[7] = DATA.UseNearest or false
-    SR[8] = DATA.ScaleWithAspect or false
+    SR[6] = DATA.UseNearest or false
+    SR[7] = DATA.ScaleWithAspect or false
     SR.__Ent = Entity
     SR.__RenderTypePtr = RT
     setmetatable(SR, SRMT)

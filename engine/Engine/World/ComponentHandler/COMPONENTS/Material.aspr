@@ -5,13 +5,25 @@ Material.Name = "Material"
 Material.Metadata = {}
 
 local function ScaleToTexture(Vector, Mat)
-    local Color = Mat.Texture
-    if not Color then
+    if not Mat then
         return Vector
     end
-    local Scale = vec2(Color:GetDimensions())
+    local Scale = vec2(Mat:GetDimensions())
     return Vector / Scale
 end
+
+Comp.ComponentAdded:Connect(function(e, id, c)
+    local Mat = Comp.HasComponent(e, "Material")
+    if id == "RenderTarget" and Mat then
+        if Mat[1] then
+            c:SetMaterial(Mat[1])
+        else
+            local Alpha = Mat[7]
+            RT:RemoveFromStack()
+            RT:SwapStacks(Alpha == 1)
+        end
+    end
+end)
 
 local Mt = {
     __index = function(self, k)
@@ -29,7 +41,7 @@ local Mt = {
         if k == "Material" then
             local RT = Comp.HasComponent(self[10], "RenderTarget")
             self[9] = v
-            self[1] = v and v.__lmat
+            self[1] = v and v.__lmat or v[1] or v
 
             if RT then
                 RT:SetMaterial(self[1])
@@ -46,10 +58,13 @@ local Mt = {
             end
         elseif k == "UVOffset" then
             local Mat = self[9]
-            local Tex = Mat and Mat.Properties
-            if Tex then
-                v = ScaleToTexture(v, Tex)
+
+            if Mat.Properties then
+                Storage[3]:set(Storage[3], Mat.Properties.Texture)
+            elseif Mat then
+                Storage[3]:set(Storage[3], Mat[1] or Mat)
             end
+
             self[3]:set(v)
         elseif k == "UVScale" then
             self[2]:set(v)
@@ -62,21 +77,26 @@ Material.Metadata.__create = function(Data, Ent)
 
     local RT = Comp.HasComponent(Ent, "RenderTarget")
 
-    Storage[1] = Data and Data.Material and Data.Material.__lmat
+    local Mat = Data and Data.Material
+    Storage[1] = Mat and (Mat.__lmat or Mat[1] or Mat)
     Storage[2] = Data and Data.UVScale and Vec2(Data.UVScale) or Vec2(1, 1)
     Storage[3] = Data and Data.UVOffset and Vec2(Data.UVOffset) or Vec2(0, 0)
 
     local Color = Data and Data.Color or color.fromRGBA(255, 255, 255, 255)
     Storage[4], Storage[5], Storage[6], Storage[7] = Color:unpack()
     Storage[8] = Color
-    Storage[9] = Data and Data.Material
+    Storage[9] = Mat
     Storage[10] = Ent
 
-    Storage[3]:set(Storage[9] and ScaleToTexture(Storage[3], Storage[9].Properties) or Storage[3])
+    if Storage[9].Properties then
+        Storage[3]:set(Storage[3], Storage[9].Properties.Texture)
+    elseif Storage[9] then
+        Storage[3]:set(Storage[3], Storage[9][1] or Storage[9])
+    end
 
     if RT and Storage[1] then
         RT:SetMaterial(Storage[1])
-    else
+    elseif RT then
         local a = Storage[7]
         RT:SwapStacks(a == 1)
     end

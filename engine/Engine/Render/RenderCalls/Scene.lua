@@ -98,18 +98,36 @@ function Renderer.RemoveCamera(Entity)
 end
 
 -- stack
+local WeakMt = {__mode = "k"}
+local SolidStack, TransparentStack = {Material = setmetatable({},WeakMt)}, {Material = setmetatable({},WeakMt)}
 
-local SolidStack, TransparentStack = {}, {}
-
-function Renderer.AddToStack(Solid,Entity) -- number
+function Renderer.AddToStack(Solid,Entity,Material) -- number
     local Stack = Solid and SolidStack or TransparentStack
-    Stack[#Stack + 1] = Entity
+
+    if Material then
+        Stack.Material[Material] = Stack.Material[Material] or {}
+        Stack.Material[Material][#Stack.Material[Material]+1] = Entity
+    else
+        Stack[#Stack + 1] = Entity
+    end
+
 end
 
 function Renderer.RemoveFromStack(Entity, Bool) -- number
     if Bool ~= nil then
         local Stack = Bool and SolidStack or TransparentStack
         local Idx = table.find(Stack,Entity)
+
+        if not Idx then
+            for _,t in pairs(Stack.Material) do
+                local j = table.find(t,Entity)
+                if j then
+                    Idx = j
+                    Stack = t
+                end
+            end
+        end
+
         if not Idx then return end
         local Top = Stack[#Stack]
         Stack[Idx] = Top
@@ -118,6 +136,17 @@ function Renderer.RemoveFromStack(Entity, Bool) -- number
         for i = 1, 2 do
             local Stack = i == 1 and SolidStack or TransparentStack
             local Idx = table.find(Stack, Entity)
+
+            if not Idx then
+                for _,t in pairs(Stack.Material) do
+                    local j = table.find(t,Entity)
+                    if j then
+                        Idx = j
+                        Stack = t
+                    end
+                end
+            end
+
             if not Idx then continue end
             local Last = Stack[#Stack]
             Stack[Idx] = Last
@@ -149,10 +178,15 @@ end
         for eind = 1, #&STACK do
             local E = &STACK[eind]
             local RenT = RendStorage[E]
+            local Comp = SetComponents[E]
+            local Mat = Comp.Material
             if RenT[2] !&== CMASK then
                 continue
             end
-            local RETFLAG = TYPETOPROCESS[RenT[1]](&PASS, E, SetComponents[E])
+            if Mat then
+                &PASS:setColor(Mat[4],Mat[5],Mat[6],Mat[7])
+            end
+            local RETFLAG = TYPETOPROCESS[RenT[1]](&PASS, E, Comp)
             if not RETFLAG then continue end
             if RETFLAG &== &F_SHADER_RESET then
                 &PASS:setShader(MAINSHADER)
@@ -198,8 +232,16 @@ function Renderer.DrawSolid()
         SETPASSPARAMS(TransPass)
 
         SolidPass:send('Transparent',false)
+        SolidPass:push'state'
 
         PROCESSSTACK(SolidStack,SolidPass)
+
+        for LovrMat,t in pairs(SolidStack.Material) do
+            SolidPass:setMaterial(LovrMat)
+            PROCESSSTACK(t,SolidPass)
+        end
+
+        SolidPass:pop'state'
     end
 end
 
@@ -224,7 +266,14 @@ function Renderer.DrawTransparent()
         TransPass:setBlendMode(1,'add','premultiplied')
         TransPass:setBlendMode(2,'add','premultiplied')
         TransPass:send('Transparent', true)
+        TransPass:push('state')
         PROCESSSTACK(TransparentStack,TransPass)
+
+        for LovrMat,t in pairs(TransparentStack.Material) do
+            TransPass:setMaterial(LovrMat)
+            PROCESSSTACK(t,TransPass)
+        end
+        TransPass:pop('state')
     end
 end
 

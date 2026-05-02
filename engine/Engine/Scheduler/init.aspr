@@ -129,7 +129,10 @@ function Scheduler:Spawn(RAW, f, ...)
             _G.CONTEXT:BindToContext("Tasks",co)
         end
 
-        self.Routines[#self.Routines + 1] = co
+        local Exists = table.find(self.Routines,co)
+        if not Exists then
+            self.Routines[#self.Routines + 1] = co
+        end
     end
     return co, Status
 end
@@ -200,9 +203,13 @@ function Scheduler:Update()
         end
 
         if STATUS(Routine) == "dead" then
-            local _I = #r
-            r[i] = r[_I]
-            r[_I] = nil
+            local Top = #r
+            if Top == i then
+                r[i] = nil
+            else
+                r[i] = r[Top]
+                r[Top] = nil
+            end
             EQ[Routine] = nil; ResAt[Routine] = nil
             continue
         end

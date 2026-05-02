@@ -109,7 +109,7 @@ local function GetRawImageData(ImagePath)
     if not Image then
         Image = DeadCache[TypeEnum.ImageData][ImagePath]
         if Image then
-            Cache[TypeEnum.ImageData][ImagePath], DeadCache[TypeEnum.ImageData] = Image, nil
+            Cache[TypeEnum.ImageData][ImagePath], DeadCache[TypeEnum.ImageData][ImagePath] = Image, nil
             return Image
         end
     else
@@ -166,8 +166,8 @@ end
 local MaterialKeyArray = {
     "Color",
     "Glow",
-    "UvShift",
-    "UvScale",
+    "UVShift",
+    "UVScale",
     "Metalness",
     "Roughness",
     "Clearcoat",
@@ -184,7 +184,7 @@ local MaterialKeyArray = {
     "NormalTexture",
 }
 
-function AssetManager.NewMaterial(Input)
+local function ProcessMaterialInput(Input)
     -- tokenize
     local Str = ""
 
@@ -217,15 +217,18 @@ function AssetManager.NewMaterial(Input)
 
             InputProcessed[i] = { x, y }
         elseif i:match("[%w_]*[Tt]exture[%w_]*") then
-            local t = AssetManager.NewTexture(v)
-            InputProcessed[i] = t and t[1] or nil -- NewTexture gives wrapped texture, we need unwrapped
+            local ObjType = rtype(v)
+
+            local t = ObjType == "string" and AssetManager.NewTexture(v) or (v[1] or v)
+
+            InputProcessed[i] = t[1] or t -- NewTexture gives wrapped texture, we need unwrapped
         else
             InputProcessed[i] = v
         end
     end
 
     for _, Field in ipairs(MaterialKeyArray) do
-        local Lower = Field:sub(1, 1):lower() .. Field:sub(2)
+        local Lower = Field:sub(1, 2):lower() .. Field:sub(3)
         local Val = InputProcessed[Field]
 
         InputProcessed[Field] = nil
@@ -241,7 +244,7 @@ function AssetManager.NewMaterial(Input)
             for i, TableValue in ipairs(Val) do -- always array, always number
                 SubStr = SubStr .. tostring(TableValue) .. (i == Len and ";" or ",")
             end
-        else
+        elseif Val then
             SubStr = SubStr .. debug.getaddress(Val) .. ";"
         end
 
@@ -249,7 +252,34 @@ function AssetManager.NewMaterial(Input)
     end
 
     local Hashed = FNV1A32(Str)
-    print(Hashed)
+
+    return Hashed, InputProcessed
+end
+
+local MatMt = {__type = "Material",__newindex = function() AstralEngine.Error("MATERIALS ARE READ-ONLY","MATERIAL",2) end}
+
+function AssetManager.NewMaterial(Input)
+    local Hash, InputProcessed = ProcessMaterialInput(Input)
+
+    local Material = Cache[TypeEnum.Material][Hash]
+    if not Material then
+        Material = DeadCache[TypeEnum.Material][Hash]
+        if Material then
+            Cache[TypeEnum.Material][Hash], DeadCache[TypeEnum.Material][Hash] = Material, nil
+            return Material
+        end
+    else
+        return Material
+    end
+
+    local LovrMat = lovr.graphics.newMaterial(InputProcessed)
+
+    Material = setmetatable({
+        __lmat = LovrMat,
+        Properties = Input
+    },MatMt)
+
+    return Material
 end
 
 function AssetManager.NewMesh() end

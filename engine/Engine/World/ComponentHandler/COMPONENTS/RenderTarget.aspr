@@ -11,10 +11,34 @@ local FIELDS = {
     __RenderMask = 2,
 }
 
+local Methods = {
+    SwapStacks = function(self, bool)
+        Renderer.RemoveFromStack(self.__E)
+        Renderer.AddToStack(bool, self.__E)
+    end,
+    AddToStack = function(self, bool)
+        Renderer.AddToStack(bool, self.__E)
+    end,
+    RemoveFromStack = function(self, bool)
+        Renderer.RemoveFromStack(self.__E, bool)
+        Renderer.RemoveFromStack(self.__E, bool)
+    end,
+    SetMaterial = function(self, mat)
+        Renderer.RemoveFromStack(self.__E)
+        Renderer.RemoveFromStack(self.__E)
+
+        -- remove twice, fully
+        if mat then
+            Renderer.AddToStack(true, self.__E, mat)
+            Renderer.AddToStack(false, self.__E, mat)
+        end
+    end,
+}
+
 local mt = {
     __index = function(self, k)
         local v = FIELDS[k]
-        return self[v]
+        return Methods[k] or self[v]
     end,
     __newindex = function(self, k, v)
         if FIELDS[k] then
@@ -22,18 +46,6 @@ local mt = {
         end
     end,
 }
-
-local function SwapStacks(self, bool)
-    Renderer.RemoveFromStack(self.__E)
-    Renderer.AddToStack(bool, self.__E)
-end
-
-local function AddToStack(self, bool)
-    Renderer.AddToStack(bool, self.__E)
-end
-local function RemoveFromStack(self, bool)
-    SpriteRenderer.RemoveFromStack(self.__E, bool)
-end
 
 RendTarget.Metadata.__create = function(Type, Entity)
     Renderer.AddToStack(Type.Solid == nil and true or Type.Solid, Entity)
@@ -45,15 +57,13 @@ RendTarget.Metadata.__create = function(Type, Entity)
         [FIELDS.__RenderMask] = RM,
         [FIELDS.__RenderType] = RT,
         __E = Entity,
-        [".SwapStacks"] = SwapStacks,
-        [".ToStack"] = AddToStack,
-        [".FromStack"] = RemoveFromStack,
     }, mt)
 
     return Data
 end
 
 RendTarget.Metadata.__remove = function(_, Entity)
+    Renderer.RemoveFromStack(Entity)
     Renderer.RemoveFromStack(Entity)
 end
 

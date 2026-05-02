@@ -1,5 +1,5 @@
-local Component = GetService("Component","Component")
-local Render = GetService "Renderer"
+local Component = GetService("Component", "Component")
+local Render = GetService("Renderer")
 
 local Shape = {}
 
@@ -8,13 +8,12 @@ local E = ENUM({
     Capsule = 2,
     Cylinder = 3,
     Sphere = 4,
-    Plane = 5
+    Plane = 5,
 }, "ShapeType")
 
-local P_SetColor, P_Box, P_Sphere, P_Capsule, P_Plane, P_Cylinder
+local P_Box, P_Sphere, P_Capsule, P_Plane, P_Cylinder
 do
     local TMPPASS = AstralEngine.Graphics.NewRawPass()
-    P_SetColor = TMPPASS.setColor
     P_Box = TMPPASS.box
     P_Sphere = TMPPASS.sphere
     P_Capsule = TMPPASS.capsule
@@ -24,39 +23,29 @@ end
 
 local Processors = {
     [E.Box.Value] = function(p, _, c)
-        local comp = c.Shape
-        P_SetColor(p,comp[3],comp[4],comp[5],comp[6])
         local t = c.Transform
-        P_Box(p,t[3])
+        P_Box(p, t[3])
     end,
     [E.Sphere.Value] = function(p, _, c)
-        local comp = c.Shape
-        P_SetColor(p,comp[3],comp[4],comp[5],comp[6])
         local t = c.Transform
-        P_Sphere(p,t[3])
+        P_Sphere(p, t[3])
     end,
     [E.Capsule.Value] = function(p, _, c)
-        local comp = c.Shape
-        P_SetColor(p,comp[3],comp[4],comp[5],comp[6])
         local t = c.Transform
-        P_Capsule(p,t[3])
+        P_Capsule(p, t[3])
     end,
     [E.Plane.Value] = function(p, _, c)
-        local comp = c.Shape
-        P_SetColor(p,comp[3],comp[4],comp[5],comp[6])
         local t = c.Transform
-        P_Plane(p,t[3])
+        P_Plane(p, t[3])
     end,
-    [E.Cylinder.Value] = function(p,_,c)
-        local comp = c.Shape
-        P_SetColor(p,comp[3],comp[4],comp[5],comp[6])
+    [E.Cylinder.Value] = function(p, _, c)
         local t = c.Transform
-        P_Cylinder(p,t[3])
-    end
+        P_Cylinder(p, t[3])
+    end,
 }
 
 Shape.Name = "Shape"
-Shape.Pattern = { Shape = 0, Color = 0xffffffff, Size = Vec3 }
+Shape.Pattern = { Shape = 0 }
 
 local OFFSET = 1
 
@@ -68,78 +57,68 @@ for i, v in pairs(E) do
     Render.AppendRenderTTP(REnum[i], Processors[v.Value])
 end
 
-@macro<L,!USEBRACK>:WRITECOLOR(&C) = Comp[3], Comp[4], Comp[5], Comp[6] = color.unpack(&C);
-
 local IdxFields = {
     Shape = 1,
-    Color = 2,
 }
 
-
 local MT = {
-    __index = function(self,k)
+    __index = function(self, k)
         return self[IdxFields[k]]
     end,
     __newindex = function(Comp, k, v)
         local RT = Comp.__RenderTypePtr
         if k == "Shape" then
-            assert(typeof(v) == "__ENUM_ShapeType",
-                "Attempt to set 'Shape' field of component " .. tostring(Comp) .. ": " .. debug.getaddress(Comp) .. " to non-enum")
+            assert(
+                typeof(v) == "__ENUM_ShapeType",
+                "Attempt to set 'Shape' field of component "
+                .. tostring(Comp)
+                .. ": "
+                .. debug.getaddress(Comp)
+                .. " to non-enum"
+            )
             Comp[IdxFields.Shape] = v
             RT.__RenderType = v.RawValue
-        elseif k == "Color" then
-            assert(color.validate(v), v .. " IS NOT A VALID COLOR")
-            local OldAlpha = Comp[6]
-            WRITECOLOR(v)
-            Comp[IdxFields.Color] = v
-            local nc = Comp[6]
-            if OldAlpha ~= nc then
-                RT[".SwapStacks"](RT,nc == 1)
-            end
         end
-    end
+    end,
 }
 
 Shape.Metadata = {}
 Shape.Metadata.__create = function(DATA, e, ShouldSink)
-    AstralEngine.Assert(not Component.HasComponent(e,"RenderTarget"), "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!")
+    AstralEngine.Assert(
+        not Component.HasComponent(e, "RenderTarget"),
+        "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!"
+    )
     local ShapeEnum = (DATA.Shape or E.Box)
     local S = ShapeEnum.RawValue
 
     FRESHV = S + OFFSET
 
-    local Color = DATA.Color or color.fromRGBA(255,255,255,255)
-
-    local Alpha = select(4,color.unpack(Color))
-
-    local RT = Component.AddComponent(e, "RenderTarget", {Value = FRESHV, Solid = Alpha == 1})
+    local RT = Component.AddComponent(e, "RenderTarget", { Value = FRESHV, Solid = true })
     if not Component.HasComponent(e, "Transform") and not ShouldSink then
         Component.AddComponent(e, "Transform")
     end
 
     local Comp = {
         [IdxFields.Shape] = Shape,
-        [IdxFields.Color] = Color
     }
 
-    WRITECOLOR(Color)
     Comp.__RenderTypePtr = RT
     Comp.__Ent = e
 
-    return setmetatable(Comp,MT)
+    return setmetatable(Comp, MT)
 end
 
-Shape.Metadata.__remove = function(_,e)
-    if Component.HasComponent(e,"RenderTarget") then
-        Component.RemoveComponent(e,"RenderTarget",true)
+Shape.Metadata.__remove = function(_, e)
+    if Component.HasComponent(e, "RenderTarget") then
+        Component.RemoveComponent(e, "RenderTarget", true)
     end
 end
 
 Shape.Metadata.HardExclusion = {
-    RenderTarget = true
+    RenderTarget = true,
 }
 Shape.Metadata.SoftDependency = {
-    Transform = true
+    Transform = true,
 }
 
 return Shape

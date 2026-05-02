@@ -166,7 +166,7 @@ end
 local MaterialKeyArray = {
     "Color",
     "Glow",
-    "UVShift",
+    "UVOffset",
     "UVScale",
     "Metalness",
     "Roughness",
@@ -230,6 +230,7 @@ local function ProcessMaterialInput(Input)
     for _, Field in ipairs(MaterialKeyArray) do
         local Lower = Field:sub(1, 2):lower() .. Field:sub(3)
         local Val = InputProcessed[Field]
+        if Field == "UVOffset" then Lower = "uvShift" end
 
         InputProcessed[Field] = nil
         InputProcessed[Lower] = Val -- lovr likes camelCase, i like pascalCase
@@ -278,6 +279,8 @@ function AssetManager.NewMaterial(Input)
         __lmat = LovrMat,
         Properties = Input
     },MatMt)
+
+    Cache[TypeEnum.Material][Hash] = Material
 
     return Material
 end

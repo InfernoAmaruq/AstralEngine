@@ -174,6 +174,8 @@ end
         &PV:setFaceCull(CULL)
 }
 
+local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
+
 @macro<L,!USEBRACK>{PROCESSSTACK(&STACK, &PASS) =
         for eind = 1, #&STACK do
             local E = &STACK[eind]
@@ -185,7 +187,14 @@ end
             end
             if Mat then
                 &PASS:setColor(Mat[4],Mat[5],Mat[6],Mat[7])
+                &PASS:send("UVScale",Mat[2])
+                &PASS:send("UVOffset",Mat[3])
+            else
+                &PASS:setColor()
+                &PASS:send("UVScale",VecOne)
+                &PASS:send("UVOffset",VecZero)
             end
+
             local RETFLAG = TYPETOPROCESS[RenT[1]](&PASS, E, Comp)
             if not RETFLAG then continue end
             if RETFLAG &== &F_SHADER_RESET then

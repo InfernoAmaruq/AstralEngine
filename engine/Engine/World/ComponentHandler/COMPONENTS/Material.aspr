@@ -4,22 +4,30 @@ local Material = {}
 Material.Name = "Material"
 Material.Metadata = {}
 
+local function ScaleToTexture(Vector, Mat)
+    local Color = Mat.Texture
+    if not Color then
+        return Vector
+    end
+    local Scale = vec2(Color:GetDimensions())
+    return Vector / Scale
+end
+
 local Mt = {
     __index = function(self, k)
         if k == "Color" then
             return self[8]
         elseif k == "Material" then
             return self[9]
-        elseif k == "UVShift" then
-            -- sink
         elseif k == "UVOffset" then
-            -- sink
+            return vec2(self[3])
+        elseif k == "UVScale" then
+            return vec2(self[2])
         end
     end,
     __newindex = function(self, k, v)
-        local RT = Comp.HasComponent(self[10], "RenderTarget")
-
         if k == "Material" then
+            local RT = Comp.HasComponent(self[10], "RenderTarget")
             self[9] = v
             self[1] = v and v.__lmat
 
@@ -27,6 +35,7 @@ local Mt = {
                 RT:SetMaterial(self[1])
             end
         elseif k == "Color" then
+            local RT = Comp.HasComponent(self[10], "RenderTarget")
             v = v or color.fromRGBA(255, 255, 255, 255)
             self[8] = v
             local OldAlpha = self[7]
@@ -35,6 +44,15 @@ local Mt = {
             if RT and OldAlpha ~= self[7] and not self[1] then
                 RT:SwapStacks(self[7] == 1)
             end
+        elseif k == "UVOffset" then
+            local Mat = self[9]
+            local Tex = Mat and Mat.Properties
+            if Tex then
+                v = ScaleToTexture(v, Tex)
+            end
+            self[3]:set(v)
+        elseif k == "UVScale" then
+            self[2]:set(v)
         end
     end,
 }
@@ -46,13 +64,15 @@ Material.Metadata.__create = function(Data, Ent)
 
     Storage[1] = Data and Data.Material and Data.Material.__lmat
     Storage[2] = Data and Data.UVScale and Vec2(Data.UVScale) or Vec2(1, 1)
-    Storage[3] = Data and Data.UVOffset and Vec2(Data.UVOffset) or Vec2(1, 1)
+    Storage[3] = Data and Data.UVOffset and Vec2(Data.UVOffset) or Vec2(0, 0)
 
     local Color = Data and Data.Color or color.fromRGBA(255, 255, 255, 255)
     Storage[4], Storage[5], Storage[6], Storage[7] = Color:unpack()
     Storage[8] = Color
     Storage[9] = Data and Data.Material
     Storage[10] = Ent
+
+    Storage[3]:set(Storage[9] and ScaleToTexture(Storage[3], Storage[9].Properties) or Storage[3])
 
     if RT and Storage[1] then
         RT:SetMaterial(Storage[1])

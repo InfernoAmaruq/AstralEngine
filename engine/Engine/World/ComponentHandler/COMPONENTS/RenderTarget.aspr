@@ -29,6 +29,7 @@ local Methods = {
         -- remove twice, fully
         if mat then
             Renderer.AddToStack(true, self.__E, mat)
+            Renderer.AddToStack(false, self.__E, mat)
         end
     end,
 }

@@ -274,7 +274,6 @@ function Component.LoadComponents()
     local ANSI = AstralEngine.Plugins.ANSIColor or {}
 
     if AstralEngine._CONFIG.Astral.Debug then
-        AstralEngine.Log("DEBUG: -- COMPONENT MOUNTING","info","COMPONENT")
         for i in pairs(Component.Components) do
             AstralEngine.Log("LOADED COMP: "..ANSI.Magenta..ANSI.Underscore..i..ANSI.Clear,"success","COMPONENT")
         end

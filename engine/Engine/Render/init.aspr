@@ -33,22 +33,6 @@ end
 @execute<UNSAFE>{if lovr.headset then return "local CONSTOFFSET = 2" else return "local CONSTOFFSET = 1" end}
 
 -- Allocate an AO texture
-local SSAONoiseSize = 4
-local SSAOImage = lovr.data.newImage(SSAONoiseSize,SSAONoiseSize)
-
-for x = 1, SSAONoiseSize do
-    for y = 1, SSAONoiseSize do
-        local Angle = math.random() * math.pi * 2
-        local nx = math.cos(Angle) * 0.5 + 0.5
-        local ny = math.sin(Angle) * 0.5 + 0.5
-
-        SSAOImage:setPixel(x-1,y-1,nx,ny,0,1)
-    end
-end
-
-local AOTex = AstralEngine.Graphics.NewRawTexture(SSAOImage,{usage = {'sample'}, mipmaps = false})
-Renderer.Misc = {SSAOTexture = AOTex}
-
 Renderer.PassStorage = {
     __CORE = {},
     PassTable = PassTable,
@@ -58,7 +42,7 @@ Renderer.PassStorage = {
 }
 
 function Renderer.PassStorage.AddPass(P, Pass, Id, Enabled)
-    Enabled = Enabled ~= nil and Enabled or Enabled
+    Enabled = Enabled == nil and true or Enabled
 
     local T = Renderer.PassStorage[P and "PostTable" or "PreTable"]
     if T[Id] then error("PASS ALREADY EXISTS AT TABLE SLOT: "..Id) end

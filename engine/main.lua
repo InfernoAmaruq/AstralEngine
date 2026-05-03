@@ -295,7 +295,9 @@ function lovr.run()
                 end
                 RETURNFIELD = RETURNFIELD..[[
                     local Window = WGetPass()
-                    RunService.__TICK(501,1000,Headset or Window)
+                    if Headset or Window then
+                        RunService.__TICK(501,1000,Headset or Window)
+                    end
                    ]]..CONCAT.."Present()"
 
             end

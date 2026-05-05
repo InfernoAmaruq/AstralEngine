@@ -229,15 +229,6 @@ function lovr.boot()
     local EXE = (lovr.filesystem.getExecutablePath() or root or bundle):gsub("\\", "/")
     local EXEFOLD = EXE:gsub("[^/\\]+$", "")
 
-    if not game and (cli or not fused) and arg[1] then
-        if arg[1]:match("[^/\\]+%.lua$") then
-            game = arg[1]:match("[/\\]") and arg[1]:match("(.+)[/\\][^/\\]+$") or "."
-        else
-            game = arg[1]
-        end
-        arg.game = game
-    end
-
     _G.package.ENG_PATH = "/"
     _G.package.GAME_PATH = "GAMEFILE/"
 

@@ -182,7 +182,7 @@ local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
             local RenT = RendStorage[E]
             local Comp = SetComponents[E]
             local Mat = Comp.Material
-            if RenT[2] !&== CMASK then
+            if RenT[2] & CMASK ~= 0 then
                 continue
             end
             if Mat then
@@ -197,7 +197,7 @@ local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
 
             local RETFLAG = TYPETOPROCESS[RenT[1]](&PASS, E, Comp)
             if not RETFLAG then continue end
-            if RETFLAG &== &F_SHADER_RESET then
+            if RETFLAG & &F_SHADER_RESET == 0 then
                 &PASS:setShader(MAINSHADER)
             end
         end

@@ -7,7 +7,7 @@ AstralEngine.Plugins.SignalLib = SIGNAL
 local AnsiColorLib = require("Lib/ANSIText")
 AstralEngine.Plugins.ANSIColor = AnsiColorLib
 
-local ROOT, World, Renderer, RunService, SS
+local MainScheduler, World, Renderer, RunService, SS
 
 AstralEngine.Callbacks = {}
 
@@ -38,27 +38,19 @@ function lovr.load()
     World = require("Engine.World")
 
     Renderer = GetService"Renderer"
-    local Entity = GetService"Entity"
-
-    ROOT = {
-        SCHEDULERS = {},
-        SCRIPTSYS = {},
-    }
-
-    QUIT = lovr.event.quit
 
     -- EXE
 
-    ROOT.SCHEDULERS.MAIN = CentralScheduler.New(lovr.timer.getTime)
+    MainScheduler = CentralScheduler.New(lovr.timer.getTime)
 
-    SIGNAL.SCHEDULER = ROOT.SCHEDULERS.MAIN
+    SIGNAL.SCHEDULER = MainScheduler
     SIGNAL.CLOCK = lovr.timer.getTime
 
     -- DEFINING EXTRA GLOBALS
 
-    local BRIDGE = require("LOVRBridge")
-    BRIDGE.LoadGlobals({ SIGNAL = SIGNAL, ROOT = ROOT, ALLKEYS = require("ALLKEYS") })
-    BRIDGE.Alias()
+    local Bridge = require("LOVRBridge")
+    Bridge.LoadGlobals({ SIGNAL = SIGNAL, ROOT = ROOT, ALLKEYS = require("ALLKEYS") })
+    Bridge.Alias()
 
     RunService = GetService"RunService"
     require("Engine.Physics")
@@ -77,9 +69,9 @@ function lovr.load()
     SS = require("Engine.ScriptSystem")
 
     -- now that everything is loaded, alias
-    BRIDGE.ConnectDevices()
-    BRIDGE.LoadRandom()
-    BRIDGE.LoadWindow()
+    Bridge.ConnectDevices()
+    Bridge.LoadRandom()
+    Bridge.LoadWindow()
 
     local IS = GetService("InputService")
     for i,v in pairs(require("Lib/TextInput.lua")) do
@@ -263,7 +255,7 @@ function lovr.run()
                 return "if lovr.headset.isActive() then XRDT = lovr.headset.update() end"
             end
         }
-        ROOT.SCHEDULERS.MAIN:Update()
+        MainScheduler:Update()
         RunService.__TICK(0,500,&DT)
         Drain()
     }

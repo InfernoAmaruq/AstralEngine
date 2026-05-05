@@ -55,10 +55,6 @@ function lovr.arg(arg)
 
     shift = shift or (#arg + 1)
 
-    for i = 0, #arg do
-        arg[i - shift], arg[i] = arg[i], nil
-    end
-
     if arg.console or arg._help or arg._version then
         local ok, system = pcall(require, "lovr.system")
         if ok and system then
@@ -177,26 +173,6 @@ local conf = {
     },
 }
 
-local OsType = nil
-
-local function Normalize(path, full)
-    local Parts = {}
-
-    for Part in path:gmatch("[^/]+") do
-        if Part == ".." then
-            table.remove(Parts)
-        elseif Part ~= "." then
-            table.insert(Parts, Part)
-        end
-    end
-
-    if OsType == "Win" then
-        return table.concat(Parts, "/")
-    else
-        return (full == true and "/" or "") .. table.concat(Parts, "/")
-    end
-end
-
 local ZipTag = "ENGINE"
 
 local function HandleZipPath(Path)
@@ -220,111 +196,7 @@ end
 function lovr.boot()
     lovr.filesystem = require("lovr.filesystem")
 
-    local Empty = {}
-    local Cache = {}
-    lovr.filesystem.__AliasCache = Cache
-
-    lovr.filesystem.alias = function(Path, Alias)
-        Alias = Alias:gsub("^/+", ""):gsub("/+$", ""):gsub("//+", "/")
-        -- assumes normalized path
-        Cache[Alias] = Cache[Alias] or {}
-        table.insert(Cache[Alias], Path)
-    end
-
-    lovr.filesystem.getAliasedFiles = function(Alias)
-        Alias = Alias:gsub("^/+", ""):gsub("/+$", ""):gsub("//+", "/")
-        local FilePaths = {}
-
-        if not Cache[Alias] then
-            return FilePaths
-        end
-
-        local Queue = {}
-        local Check = {}
-
-        for _, Path in ipairs(Cache[Alias]) do
-            if Check[Path] then
-                continue
-            end
-            Check[Path] = true
-            if lovr.filesystem.isDirectory(Path) then
-                table.insert(Queue, Path)
-            elseif lovr.filesystem.isFile(Path) then
-                table.insert(FilePaths, Path)
-            end
-        end
-
-        while #Queue > 0 do
-            local CurDir = table.remove(Queue, 1)
-
-            for _, Item in ipairs(lovr.filesystem.getDirectoryItems(CurDir)) do
-                local Path = CurDir .. "/" .. Item
-                if Check[Path] then
-                    continue
-                end
-                Check[Path] = true
-
-                if lovr.filesystem.isDirectory(Path) then
-                    table.insert(Queue, Path)
-                elseif lovr.filesystem.isFile(Path) then
-                    table.insert(FilePaths, Path)
-                end
-            end
-        end
-
-        return FilePaths
-    end
-
-    lovr.filesystem.getAliased = function(Alias)
-        return Cache[Alias] or Empty
-    end
-
-    local FSType = package.config:sub(1, 1)
-    FSType = FSType == "\\" and "Win" or "Unix"
-    lovr.filesystem.filesystemType = FSType
-
-    lovr.filesystem.getCurrentPath = function(Level)
-        Level = Level or 1
-
-        local Info = debug.getinfo(Level + 1, "S")
-        local CurPath = Info and (Info.source:sub(1, 1) == "@" and Info.source:sub(2) or Info.source)
-        return CurPath
-    end
-
-    lovr.filesystem.getExtension = function(Path)
-        local LastDot = Path:match(".*()%.")
-        if not LastDot then
-            return nil
-        end
-
-        local AfterDot = Path:sub(LastDot + 1)
-        if AfterDot:find("/") then
-            return nil
-        end
-
-        return Path:sub(LastDot)
-    end
-
-    OsType = FSType
-
-    -- adding FS helpers
-    lovr.filesystem.normalize = Normalize
-
-    local PATTERN = "[^/\\]+$"
-
-    local Unix, Win = "%/", "\\"
-    lovr.filesystem.getExecutableFolder = function()
-        return lovr.filesystem.getExecutablePath():gsub(PATTERN, "")
-    end
-    lovr.filesystem.toWindows = function(Path)
-        return Path:gsub(Unix, Win)
-    end
-    lovr.filesystem.toUnix = function(Path)
-        return Path:gsub(Win, Unix)
-    end
-    lovr.filesystem.folderFromPath = function(p)
-        return p:gsub(PATTERN, "")
-    end
+    local Normalize = lovr.filesystem.normalize
 
     -- See if there's a ZIP archive fused to the executable, and set up the fused CLI if it exists
 
@@ -347,7 +219,7 @@ function lovr.boot()
         "./",
     }
 
-    arg.game = arg.game or "./GAMEFILE"
+    arg.game = arg.game or arg[1] or "./GAMEFILE"
 
     local game = arg.game
     local path = arg.engine
@@ -355,13 +227,13 @@ function lovr.boot()
     local pre = "pre.lua"
 
     local EXE = (lovr.filesystem.getExecutablePath() or root or bundle):gsub("\\", "/")
-    local EXEFOLD = EXE:gsub(PATTERN, "")
+    local EXEFOLD = EXE:gsub("[^/\\]+$", "")
 
-    if not game and (cli or not fused) and arg[0] then
-        if arg[0]:match("[^/\\]+%.lua$") then
-            game = arg[0]:match("[/\\]") and arg[0]:match("(.+)[/\\][^/\\]+$") or "."
+    if not game and (cli or not fused) and arg[1] then
+        if arg[1]:match("[^/\\]+%.lua$") then
+            game = arg[1]:match("[/\\]") and arg[1]:match("(.+)[/\\][^/\\]+$") or "."
         else
-            game = arg[0]
+            game = arg[1]
         end
         arg.game = game
     end
@@ -376,7 +248,7 @@ function lovr.boot()
     local Mounted, Failed
     if not IsFused then
         if path then
-            path = Normalize(EXEFOLD .. path, FSType == "Unix")
+            path = "/" .. Normalize(EXEFOLD .. path)
             local Zip, Inner = HandleZipPath(path)
 
             Inner = Inner or ""
@@ -398,9 +270,13 @@ function lovr.boot()
             end
         else
             for _, v in ipairs(PossiblePaths) do
-                local p = Normalize(EXEFOLD .. v, FSType == "Unix")
+                local p = "/" .. Normalize(EXEFOLD .. v)
 
                 Mounted, Failed = lovr.filesystem.mount(p)
+
+                if Failed then
+                    print("failed to mount engine:", p, Failed)
+                end
 
                 if Mounted then
                     path = v
@@ -434,7 +310,7 @@ function lovr.boot()
             local NormalizedPaths = {}
 
             for _, v in pairs(PossiblePaths) do
-                table.insert(NormalizedPaths, Normalize(EXEFOLD .. v, FSType == "Unix"))
+                table.insert(NormalizedPaths, "/" .. Normalize(EXEFOLD .. v))
             end
 
             error(("Failed to mount engine path, searched:\n%s"):format(table.concat(NormalizedPaths, "\n")))

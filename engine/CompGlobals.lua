@@ -4,21 +4,6 @@
 @macro<G>:A|==B = A | B ~= 0
 @macro<G>:A!|==B = A | B == 0
 
--- ADDING BOOLS
-@macro<L>:BtI(v) = (type(v) == "number" and v) or (v and 1 or 0);
-
-debug.setmetatable(true,{
-    __add = function(a,b)
-        return BtI(a) + BtI(b)
-    end,
-    __mul = function(a,b)
-        return BtI(a) * BtI(b)
-    end,
-    __sub = function(a,b)
-        return BtI(a) - BtI(b)
-    end
-})
-
 -- NUMBERS
 local REGISTRY = _G.NTYPEREG or {}
 _G.NTYPEREG = REGISTRY

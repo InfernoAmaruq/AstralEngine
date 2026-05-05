@@ -1,5 +1,6 @@
 #include "api.h"
 #include "filesystem/filesystem.h"
+#include "filesystem.lua.h"
 #include "data/blob.h"
 #include "util.h"
 #include <stdlib.h>
@@ -596,5 +597,24 @@ int luaopen_lovr_filesystem(lua_State* L) {
   luax_registerloader(L, libLoaderAllInOne, 4);
   luax_assert(L, lovrFilesystemInit());
   luax_atexit(L, lovrFilesystemDestroy);
+
+  // load bonus lualib here
+
+  if(luaL_loadbuffer(L,(const char*) etc_filesystem_lua, etc_filesystem_lua_len, "@filesystem.lua")){
+    fprintf(stderr,"filesystem load err: %s\n",lua_tostring(L,-1));
+    lua_pop(L,1);
+    return 1;
+  }
+
+  lua_pushvalue(L,-2);
+  if (lua_pcall(L,1,1,0)){
+    fprintf(stderr, "filesystem run err: %s\n",lua_tostring(L,-1));
+    lua_pop(L,1);
+    lua_pushvalue(L,-1);
+    return 1;
+  }
+
+  // return
+
   return 1;
 }

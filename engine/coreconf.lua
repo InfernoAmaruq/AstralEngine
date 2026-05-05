@@ -19,10 +19,6 @@ return {
             -- with AstralGC, lua gc is not disabled, you can call collectgarbage"restart" and collectgarbage"stop" if you're doing a lot of alloc-heavy work without yielding
             --]]
         },
-        Render = {
-            "LoadShadowmap",
-            "LoadCel",
-        },
         Asset = {
             "StrictLoad", -- the asset manager will not load raw binary blobs or random types unless told to
         },

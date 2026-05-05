@@ -1,5 +1,3 @@
-local Color = {}
-
 local CLRHDR = 0x434C << 32
 
 local function fromRGBA(r, g, b, a)
@@ -48,6 +46,7 @@ local ColorFields = {
     toHex = Lookup.toHex,
 }
 
+-- allows us to do the proper indexing on number Colors
 debug.setmetatable(0, {
     __index = function(i, idx)
         if (i & CLRHDR) ~= 0 then
@@ -56,9 +55,4 @@ debug.setmetatable(0, {
     end,
 })
 
-Color.__NAME = "color"
-Color.__PRO = function()
-    return Lookup
-end
-
-return Color
+_G.color = Lookup

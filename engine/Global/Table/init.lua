@@ -1,10 +1,3 @@
-local Table = {}
-
-Table.__NAME = "table"
-Table.__PRO = function()
-    return table
-end
-
 local OgUnpack = unpack
 runpack = OgUnpack
 unpack = function(t, i, j)
@@ -144,5 +137,3 @@ table.foreach = function(list, callback, itype)
     end
     return r
 end
-
-return Table

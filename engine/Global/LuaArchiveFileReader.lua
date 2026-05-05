@@ -48,9 +48,4 @@ function LAFReader.LoadArchive(Path, EntryPoint, Depth)
     return nil
 end
 
-return {
-    __NAME = "LAF",
-    __PRO = function()
-        return LAFReader
-    end,
-}
+_G.LAF = LAFReader

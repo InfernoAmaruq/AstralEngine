@@ -1,10 +1,3 @@
-local Math = {}
-
-Math.__NAME = "math"
-Math.__PRO = function()
-    return math
-end
-
 local floor, ceil, abs, type = math.floor, math.ceil, math.abs, type
 
 math.mathtype = function(x)
@@ -21,8 +14,15 @@ math.mathtype = function(x)
     end
 end
 
+function FastIntPow(a, b)
+    for _ = 1, b do
+        a = a * a
+    end
+    return a
+end
+
 math.round = function(x, n) -- val, dp
-    n = n and (10 ^ n) or 1
+    n = n and FastIntPow(10, n) or 1
     if x >= 0 then
         return floor(x * n + 0.5) / n
     else
@@ -37,5 +37,3 @@ end
 math.clamp = function(x, a, b)
     return (x < a and a) or (x > b and b) or x
 end
-
-return Math

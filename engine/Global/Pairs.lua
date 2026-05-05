@@ -26,18 +26,11 @@ ipairs = function(t)
         local Type = rtype(p)
 
         if Type == "table" then
-            return OgPairs(p)
+            return OgIpairs(p)
         else
             return p(t)
         end
     else
-        return OgPairs(t)
+        return OgIpairs(t)
     end
 end
-
-return {
-    __NAME = "pairs",
-    __PRO = function()
-        return pairs
-    end,
-}

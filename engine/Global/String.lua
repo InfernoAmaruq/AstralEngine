@@ -1,10 +1,3 @@
-local String = {}
-
-String.__NAME = "string"
-String.__PRO = function()
-    return string
-end
-
 local mt = debug.getmetatable("")
 local strdef = mt.__index
 mt.__index = function(str, i)
@@ -38,5 +31,3 @@ function string.split(s, sep, MULTI)
     end
     return t
 end
-
-return String

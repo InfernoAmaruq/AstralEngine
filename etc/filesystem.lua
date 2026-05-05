@@ -127,12 +127,7 @@ fs.getExecutableFolder = function()
 end
 
 fs.folderFromPath = function(p)
-    local isFile = fs.isFile(p)
-    if isFile then
-        return p:gsub(fldrPattern, "")
-    else
-        return nil
-    end
+    return p:gsub(fldrPattern, "")
 end
 
 return fs

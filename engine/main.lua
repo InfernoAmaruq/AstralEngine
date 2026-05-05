@@ -79,6 +79,7 @@ function lovr.load()
     Renderer.LateCall()
 
     AstralEngine.Plugins.Finish()
+    GetService.Disable() -- Disable GetService so it errors when you try to index a non-existant service
 end
 
 local QuitSig = Signal.new(Signal.Type.RTC)

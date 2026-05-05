@@ -1,20 +1,35 @@
 local CONFIG = CONF
-local PluginHandler = require("./PluginHandler")
 
-local SIGNAL = require("Lib.Signal")
-AstralEngine.Plugins.SignalLib = SIGNAL
-
+local Signal = require("Lib/Signal")
 local AnsiColorLib = require("Lib/ANSIText")
-AstralEngine.Plugins.ANSIColor = AnsiColorLib
 
 local MainScheduler, World, Renderer, RunService, SS
+
+local CURRENT_FRAME = 0
+local CURRENT_CPUTICK = 0
 
 AstralEngine.Callbacks = {}
 
 -- LOAD
 
 function lovr.load()
+    -- LOAD MISC
+
+    _G.ENUM = require("Lib.Enum")
+    require("Engine/Graphics")
+
+    local Bridge = loadfile("Engine/LOVRBridge")() -- we want it to run once and be freed after. So we avoid caching
+    Bridge.Alias() -- alias early for compat reasons
+
+    -- INITIALISE SERVICES
+    require("Engine")
+
     -- QUEUE PLUGINS
+    local PluginHandler = require("Engine/PluginManager")
+
+    -- turn useful libs to plugin
+    AstralEngine.Plugins.SignalLib = Signal
+    AstralEngine.Plugins.ANSIColor = AnsiColorLib
 
     for _, Dir in ipairs(lovr.filesystem.getDirectoryItems("/Plugins")) do
         lovr.filesystem.alias("/Plugins/" .. Dir, "Plugins")
@@ -27,65 +42,46 @@ function lovr.load()
         PluginHandler.Load(PluginFolder)
     end
 
-    -- INITIAL DECL
+    -- LOADING ALL OTHER SERVICES
 
-    require("./Engine/Graphics")
-    _G.ENUM = require("Lib.Enum")
-
-    require("Engine")
-    local CentralScheduler = require("Engine.Scheduler")
-    require("Engine.Render")
-    World = require("Engine.World")
-
-    Renderer = GetService"Renderer"
-
-    -- EXE
-
+    local CentralScheduler = require("Engine/Services/Scheduler")
     MainScheduler = CentralScheduler.New(lovr.timer.getTime)
 
-    SIGNAL.SCHEDULER = MainScheduler
-    SIGNAL.CLOCK = lovr.timer.getTime
+    Signal.Scheduler = MainScheduler
+    Signal.Clock = lovr.timer.getTime
 
-    -- DEFINING EXTRA GLOBALS
+    Renderer = require("Engine/Services/Render")
 
-    local Bridge = require("LOVRBridge")
-    Bridge.LoadGlobals({ SIGNAL = SIGNAL, ROOT = ROOT, ALLKEYS = require("ALLKEYS") })
-    Bridge.Alias()
+    World = require("Engine/Services/World")
 
-    RunService = GetService"RunService"
-    require("Engine.Physics")
+    RunService = require("Engine/Services/RunService")
+    require("Engine/Services/InputService")
+    require("Engine/Services/ContextActionService")
 
-    -- RUNNING ALL SCRIPTS
+    require("Engine/Services/Physics")
 
-    CURRENT_FRAME = 0
-    CURRENT_CPUTICK = 0
+    -- LOAD COMPONENTS AND SCRIPT SYSTEM
 
-    require("Engine.AssetManager")
+    require("Engine/Services/AssetManager")
+    SS = require("Engine/Services/ScriptSystem")
 
     World.Component.LoadComponents()
 
     World.Component.__RunPostPass()
 
-    SS = require("Engine.ScriptSystem")
+    -- now that everything is loaded, bridge it
+    Bridge.VirtualiseScheduler(MainScheduler)
 
-    -- now that everything is loaded, alias
     Bridge.ConnectDevices()
     Bridge.LoadRandom()
     Bridge.LoadWindow()
-
-    local IS = GetService("InputService")
-    for i,v in pairs(require("Lib/TextInput.lua")) do
-        IS[i] = v
-    end
 
     Renderer.LateCall()
 
     AstralEngine.Plugins.Finish()
 end
 
-lovr.textinput = nil
-
-local QuitSig = SIGNAL.new(SIGNAL.Type.RTC)
+local QuitSig = Signal.new(Signal.Type.RTC)
 function lovr.quit(...)
     local ShouldAbort = false
     if AstralEngine.Callbacks.OnQuit then ShouldAbort = AstralEngine.Callbacks.OnQuit(...) end

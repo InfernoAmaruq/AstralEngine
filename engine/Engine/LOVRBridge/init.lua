@@ -1,30 +1,40 @@
 local LVRB = {}
 
--- GLOBALS
+-- configure our clock
+debug.cpuclock = os.clock
+os.clock = lovr.timer.getTime
 
-LVRB.LoadGlobals = function(LIBS)
-    debug.cpuclock = os.clock
-    os.clock = lovr.timer.getTime
+local wrapself = function(s, f, VAL)
+    if VAL ~= nil then
+        return function(...)
+            return f(s, VAL, ...)
+        end
+    else
+        return function(...)
+            return f(s, ...)
+        end
+    end
+end
 
-    local SIGNAL = LIBS.SIGNAL
-    local ROOT = LIBS.ROOT
+LVRB.VirtualiseScheduler = function(Scheduler)
+    _G.task = {}
+    local Global = _G.task
+    Global.wait = wrapself(Scheduler,Scheduler.Wait,false)
+    Global.delay = wrapself(Scheduler,Scheduler.Delay,false)
+    Global.defer = wrapself(Scheduler,Scheduler.Defer,false)
+    Global.spawn = wrapself(Scheduler,Scheduler.Spawn,false)
+    Global.waitfor = wrapself(Scheduler,Scheduler.WaitFor)
+    Global.spawnat = wrapself(Scheduler,Scheduler.SpawnAt)
+    Global.escape = wrapself(Scheduler,Scheduler.Escape)
 
-    require("g")({
-        SCHEDULER = ROOT.SCHEDULERS.MAIN,
-        TICK = { SIGNAL = SIGNAL, SCHEDULER = ROOT.SCHEDULERS.MAIN, SCHEDTASKS = ROOT.SCHEDULERS.MAIN.Routines },
-        INPUT = {
-            SIGNAL = SIGNAL,
-            KEYBOARD = {
-                ISDOWN = lovr.system.isKeyDown,
-            },
-            MOUSE = {
-                MOUSEDOWN = lovr.system.isMouseDown,
-                MOUSEPOS = lovr.system.getMousePosition,
-                VECTOR2 = lovr.math.newVec2,
-            },
-        },
-        CONTEXTACT = { SCHEDTABLE = ROOT.SCHEDULERS.MAIN.Routines, KEYS = LIBS.ALLKEYS }
-    })
+    Global.raw = {
+        wait = wrapself(Scheduler,Scheduler.Wait,true),
+        delay = wrapself(Scheduler,Scheduler.Delay,true),
+        defer = wrapself(Scheduler,Scheduler.Defer,true),
+        spawn = wrapself(Scheduler,Scheduler.Spawn,true)
+    }
+
+    LVRB.VirtualiseScheduler = nil
 end
 
 -- INPUT SYSTEM
@@ -46,8 +56,8 @@ local Lookup = {
 LVRB.ConnectDevices = function()
     local InputService = GetService "InputService"
 
-    local Mouse = InputService.GetMouse()
-    local KB = InputService.GetKeyboard()
+    local Mouse = InputService.Mouse
+    local KB = InputService.Keyboard
     local CAS = GetService "ContextActionService"
 
     local PoolSize = 60
@@ -58,9 +68,15 @@ LVRB.ConnectDevices = function()
     local MouseLookUp = {}
     local KBKeys = {}
 
-    local KMP = CAS.__KEYMAP
+    local RawKeys = require("AllKeys")
+
+    local KeyMap = {}
+    for i,v in ipairs(RawKeys) do
+        KeyMap[v] = i
+    end
+
     local Size = 0
-    for i, v in pairs(KMP) do
+    for i, v in pairs(KeyMap) do
         if type(i) == "number" then
             local n = "MouseButton" .. i
             MKeys[n] = v
@@ -75,7 +91,7 @@ LVRB.ConnectDevices = function()
     end
 
     local KeyArray = table.array(Size)
-    for _, v in pairs(KMP) do
+    for _, v in pairs(KeyMap) do
         KeyArray[v] = false
     end
     InputService.__GetKeyArr = function()
@@ -134,7 +150,7 @@ LVRB.ConnectDevices = function()
         local DATA = GetEmptyPoolObj()
         DATA.__INUSE = true
 
-        local ID = CAS.__KEYMAP[CODE]
+        local ID = KeyMap[CODE]
 
         local tn = IsKB and tonumber(CODE)
         if tn and Lookup[tn] then
@@ -182,14 +198,14 @@ LVRB.ConnectDevices = function()
     end
 
     function lovr.mousepressed(x, y, c)
-        KeyArray[KMP[c]] = true
+        KeyArray[KeyMap[c]] = true
         local Terminated
         MAKEINPUTDATA(Terminated, false, c, true, x, y)
         Mouse.MouseButtonDown:Fire(c, x, y, Terminated)
     end
 
     function lovr.mousereleased(x, y, c)
-        KeyArray[KMP[c]] = false
+        KeyArray[KeyMap[c]] = false
         local Terminated
         MAKEINPUTDATA(Terminated, false, c, false, x, y)
         Mouse.MouseButtonUp:Fire(c, x, y, Terminated)
@@ -203,18 +219,20 @@ LVRB.ConnectDevices = function()
 
     function lovr.keypressed(k, c, r)
         if r then return end
-        KeyArray[KMP[k]] = true
+        KeyArray[KeyMap[k]] = true
         local Terminated
         MAKEINPUTDATA(Terminated, true, k, true,nil,nil)
         KB.KeyPressed:Fire(k, c, Terminated)
     end
 
     function lovr.keyreleased(k, c)
-        KeyArray[KMP[k]] = false
+        KeyArray[KeyMap[k]] = false
         local Terminated
         MAKEINPUTDATA(Terminated, true, k, false,nil,nil)
         KB.KeyReleased:Fire(k, c, Terminated)
     end
+
+    LVRB.ConnectDevices = nil
 end
 
 LVRB.LoadWindow = function()
@@ -280,6 +298,8 @@ LVRB.LoadWindow = function()
     AstralEngine.Window.SetCursorIcon = function(Inp)
         SetCursorIcon(Inp and Inp.Name:lower() or "default")
     end
+
+    LVRB.LoadWindow = nil
 end
 
 LVRB.LoadRandom = function()
@@ -319,6 +339,7 @@ LVRB.LoadRandom = function()
         return RanGen
     end
 
+    LVRB.LoadRandom = nil
 end
 
 LVRB.Alias = function()
@@ -345,15 +366,18 @@ LVRB.Alias = function()
     AstralEngine.System.GetGPULimits = lovr.graphics.getLimits
     AstralEngine.System.IsTextureSupported = lovr.graphics.isFormatSupported
 
+    AstralEngine.System.Quit = lovr.event.quit
+    AstralEngine.System.Restart = lovr.event.quit
+
     AstralEngine.Graphics.SetBackgroundColor = lovr.graphics.setBackgroundColor
-    AstralEngine.Graphics.GetBackgroundColor = lovr.graphics.GetBackgroundColor
+    AstralEngine.Graphics.GetBackgroundColor = lovr.graphics.getBackgroundColor
     AstralEngine.Graphics.EnableTiming = lovr.graphics.setTimingEnabled
     AstralEngine.Graphics.IsTimingEnabled = lovr.graphics.isTimingEnabled
     AstralEngine.Graphics.GetDefaultFont = lovr.graphics.getDefaultFont
 
-    AstralEngine.Quit = lovr.event.quit
-    AstralEngine.Restart = lovr.event.restart
     AstralEngine.GetHostVersion = lovr.getVersion
+
+    LVRB.Alias = nil
 end
 
 return LVRB

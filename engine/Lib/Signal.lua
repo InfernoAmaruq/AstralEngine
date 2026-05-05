@@ -1,8 +1,8 @@
 local Signal = {}
 
 Signal.__index = Signal
-Signal.SCHEDULER = nil
-Signal.CLOCK = os.clock
+Signal.Scheduler = nil
+Signal.Clock = os.clock
 
 Signal.Type = {
     Default = 0,
@@ -102,12 +102,12 @@ function Signal:Fire(...)
         local Threads = {}
 
         for _, cb in ipairs(self._connections) do
-            local Thread = self.SCHEDULER:Spawn(false, cb, ...)
+            local Thread = self.Scheduler:Spawn(false, cb, ...)
             table.insert(Threads, Thread)
         end
 
-        local ST = self.CLOCK() -- os.clock is bad here
-        while self.CLOCK() - ST < self._timeout do
+        local ST = self.Clock() -- os.clock is bad here
+        while self.Clock() - ST < self._timeout do
             local Done = true
 
             for _, thread in ipairs(Threads) do
@@ -125,7 +125,7 @@ function Signal:Fire(...)
         end
     else
         for _, cb in ipairs(self._connections) do
-            local Ok, Error = self.SCHEDULER:Spawn(false, cb, ...)
+            local Ok, Error = self.Scheduler:Spawn(false, cb, ...)
             if not Ok then
                 print("SIGNAL ERR:" .. Error)
             end

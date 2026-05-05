@@ -62,8 +62,6 @@ lovr.graphics.newTexture = function(...)
     return CAPTURE
 end
 
-local Tilemap = require("./Tilemap")
-
 AstralEngine.Graphics = {
     NewRawPass = OgPass,
     NewRawTexture = function(...)
@@ -77,7 +75,6 @@ AstralEngine.Graphics = {
     end,
     NewTexture = lovr.graphics.newTexture,
     NewPass = lovr.graphics.newPass,
-    NewTilemap = Tilemap.New,
 }
 
 function AstralEngine.Window.__WindowResizedPasses(...)

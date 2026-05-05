@@ -20,7 +20,7 @@ static int l_RunService_Tick(lua_State* L){
     int HasPass = !lua_isnoneornil(L,3);
 
     lua_rawgeti(L,LUA_REGISTRYINDEX,RSRef);
-    lua_getfield(L,-1,"__BOUNDTOSTEP");
+    lua_getfield(L,-1,"__BoundToStep");
     luaL_checktype(L,-1,LUA_TTABLE);
 
     for (int Pr = PStart; Pr <= PLimit; Pr++)

@@ -130,4 +130,27 @@ fs.folderFromPath = function(p)
     return p:gsub(fldrPattern, "")
 end
 
+-- Mounting
+
+fs.mountRecursively = function(path, search, coreMountPoint, handler)
+    for _, v in ipairs(fs.getDirectoryItems(search)) do
+        local searchAt = search .. "/" .. v
+        if fs.isDirectory(searchAt) then
+            local truePath = path .. "/" .. v .. "/"
+
+            local mountAt = coreMountPoint .. "/" .. v
+            if handler then
+                mountAt = handler(v, truePath, searchAt) or mountAt
+            end
+
+            local mountAttempt, err = fs.mount(truePath, mountAt, true)
+            if mountAttempt then
+                fs.mountRecursively(truePath, searchAt, mountAt, handler)
+            else
+                print("Failed mount of:", searchAt, err)
+            end
+        end
+    end
+end
+
 return fs

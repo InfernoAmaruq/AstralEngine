@@ -1,0 +1,156 @@
+local SignalLib = require("/Lib/Signal")
+
+-- define FENV for our coroutines
+local FENV = setmetatable({
+    task = {
+        spawn = task and task.spawn,
+        defer = task and task.defer,
+        wait = function()
+            error("CANNOT CALL 'wait' IN RUNSERVICE ROUTINE")
+        end,
+    },
+    coroutine = {
+        resume = coroutine.resume,
+        wrap = coroutine.wrap,
+        create = coroutine.create,
+        running = coroutine.running,
+        status = coroutine.status,
+    },
+}, {
+    __index = _G,
+    __newindex = function(_, k, v)
+        _G[k] = v
+    end,
+})
+
+local function AllocRoutine(fn)
+    if not FENV.task.spawn and task and task.spawn then
+        FENV.task.spawn = task.spawn
+        FENV.task.defer = task.defer
+    end
+
+    local YIELD = coroutine.yield
+    setfenv(fn, FENV)
+    local f = function()
+        while true do
+            fn(YIELD(-1))
+        end
+    end
+    local c = coroutine.create(f)
+    coroutine.resume(c)
+    return c
+end
+
+-- RunService logic
+
+local Data = {}
+
+Data.RenderStepped = SignalLib.new()
+
+Data.__BoundToStep = {}
+Data.__UsedNames = {}
+
+Data.UnbindFromStep = function(Name)
+    if not Data.__UsedNames[Name] then
+        return
+    end
+
+    if _G.CONTEXT then
+        _G.CONTEXT:UnbindFromContext("RSBinds", Name)
+    end
+
+    Data.__BoundToStep[Data.__UsedNames[Name]][Name] = nil
+end
+
+Data.__RawUnbind = function(Name)
+    if not Data.__UsedNames[Name] then
+        return
+    end
+
+    Data.__BoundToStep[Data.__UsedNames[Name]][Name] = nil
+end
+
+local ENUMName = "StepPriority"
+local E
+local Processor
+if _G["ENUM"] then
+    E = _G["ENUM"]({
+        CPUUpdate = 250,
+        RenderSceneSolid = 600,
+        RenderSceneTransparent = 700,
+        RenderSceneComposite = 750,
+        RenderPost = 800,
+        RenderSubmit = 950,
+        RenderMirror = 970,
+        Physics = 1250,
+    }, ENUMName, { CanAppend = true })
+    Processor = _G["ENUM"].__GETPROCESSOR(ENUMName, "RawValue")
+else
+    Processor = function(_) end
+end
+
+Data.__TEMPBIND = function(n, Priority, F)
+    Priority = Processor(Priority) or Priority
+    assert(math.mathtype(Priority) == "Integer", Priority .. " NOT AN INT")
+    Data.__BoundToStep[Priority] = Data.__BoundToStep[Priority] or {}
+    Data.__BoundToStep[Priority][n] = F
+    if _G.CONTEXT then
+        _G.CONTEXT:BindToContext("RSTemp", F, Priority)
+    end
+end
+
+Data.__UNBIND_TEMP = function(F, P)
+    for Idx, Func in pairs(Data.__BoundToStep[P]) do
+        if F == Func then
+            Data.__BoundToStep[P][Idx] = nil
+        end
+    end
+end
+
+Data.Flags = {
+    Raw = 1 << 0,
+    Contextless = 1 << 1,
+}
+
+Data.BindToStep = function(Name, Priority, F, Flag)
+    Flag = Flag or 0
+    Priority = Processor(Priority) or Priority
+    assert(math.mathtype(Priority) == "Integer", Priority .. " NOT AN INT")
+
+    local BindRaw = Flag & Data.Flags.Raw ~= 0
+    local Contextless = Flag & Data.Flags.Contextless ~= 0
+
+    if rtype(F) == "function" and not BindRaw then
+        F = AllocRoutine(F)
+    end
+
+    local IsUsed = Data.__UsedNames[Name]
+    if IsUsed then
+        error("RS bind of " .. Name .. " already in use")
+    end
+
+    Data.__BoundToStep[Priority] = Data.__BoundToStep[Priority] or {}
+
+    if _G.CONTEXT and not Contextless then
+        _G.CONTEXT:BindToContext("RSBinds", Name)
+    end
+
+    local T = Data.__BoundToStep[Priority]
+
+    Data.__UsedNames[Name] = Priority
+
+    T[Name] = F
+end
+
+local Native = require("RunServiceNative") -- calling the so/dll
+
+Native.Init(Data)
+Data.__TICK = Native.Tick
+
+Data.BindToStep("__CORE_UPD", E and E.CPUUpdate and E.CPUUpdate.RawValue or 250, function(dt)
+    Data.RenderStepped:Fire(dt)
+end)
+
+GetService.AddService("RunService", Data)
+
+return Data

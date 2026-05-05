@@ -15,7 +15,6 @@ _G.AstralEngine = {
     [".Internal"] = {},
 }
 
-AstralEngine._MOUNT = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Mount.lua")()
 lovr.filesystem.extractor = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Extractor.lua")()
 loadfile, require, package.loadlib = unpack(lovr.filesystem.load(package.ENG_PATH .. "/Lib/Require.lua")())
 
@@ -39,7 +38,7 @@ local AliasMap = {
 local ShaderPath
 local IsZip = Real:sub(-4) == ".zip"
 if not IsZip and not lovr.filesystem.isFused() then
-    AstralEngine._MOUNT(Real, "", "", true, function(Name, _, True)
+    lovr.filesystem.mountRecursively(Real, "", "", function(Name, _, True)
         if AliasMap[Name] then
             if AliasMap[Name] == AliasMap.Shaders then
                 ShaderPath = True
@@ -88,7 +87,7 @@ local GameAliasTable = {
     Scenes = "Scenes",
 }
 
-AstralEngine._MOUNT(PATH, package.GAME_PATH, package.GAME_PATH, true, function(Name, _, VfsPath)
+lovr.filesystem.mountRecursively(PATH, package.GAME_PATH, package.GAME_PATH, function(Name, _, VfsPath)
     if GameAliasTable[Name] then
         if Name == "Components" and VfsPath:find("Plugin") then
             return

@@ -81,6 +81,11 @@ function lovr.load()
     BRIDGE.LoadRandom()
     BRIDGE.LoadWindow()
 
+    local IS = GetService("InputService")
+    for i,v in pairs(require("Lib/TextInput.lua")) do
+        IS[i] = v
+    end
+
     Renderer.LateCall()
 
     AstralEngine.Plugins.Finish()

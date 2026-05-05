@@ -8,9 +8,6 @@ Renderer.Late[#Renderer.Late + 1] = function()
     local Bound = false
 
     local function RenderFunc(Pass)
-        if not Pass then
-            return
-        end
         Pass:setDepthWrite(false)
         Pass:setSampler(CoreCamera[16] and "nearest" or "linear")
         Pass:fill(CoreCamera[12][1])

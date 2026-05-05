@@ -299,17 +299,13 @@ local Metatable = {
 --              CONSTRUCTOR
 --\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
 
-Ancestry.Metadata.__create = function(Input, Entity)
+Ancestry.Metadata.__create = function(_, Entity)
     local Comp = {}
     Comp[&PARENT_PTR] = false -- false so array is linear
     Comp[&CHILD_PTR] = {}
     Comp[&SELF_PTR] = Entity
 
     setmetatable(Comp, Metatable)
-
-    if Input.Parent then
-        PublicMethods.SetParent(Comp,Input.Parent)
-    end
 
     return Comp
 end

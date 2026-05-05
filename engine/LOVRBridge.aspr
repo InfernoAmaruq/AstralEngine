@@ -264,7 +264,21 @@ LVRB.LoadWindow = function()
         title = AstralEngine._CONFIG.Game.Window.Name,
         icon = AstralEngine._CONFIG.Game.Window.Icon,
     })
-    AstralEngine.Window.SetCursorIcon = lovr.system.setCursorIcon
+
+    local SetCursorIcon = lovr.system.setCursorIcon
+
+    ENUM({
+        Default = 1,
+        Hand = 2,
+        Crosshair = 3,
+        IBeam = 4,
+        HResize = 5,
+        VResize = 6
+    },"CursorIconType")
+
+    AstralEngine.Window.SetCursorIcon = function(Inp)
+        SetCursorIcon(Inp and Inp.Name:lower() or "default")
+    end
 end
 
 LVRB.LoadRandom = function()

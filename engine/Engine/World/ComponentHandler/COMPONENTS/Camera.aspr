@@ -7,6 +7,7 @@
 --              DEPENDENCY
 --\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
 
+local Signal = require("Lib/Signal")
 local Renderer = GetService("Renderer")
 local Component = GetService("Component")
 
@@ -40,7 +41,7 @@ Camera.Pattern = {
     NearestSampler = false,
     Enabled = true,
     QueueUpd = false,
-    RenderCallback = nil,
+    ShouldRebuild = nil,
     OITPass = nil,
     SolidPass = nil,
 
@@ -70,7 +71,7 @@ local FIELDS = {
     NearestSampler = 16,
     Enabled = 17,
     QueueUpd = 18,
-    RenderCallback = 19,
+    ShouldRebuild = 19,
     SolidTex = 20,
     OITPass = 21,
     SolidPass = 22,
@@ -78,6 +79,7 @@ local FIELDS = {
     DepthTexture = 24,
     Density = 25,
     ProjectionMatrix = 26,
+    OnResize = 27,
 }
 
 local function RawViewToRay(self, Vector)
@@ -174,6 +176,7 @@ local READ_ONLY = {
     Height = true,
     Aspect = true,
     Density = true,
+    OnResize = true,
 }
 
 local SETTER = {
@@ -266,6 +269,9 @@ local function RebuildPasses(CameraRef)
 end
 
 local function Rebuild(V, IsPass, w, h, Density)
+    if not V.CREF.ShouldRebuild then
+        return
+    end
     Density = Density or lovr.system.getWindowDensity()
     w = w * Density
     h = h * Density
@@ -278,6 +284,7 @@ local function Rebuild(V, IsPass, w, h, Density)
             V.CREF[FIELDS.Aspect] = w / h
             V.CREF[FIELDS.Density] = Density
             METHODS.ReconstructProjectionMatrix(V.CREF)
+            V.CREF.OnResize:Fire(w, h)
         end
     end
 end
@@ -369,6 +376,8 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.CameraTex.CREF = D
     Data.DepthTexture.CREF = D
 
+    Data.ShouldRebuild = Input.ShouldRebuild == nil and true or Input.ShouldRebuild
+
     for i, v in pairs(Data) do
         if i == "__Resizables" then
             rawset(D, i, v)
@@ -382,6 +391,8 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
         end
     end
 
+    D[FIELDS.OnResize] = Signal.new(Signal.Type.NoCtx | Signal.Type.RTC)
+
     BoundCameras = BoundCameras + 3
 
     rawset(D, "__EntityPtr", GetService("World").GetEntityFromId(Entity))
@@ -393,6 +404,8 @@ end
 
 Camera.Metadata.__remove = function(self, Entity)
     Renderer.RemoveCamera(Entity)
+
+    self.OnResize:Destroy()
 
     Renderer.PassStorage.RemovePass(self.OITPass)
     Renderer.PassStorage.RemovePass(self.SolidPass)

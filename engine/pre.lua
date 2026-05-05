@@ -6,7 +6,7 @@ end
 
 local ExeFold = lovr.filesystem.getWorkingDirectory()
 
-PATH = "/" .. lovr.filesystem.normalize(lovr.filesystem.toUnix(ExeFold .. PATH))
+PATH = lovr.filesystem.normalize(lovr.filesystem.toUnix(ExeFold .. "/" .. PATH))
 
 _G.__BOOT = {}
 _G.AstralEngine = {

@@ -101,12 +101,12 @@ jobs:
           -keysize 2048
           -validity 10000 &&
           cmake ..
-          -D CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake
+          -D CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake
           -D ANDROID_SDK=$ANDROID_HOME
           -D ANDROID_ABI=${{ matrix.abi }}
           -D ANDROID_STL=c++_shared
           -D ANDROID_NATIVE_API_LEVEL=${{ matrix.android_version }}
-          -D ANDROID_BUILD_TOOLS_VERSION=34.0.0
+          -D ANDROID_BUILD_TOOLS_VERSION=37.0.0
           -D ANDROID_KEYSTORE=key.keystore
           -D ANDROID_KEYSTORE_PASS=pass:hunter2
           -D LOVR_VERSION_HASH=${GITHUB_SHA::6}

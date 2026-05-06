@@ -1060,10 +1060,6 @@ bool gpu_surface_resize(uint32_t width, uint32_t height) {
   surface->width = 0;
   surface->height = 0;
 
-  if (width == 0 || height == 0) {
-    return true;
-  }
-
   if (surface->swapchain) {
     VK(vkDeviceWaitIdle(state.device), "vkDeviceWaitIdle") {
       return false;
@@ -1083,6 +1079,10 @@ bool gpu_surface_resize(uint32_t width, uint32_t height) {
   width = MAX(width, surface->capabilities.minImageExtent.width);
   height = MIN(height, surface->capabilities.maxImageExtent.height);
   height = MAX(height, surface->capabilities.minImageExtent.height);
+
+  if (width == 0 || height == 0) {
+    return true;
+  }
 
   VkSwapchainCreateInfoKHR swapchainInfo = {
     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,

@@ -4967,7 +4967,40 @@ bool lovrMeshComputeBoundingBox(Mesh* mesh) {
   return true;
 }
 
+static bool lovrMeshFlush(Mesh* mesh) {
+  if (mesh->storage == MESH_GPU) {
+    return true;
+  }
+
+  if (mesh->dirtyVertices[1] > mesh->dirtyVertices[0]) {
+    uint32_t stride = mesh->vertexBuffer->info.format->stride;
+    uint32_t offset = mesh->dirtyVertices[0] * stride;
+    uint32_t extent = (mesh->dirtyVertices[1] - mesh->dirtyVertices[0]) * stride;
+    void* data = lovrBufferSetData(mesh->vertexBuffer, offset, extent);
+    if (!data) return false;
+    memcpy(data, (char*) mesh->vertices + offset, extent);
+    lovrBufferFlush(mesh->vertexBuffer);
+    mesh->dirtyVertices[0] = ~0u;
+    mesh->dirtyVertices[1] = 0;
+  }
+
+  if (mesh->dirtyIndices) {
+    uint32_t stride = mesh->indexBuffer->info.format->stride;
+    void* data = lovrBufferSetData(mesh->indexBuffer, 0, mesh->indexCount * stride);
+    if (!data) return false;
+    memcpy(data, mesh->indices, mesh->indexCount * stride);
+    lovrBufferFlush(mesh->indexBuffer);
+    mesh->dirtyIndices = false;
+  }
+
+  return true;
+}
+
 bool lovrMeshBuildRaytracer(Mesh* mesh) {
+  if (!lovrMeshFlush(mesh)) {
+    return false;
+  }
+
   if (!mesh->tree) {
     const DataField* vertex = mesh->vertexBuffer->info.format;
     const DataField* index = mesh->indexCount > 0 ? mesh->indexBuffer->info.format : NULL;
@@ -5075,35 +5108,6 @@ void lovrMeshSetMaterial(Mesh* mesh, Material* material) {
   lovrRelease(mesh->material, lovrMaterialDestroy);
   mesh->material = material;
   lovrRetain(material);
-}
-
-static bool lovrMeshFlush(Mesh* mesh) {
-  if (mesh->storage == MESH_GPU) {
-    return true;
-  }
-
-  if (mesh->dirtyVertices[1] > mesh->dirtyVertices[0]) {
-    uint32_t stride = mesh->vertexBuffer->info.format->stride;
-    uint32_t offset = mesh->dirtyVertices[0] * stride;
-    uint32_t extent = (mesh->dirtyVertices[1] - mesh->dirtyVertices[0]) * stride;
-    void* data = lovrBufferSetData(mesh->vertexBuffer, offset, extent);
-    if (!data) return false;
-    memcpy(data, (char*) mesh->vertices + offset, extent);
-    lovrBufferFlush(mesh->vertexBuffer);
-    mesh->dirtyVertices[0] = ~0u;
-    mesh->dirtyVertices[1] = 0;
-  }
-
-  if (mesh->dirtyIndices) {
-    uint32_t stride = mesh->indexBuffer->info.format->stride;
-    void* data = lovrBufferSetData(mesh->indexBuffer, 0, mesh->indexCount * stride);
-    if (!data) return false;
-    memcpy(data, mesh->indices, mesh->indexCount * stride);
-    lovrBufferFlush(mesh->indexBuffer);
-    mesh->dirtyIndices = false;
-  }
-
-  return true;
 }
 
 // Model

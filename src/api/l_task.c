@@ -209,7 +209,7 @@ static int l_lovrTaskStart(lua_State* L) {
       luax_setthreaddata(T, &TASK_ERR);
       return lua_error(L);
     } else {
-      luax_setthreaddata(T, &TASK_OK);
+      luax_setthreaddata(T, (void*) &TASK_OK);
     }
   }
 
@@ -219,12 +219,13 @@ static int l_lovrTaskStart(lua_State* L) {
 static int l_lovrTaskResume(lua_State* L) {
   luaL_checktype(L, 1, LUA_TTHREAD);
   lua_State* T = lua_tothread(L, 1);
-  Task* task = luax_getthreaddata(T);
+  void* data = luax_getthreaddata(T);
+  Task* task = data;
 
-  if (!task) {
+  if (!data) {
     task = lovrTaskCreate(T);
     luax_setthreaddata(T, task);
-  } else if (task == &TASK_OK || task == &TASK_ERR || task->complete) {
+  } else if (data == &TASK_OK || data == &TASK_ERR || task->complete) {
     lua_pushnil(L);
     lua_pushliteral(L, "already complete");
     return 2;
@@ -300,15 +301,17 @@ static int l_lovrTaskPoll(lua_State* L) {
 }
 
 static int luax_waittask(lua_State* L, lua_State* T) {
-  Task* task = luax_getthreaddata(T);
+  void* data = luax_getthreaddata(T);
 
-  if (task == &TASK_OK) {
+  if (data == &TASK_OK) {
     return 0;
-  } else if (task == &TASK_ERR) {
+  } else if (data == &TASK_ERR) {
     return LUA_ERRRUN;
   } else {
-    luax_check(L, task, "Trying to wait on a coroutine that wasn't resumed with lovr.task.resume");
+    luax_check(L, data, "Trying to wait on a coroutine that wasn't resumed with lovr.task.resume");
   }
+
+  Task* task = data;
 
   if (task->complete) {
     return task->error ? LUA_ERRRUN : 0;
@@ -355,10 +358,10 @@ static int l_lovrTaskWait(lua_State* L) {
     for (int i = 1; i <= n; i++) {
       luaL_checktype(L, i, LUA_TTHREAD);
       lua_State* T = lua_tothread(L, i);
-      Task* task = luax_getthreaddata(T);
-      luax_check(T, task, "Trying to wait on a coroutine that wasn't resumed with lovr.task.resume");
-      if (task != &TASK_OK && task != &TASK_ERR) {
-        luax_assert(L, lovrTaskAddDependency(self, task));
+      void* data = luax_getthreaddata(T);
+      luax_check(T, data, "Trying to wait on a coroutine that wasn't resumed with lovr.task.resume");
+      if (data != &TASK_OK && data != &TASK_ERR) {
+        luax_assert(L, lovrTaskAddDependency(self, data));
       }
     }
 
@@ -415,15 +418,16 @@ static int l_lovrTaskWait(lua_State* L) {
 static int l_lovrTaskGetStatus(lua_State* L) {
   luaL_checktype(L, 1, LUA_TTHREAD);
   lua_State* T = lua_tothread(L, 1);
-  Task* task = luax_getthreaddata(T);
+  void* data = luax_getthreaddata(T);
+  Task* task = data;
 
   if (T == L) {
     lua_pushliteral(L, "running");
-  } else if (!task) {
+  } else if (!data) {
     lua_pushnil(L);
-  } else if (task == &TASK_OK || task->complete) {
+  } else if (data == &TASK_OK || task->complete) {
     lua_pushliteral(L, "complete");
-  } else if (task == &TASK_ERR || task->error) {
+  } else if (data == &TASK_ERR || task->error) {
     lua_pushliteral(L, "failed");
   } else if (task->waiting && atomic_load(&task->deps) > 0) {
     lua_pushliteral(L, "waiting");

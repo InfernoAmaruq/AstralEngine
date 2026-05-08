@@ -156,7 +156,7 @@ static bool luax_callthread(void** arg) {
     luax_pushvariant(L, &context->arguments[i]);
   }
 
-  if (lua_pcall(L, context->argumentCount, LUA_MULTRET, base + 1) != LUA_OK) {
+  if (lua_pcall(L, context->argumentCount, LUA_MULTRET, base + 1)) {
     lovrSetError(lua_tostring(L, -1));
     lua_settop(L, base);
     return false;

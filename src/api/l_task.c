@@ -180,7 +180,7 @@ static int luax_runtask(Task* task, int n) {
 
   // Handle error/completion
   if (status != LUA_YIELD) {
-    if (status != LUA_OK) {
+    if (status != 0) {
       task->error = lovrStrdup(lua_tostring(T, -1));
     }
 
@@ -203,7 +203,7 @@ static int l_lovrTaskStart(lua_State* L) {
   if (!task->waiting) {
     lovrTaskDestroy(task);
 
-    if (status != LUA_OK && status != LUA_YIELD) {
+    if (status != 0 && status != LUA_YIELD) {
       lua_pushvalue(T, -1);
       lua_xmove(T, L, 1);
       luax_setthreaddata(T, &TASK_ERR);
@@ -252,7 +252,7 @@ static int l_lovrTaskResume(lua_State* L) {
 
   lovrTaskDestroy(task);
 
-  if (status == LUA_OK) {
+  if (status == 0) {
     luax_setthreaddata(T, &TASK_OK);
     lua_pushboolean(L, true);
     int n = lua_gettop(T);
@@ -303,7 +303,7 @@ static int luax_waittask(lua_State* L, lua_State* T) {
   Task* task = luax_getthreaddata(T);
 
   if (task == &TASK_OK) {
-    return LUA_OK;
+    return 0;
   } else if (task == &TASK_ERR) {
     return LUA_ERRRUN;
   } else {
@@ -311,7 +311,7 @@ static int luax_waittask(lua_State* L, lua_State* T) {
   }
 
   if (task->complete) {
-    return task->error ? LUA_ERRRUN : LUA_OK;
+    return task->error ? LUA_ERRRUN : 0;
   }
 
   if (task->waiting == WAIT_JOB) {
@@ -377,7 +377,7 @@ static int l_lovrTaskWait(lua_State* L) {
     for (;;) {
       int status = luax_waittask(L, T);
 
-      if (status == LUA_OK) {
+      if (status == 0) {
         break;
       } else if (status != LUA_YIELD) {
         lua_pushvalue(T, -1);

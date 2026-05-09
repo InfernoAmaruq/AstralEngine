@@ -2486,6 +2486,8 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
   uint32_t levelSizes[16];
   BufferView view = { 0 };
 
+  mtx_lock(&state.lock);
+
   if (info->imageCount > 0) {
     levelCount = lovrImageGetLevelCount(info->images[0]);
 
@@ -2504,10 +2506,8 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
       total += levelSizes[level];
     }
 
-    mtx_lock(&state.lock);
     view = getBuffer(GPU_BUFFER_UPLOAD, total, 64);
     char* data = view.pointer;
-    mtx_unlock(&state.lock);
 
     if (!view.buffer) {
       lovrTextureDestroy(texture);
@@ -2530,8 +2530,6 @@ Texture* lovrTextureCreate(const TextureInfo* info) {
 
   // Render targets with mipmaps get transfer usage for automipmapping
   bool transfer = (info->usage & TEXTURE_TRANSFER) || ((info->usage & TEXTURE_RENDER) && texture->info.mipmaps > 1);
-
-  mtx_lock(&state.lock);
 
   if (!gpu_texture_init(texture->gpu, &(gpu_texture_info) {
     .type = (gpu_texture_type) info->type,

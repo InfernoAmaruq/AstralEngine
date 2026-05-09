@@ -151,7 +151,6 @@ typedef struct {
 } gpu_alloc_entry;
 
 typedef struct {
-  mtx_t lock;
   gpu_memory* block;
   uint32_t pageCount;
   uint32_t heapIndex;
@@ -258,6 +257,7 @@ static struct {
   VkDebugUtilsMessengerEXT messenger;
   gpu_allocator allocators[GPU_MEMORY_COUNT];
   uint8_t allocatorLookup[GPU_MEMORY_COUNT];
+  mtx_t allocatorLock;
   gpu_memory memory[1024];
   _Atomic(gpu_thread_state*) threads;
   gpu_morgue morgue;
@@ -3351,8 +3351,6 @@ bool gpu_init(gpu_config* config) {
           }
         }
       }
-
-      mtx_init(&allocator->lock, mtx_plain);
     }
 
     // Textures
@@ -3425,7 +3423,6 @@ bool gpu_init(gpu_config* config) {
 
       if (!merged) {
         uint32_t index = allocatorCount++;
-        mtx_init(&state.allocators[index].lock, mtx_plain);
         state.allocators[index].memoryFlags = memoryFlags;
         state.allocators[index].heapIndex = memoryTypes[memoryType].heapIndex;
         state.allocators[index].fallbackMemoryType = memoryType;
@@ -3433,6 +3430,8 @@ bool gpu_init(gpu_config* config) {
         state.allocatorLookup[i] = index;
       }
     }
+
+    mtx_init(&state.allocatorLock, mtx_plain);
   }
 
   // Semaphore
@@ -3495,11 +3494,7 @@ void gpu_destroy(void) {
     state.config.fnFree(victim);
   }
   mtx_destroy(&state.morgue.lock);
-  for (uint32_t i = 0; i < COUNTOF(state.allocators); i++) {
-    if (state.allocators[i].memoryFlags) {
-      mtx_destroy(&state.allocators[i].lock);
-    }
-  }
+  mtx_destroy(&state.allocatorLock);
   if (state.pipelineCache) vkDestroyPipelineCache(state.device, state.pipelineCache, NULL);
   if (state.semaphore) vkDestroySemaphore(state.device, state.semaphore, NULL);
   for (uint32_t i = 0; i < COUNTOF(state.memory); i++) {
@@ -3688,7 +3683,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
   uint32_t align = MAX(info.alignment, GPU_PAGE_SIZE);
   uint32_t requiredPages = ALIGN(info.size, align) / GPU_PAGE_SIZE;
 
-  mtx_lock(&allocator->lock);
+  mtx_lock(&state.allocatorLock);
 
   if (allocator->block) {
     // Search through regions for a free region of sufficient size
@@ -3723,7 +3718,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 
         allocator->block->refs++;
         *offset = (i + offsetPages) * GPU_PAGE_SIZE;
-        mtx_unlock(&allocator->lock);
+        mtx_unlock(&state.allocatorLock);
         return allocator->block;
       }
     }
@@ -3762,7 +3757,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 
         VK(result, "vkAllocateMemory") {
           allocator->block = NULL;
-          mtx_unlock(&allocator->lock);
+          mtx_unlock(&state.allocatorLock);
           return NULL;
         }
       }
@@ -3771,7 +3766,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
         VK(vkMapMemory(state.device, memory->handle, 0, VK_WHOLE_SIZE, 0, &memory->pointer), "vkMapMemory") {
           vkFreeMemory(state.device, memory->handle, NULL);
           memory->handle = NULL;
-          mtx_unlock(&allocator->lock);
+          mtx_unlock(&state.allocatorLock);
           return NULL;
         }
       } else {
@@ -3783,7 +3778,7 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
 
       // Memory only receives an allocator if it can host multiple allocations
       // (i.e. it has a fixed block size and this block is not full/oversized)
-      if(blockSize && (requiredPages * GPU_PAGE_SIZE) < blockSize) {
+      if (blockSize && (requiredPages * GPU_PAGE_SIZE) < blockSize) {
         allocator->block = memory;
 
         // Mark the initial region
@@ -3798,13 +3793,13 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
       }
 
       *offset = 0;
-      mtx_unlock(&allocator->lock);
+      mtx_unlock(&state.allocatorLock);
       return memory;
     }
   }
 
   error("Out of GPU memory blocks");
-  mtx_unlock(&allocator->lock);
+  mtx_unlock(&state.allocatorLock);
   return NULL;
 }
 
@@ -3815,7 +3810,7 @@ static void release(gpu_memory* memory, VkDeviceSize offset) {
 
   gpu_allocator* allocator = &state.allocators[state.allocatorLookup[memory->type]];
 
-  mtx_lock(&allocator->lock);
+  mtx_lock(&state.allocatorLock);
 
   if (--memory->refs == 0) {
     // If the allocator manages this block, reset it, otherwise free the memory
@@ -3856,7 +3851,7 @@ static void release(gpu_memory* memory, VkDeviceSize offset) {
     }
   }
 
-  mtx_unlock(&allocator->lock);
+  mtx_unlock(&state.allocatorLock);
 }
 
 static void condemn(void* handle, VkObjectType type) {

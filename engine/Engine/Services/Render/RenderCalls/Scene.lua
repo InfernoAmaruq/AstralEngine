@@ -182,7 +182,7 @@ local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
             local RenT = RendStorage[E]
             local Comp = SetComponents[E]
             local Mat = Comp.Material
-            if RenT[2] & CMASK ~= 0 then
+            if (RenT[2] & CMASK) == 0 then
                 continue
             end
             if Mat then
@@ -190,14 +190,14 @@ local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
                 &PASS:send("UVScale",Mat[2])
                 &PASS:send("UVOffset",Mat[3])
             else
-                &PASS:setColor()
+                &PASS:setColor(1,1,1,1)
                 &PASS:send("UVScale",VecOne)
                 &PASS:send("UVOffset",VecZero)
             end
 
             local RETFLAG = TYPETOPROCESS[RenT[1]](&PASS, E, Comp)
             if not RETFLAG then continue end
-            if RETFLAG & &F_SHADER_RESET == 0 then
+            if RETFLAG & &F_SHADER_RESET ~= 0 then
                 &PASS:setShader(MAINSHADER)
             end
         end

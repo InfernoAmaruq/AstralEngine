@@ -23,6 +23,9 @@ local StrToFunc = {
             Self.__ShapePtr:setDimensions(NewSize:unpack())
         elseif T == ST.Sphere then
             Self.__ShapePtr:setRadius(type(NewSize) == "number" and NewSize or math.max(NewSize:unpack()))
+        elseif T == ST.Capsule or T == ST.Cylinder then
+            Self.__ShapePtr:setLength(NewSize.y)
+            Self.__ShapePtr:setLength(NewSize.x)
         else
             error("SHAPES: INCOMPLETE API")
         end
@@ -44,14 +47,14 @@ local StrToFunc = {
         if typeof(Rotation) == "Vec3" then
             Quat = quat():setEuler(Rotation:unpack())
         else
-            Quat = Rotation
+            Quat = Rotation or quat()
         end
 
-        self.__ShapePtr:setOffset(Position:unpack(), Quat:unpack())
+        self.__ShapePtr:setOffset(Position, Quat)
     end,
     SetPosition = function(self, Position)
         local _, _, _, a, ax, ay, az = self.__ShapePtr:getOffset()
-        self.__ShapePtr:setOffset(Position:unpack(), a, ax, ay, az)
+        self.__ShapePtr:setOffset(Position.x, Position.y, Position.z, a, ax, ay, az)
     end,
     SetMass = function(self, NewMass)
         self.__ShapePtr:setMass(NewMass)
@@ -131,6 +134,7 @@ function Shapes.NewShape(ShapeType, Config)
     if ShapeType.RawValue <= 4 then
         Shape = RawPhys["new" .. TypeToShapeName[ShapeType]]()
     elseif ShapeType == ST.Convex then
+        AstralEngine.Error("CURRENTLY NO HANDLER FOR CONVEX SHAPES FOR COLLIDERS!", "PHYSICS")
     end
 
     AstralEngine.Assert(Shape, "Failed to create shape!", "PHYSICS")
@@ -146,6 +150,9 @@ function Shapes.NewShape(ShapeType, Config)
     if Config then
         if Config.Size then
             UD:SetSize(Config.Size)
+        end
+        if Config.OffsetPosition or Config.OffsetRotation then
+            UD:SetOffset(Config.OffsetPosition, Config.OffsetRotation)
         end
     end
 

@@ -59,12 +59,12 @@ function AstralEngine.Log(Msg, Flag, Tag, Level)
             IsErr and (Level or 2) or ""
         )
         if IsFatal then
-            QUIT()
+            AstralEngine.System.Quit()
         end
     else
         f(Pre .. ("[ASTRAL %s]" .. Post .. ": %s"):format(Flag:upper(), tostring(Msg)), IsErr and (Level or 2) or "")
         if IsFatal then
-            QUIT()
+            AstralEngine.System.Quit()
         end
     end
 end

@@ -9638,6 +9638,14 @@ static bool checkShaderFeatures(uint32_t* features, uint32_t count) {
       case 55: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "autoformat storage textures");
       case 56: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "autoformat storage textures");
       case 57: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "multiviewport");
+      case 61: break; // GroupNonUniform
+      case 62: lovrCheck(state.features.subgroupVote, "GPU does not support shader feature #%d: %s", features[i], "subgroup vote functions"); break;
+      case 63: lovrCheck(state.features.subgroupArithmetic, "GPU does not support shader feature #%d: %s", features[i], "subgroup arithmetic functions"); break;
+      case 64: lovrCheck(state.features.subgroupBallot, "GPU does not support shader feature #%d: %s", features[i], "subgroup ballot functions"); break;
+      case 65: lovrCheck(state.features.subgroupShuffle, "GPU does not support shader feature #%d: %s", features[i], "subgroup shuffle functions"); break;
+      case 66: lovrCheck(state.features.subgroupShuffleRelative, "GPU does not support shader feature #%d: %s", features[i], "subgroup relative shuffle functions"); break;
+      case 67: lovrCheck(state.features.subgroupClustered, "GPU does not support shader feature #%d: %s", features[i], "subgroup clustered functions"); break;
+      case 68: lovrCheck(state.features.subgroupQuad, "GPU does not support shader feature #%d: %s", features[i], "subgroup quad functions"); break;
       case 69: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "layered rendering");
       case 70: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "multiviewport");
       case 4427: break; // ShaderDrawParameters

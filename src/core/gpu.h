@@ -770,6 +770,13 @@ typedef struct {
   bool indirectDrawFirstInstance;
   bool packedBuffers;
   bool shaderDebug;
+  bool subgroupVote;
+  bool subgroupArithmetic;
+  bool subgroupBallot;
+  bool subgroupShuffle;
+  bool subgroupShuffleRelative;
+  bool subgroupClustered;
+  bool subgroupQuad;
   bool float64;
   bool int64;
   bool int16;

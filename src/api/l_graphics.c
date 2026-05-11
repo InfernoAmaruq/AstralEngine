@@ -891,16 +891,6 @@ static bool luax_loadtexture(void** userdata) {
     info->layers = info->imageCount == 1 ? lovrImageGetLayerCount(info->images[0]) : info->imageCount;
     info->samples = 1;
 
-    if (!context->hasType) {
-      if (info->imageCount == 1 && lovrImageIsCube(info->images[0])) {
-        info->type = TEXTURE_CUBE;
-      } else if (info->layers > 1) {
-        info->type = TEXTURE_ARRAY;
-      } else {
-        info->type = TEXTURE_2D;
-      }
-    }
-
     Image* image = info->images[0];
     uint32_t levels = lovrImageGetLevelCount(image);
     info->format = lovrImageGetFormat(image);
@@ -915,6 +905,16 @@ static bool luax_loadtexture(void** userdata) {
       lovrCheck(lovrImageGetFormat(image) == lovrImageGetFormat(info->images[i]), "Image formats must match");
       lovrCheck(lovrImageGetLevelCount(image) == lovrImageGetLevelCount(info->images[i]), "Image mipmap counts must match");
       lovrCheck(lovrImageGetLayerCount(info->images[i]) == 1, "When a list of images are provided, each must have a single layer");
+    }
+  }
+
+  if (!context->hasType) {
+    if (info->imageCount == 6 || (info->imageCount == 1 && lovrImageIsCube(info->images[0]))) {
+      info->type = TEXTURE_CUBE;
+    } else if (info->layers > 1) {
+      info->type = TEXTURE_ARRAY;
+    } else {
+      info->type = TEXTURE_2D;
     }
   }
 
@@ -943,7 +943,7 @@ static int luax_pushtexture(lua_State* L, bool success, void* userdata) {
 }
 
 static int l_lovrGraphicsNewTexture(lua_State* L) {
-  TextureContext* context = lovrMalloc(sizeof(TextureContext));
+  TextureContext* context = lovrCalloc(sizeof(TextureContext));
   TextureInfo* info = &context->info;
   context->blobs = context->blobStack;
   context->info = (TextureInfo) {
@@ -964,13 +964,11 @@ static int l_lovrGraphicsNewTexture(lua_State* L) {
     info->height = luax_checku32(L, index++);
     if (lua_isnumber(L, index)) {
       info->layers = luax_checku32(L, index++);
-      info->type = TEXTURE_ARRAY;
     }
     info->usage |= TEXTURE_RENDER;
     info->mipmaps = 1;
   } else if (lua_istable(L, 1)) {
     info->imageCount = luax_len(L, index++);
-    info->type = info->imageCount == 6 ? TEXTURE_CUBE : TEXTURE_ARRAY;
 
     if (info->imageCount > COUNTOF(context->imageStack)) {
       info->images = lovrMalloc(info->imageCount * sizeof(Image*));
@@ -978,9 +976,7 @@ static int l_lovrGraphicsNewTexture(lua_State* L) {
     }
 
     if (info->imageCount == 0) {
-      info->layers = 6;
       info->imageCount = 6;
-      info->type = TEXTURE_CUBE;
       const char* faces[6] = { "right", "left", "top", "bottom", "back", "front" };
       const char* altFaces[6] = { "px", "nx", "py", "ny", "pz", "nz" };
       for (int i = 0; i < 6; i++) {

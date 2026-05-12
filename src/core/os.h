@@ -160,11 +160,6 @@ void os_request_permission(os_permission permission);
 const char* os_get_clipboard_text(void);
 void os_set_clipboard_text(const char* text);
 
-void* os_vm_init(size_t size);
-bool os_vm_free(void* p, size_t size);
-bool os_vm_commit(void* p, size_t size);
-bool os_vm_release(void* p, size_t size);
-
 void os_thread_attach(void);
 void os_thread_detach(void);
 void os_thread_set_name(const char* name);

@@ -556,12 +556,14 @@ static int l_lovrWorldSetCallbacks(lua_State* L) {
   lua_rawset(L, -3);
   lua_pop(L, 1);
 
+  lua_State* mainThread = luax_getmainthread();
+
   lovrWorldSetCallbacks(world, &(WorldCallbacks) {
     .filter = filter ? filterCallback : NULL,
     .enter = enter ? enterCallback : NULL,
     .exit = exit ? exitCallback : NULL,
     .contact = contact ? contactCallback : NULL,
-    .userdata = L
+    .userdata = mainThread ? mainThread : L
   });
 
   return 0;

@@ -40,12 +40,12 @@ local CALLBACKS = {
     end,
     Exit = function(a,b)
         local PtrA, PtrB = a:getUserData(), b:getUserData()
-        PtrA.TouchEnded:Fire(PtrB.Entity,c)
-        PtrB.TouchEnded:Fire(PtrA.Entity,c)
+        PtrA.TouchEnded:Fire(PtrB.Entity)
+        PtrB.TouchEnded:Fire(PtrA.Entity)
     end,
 }
 
-local DefaultParameters = { ThreadSafe = false, RestitutionThreshold = 1, Stabilization = .7, Callbacks = {
+local DefaultParameters = { ThreadSafe = true, RestitutionThreshold = 1, Stabilization = .7, Callbacks = {
     Enter = CALLBACKS.Enter, Exit = CALLBACKS.Exit
 }, SetCollisionBetween = {},
     Tags = {"DEFAULT"}, StaticTags = {"STATIC_DEFAULT"}

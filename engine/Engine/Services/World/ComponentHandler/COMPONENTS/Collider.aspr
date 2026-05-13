@@ -301,7 +301,6 @@ function mt.__remove(self)
 
     self.ColRef:setUserData(nil)
     self.ColRef:destroy()
-    self.ColRef:release()
     for i in pairs(self) do
         self[i] = nil
     end

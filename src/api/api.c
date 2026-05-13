@@ -418,10 +418,21 @@ void luax_pushstash(lua_State* L, const char* name) {
   }
 }
 
+static lua_State* mainThreadPtr;
+
 void luax_setmainthread(lua_State *L) {
 #if LUA_VERSION_NUM < 502
   lua_pushthread(L);
   lua_rawseti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
+  mainThreadPtr = L;
+#endif
+}
+
+lua_State* luax_getmainthread(){
+#if LUA_VERSION_NUM < 502
+    return mainThreadPtr;
+#else
+    return NULL;
 #endif
 }
 

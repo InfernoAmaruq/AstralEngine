@@ -243,7 +243,6 @@ local function RebuildTexture(V, w, h)
     elseif CamRef.__REBUILT_TEX == TEXCTR then
         v = true
     end
-    OldV:release()
     return v
 end
 
@@ -417,10 +416,6 @@ Camera.Metadata.__remove = function(self, Entity)
     Solid:release()
     local CameraPass = self.CameraPass[1] or self.CameraPass
     CameraPass:release()
-
-    if Component.TransformRequired then
-        table.insert(Component.TransformRequired, Camera.Name)
-    end
 end
 
 Camera.Metadata.SoftDependency = { Transform = true }

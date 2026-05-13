@@ -134,6 +134,7 @@ void luax_pushconf(lua_State* L);
 int luax_setconf(lua_State* L);
 void luax_pushstash(lua_State* L, const char* name);
 void luax_setmainthread(lua_State* L);
+lua_State* luax_getmainthread();
 void luax_atexit(lua_State* L, void (*finalizer)(void));
 uint32_t _luax_checku32(lua_State* L, int index);
 uint32_t _luax_optu32(lua_State* L, int index, uint32_t fallback);

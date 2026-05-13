@@ -219,9 +219,6 @@ World.Metadata.__remove = function(self, e)
     if w == MW then
         Physics.SetMainWorld(nil)
     end
-
-    w:destroy()
-    w:release()
 end
 
 return World

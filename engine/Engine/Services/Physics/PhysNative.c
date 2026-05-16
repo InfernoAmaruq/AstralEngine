@@ -11,11 +11,18 @@
 #define BASE_SIZE 64
 #define RESIZE_STEP 1.2
 
+typedef struct LightContact {
+    Collider* ColliderA; Collider* ColliderB;
+    Shape* ShapeA; Shape* ShapeB;
+    float normal[3];
+    float Overlap;
+} LightContact;
+
 typedef struct WorldColBuf {
     mtx_t EnterLock;
     mtx_t ExitLock;
 
-    Contact** ContactArray; // for enter, holds only contact (we can get Collider from Contact after)
+    LightContact* ContactArray; // for enter, holds only contact (we can get Collider from Contact after)
     size_t ContactCount;
     size_t ContactCapacity;
 
@@ -54,11 +61,17 @@ static void PhysNative_EnterCallback(void* userdata, World* world, Collider* a, 
 
     mtx_lock(&Buffer->EnterLock);
 
-    Buffer->ContactArray[Buffer->ContactCount++] = contact;
+    LightContact* lc = &Buffer->ContactArray[Buffer->ContactCount++];
+    lc->ColliderA = a;
+    lc->ColliderB = b;
+    lc->ShapeA = lovrContactGetShapeA(contact);
+    lc->ShapeB = lovrContactGetShapeB(contact);
+    lc->Overlap = lovrContactGetOverlap(contact);
+    lovrContactGetNormal(contact,lc->normal);
 
     if (Buffer->ContactCount == Buffer->ContactCapacity){
         Buffer->ContactCapacity = (size_t)Buffer->ContactCapacity * RESIZE_STEP;
-        Buffer->ContactArray = lovrRealloc(Buffer->ContactArray,sizeof(void*) * Buffer->ContactCapacity);
+        Buffer->ContactArray = lovrRealloc(Buffer->ContactArray,sizeof(LightContact) * Buffer->ContactCapacity);
     }
 
     mtx_unlock(&Buffer->EnterLock);
@@ -75,11 +88,11 @@ static int PhysNative_RegisterWorld(lua_State* L){
 
     Buffer->ContactCount = 0;
     Buffer->ContactCapacity = BASE_SIZE;
-    Buffer->ContactArray = malloc(Buffer->ContactCapacity * sizeof(void*));
+    Buffer->ContactArray = malloc(Buffer->ContactCapacity * sizeof(LightContact));
 
     Buffer->ColliderCount = 0;
     Buffer->ColliderCapacity = BASE_SIZE * 2;
-    Buffer->ColliderArray= malloc(Buffer->ColliderCapacity * sizeof(void*));
+    Buffer->ColliderArray = malloc(Buffer->ColliderCapacity * sizeof(void*));
 
     TotalWorlds[WorldCount] = Buffer;
     lua_pushinteger(L,WorldCount);
@@ -113,13 +126,21 @@ static int PhysNative_IterateBufferStart(lua_State *L){
     for (int i = 0; i < Buffer->ContactCount; i++){
         lua_pushvalue(L,2);
 
-        Contact* c = Buffer->ContactArray[i];
+        LightContact* c = &Buffer->ContactArray[i];
 
-        luax_pushtype(L, Collider, lovrContactGetColliderA(c));
-        luax_pushtype(L, Collider, lovrContactGetColliderB(c));
-        luax_pushtype(L, Contact, c);
+        luax_pushtype(L, Collider, c->ColliderA);
+        luax_pushtype(L, Collider, c->ColliderB);
 
-        lua_pcall(L,3,0,0);
+        luax_pushtype(L, Shape, c->ShapeA);
+        luax_pushtype(L, Shape, c->ShapeB);
+
+        lua_pushnumber(L, c->normal[0]);
+        lua_pushnumber(L, c->normal[1]);
+        lua_pushnumber(L, c->normal[2]);
+
+        lua_pushnumber(L,c->Overlap);
+
+        lua_pcall(L,8,0,0);
     }
 
     Buffer->ContactCount = 0;

@@ -49,10 +49,12 @@ local LuaToJoltToSync = table.alloc(1, 0)
 @flag:SHOULD_MOVE = 0b101100000011;
 
 local CALLBACKS = {
-    Enter = function(a,b,c)
+    Enter = function(a,b,sa,sb,nx,ny,nz,overlap)
         local PtrA, PtrB = a:getUserData(), b:getUserData()
-        PtrA.Touched:Fire(PtrB.Entity,c)
-        PtrB.Touched:Fire(PtrA.Entity,c)
+        local PtrSA, PtrSB = sa:getUserData(), sb:getUserData()
+        local Normal = vec3(nx,ny,nz)
+        PtrA.Touched:Fire(PtrB.Entity,PtrSA,PtrSB,Normal,overlap)
+        PtrB.Touched:Fire(PtrA.Entity,PtrSA,PtrSB,Normal,overlap)
     end,
     Exit = function(a,b)
         local PtrA, PtrB = a:getUserData(), b:getUserData()

@@ -161,6 +161,7 @@ function lovr.run()
         GetService"RunService".BindToStep("__PHYSICS_UPD_STEP",ENUM.StepPriority.Physics,function(Time)
             SyncState(MainPhysWorld)
             MainPhysWorld.LovrWorld:update(Time)
+            Phys.__GetEvents(MainPhysWorld)
             UpdTrans(MainPhysWorld)
         end)
 

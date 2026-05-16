@@ -10,7 +10,16 @@ Physics.Shapes = require("Shapes")
 
 local N = 1
 Physics.Worlds = {}
-Physics.RawWorlds = {}
+
+function Physics.GetWorldById(Id)
+    return Physics.Worlds[Id]
+end
+
+function Physics.GetWorldByName(Name)
+    for _,v in pairs(Physics.Worlds) do
+        if v.Name == Name then return v end
+    end
+end
 
 local DataList = require("./Data")
 for i,v in pairs(DataList) do
@@ -57,6 +66,12 @@ local DefaultParameters = { ThreadSafe = false, RestitutionThreshold = 1, Stabil
 }, SetCollisionBetween = {},
     Tags = {"DEFAULT"}, StaticTags = {"STATIC_DEFAULT"}
 }
+
+function Physics.__GetEvents(World)
+    local w = World.LovrWorld
+    PhysNative.IterateStartArray(w,CALLBACKS.Enter)
+    PhysNative.IterateEndArray(w,CALLBACKS.Exit)
+end
 
 function Physics.NewWorld(Parameters)
     Parameters = Parameters or DefaultParameters
@@ -119,7 +134,8 @@ function Physics.NewWorld(Parameters)
         DefaultTag = Parameters.DefaultTag or nil,
         TagLookUp = {},
         StaticTags = StaticTags,
-        Tags = Tags
+        Tags = Tags,
+        __NativeId = PhysNative.RegisterWorld(W)
     }
 
     for _, v in pairs(Tags) do
@@ -129,7 +145,6 @@ function Physics.NewWorld(Parameters)
     setmetatable(T,Meta)
 
     Physics.Worlds[N] = T
-    Physics.RawWorlds[N] = W
 
     WorldColliders[N] = { [&F_Col] = table.alloc(250,0), [&F_Trans] = table.alloc(250,0), [&F_Flags] = table.alloc(250,0) }
     LuaToJoltToSync[N] = { [&F_Col] = table.alloc(70,0), [&F_Trans] = table.alloc(70,0) }

@@ -44,6 +44,7 @@ struct World {
   uint32_t jobCount;
   job* jobs[1024];
   mtx_t lock;
+  uintptr_t userdata;
 };
 
 struct Collider {
@@ -452,6 +453,14 @@ void lovrWorldDestruct(World* world) {
 
 bool lovrWorldIsDestroyed(World* world) {
   return !world->system;
+}
+
+void lovrWorldSetUserData(World* world, uintptr_t ud){
+    world->userdata = ud;
+}
+
+uintptr_t lovrWorldGetUserData(World* world){
+    return world->userdata;
 }
 
 char** lovrWorldGetTags(World* world, uint32_t* count) {

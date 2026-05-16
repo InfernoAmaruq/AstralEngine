@@ -119,14 +119,14 @@ function lovr.boot()
   -- Mount source archive, make sure it's got the main file, and load conf.lua
 
   local ok, failure = true, nil
-  if source ~= bundle and not lovr.filesystem.mount(source) then
+  if bundle and source ~= bundle and not lovr.filesystem.mount(source) then
     ok, failure = false, ('Failed to load project at %q\nMake sure the path or archive is valid.'):format(source)
   elseif not lovr.filesystem.isFile(main) then
     local location = source == '.' and '' or (' in %q'):format(source:match('[^/\\]+[/\\]?$'))
     ok, failure = false, ('No %s file found%s.\nThe project may be packaged incorrectly.'):format(main, location)
   else
     lovr.filesystem.setSource(source)
-    if source ~= bundle then lovr.filesystem.unmount(bundle) end
+    if bundle and source ~= bundle then lovr.filesystem.unmount(bundle) end
     if _VERSION == "Luau" then
       if lovr.filesystem.isFile('conf.lua') or lovr.filesystem.isFile('conf.luau') then ok, failure = pcall(require, 'conf') end
     else

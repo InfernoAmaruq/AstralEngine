@@ -52,9 +52,8 @@ local CALLBACKS = {
     Enter = function(a,b,sa,sb,nx,ny,nz,overlap)
         local PtrA, PtrB = a:getUserData(), b:getUserData()
         local PtrSA, PtrSB = sa:getUserData(), sb:getUserData()
-        local Normal = vec3(nx,ny,nz)
-        PtrA.Touched:Fire(PtrB.Entity,PtrSA,PtrSB,Normal,overlap)
-        PtrB.Touched:Fire(PtrA.Entity,PtrSA,PtrSB,Normal,overlap)
+        PtrA.Touched:Fire(PtrB.Entity,PtrSA,PtrSB,vec3(nx,ny,nz),overlap)
+        PtrB.Touched:Fire(PtrA.Entity,PtrSA,PtrSB,vec3(-nx,-ny,-nz),overlap)
     end,
     Exit = function(a,b)
         local PtrA, PtrB = a:getUserData(), b:getUserData()

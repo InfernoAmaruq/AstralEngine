@@ -102,6 +102,31 @@ function lovr.run()
     collectgarbage("collect")
     _G.AstralEngine.__ENGINETHREAD = coroutine.running()
 
+    -- load main scene
+
+    -- try execute core script first
+    local HasWorld, WorldRes = pcall(loadfile,package.GAME_PATH.."/PhysicsWorld.lua")
+
+    if HasWorld then
+        local Ok, WorldData = pcall(WorldRes)
+        if not Ok then AstralEngine.Error("Failed to load PhysicsWorld.lua file: "..WorldData,"PHYSICS") end
+        local ps = GetService"Physics"
+        local W = ps.NewWorld(WorldData)
+        ps.SetMainWorld(W)
+    end
+
+    local Ok, Err = pcall(loadfile,package.GAME_PATH.."/launch.lua")
+
+    if Ok then
+        if Err then
+            task.spawn(Err)
+        end
+    else
+        AstralEngine.Log("File 'launch.lua' encountered an error!\n > "..tostring(Err),"FATAL")
+    end
+
+    SS.Scene.LoadScene(AstralEngine._CONFIG.Filesystem.EntryScene)
+
     -- RUNTIME DEFINITION
 
     local Frames = 0
@@ -128,15 +153,16 @@ function lovr.run()
     @ifdef<Physics.BindMainWorld>
     {
         local Phys = GetService"Physics"
-        local MainPhysWorld, MainPhysWorldID = Phys.GetMainWorld()
+        local MainPhysWorld = Phys.GetMainWorld()
         local UpdTrans = Phys.UpdateTransforms
         local SyncState = Phys.LuaToJolt
         local LastPhysTime = -1
 
         GetService"RunService".BindToStep("__PHYSICS_UPD_STEP",ENUM.StepPriority.Physics,function(Time)
-            SyncState(MainPhysWorldID)
-            MainPhysWorld:update(Time)
-            UpdTrans(MainPhysWorldID)
+            SyncState(MainPhysWorld)
+            MainPhysWorld.LovrWorld:update(Time)
+            Phys.__GetEvents(MainPhysWorld)
+            UpdTrans(MainPhysWorld)
         end)
 
         @macro<L,!USEBRACK>{M_PHYSTICK(&TIMER) =
@@ -146,11 +172,10 @@ function lovr.run()
             end
         }
 
-        Phys.__OnWorldReset = function(W,WId)
+        Phys.__OnWorldReset = function(W)
             -- if ifdef fails, this just doesnt get attached so it doesnt fire
             -- Usercode can attach to this instead
             MainPhysWorld = W
-            MainPhysWorldID = WId
         end
 
         @ifdef<Physics.Interpolate>{
@@ -158,8 +183,8 @@ function lovr.run()
                 -- get alpha, world and whatnot, interpolate
                 if MainPhysWorld then
                     local Alpha = math.min(PhysicsRate > 0 and (PhysTime / (PhysicsRate * TimeScale)) or 1,1)
-                    MainPhysWorld:interpolate(Alpha)
-                    UpdTrans(MainPhysWorldID)
+                    MainPhysWorld.LovrWorld:interpolate(Alpha)
+                    UpdTrans(MainPhysWorld)
                 end
             }
         }
@@ -325,21 +350,6 @@ function lovr.run()
     local SLEEP = lovr.timer.sleep
 
     local LASTCPUT = 0
-
-    -- MOUNT
-
-    -- try execute core script first
-    local Ok, Err = pcall(loadfile,package.GAME_PATH.."/launch.lua")
-
-    if Ok then
-        if Err then
-            task.spawn(Err)
-        end
-    else
-        AstralEngine.Log("File 'launch.lua' encountered an error!\n > "..tostring(Err),"FATAL")
-    end
-
-    SS.Scene.LoadScene(AstralEngine._CONFIG.Filesystem.EntryScene)
 
     -- DEFINE LOOP FUNC
 

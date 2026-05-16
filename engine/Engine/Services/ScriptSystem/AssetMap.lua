@@ -1,6 +1,5 @@
 local AssetMapLoader = {}
 
-local PhysicsService = GetService("Physics", "PhysicsService")
 local EntityService = GetService("Entity", "EntityService")
 local ComponentService = GetService("Component", "ComponentService")
 
@@ -14,15 +13,10 @@ local ID_MASK = ~TAG_MASK
 
 local BYTE = 8
 local FENVFLAGS = {
-    F_PHYS_WORLD = 0b0001 << BYTE,
-    F_PHYS_MAINWORLD = 0b0010 << BYTE,
     F_ENT_NOCTX = 0b0100 << BYTE,
 }
 
 local FLAG_RESOLVE = {
-    [FENVFLAGS.F_PHYS_MAINWORLD] = function(Ent)
-        PhysicsService.SetMainWorld(Ent)
-    end,
     [FENVFLAGS.F_ENT_NOCTX] = function(Ent)
         Ent.__context = 0
     end,
@@ -266,38 +260,22 @@ function AssetMapLoader.LoadAssetMap(Map)
         local Flags = Val.Flags and Val.Flags or 0
 
         -- summon the entity
-        if Flags & FENVFLAGS.F_PHYS_WORLD ~= 0 then
-            local WorldData = Val.WorldData or nil
-            local Phys = GetService("Physics")
-            Ent = Phys.NewWorld(WorldData, Tag & TAG_FORCE ~= 0 and NewId or nil)
-            if Tag & TAG_RES ~= 0 and not (Tag & TAG_FORCE ~= 0) then
-                if RESERVED[NewId] then
-                    AstralEngine.Log(
-                        "RESERVED ID COLLISION, WITH ID " .. NewId .. " ON ENTITY " .. Val.Name,
-                        "error",
-                        "SCENEMANAGER"
-                    )
-                end
-                RESERVED[NewId] = Ent
+        if Tag & TAG_FORCE ~= 0 then
+            Ent = EntityService.CreateAtId(NewId, Val.Name)
+        elseif Tag & TAG_RES ~= 0 then
+            if RESERVED[NewId] then
+                AstralEngine.Log(
+                    "RESERVED ID COLLISION, WITH ID " .. NewId .. " ON ENTITY " .. Val.Name,
+                    "error",
+                    "SCENEMANAGER"
+                )
             end
+            Ent = EntityService.New(Val.Name)
+            RESERVED[NewId] = Ent
+        elseif Tag & TAG_UNSET == 0 then
+            Ent = EntityService.New(Val.Name)
         else
-            if Tag & TAG_FORCE ~= 0 then
-                Ent = EntityService.CreateAtId(NewId, Val.Name)
-            elseif Tag & TAG_RES ~= 0 then
-                if RESERVED[NewId] then
-                    AstralEngine.Log(
-                        "RESERVED ID COLLISION, WITH ID " .. NewId .. " ON ENTITY " .. Val.Name,
-                        "error",
-                        "SCENEMANAGER"
-                    )
-                end
-                Ent = EntityService.New(Val.Name)
-                RESERVED[NewId] = Ent
-            elseif Tag & TAG_UNSET == 0 then
-                Ent = EntityService.New(Val.Name)
-            else
-                AstralEngine.Log("INVALID TAG FOUND: " .. tostring(i >> TAG_OFFSET & 0b11), "Fatal", "SCENEMANAGER")
-            end
+            AstralEngine.Log("INVALID TAG FOUND: " .. tostring(i >> TAG_OFFSET & 0b11), "Fatal", "SCENEMANAGER")
         end
 
         ENTITIES[Val.Map] = ENTITIES[Val.Map] or {}

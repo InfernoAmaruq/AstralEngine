@@ -137,7 +137,7 @@ local function MTNewIndex(Ret, k, v)
     local Col = Component.HasComponent(Ret[9], "Collider")
     if Col then
         Col:__TransformMoved(Ret[1], Ret[2])
-        Physics.QueueToSyncLTJ(Col.WId, Col.ColRef, Ret)
+        Physics.__QueueToSyncLTJ(Col.World, Col.ColRef, Ret)
     end
 end
 

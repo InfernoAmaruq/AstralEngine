@@ -50,6 +50,7 @@ if(EMSCRIPTEN)
     "-sINITIAL_MEMORY=1677721600 "
     "-sEXPORTED_FUNCTIONS=_main "
     "-sEXPORTED_RUNTIME_METHODS=getValue,setValue "
+    "--js-library \"${PROJECT_SOURCE_DIR}/src/lib/webgpu/webgpu.js\" "
     "--shell-file \"${PROJECT_SOURCE_DIR}/etc/lovr.html\""
   )
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -fno-exceptions")

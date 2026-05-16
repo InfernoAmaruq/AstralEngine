@@ -61,27 +61,30 @@ do
         end,
     }
 
+    local WeakMt = { __mode = "kv" }
+
     RT.New = function()
         local Tab = {
             [".StaticTags"] = {},
             [".LiveTags"] = {},
             [".Tags"] = nil, -- string
             GetFirst = true,
-            FilterInstances = {},
+            FilterInstances = setmetatable({}, WeakMt),
         }
 
         local BaseCallback = function(C, S, x, y, z, nx, ny, nz, tri, frac)
             local CT = Tab
             local Type = CT[".RFilterType"]
             local Out = CT.__OUT
+            local List = CT.FilterInstances
 
             local Valid = true
             if List and Type then
                 local Entity = C:getUserData().Entity
                 if Type == WhitelistRaw then
-                    Valid = CT.FilterInstances[Entity] and true or false
+                    Valid = List[Entity] and true or false
                 else
-                    Valid = not CT.FilterInstances[Entity]
+                    Valid = not List[Entity]
                 end
             end
             if Valid then
@@ -94,12 +97,13 @@ do
                 Obj.Entity = C and C:getUserData().Entity
                 if Out then
                     Out[#Out + 1] = Obj
+                    return frac
                 else
                     rawset(CT, "__OUT", Obj)
-                    return 1
+                    return 0
                 end
             end
-            return frac
+            return 1
         end
 
         Tab.Callback = BaseCallback

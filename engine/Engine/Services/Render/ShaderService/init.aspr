@@ -201,6 +201,9 @@ end
 local function Compile(Tab,Tag)
     RETURN_DEFAULT(Tab,DEFAULTS[Tag])
 
+    local Defined = Tab.Define
+    Tab.Define = nil
+
     Tab = SortByPriority(Tab)
 
     local Body = BODIES[Tag]
@@ -222,6 +225,18 @@ local function Compile(Tab,Tag)
 
         LinkedBody = LinkedBody.."\n"..Linked
         Out = Out..Text
+    end
+
+    if Defined then
+        for i,v in pairs(Defined) do
+            local Str
+            if rtype(i) == "number" then
+                Str = "#define "..tostring(v).."\n"
+            else
+                Str = "#define "..tostring(i).." "..tostring(v).."\n"
+            end
+            Out = Str..Out
+        end
     end
 
     return Out.."\n//LINKED\n"..BodyStart..LinkedBody:gsub("%f[%w_][%w_]+%f[^%w_]",LinkerGsub)..BodyEnd
@@ -249,6 +264,14 @@ local function GetIncluded(Into,IncludeTable)
                     Out = true
 
                     Into[#Into + 1] = FilePath
+
+                    break
+                elseif lovr.filesystem.isDirectory(FilePath) then
+                    Out = true
+
+                    for _,v in ipairs(lovr.filesystem.getDirectoryItems(FilePath)) do
+                        Into[#Into + 1] = FilePath.."/"..v
+                    end
 
                     break
                 end
@@ -305,8 +328,11 @@ function ShaderService.ComposeShader(Type,Search,Params)
     end
 
     if Type == &ST_Graphics then
+        Buckets[&ST_Vertex].Define = Params.Define and Params.Define.Vertex
+        Buckets[&ST_Fragment].Define = Params.Define and Params.Define.Fragment
         return CompileGraphics(Buckets)
     else
+        Buckets[&ST_Compute].Define = Params.Define and Params.Define.Compute or Params.Define
         return CompileCompute(unpack(Buckets))
     end
 

@@ -62,6 +62,7 @@ return function(Str)
             elseif Scope == &P_LongComment then
                 if Str:sub(i,i+1) == "*/" then
                     Scope = &P_Code
+                    i = i + 1
                 end
             end
             i = i + 1

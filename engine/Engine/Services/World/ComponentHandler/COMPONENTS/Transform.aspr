@@ -19,18 +19,31 @@ Transform.Pattern = {
 }
 Transform.Metadata = {}
 
+local RadToDeg = 180 / math.pi
+
 -- private methods
 
 local function GetOrientation(Comp)
     local O = Comp[4]
     local x, y, z = math.rad(O.x), math.rad(O.y), math.rad(O.z)
-    Comp[2]:setEuler(y, x, z)
+    Comp[2]:setEuler(x, y, z)
     return Comp[2]
 end
 
 local function GetMatrix(Comp)
     Comp[3]:set(Comp[1], Comp[5], Comp[2])
     return Comp[3]
+end
+
+local function SetMatrix(Comp, Matrix, IsTransform)
+    Comp[3]:set(Matrix)
+    Comp[1]:set(Matrix:getPosition())
+    Comp[2]:set(Matrix:getOrientation())
+    Comp[4]:set(vec3(Comp[2]:getEuler()):mul(RadToDeg))
+
+    if not IsTransform then
+        Comp[5]:set(Matrix:getScale())
+    end
 end
 
 local function FromPose(T, x, y, z, a, ax, ay, az)
@@ -67,6 +80,8 @@ local BaseMethods = {
 local function MTIndex(T, k)
     if k == "UpVector" or k == "RightVector" or k == "ForwardVector" then
         return GetVector(T, k)
+    elseif k == "TransformMatrix" then
+        return mat4(T[1], T[2])
     end
     local KEY = IndexFields[k]
     if KEY then
@@ -83,35 +98,45 @@ local function MTIndex(T, k)
 end
 
 local function MTNewIndex(Ret, k, v)
-    if rtype(v) == "userdata" and v.type and v.type() then
-        local F = IndexFields[k]
-        if not F then
-            return
-        end
-        Ret[F]:set(v:unpack())
-    else
-        if not IndexFields[k] then
-            return
-        end
-        rawset(Ret, IndexFields[k], v)
+    local Skip = false
+    if k == "Matrix" or k == "TransformMatrix" then
+        SetMatrix(Ret, v, k == "TransformMatrix")
+        Skip = true
     end
 
-    if k == "Rotation" then
-        GetOrientation(Ret)
-    elseif k == "Scale" then
-        local c = Component.HasComponent(self[9], "Collider")
-        if c then
-            c:OnObjectResize(self[5])
+    if not Skip then
+        if rtype(v) == "userdata" and v.type and v.type() then
+            local F = IndexFields[k]
+            if not F then
+                return
+            end
+            Ret[F]:set(v:unpack())
+        else
+            if not IndexFields[k] then
+                return
+            end
+            rawset(Ret, IndexFields[k], v)
         end
-    elseif k == "Orientation" then
-        Ret[4]:set(Ret[3]:getEuler())
-    end
-    if k ~= "Matrix" then
-        GetMatrix(Ret)
+
+        if k == "Rotation" then
+            GetOrientation(Ret)
+        elseif k == "Scale" then
+            local c = Component.HasComponent(Ret[9], "Collider")
+            if c then
+                c:OnObjectResize(Ret[5])
+            end
+        elseif k == "Orientation" then
+            Ret[4]:set(vec3(Ret[2]:getEuler()):mul(RadToDeg))
+        end
+
+        if k ~= "Matrix" and k ~= "TransformMatrix" then
+            GetMatrix(Ret)
+        end
     end
 
     local Col = Component.HasComponent(Ret[9], "Collider")
     if Col then
+        Col:__TransformMoved(Ret[1], Ret[2])
         Physics.QueueToSyncLTJ(Col.WId, Col.ColRef, Ret)
     end
 end

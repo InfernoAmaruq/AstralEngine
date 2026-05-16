@@ -24,7 +24,12 @@ Renderer.Flags = {
 
 local ShaderService = GetService("ShaderService","ShaderService")
 local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
-    Include = {"Misc/SpriteMap.glsl"}
+    Include = {"Material"},
+    Define = {
+        Fragment = {
+            "MATERIAL_BASEUV_TO_COLOR"
+        }
+    }
 })
 
 local MAINSHADER = lovr.graphics.newShader(V,F)
@@ -187,12 +192,16 @@ local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
             end
             if Mat then
                 &PASS:setColor(Mat[4],Mat[5],Mat[6],Mat[7])
-                &PASS:send("UVScale",Mat[2])
-                &PASS:send("UVOffset",Mat[3])
+                &PASS:send("Material_UVScale",Mat[2])
+                &PASS:send("Material_UVOffset",Mat[3])
+                &PASS:send("Material_FillMode",Mat[11])
+                &PASS:send("Material_ObjectScale",Comp.Transform[5])
+                &PASS:setSampler(Mat[12] and "nearest" or "linear")
             else
                 &PASS:setColor(1,1,1,1)
-                &PASS:send("UVScale",VecOne)
-                &PASS:send("UVOffset",VecZero)
+                &PASS:send("Material_UVScale",VecOne)
+                &PASS:send("Material_UVOffset",VecZero)
+                &PASS:send("Material_FillMode",0)
             end
 
             local RETFLAG = TYPETOPROCESS[RenT[1]](&PASS, E, Comp)

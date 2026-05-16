@@ -4,6 +4,8 @@ local NewWorld = lovr.physics.newWorld
 
 local Physics = {}
 
+local PhysNative = require("PhysNative")
+
 Physics.Shapes = require("Shapes")
 
 local N = 1
@@ -45,7 +47,7 @@ local CALLBACKS = {
     end,
 }
 
-local DefaultParameters = { ThreadSafe = true, RestitutionThreshold = 1, Stabilization = .7, Callbacks = {
+local DefaultParameters = { ThreadSafe = false, RestitutionThreshold = 1, Stabilization = .7, Callbacks = {
     Enter = CALLBACKS.Enter, Exit = CALLBACKS.Exit
 }, SetCollisionBetween = {},
     Tags = {"DEFAULT"}, StaticTags = {"STATIC_DEFAULT"}
@@ -77,17 +79,29 @@ function Physics.NewWorld(Parameters)
 
     W:setCallbacks{
         exit = (Parameters.Callbacks or DefaultParameters.Callbacks).Exit,
-        enter = (Parameters.Callbacks or DefaultParameters.Callbacks).Enter
+        enter = (Parameters.Callbacks or DefaultParameters.Callbacks).Enter,
+        nativeEnter = PhysNative.NativeEnter,
+        nativeExit = PhysNative.NativeExit
     }
 
-    for Tag, List in pairs(Parameters.SetCollisionBetween) do
-        for Tag2, State in pairs(List) do
+    if Parameters and Parameters.SetCollisionBetween then
+        for Tag, List in pairs(Parameters.SetCollisionBetween) do
+            for Tag2, State in pairs(List) do
 
-            if State then
-                W:enableCollisionBetween(Tag,Tag2)
-            else
-                W:disableCollisionBetween(Tag,Tag2)
+                if State then
+                    W:enableCollisionBetween(Tag,Tag2)
+                else
+                    W:disableCollisionBetween(Tag,Tag2)
+                end
             end
+        end
+    end
+
+    if Parameters and Parameters.Gravity then
+        if rtype(Parameters.Gravity) == "number" then
+            W:setGravity(vec3(0,Parameters.Gravity,0))
+        else
+            W:setGravity(vec3(Parameters.Gravity))
         end
     end
 

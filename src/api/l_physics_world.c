@@ -6,6 +6,9 @@
 #include <stdbool.h>
 #include <string.h>
 
+typedef void (*lovr_phys_c_enter_callback)(void*, World*, Collider*, Collider*, Contact*);
+typedef void (*lovr_phys_c_exit_callback)(void*, World*, Collider*, Collider*);
+
 static World* luax_checkworld(lua_State* L, int index) {
   World* world = luax_checktype(L, index, World);
   luax_check(L, !lovrWorldIsDestroyed(world), "Attempt to use a destroyed World");
@@ -556,12 +559,25 @@ static int l_lovrWorldSetCallbacks(lua_State* L) {
   lua_rawset(L, -3);
   lua_pop(L, 1);
 
+  // c contacts
+
+  lua_pushvalue(L,1);
+  lua_getfield(L,2,"nativeEnter");
+  lovr_phys_c_enter_callback nativeContact = lua_touserdata(L,-1);
+
+  lua_pushvalue(L,1);
+  lua_getfield(L,2,"nativeExit");
+  lovr_phys_c_exit_callback nativeExit = lua_touserdata(L,-1);
+
   lua_State* mainThread = luax_getmainthread();
+
+  lovr_phys_c_exit_callback newExitCallback = nativeExit != NULL ? nativeExit : exitCallback;
+  lovr_phys_c_enter_callback newEnterCallback = nativeContact != NULL ? nativeContact : contactCallback;
 
   lovrWorldSetCallbacks(world, &(WorldCallbacks) {
     .filter = filter ? filterCallback : NULL,
-    .enter = enter ? enterCallback : NULL,
-    .exit = exit ? exitCallback : NULL,
+    .enter = enter ? newEnterCallback : NULL,
+    .exit = exit ? newExitCallback : NULL,
     .contact = contact ? contactCallback : NULL,
     .userdata = mainThread ? mainThread : L
   });

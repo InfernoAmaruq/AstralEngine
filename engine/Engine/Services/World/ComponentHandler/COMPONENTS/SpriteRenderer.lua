@@ -11,13 +11,8 @@ local ProcessorFunc = function(p, _, c)
     local SR = c.SpriteRenderer
     p:push("state")
     local TRANSFORM = c.Transform
-    local Sampler = SR[1]
 
-    if Sampler then
-        p:setSampler("nearest")
-    end
-
-    if SR[2] then
+    if SR[1] then
         local SCALE = TRANSFORM[5].xy
         local TEX_SCALE = vec2(c.Material[1]:getDimensions())
         local AR = TEX_SCALE.x / TEX_SCALE.y
@@ -36,17 +31,13 @@ REND.AppendRenderTTP(REnum["SpriteRenderer"], ProcessorFunc)
 
 local SRMT = {
     __index = function(self, k)
-        if k == "UseNearest" then
+        if k == "ScaleWithAspect" then
             return self[1]
-        elseif k == "ScaleWithAspect" then
-            return self[2]
         end
     end,
     __newindex = function(SR, k, v)
-        if k == "UseNearest" then
+        if k == "ScaleWithAspect" then
             SR[1] = v
-        elseif k == "ScaleWithAspect" then
-            SR[2] = v
         end
     end,
 }
@@ -67,8 +58,7 @@ SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
         COMP.AddComponent(Entity, "Transform")
     end
 
-    SR[1] = DATA.UseNearest or false
-    SR[2] = DATA.ScaleWithAspect or false
+    SR[1] = DATA.ScaleWithAspect or false
     SR.__Ent = Entity
     setmetatable(SR, SRMT)
 

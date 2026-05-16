@@ -4,14 +4,6 @@ local Material = {}
 Material.Name = "Material"
 Material.Metadata = {}
 
-local function ScaleToTexture(Vector, Mat)
-    if not Mat then
-        return Vector
-    end
-    local Scale = vec2(Mat:GetDimensions())
-    return Vector / Scale
-end
-
 Comp.ComponentAdded:Connect(function(e, id, c)
     local Mat = Comp.HasComponent(e, "Material")
     if id == "RenderTarget" and Mat then
@@ -25,6 +17,8 @@ Comp.ComponentAdded:Connect(function(e, id, c)
     end
 end)
 
+local MaterialFitMode = ENUM({ Stretch = 0, Tile = 1, Crop = 2 }, "MaterialFitMode")
+
 local Mt = {
     __index = function(self, k)
         if k == "Color" then
@@ -35,6 +29,10 @@ local Mt = {
             return vec2(self[3])
         elseif k == "UVScale" then
             return vec2(self[2])
+        elseif k == "FitMode" then
+            return rawget(self, "__FitEnum")
+        elseif k == "UseNearest" then
+            return self[12]
         end
     end,
     __newindex = function(self, k, v)
@@ -57,17 +55,14 @@ local Mt = {
                 RT:SwapStacks(self[7] == 1)
             end
         elseif k == "UVOffset" then
-            local Mat = self[9]
-
-            if Mat.Properties then
-                Storage[3]:set(Storage[3], Mat.Properties.Texture)
-            elseif Mat then
-                Storage[3]:set(Storage[3], Mat[1] or Mat)
-            end
-
             self[3]:set(v)
         elseif k == "UVScale" then
             self[2]:set(v)
+        elseif k == "FitMode" then
+            rawset(self, "__FitEnum", v)
+            self[11] = v.RawValue
+        elseif k == "UseNearest" then
+            self[12] = v
         end
     end,
 }
@@ -87,6 +82,11 @@ Material.Metadata.__create = function(Data, Ent)
     Storage[8] = Color
     Storage[9] = Mat
     Storage[10] = Ent
+
+    local FitMode = Data.FitMode or MaterialFitMode.Stretch
+    Storage.__FitEnum = FitMode
+    Storage[11] = FitMode.RawValue
+    Storage[12] = Data.UseNearest or false
 
     if Storage[9] and Storage[9].Properties then
         Storage[3]:set(Storage[3], Storage[9].Properties.Texture)

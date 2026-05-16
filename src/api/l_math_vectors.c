@@ -210,6 +210,13 @@ int l_lovrVec2Set(lua_State* L) {
   return 1;
 }
 
+static int l_lovrVec2Abs(lua_State* L){
+    float* v = luax_checkvector(L,1,V_VEC2,NULL);
+    vec2_abs(v);
+    lua_settop(L,1);
+    return 1;
+}
+
 static int l_lovrVec2Add(lua_State* L) {
   float* v = luax_checkvector(L, 1, V_VEC2, NULL);
   float u[2];
@@ -515,6 +522,7 @@ const luaL_Reg lovrVec2[] = {
   { "equals", l_lovrVec2Equals },
   { "unpack", l_lovrVec2Unpack },
   { "set", l_lovrVec2Set },
+  { "abs", l_lovrVec2Abs },
   { "add", l_lovrVec2Add },
   { "sub", l_lovrVec2Sub },
   { "mul", l_lovrVec2Mul },
@@ -550,6 +558,13 @@ static int l_lovrVec3Equals(lua_State* L) {
   float* u = luax_checkvector(L, 2, V_VEC3, NULL);
   lua_pushboolean(L, vec3_distance2(v, u) < EQ_THRESHOLD);
   return 1;
+}
+
+static int l_lovrVec3Abs(lua_State* L){
+    float* v = luax_checkvector(L,1,V_VEC3,NULL);
+    vec3_abs(v);
+    lua_settop(L,1);
+    return 1;
 }
 
 static int l_lovrVec3Unpack(lua_State* L) {
@@ -922,6 +937,7 @@ const luaL_Reg lovrVec3[] = {
   { "unpack", l_lovrVec3Unpack },
   { "set", l_lovrVec3Set },
   { "add", l_lovrVec3Add },
+  { "abs", l_lovrVec3Abs },
   { "sub", l_lovrVec3Sub },
   { "mul", l_lovrVec3Mul },
   { "div", l_lovrVec3Div },
@@ -959,6 +975,13 @@ static int l_lovrVec4Equals(lua_State* L) {
   float* u = luax_checkvector(L, 2, V_VEC4, NULL);
   lua_pushboolean(L, vec4_distance2(v, u) < EQ_THRESHOLD);
   return 1;
+}
+
+static int l_lovrVec4Abs(lua_State* L){
+    float* v = luax_checkvector(L,1,V_VEC4,NULL);
+    vec4_abs(v);
+    lua_settop(L,1);
+    return 1;
 }
 
 static int l_lovrVec4Unpack(lua_State* L) {
@@ -1324,6 +1347,7 @@ const luaL_Reg lovrVec4[] = {
   { "unpack", l_lovrVec4Unpack },
   { "set", l_lovrVec4Set },
   { "add", l_lovrVec4Add },
+  { "abs", l_lovrVec4Abs },
   { "sub", l_lovrVec4Sub },
   { "mul", l_lovrVec4Mul },
   { "div", l_lovrVec4Div },

@@ -162,10 +162,14 @@ local METHODS = {
 
         local State = self[2]
 
+        local Far, Near = self[4], self[5]
+
         if State then
-            CurrentMatrix:orthographic(self.TrueResolution.x, self.TrueResolution.y, 0.01, 0)
+            local HalfRes = self.TrueResolution / 2
+            CurrentMatrix:orthographic(-HalfRes.x, HalfRes.x, -HalfRes.y, HalfRes.y, Far == 0 and 100 or Far, Near)
+            --CurrentMatrix:orthographic(self.TrueResolution.x, self.TrueResolution.y, 0.01, 100)
         else
-            CurrentMatrix:perspective(self.RadFOV, self.Aspect, 0.01, 0)
+            CurrentMatrix:perspective(self.RadFOV, self.Aspect, Near, Far)
         end
         self[26] = CurrentMatrix
     end,

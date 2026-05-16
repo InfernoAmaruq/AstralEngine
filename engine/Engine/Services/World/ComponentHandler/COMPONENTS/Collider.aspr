@@ -101,12 +101,16 @@ local SHAREDT = {
         self.ColRef:moveKinematic(Pos,Quat,dt)
     end,
 
+    __TransformMoved = function(self,pos,quat)
+        self.ColRef:setPose(pos,quat)
+    end,
+
     OnObjectResize = function(self,v)
         if self.OnResize then
             self:OnResize(v)
         end
         if self.InheritanceMethod.RawValue & INHM.Root.RawValue ~= 0 then
-            self.ShapeList[1]:SetSize(v)
+            self.ShapeList[1]:SetSize(v:abs())
             self.ColRef:setAwake(true)
         end
     end
@@ -246,7 +250,7 @@ function mt.__create(DATA, e)
     local Size = Transform.Scale
 
     if InheritanceMethod.RawValue & INHM.Root.RawValue ~= 0 then
-        Shapes[1]:SetSize(Size)
+        Shapes[1]:SetSize(Size:abs())
     end
 
     for _,v in ipairs(Shapes) do

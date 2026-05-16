@@ -27,7 +27,7 @@ Scheduler.__index = Scheduler
 local NativeUpdate = require("NativeSched")
 }
 
-@macro<L,!USEBRACK>:ERROR_ROUTINE(&Err,&Co) = AstralEngine.Log("Scheduled coroutine encountered an error! Routine: "..debug.getaddress(&Co).."\n\t"..&Err:gsub("\n","\n\t"),"warn");
+@macro<L,!USEBRACK>{ERROR_ROUTINE(&Err,&Co) = AstralEngine.Log("Scheduled coroutine encountered an error! Routine: "..debug.getaddress(&Co).."\n\t"..&Err:gsub("\n","\n\t").."\n"..debug.traceback(&Co),"warn") }
 
 function Scheduler.New(Clock, budget)
     @ifdef<Sched.UseNative || Sched.UseAuto>{

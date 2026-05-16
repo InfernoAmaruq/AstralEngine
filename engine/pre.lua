@@ -142,6 +142,11 @@ function lovr.conf(t)
 
     t.identity = AstralEngine._CONFIG.Game.Identity
     t.saveprecedence = AstralEngine._CONFIG.Game.SavePrecedence
+
+    t.threads = AstralEngine._CONFIG.Astral.Threads
+    if t.threads then
+        t.threads.workers = AstralEngine._CONFIG.Astral.Threads.Workers
+    end
 end
 
 -- set astral config, not lovr config

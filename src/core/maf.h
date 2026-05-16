@@ -28,6 +28,12 @@ MAF vec2 vec2_init(vec2 v, const vec2 u) {
   return memcpy(v, u, 2 * sizeof(float));
 }
 
+MAF vec2 vec2_abs(vec2 v){
+    v[0] = fabsf(v[0]);
+    v[1] = fabsf(v[1]);
+    return v;
+}
+
 MAF vec2 vec2_add(vec2 v, const vec2 u) {
   v[0] += u[0];
   v[1] += u[1];

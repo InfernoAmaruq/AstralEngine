@@ -43,6 +43,9 @@ return {
         Modules = {
             Headset = false,
         },
+        Threads = {
+            Workers = -1,
+        },
         Tick = {
             PhysicsRate = 50,
             FrameRate = 165,

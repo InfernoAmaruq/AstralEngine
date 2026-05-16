@@ -1,5 +1,5 @@
 @TYPE:FRAGMENT;
-@PRIORITY:1000;
+@PRIORITY:100000;
 @IDENTIFIER:OIT_DRAW;
 
 layout(location = 1) out vec2 SecondColor;

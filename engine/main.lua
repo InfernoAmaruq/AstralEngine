@@ -120,6 +120,11 @@ function lovr.run()
     local PhysTime = 0
     local PhysicsRate = 1/CONFIG.CONFIG.PHYSRATE
 
+    local Timer = {}
+    AstralEngine.Timer = Timer
+
+    Timer.TimeScale = 1
+
     @ifdef<Physics.BindMainWorld>
     {
         local Phys = GetService"Physics"
@@ -128,11 +133,15 @@ function lovr.run()
         local SyncState = Phys.LuaToJolt
         local LastPhysTime = -1
 
+        GetService"RunService".BindToStep("__PHYSICS_UPD_STEP",ENUM.StepPriority.Physics,function(Time)
+            SyncState(MainPhysWorldID)
+            MainPhysWorld:update(Time)
+            UpdTrans(MainPhysWorldID)
+        end)
+
         @macro<L,!USEBRACK>{M_PHYSTICK(&TIMER) =
             if MainPhysWorld then
-                SyncState(MainPhysWorldID)
-                MainPhysWorld:update(PhysicsRate)
-                UpdTrans(MainPhysWorldID)
+                RunService.__TICK(1001,1500,PhysicsRate * TimeScale)
                 LastPhysTime = &TIMER
             end
         }
@@ -148,7 +157,7 @@ function lovr.run()
             @macro<L,!USEBRACK>{PHYSICS_INTERPOLATE() = 
                 -- get alpha, world and whatnot, interpolate
                 if MainPhysWorld then
-                    local Alpha = math.min(PhysicsRate > 0 and (PhysTime / PhysicsRate) or 1,1)
+                    local Alpha = math.min(PhysicsRate > 0 and (PhysTime / (PhysicsRate * TimeScale)) or 1,1)
                     MainPhysWorld:interpolate(Alpha)
                     UpdTrans(MainPhysWorldID)
                 end
@@ -253,7 +262,7 @@ function lovr.run()
             end
         }
         MainScheduler:Update()
-        RunService.__TICK(0,500,&DT)
+        RunService.__TICK(0,500,&DT * TimeScale)
         Drain()
     }
 
@@ -342,6 +351,8 @@ function lovr.run()
         @execute<UNSAFE>{
             if lovr.headset then return "local XRDT = DT" end
         }
+
+        local TimeScale = Timer.TimeScale
 
         TICK = TICK + DT
         COUNTER = COUNTER + 1

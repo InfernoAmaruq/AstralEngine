@@ -45,15 +45,15 @@ option(LOVR_BUILD_WITH_SYMBOLS "Build with C function symbols exposed" OFF)
 if(EMSCRIPTEN)
   string(CONCAT EMSCRIPTEN_LINKER_FLAGS
     "-Os "
-    "-sUSE_WEBGPU=1 "
+    "-sJSPI=1 "
     "-sFORCE_FILESYSTEM=1 "
-    "-sINITIAL_HEAP=1677721600 "
+    "-sINITIAL_MEMORY=1677721600 "
     "-sEXPORTED_FUNCTIONS=_main "
     "-sEXPORTED_RUNTIME_METHODS=getValue,setValue "
     "--shell-file \"${PROJECT_SOURCE_DIR}/etc/lovr.html\""
   )
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Os")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -fno-exceptions")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Os -fno-exceptions")
   if(LOVR_ENABLE_THREAD)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
@@ -61,6 +61,7 @@ if(EMSCRIPTEN)
   set(CMAKE_EXECUTABLE_SUFFIX ".html")
   set(LOVR_USE_WEBGPU ON)
   set(LOVR_USE_VULKAN OFF)
+  set(LOVR_USE_STEAM_AUDIO OFF)
 elseif(MSVC)
   add_compile_options(/MP)
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
@@ -242,7 +243,7 @@ if(LOVR_USE_GLSLANG)
 endif()
 
 # OpenXR
-if(LOVR_ENABLE_HEADSET)
+if(LOVR_ENABLE_HEADSET AND NOT EMSCRIPTEN)
   if(LOVR_SYSTEM_OPENXR AND NOT ANDROID)
     pkg_search_module(OPENXR openxr REQUIRED)
     list(APPEND LOVR_INCLUDES ${OPENXR_INCLUDE_DIRS})
@@ -493,10 +494,13 @@ endif()
 
 if(LOVR_ENABLE_HEADSET)
   target_sources(lovr PRIVATE
-    src/modules/headset/headset.c
     src/api/l_headset.c
     src/api/l_headset_layer.c
   )
+
+  if(NOT EMSCRIPTEN)
+    target_sources(lovr PRIVATE src/modules/headset/headset.c)
+  endif()
 else()
   target_compile_definitions(lovr PRIVATE LOVR_DISABLE_HEADSET)
 endif()

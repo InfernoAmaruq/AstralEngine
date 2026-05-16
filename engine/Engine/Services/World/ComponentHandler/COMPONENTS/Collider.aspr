@@ -44,8 +44,8 @@ local SHAREDT = {
     SetTag = function(self, v)
         self.ColRef:setTag(v)
 
-        local IsStatic = self.WorldComp:IsStaticTag(v)
-        Physics.UpdateSyncField(w.WorldId,self.ColRef,"Static",IsStatic)
+        local IsStatic = self.World:IsStaticTag(v)
+        Physics.__UpdateSyncField(w.WorldId,self.ColRef,"Static",IsStatic)
     end,
 
     ResetMass = function(self)
@@ -173,7 +173,7 @@ local FIELDTOFUNC = {
 
 local GETTERS = {
     Static = function(self)
-        return self.WorldComp:IsStaticTag(self.ColRef:getTag())
+        return self.World:IsStaticTag(self.ColRef:getTag())
     end,
     AngularVelocity = function(self)
         return vec3(self.ColRef:getAngularVelocity())
@@ -225,24 +225,14 @@ function mt.__create(DATA, e)
 
     local EntPtr = WorldSer.GetEntityFromId(e)
 
-    local World = DATA.World
-    local WorldComp
-    local WId
+    local World = DATA.World or Physics.GetMainWorld()
 
-    if not World then
-        WId = DATA.WorldId or 1
-        World = assert(Physics.Worlds[WId], "NO WORLD WITH ID OF [" .. tostring(WId) .. "] PRESENT!")
-    else
-        WId = World.WorldId
-    end
+    AstralEngine.Assert(World, "No world provided or no main world created!","COLLIDER")
 
-    WorldComp = Component.SetComponents[World.__id]["World"]
-
-    local RawWorld = World:GetComponent("World").World
-
+    local RawWorld = World.LovrWorld
     local COLLIDER = RawWorld:newCollider(0,0,0)
     COLLIDER:setPose(Transform.Position,Transform.Orientation)
-    COLLIDER:setTag(DATA.Tag or WorldComp.DefaultTag)
+    COLLIDER:setTag(DATA.Tag or World.DefaultTag)
 
     local InheritanceMethod = DATA.InheritanceMethod or INHM.Root
 
@@ -257,12 +247,10 @@ function mt.__create(DATA, e)
         COLLIDER:addShape(v.__ShapePtr)
     end
 
-    local IsStatic = WorldComp:IsStaticTag(COLLIDER:getTag())
+    local IsStatic = World:IsStaticTag(COLLIDER:getTag())
 
     local Tab = {
         World = World,
-        WorldComp = WorldComp,
-        WId = WorldComp.WorldId,
         ColRef = COLLIDER,
         ShapeList = Shapes,
         Tags = 0,
@@ -283,7 +271,7 @@ function mt.__create(DATA, e)
 
     COLLIDER:setUserData(T)
 
-    Physics.BindCollider(WId, T, Transform)
+    Physics.__BindCollider(World, T, Transform)
 
     if DATA.Trigger then
         T.ColRef:setSensor(true)
@@ -296,8 +284,8 @@ function mt.__create(DATA, e)
 end
 
 function mt.__remove(self)
-    Physics.DequeueToSyncLTJ(self)
-    Physics.UnbindCollider(self.WId,self.ColRef)
+    Physics.__DequeueToSyncLTJ(self)
+    Physics.__UnbindCollider(self.World,self.ColRef)
 
     self.Touched:Destroy()
     self.TouchEnded:Destroy()

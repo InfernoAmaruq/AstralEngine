@@ -1,7 +1,6 @@
-local Component = GetService("Component", "Component")
-local Physics = GetService("Physics", "Physics")
+local Physics = select(1, ...)
 
-local World = {}
+local Meta = { __type = "PhysicsWorld" }
 
 local CAPTUREFUNC = function(t, ...)
     local s = t
@@ -12,7 +11,7 @@ local CAPTUREFUNC = function(t, ...)
     return FUNC(WORLD, ...)
 end
 
-local Functions = {
+local Methods = {
     Raycast = function(WorldTab, Start, End, Parameters, Out)
         Parameters = Parameters or Physics.RaycastParams.Default
 
@@ -23,7 +22,7 @@ local Functions = {
 
         local ReleaseFunc = Physics.QueryData.Release
 
-        WorldTab.World:raycast(Start, End, Parameters[".Tags"], Parameters.Callback)
+        WorldTab.LovrWorld:raycast(Start, End, Parameters[".Tags"], Parameters.Callback)
 
         if Parameters.GetFirst then
             local Obj = Parameters.__OUT or Physics.QueryData.New()
@@ -61,7 +60,7 @@ local Functions = {
 
         local RawShape = Physics.RaycastParams.GetTempShape(Shape, ShapeSize)
 
-        WorldTab.World:shapecast(RawShape, Start, End, Quat, Parameters[".Tags"], Parameters.Callback)
+        WorldTab.LovrWorld:shapecast(RawShape, Start, End, Quat, Parameters[".Tags"], Parameters.Callback)
 
         if Parameters.GetFirst then
             local Obj = Parameters.__OUT or Physics.QueryData.New()
@@ -96,7 +95,7 @@ local Functions = {
 
         local RawShape = Physics.RaycastParams.GetTempShape(Shape, ShapeSize)
 
-        WorldTab.World:overlapShape(RawShape, Position, Quat, MaxDistance, Parameters[".Tags"], Parameters.Callback)
+        WorldTab.LovrWorld:overlapShape(RawShape, Position, Quat, MaxDistance, Parameters[".Tags"], Parameters.Callback)
 
         Parameters.__OUT = nil
         for _, v in ipairs(Out) do
@@ -112,7 +111,7 @@ local Functions = {
 
         local ReleaseFunc = Physics.QueryData.Release
 
-        WorldTab.World:queryBox(Pos, Size, Parameters[".Tags"], Parameters.OverlapCallback)
+        WorldTab.LovrWorld:queryBox(Pos, Size, Parameters[".Tags"], Parameters.OverlapCallback)
 
         Parameters.__OUT = nil
         for _, v in ipairs(Out) do
@@ -128,13 +127,21 @@ local Functions = {
 
         local ReleaseFunc = Physics.QueryData.Release
 
-        WorldTab.World:querySphere(Pos, Radius, Parameters[".Tags"], Parameters.OverlapCallback)
+        WorldTab.LovrWorld:querySphere(Pos, Radius, Parameters[".Tags"], Parameters.OverlapCallback)
 
         Parameters.__OUT = nil
         for _, v in ipairs(Out) do
             ReleaseFunc(v)
         end
         return Out
+    end,
+    HasTag = function(World, Name)
+        local t = World.TagLookUp[Name]
+        return t ~= nil
+    end,
+    IsStaticTag = function(World, Tag)
+        local t = table.find(World.StaticTags, Tag)
+        return t and true or false
     end,
 }
 
@@ -143,82 +150,35 @@ local AliasMap = {
     Interpolate = "interpolate",
 }
 
-local WORLDINHERITANCE = {
-    __index = function(t, k)
-        if Functions[k] then
-            return Functions[k]
-        end
+Meta.Methods = Methods
 
-        k = rtype(k) == "string" and AliasMap[k] or k
-        local W = rawget(t, "World")
-        local v = W and W[k]
-
-        if k == "Gravity" then
-            return t.World:getGravity()
-        end
-
-        if rtype(v) == "function" then
-            rawset(t, ".NEXTCALL", v)
-            return CAPTUREFUNC
-        else
-            return v or rawget(t, k)
-        end
-    end,
-    __newindex = function(t, k, v)
-        if k == "Gravity" then
-            t.World:setGravity(v)
-            return
-        end
-        error("CANNOT WRITE TO WORLD", 2)
-    end,
-}
-
-World.Name = "World"
-World.Pattern = { update = 0, World = 0, WorldId = 0 }
-World.Metadata = {}
-
-local function HasTag(World, Name)
-    local t = World.TagLookUp[Name]
-    return t ~= nil
-end
-
-local function IsStatic(World, Tag)
-    local t = table.find(World.StaticTags, Tag)
-    return t and true or false
-end
-
-World.Metadata.__create = function(DATA)
-    local T = {}
-    T.World = DATA.W
-    T.DefaultTag = DATA.D
-    T.WorldId = DATA.N
-    T.Tags = DATA.TAGS
-    T.TagLookUp = {}
-    T.StaticTags = DATA.STATIC
-
-    for _, v in pairs(DATA.TAGS) do
-        T.TagLookUp[v] = true
+Meta.__index = function(t, k)
+    if Methods[k] then
+        return Methods[k]
     end
 
-    T.HasTag = HasTag
-    T.IsStaticTag = IsStatic
+    k = rtype(k) == "string" and AliasMap[k] or k
+    local W = rawget(t, "LovrWorld")
+    local v = W and W[k]
 
-    setmetatable(T, WORLDINHERITANCE)
-    return T
-end
+    if k == "Gravity" then
+        return t.LovrWorld:getGravity()
+    end
 
-World.Metadata.__remove = function(self, e)
-    local Ent = GetService("World").GetEntityFromId(e)
-
-    local MW = Physics.GetMainWorld()
-
-    local w = self.World
-
-    Physics.DestroyWorld(Ent, false, true)
-
-    if w == MW then
-        Physics.SetMainWorld(nil)
+    if rtype(v) == "function" then
+        rawset(t, ".NEXTCALL", v)
+        return CAPTUREFUNC
+    else
+        return v or rawget(t, k)
     end
 end
 
-return World
+Meta.__newindex = function(t, k, v)
+    if k == "Gravity" then
+        t.LovrWorld:setGravity(v)
+        return
+    end
+    error("CANNOT WRITE TO WORLD", 2)
+end
+
+return Meta

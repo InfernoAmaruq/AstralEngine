@@ -11,8 +11,8 @@ Comp.ComponentAdded:Connect(function(e, id, c)
             c:SetMaterial(Mat[1])
         else
             local Alpha = Mat[7]
-            RT:RemoveFromStack()
-            RT:SwapStacks(Alpha == 1)
+            c:RemoveFromStack()
+            c:SwapStacks(Alpha == 1)
         end
     end
 end)

@@ -78,6 +78,8 @@ function lovr.load()
 
     Renderer.LateCall()
 
+    World.__ConnectDestructors()
+
     AstralEngine.Plugins.Finish()
     GetService.Disable() -- Disable GetService so it errors when you try to index a non-existant service
 end

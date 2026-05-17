@@ -143,7 +143,9 @@ function Entity.CreateAtId(Id, Name, ...)
     return Obj
 end
 
-function Entity.Destroy(Ent, Recursive)
+local ToKill = {}
+
+local function DestroyEntity(Ent, Recursive)
     Recursive = Recursive ~= false and true or false
     Ent = type(Ent) == "astrobj" and Ent or World.Alive[Ent]
 
@@ -183,7 +185,37 @@ function Entity.Destroy(Ent, Recursive)
     rawset(Ent, "IsNull", true)
 end
 
+function Entity.Destroy(Ent, Recursive)
+    Recursive = Recursive ~= false and true or false
+    ToKill[Ent] = Recursive
+end
+
 Methods.Destroy = Entity.Destroy
+
+-- handle destruction
+World.__ConnectDestructors = function()
+    World.__ConnectDestructors = nil
+
+    local RS = GetService("RunService")
+
+    ENUM.StepPriority.__Append({
+        EntityDestruction = 496,
+        ComponentDestruction = 497,
+    })
+
+    RS.BindToStep("__DESTRUCTION_FRAME_ENTITY", ENUM.StepPriority.EntityDestruction, function()
+        for Ent, Rec in pairs(ToKill) do
+            DestroyEntity(Ent, Rec)
+            ToKill[Ent] = nil
+        end
+    end)
+
+    RS.BindToStep(
+        "__DESTRUCTION_FRAME_COMPONENT",
+        ENUM.StepPriority.ComponentDestruction,
+        World.Component.__DrainDestructionList
+    )
+end
 
 -- virtualize tag functions
 Methods.HasTag = TagService.HasTag

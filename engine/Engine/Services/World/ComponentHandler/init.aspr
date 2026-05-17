@@ -156,7 +156,7 @@ local function CallstackDepth()
     return Depth
 end
 
-function Component.RemoveComponent(e, id, Force)
+local function KillComponent(e,id,Force)
     local D = CallstackDepth() - 4
     local pre = string.rep(">",D)
     if type(e) == &TYPE then
@@ -198,12 +198,28 @@ function Component.RemoveComponent(e, id, Force)
         CompInst[i] = nil
     end
 
-    CompInst.IsNull = true
+    rawset(CompInst,"IsNull",true)
 
     setmetatable(CompInst, DEADMT)
 
     Component.Components[id].Storage[e] = nil
     Component.SetComponents[e][id] = nil
+end
+
+local ComponentsToKill = {}
+
+function Component.RemoveComponent(e, id, Force)
+    ComponentsToKill[e] = ComponentsToKill[e] or {}
+    ComponentsToKill[e][id] = Force or false
+end
+
+function Component.__DrainDestructionList()
+    for Entity, List in pairs(ComponentsToKill) do
+        for Comp, Force in pairs(List) do
+            KillComponent(Entity,Comp,Force)
+        end
+        ComponentsToKill[Entity] = nil
+    end
 end
 
 Component.GetComponentStorage = function(Name)

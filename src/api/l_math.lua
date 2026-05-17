@@ -233,7 +233,7 @@ function quaternion.angleaxis(angle, ax, ay, az)
     s = s / length
     result = { x = ax * s, y = ay * s, z = az * s, w = c }
   else
-    result = { x = 0., y = 0., z = 0., w = 1. }
+    result = { x = 0, y = 0, z = 0, w = 1 }
   end
 
   setmetatable(result, quaternion)

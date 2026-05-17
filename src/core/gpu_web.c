@@ -255,7 +255,7 @@ bool gpu_surface_init(gpu_surface_info* info) {
     .toneMapping.mode = WGPU_CANVAS_TONE_MAPPING_MODE_STANDARD,
     .alphaMode = WGPU_CANVAS_ALPHA_MODE_OPAQUE,
     .numViewFormats = 1,
-    .viewFormats = &(WGPU_TEXTURE_FORMAT) { convertFormat(gpu_surface_get_format(), true)}
+    .viewFormats = &(WGPU_TEXTURE_FORMAT) { convertFormat(gpu_surface_get_format(), true) }
   };
 
   wgpu_canvas_context_configure(state.context, &config);

@@ -86,7 +86,7 @@ group('math', function()
     end)
 
     test(':getOrientation', function()
-      matrix = lovr.math.newMat4():target({0, 1, -1}, {0, 1.7, 0})
+      matrix = lovr.math.newMat4():target({ 0, 1, -1 }, { 0, 1.7, 0 })
       expect({ matrix:getOrientation() }).to.equal({ 3.1415, 0, 0.9537, -0.3006 }, 1e-4)
     end)
 
@@ -134,9 +134,8 @@ group('math', function()
     expect(lovr.math.randomNormal()).to.equal(b)
   end)
 
-
   group('quaternion', function()
-    test("angleaxis", function()
+    test('angleaxis', function()
       expect({ quaternion(1.2, 1, 0, 0):unpack() }).to.equal({ .564642, 0.000000, 0.000000, 0.825336 }, 1e-4)
       expect({ quaternion(1.2, 0, 0, 0):unpack() }).to.equal({ 0, 0, 0, 1 }, 1e-4)
     end)

@@ -547,10 +547,12 @@ void main() {
 
 #ifdef WEBGPU
   PointSize = 1.;
+  Position = lovrmain();
+  Position.y = -Position.y;
 #else
   PointSize = flag_pointSize;
-#endif
   Position = lovrmain();
+#endif
 
   if (flag_uvTransform) {
     UV *= Material.uvScale;

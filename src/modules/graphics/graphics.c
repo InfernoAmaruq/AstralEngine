@@ -111,7 +111,8 @@ typedef struct {
   gpu_slot_type type;
   gpu_phase phase;
   gpu_cache cache;
-  uint16_t textureFlags;
+  uint8_t textureFlags;
+  uint8_t storageAccess;
   uint16_t fieldCount;
   DataField* format;
 } ShaderResource;
@@ -3594,23 +3595,32 @@ Shader* lovrShaderCreate(const ShaderInfo* info) {
       shader->raytracerMask |= (raytracer << *binding);
       shader->storageMask |= (storage << *binding);
 
-      gpu_cache cache;
-
-      if (storage) {
-        cache = info->type == SHADER_COMPUTE ? GPU_CACHE_STORAGE_WRITE : GPU_CACHE_STORAGE_READ;
-      } else if (raytracer) {
-        cache = GPU_CACHE_TREE_READ;
-      } else {
-        cache = texture ? GPU_CACHE_TEXTURE : GPU_CACHE_UNIFORM;
-      }
-
       shader->resources[index] = (ShaderResource) {
         .hash = hash,
         .binding = *binding,
         .type = type,
-        .phase = phase,
-        .cache = cache
+        .phase = phase
       };
+
+      if (storage) {
+        lovrCheck(stage == STAGE_COMPUTE || resource->storageAccess == SPV_ACCESS_READ_ONLY, "Currently, vertex/fragment shaders can not writes to storage buffers or storage textures (check variable %s)", resource->name);
+        shader->resources[index].storageAccess = resource->storageAccess;
+
+        switch (resource->storageAccess) {
+          case SPV_ACCESS_READ_ONLY: shader->resources[index].cache = GPU_CACHE_STORAGE_READ; break;
+          case SPV_ACCESS_WRITE_ONLY: shader->resources[index].cache = GPU_CACHE_STORAGE_WRITE; break;
+          case SPV_ACCESS_READ_WRITE: shader->resources[index].cache = GPU_CACHE_STORAGE_READ | GPU_CACHE_STORAGE_WRITE; break;
+          default: break;
+        }
+      } else if (raytracer) {
+        shader->resources[index].cache = GPU_CACHE_TREE_READ;
+      } else {
+        shader->resources[index].cache = texture ? GPU_CACHE_TEXTURE : GPU_CACHE_UNIFORM;
+      }
+
+      if (storage) {
+        shader->resources[index].storageAccess = resource->storageAccess;
+      }
 
       if (texture) {
         shader->resources[index].textureFlags = resource->textureFlags;
@@ -3736,7 +3746,8 @@ Shader* lovrShaderCreate(const ShaderInfo* info) {
       .stages =
         ((resource->phase & GPU_PHASE_SHADER_VERTEX) ? GPU_STAGE_VERTEX : 0) |
         ((resource->phase & GPU_PHASE_SHADER_FRAGMENT) ? GPU_STAGE_FRAGMENT : 0) |
-        ((resource->phase & GPU_PHASE_SHADER_COMPUTE) ? GPU_STAGE_COMPUTE : 0)
+        ((resource->phase & GPU_PHASE_SHADER_COMPUTE) ? GPU_STAGE_COMPUTE : 0),
+      .access = (gpu_storage_access) resource->storageAccess
     };
   }
 

@@ -355,10 +355,17 @@ enum {
   GPU_STAGE_GRAPHICS = GPU_STAGE_VERTEX | GPU_STAGE_FRAGMENT
 };
 
+typedef enum {
+  GPU_READ_ONLY,
+  GPU_WRITE_ONLY,
+  GPU_READ_WRITE
+} gpu_storage_access;
+
 typedef struct {
   uint32_t number;
   gpu_slot_type type;
-  uint32_t stages;
+  uint8_t stages;
+  uint8_t access;
 } gpu_slot;
 
 typedef struct {

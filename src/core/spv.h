@@ -79,6 +79,12 @@ enum {
   SPV_TEXTURE_INTEGER = (1 << 4)
 };
 
+typedef enum {
+  SPV_ACCESS_READ_ONLY,
+  SPV_ACCESS_WRITE_ONLY,
+  SPV_ACCESS_READ_WRITE
+} spv_access;
+
 typedef struct {
   const uint32_t* set;
   const uint32_t* binding;
@@ -87,6 +93,7 @@ typedef struct {
   spv_resource_type type;
   spv_texture_dimension dimension;
   uint16_t textureFlags;
+  spv_access storageAccess;
   spv_field* bufferFields;
 } spv_resource;
 

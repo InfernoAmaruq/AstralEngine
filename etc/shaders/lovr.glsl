@@ -545,7 +545,11 @@ void main() {
     Tangent = vec4(NormalMatrix * VertexTangent.xyz, VertexTangent.w);
   }
 
+#ifdef WEBGPU
+  PointSize = 1.;
+#else
   PointSize = flag_pointSize;
+#endif
   Position = lovrmain();
 
   if (flag_uvTransform) {

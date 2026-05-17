@@ -46,16 +46,18 @@ if(EMSCRIPTEN)
   string(CONCAT EMSCRIPTEN_LINKER_FLAGS
     "-Os "
     "-sJSPI=1 "
+    "-sASYNCIFY_IGNORE_INDIRECT=1 "
     "-sFORCE_FILESYSTEM=1 "
     "-sINITIAL_MEMORY=1677721600 "
+    "-sMIN_FIREFOX_VERSION=149 "
     "-sEXPORTED_FUNCTIONS=_main,_lovrTimerGetDelta,_lovrTimerGetTime,_lovrGraphicsGetWindowTexture,_lovrGraphicsGetWindowPass,_lovrPassSetViewMatrix,_lovrPassSetProjection "
     "-sEXPORTED_RUNTIME_METHODS=getValue,setValue "
     "--js-library \"${PROJECT_SOURCE_DIR}/src/lib/webgpu/webgpu.js\" "
     "--js-library \"${PROJECT_SOURCE_DIR}/src/modules/headset/headset.js\" "
     "--shell-file \"${PROJECT_SOURCE_DIR}/etc/lovr.html\""
   )
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -fno-exceptions")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Os -fno-exceptions")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -sSUPPORT_LONGJMP=wasm -fno-exceptions")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Os -sSUPPORT_LONGJMP=wasm -fno-exceptions")
   if(LOVR_ENABLE_THREAD)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
@@ -632,17 +634,16 @@ foreach(path ${LOVR_RESOURCES})
   file(WRITE ${output} "const unsigned char ${identifier}[] = {${data}};\nconst unsigned int ${identifier}_len = sizeof(${identifier});\n")
 endforeach()
 
-if(NOT ANDROID AND NOT EMSCRIPTEN)
-  if(APPLE AND LOVR_BUILD_BUNDLE)
-    set(NOGAME_BUNDLE "${PROJECT_BINARY_DIR}/lovr.app/Contents/Resources/nogame.lovr")
-  else()
-    set(NOGAME_BUNDLE "$<TARGET_FILE:lovr>")
-  endif()
+if(NOT ANDROID)
   add_custom_command(TARGET lovr POST_BUILD
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/etc/nogame"
-    COMMAND ${CMAKE_COMMAND} -E tar c "${PROJECT_BINARY_DIR}/nogame.zip" --format=zip .
-    COMMAND ${CMAKE_COMMAND} -E cat "${PROJECT_BINARY_DIR}/nogame.zip" >> ${NOGAME_BUNDLE}
+    COMMAND ${CMAKE_COMMAND} -E tar c "${PROJECT_BINARY_DIR}/nogame.lovr" --format=zip .
   )
+  if(APPLE AND LOVR_BUILD_BUNDLE)
+    add_custom_command(TARGET lovr POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy nogame.lovr lovr.app/Contents/Resources)
+  elseif(NOT EMSCRIPTEN)
+    add_custom_command(TARGET lovr POST_BUILD COMMAND ${CMAKE_COMMAND} -E cat nogame.lovr >> "$<TARGET_FILE:lovr>")
+  endif()
 endif()
 
 if(LOVR_VERSION_HASH)

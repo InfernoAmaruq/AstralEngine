@@ -21,14 +21,6 @@
         margin: 40px auto;
         outline: none;
       }
-
-      button {
-        display: block;
-        margin: 0 auto;
-        font-size: 18px;
-        border-radius: 4px;
-        padding: 8px 16px;
-      }
     </style>
 
     <meta charset="utf-8"/>
@@ -37,14 +29,12 @@
 
   <body>
     <div class="container">
-      <canvas id="canvas" width="1080" height="600" tabIndex="1"></canvas>
+      <canvas id="canvas" width="800" height="600" tabIndex="1"></canvas>
     </div>
 
     <script type="text/javascript">
       var container = document.querySelector('.container');
       var canvas = document.getElementById('canvas');
-      var button = document.createElement('button');
-      button.textContent = 'Enter VR';
 
       var Module = window.Module = {
         arguments: [],
@@ -60,45 +50,12 @@
       // alongside the HTML file.  Then set the 'project' variable below to the project's filename.
       // This downloads the .lovr file into the virtual filesystem and adds it as a virtual command
       // line argument before booting up LÖVR.
-      // Example: var project = 'app.lovr';
-      var project = null;
+      var project = 'nogame.lovr';
+
       if (project) {
         Module.arguments.push(project);
         Module.preRun.push(function() {
-          Module.FS_createPreloadedFile('/', project, project, true, false);
-        });
-      }
-
-      // If WebXR is supported and immersive sessions are supported, add a button to the DOM that
-      // controls starting/stopping the immersive session.
-      if (navigator.xr) {
-        navigator.xr.isSessionSupported('immersive-vr').then(function(supported) {
-          if (!supported) return;
-
-          container.appendChild(button);
-
-          var active = false;
-
-          function onEnter() {
-            active = true;
-            button.textContent = 'Exit VR';
-          }
-
-          function onExit() {
-            active = false;
-            button.textContent = 'Enter VR';
-          }
-
-          button.addEventListener('click', function() {
-            if (!active) {
-              Module.lovr.enterVR().then(function(session) {
-                session.addEventListener('end', onExit);
-                onEnter();
-              });
-            } else {
-              Module.lovr.exitVR().then(onExit);
-            }
-          });
+          FS_createPreloadedFile('/', project, project, true, false);
         });
       }
     </script>

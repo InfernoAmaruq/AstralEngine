@@ -407,3 +407,18 @@ void os_set_mouse_mode(os_mouse_mode mode) {
     }
   }
 }
+
+typedef bool Loop(void*);
+
+EM_JS(void, requestAnimationFrameLoop, (Loop* loop, void* arg), {
+  var wrappedCallback = WebAssembly.promising(getWasmTableEntry(loop));
+  async function tick() {
+    var again = await wrappedCallback(arg);
+    if (again) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})
+
+void os_set_emscripten_loop(Loop* loop, void* arg) {
+  requestAnimationFrameLoop(loop, arg);
+}

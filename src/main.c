@@ -8,6 +8,24 @@
 #include <string.h>
 #include <stdlib.h>
 
+bool step(void* arg) {
+  lua_State* T = arg;
+
+  if (luax_resume(T, 0) != LUA_YIELD) {
+    if (lua_type(T, 1) == LUA_TSTRING && !strcmp(lua_tostring(T, 1), "restart")) {
+      return false;
+    } else {
+      int status = lua_tointeger(T, -1);
+      lua_close(T);
+      os_destroy();
+      exit(status);
+      return false;
+    }
+  }
+
+  return true;
+}
+
 int main(int argc, char** argv) {
   os_init();
 
@@ -38,20 +56,20 @@ int main(int argc, char** argv) {
     lua_State* T = lua_tothread(L, -1);
     lovrSetLogCallback(luax_vlog, T);
 
-    while (luax_resume(T, 0) == LUA_YIELD) {
-      os_sleep(0.);
+#ifdef EMSCRIPTEN
+    os_set_emscripten_loop(step, T);
+    return 0;
+#else
+    for (;;) {
+      if (step(T)) {
+        os_sleep(0.);
+      } else {
+        luax_checkvariant(T, 2, &cookie);
+        if (cookie.type == TYPE_OBJECT) memset(&cookie, 0, sizeof(cookie));
+        luax_close(L);
+        break;
+      }
     }
-
-    if (lua_type(T, 1) == LUA_TSTRING && !strcmp(lua_tostring(T, 1), "restart")) {
-      luax_checkvariant(T, 2, &cookie);
-      if (cookie.type == TYPE_OBJECT) memset(&cookie, 0, sizeof(cookie));
-      luax_close(L);
-      continue;
-    } else {
-      int status = lua_tointeger(T, 1);
-      luax_close(L);
-      os_destroy();
-      return status;
-    }
+#endif
   }
 }

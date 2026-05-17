@@ -883,7 +883,8 @@ void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas) {
   WGpuRenderPassDescriptor info = {
     .numColorAttachments = colorAttachmentCount,
     .colorAttachments = colorAttachments,
-    .depthStencilAttachment = depth
+    .depthStencilAttachment = depth,
+    .occlusionQuerySet = canvas->pixelTally ? canvas->pixelTally->handle : 0
   };
 
   stream->pass = wgpu_command_encoder_begin_render_pass(stream->commands, &info);

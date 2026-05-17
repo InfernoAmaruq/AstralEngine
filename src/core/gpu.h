@@ -656,6 +656,7 @@ typedef struct {
   gpu_color_attachment color[4];
   gpu_depth_attachment depth;
   gpu_texture* foveation;
+  gpu_tally* pixelTally;
   uint32_t width;
   uint32_t height;
   uint32_t area[4];

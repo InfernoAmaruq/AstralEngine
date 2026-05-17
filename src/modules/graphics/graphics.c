@@ -1465,6 +1465,9 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
 
   if (pass->tally.buffer && pass->tally.count > 0) {
     gpu_clear_tally(stream, pass->tally.gpu, 0, pass->tally.count * pass->views);
+    pass->target.pixelTally = pass->tally.gpu;
+  } else {
+    pass->target.pixelTally = NULL;
   }
 
   // Do the thing!

@@ -116,7 +116,11 @@ layout(location = 15) in vec4 Tangent;
 #define ClipDistance gl_ClipDistance
 #define CullDistance gl_CullDistance
 #define PrimitiveID gl_PrimitiveID
+#ifdef WEBGPU
+#define ViewIndex 0
+#else
 #define ViewIndex gl_ViewIndex
+#endif
 #endif
 
 #ifdef GL_VERTEX_SHADER

@@ -3064,8 +3064,12 @@ bool lovrGraphicsCompileShader(ShaderSource* stages, ShaderSource* outputs, uint
 
   const char* prefix = ""
     "#version 460\n"
+#ifdef LOVR_WEBGPU
+    "#define WEBGPU\n"
+#else
     "#extension GL_EXT_multiview : require\n"
     "#extension GL_EXT_ray_query : enable\n"
+#endif
     "#extension GL_EXT_samplerless_texture_functions : require\n"
     "#extension GL_EXT_scalar_block_layout : enable\n"
     "#extension GL_GOOGLE_include_directive : require\n";

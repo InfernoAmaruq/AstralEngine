@@ -48,9 +48,10 @@ if(EMSCRIPTEN)
     "-sJSPI=1 "
     "-sFORCE_FILESYSTEM=1 "
     "-sINITIAL_MEMORY=1677721600 "
-    "-sEXPORTED_FUNCTIONS=_main "
+    "-sEXPORTED_FUNCTIONS=_main,_lovrTimerGetDelta,_lovrTimerGetTime,_lovrGraphicsGetWindowTexture,_lovrGraphicsGetWindowPass,_lovrPassSetViewMatrix,_lovrPassSetProjection "
     "-sEXPORTED_RUNTIME_METHODS=getValue,setValue "
     "--js-library \"${PROJECT_SOURCE_DIR}/src/lib/webgpu/webgpu.js\" "
+    "--js-library \"${PROJECT_SOURCE_DIR}/src/modules/headset/headset.js\" "
     "--shell-file \"${PROJECT_SOURCE_DIR}/etc/lovr.html\""
   )
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -fno-exceptions")

@@ -481,7 +481,7 @@ if(LOVR_ENABLE_GRAPHICS)
           --quiet
           $<$<CONFIG:Debug>:-gVS>
           --target-env vulkan1.1
-          $<$<BOOL:LOVR_USE_WEBGPU>:-DWEBGPU>
+          $<$<BOOL:${LOVR_USE_WEBGPU}>:-DWEBGPU>
           --vn lovr_shader_${shader}_${ARGV0}
           -o ${shader_file}.h
           ${shader_file}

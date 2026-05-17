@@ -223,6 +223,9 @@ static int l_lovrThreadCall(lua_State* L) {
   if (lua_iscfunction(L, 1)) {
     context->function = lua_tocfunction(L, 1);
   } else {
+#ifdef LOVR_USE_LUAU
+    return luaL_error(L, "Luau doesn't support calling Lua functions with lovr.thread.call");
+#else
     luaL_checktype(L, 1, LUA_TFUNCTION);
     lua_getfield(L, LUA_REGISTRYINDEX, "_lovrbytecode");
     lua_pushvalue(L, 1);
@@ -240,6 +243,7 @@ static int l_lovrThreadCall(lua_State* L) {
       arr_append(&context->code, code, length);
       lua_pop(L, 2);
     }
+#endif
   }
 
   int n = lua_gettop(L) - 1;

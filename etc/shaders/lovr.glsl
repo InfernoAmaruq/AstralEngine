@@ -8,7 +8,7 @@ layout(constant_id = 1005) const bool flag_uvTransform = true;
 layout(constant_id = 1006) const bool flag_alphaCutoff = false;
 layout(constant_id = 1007) const bool flag_glow = false;
 layout(constant_id = 1008) const bool flag_normalMap = false;
-layout(constant_id = 1009) const bool flag_vertexTangents = true;
+layout(constant_id = 1009) const bool flag_vertexTangents = false;
 layout(constant_id = 1010) const bool flag_colorTexture = true;
 layout(constant_id = 1011) const bool flag_glowTexture = true;
 layout(constant_id = 1012) const bool flag_metalnessTexture = true;

@@ -379,6 +379,14 @@ static int l_lovrSystemSetCursorIcon(lua_State* L){
     return 0;
 }
 
+static int l_lovrSystemSetPreciseMouse(lua_State* L){
+    int Bool = lua_toboolean(L,1);
+
+    lua_pushboolean(L,lovrSystemSetPreciseMouse(Bool));
+
+    return 1;
+}
+
 static const luaL_Reg lovrSystem[] = {
   { "getOS", l_lovrSystemGetOS },
   { "getCoreCount", l_lovrSystemGetCoreCount },
@@ -411,6 +419,7 @@ static const luaL_Reg lovrSystem[] = {
   { "_getScrollDelta", l_lovrSystemGetScrollDelta },
   { "setWindowSize", l_lovrSystemSetWindowSize },
   { "setCursorIcon", l_lovrSystemSetCursorIcon },
+  { "setPreciseMouse", l_lovrSystemSetPreciseMouse },
   { NULL, NULL }
 };
 

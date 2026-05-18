@@ -196,7 +196,7 @@ local function ProcessMaterialInput(Input)
 
             local t = rtype(v)
             if t == "table" then
-                r, g, b, a = unpack(t)
+                r, g, b, a = unpack(v)
             else
                 r, g, b, a = v:unpack()
             end
@@ -225,6 +225,10 @@ local function ProcessMaterialInput(Input)
         else
             InputProcessed[i] = v
         end
+    end
+
+    if not Input.Glow and Input.GlowTexture then
+        InputProcessed.Glow = {1,1,1,1}
     end
 
     for _, Field in ipairs(MaterialKeyArray) do

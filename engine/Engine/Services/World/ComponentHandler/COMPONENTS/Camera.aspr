@@ -30,7 +30,6 @@ Camera.Pattern = {
     Near = 0.05,
     Orthographic = false,
     CameraMask = Renderer.CamMask,
-    Lighting = ENUM.LightingTechnology.Cel,
     DrawToScreen = false,
     CameraPass = nil,
     CameraTex = nil,
@@ -61,7 +60,7 @@ local FIELDS = {
     Width = 7,
     H = 8,
     Height = 8,
-    Lighting = 9,
+    Ambience = 9,
     DrawToScreen = 10,
     CameraPass = 11,
     CameraTex = 12,
@@ -194,10 +193,17 @@ local SETTER = {
             AstralEngine.Error("CANNOT SET PRIMARY CAMERA, FUNCTION MISSING", "CAMERA", 2)
         end
     end,
+    Ambience = function(self, Val)
+        self[9]:set(Val:unpack())
+    end,
 }
+
 local GETTER = {
     FOV = function(self)
         return math.deg(self[FIELDS.RadFOV])
+    end,
+    Ambience = function(self)
+        return color.fromRGBA(self[9]:unpack())
     end,
     Resolution = function(self)
         return vec2(self[FIELDS.W], self[FIELDS.H]) / self[FIELDS.Density]
@@ -231,6 +237,8 @@ local mt = {
 
 local BasePriority = 42069
 local BoundCameras = 0
+
+local BaseAmbience = color.fromRGBA(180, 180, 180, 255)
 
 local OIT_CONF = { format = "rg16f", samples = 4, usage = { "render", "sample" }, mipmaps = false }
 local DEPTH_CONF = { format = "d32f", samples = 4, usage = { "render", "sample" }, mipmaps = false, linear = true }
@@ -337,6 +345,8 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.SolidPass = AstralEngine.Graphics.NewPass({ SolidTex[1], depth = { texture = DepthTexture[1] }, samples = 4 })
 
     Data.OITPass:setClear({ { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, depth = false })
+
+    Data.Ambience = Vec4((Input.Ambience or BaseAmbience):unpack())
 
     Data.OITPass.ResizeCallback = REBUILD_CALLBACK
     Data.CameraPass.ResizeCallback = REBUILD_CALLBACK

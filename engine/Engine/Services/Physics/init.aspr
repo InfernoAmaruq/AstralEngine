@@ -62,8 +62,8 @@ local CALLBACKS = {
     end,
 }
 
-local DefaultParameters = { ThreadSafe = false, RestitutionThreshold = 1, Stabilization = .7, Callbacks = {
-    Enter = CALLBACKS.Enter, Exit = CALLBACKS.Exit
+local DefaultParameters = { ThreadSafe = false, RestitutionThreshold = 1, Stabilization = .5, Callbacks = {
+    Enter = CALLBACKS.Enter, Exit = CALLBACKS.Exit, PositionSteps = 3
 }, SetCollisionBetween = {},
     Tags = {"DEFAULT"}, StaticTags = {"STATIC_DEFAULT"}
 }

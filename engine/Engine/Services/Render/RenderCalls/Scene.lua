@@ -22,17 +22,15 @@ Renderer.Flags = {
     SHADER_RESET = &F_SHADER_RESET
 }
 
-local ShaderService = GetService("ShaderService","ShaderService")
-local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
-    Include = {"Material"},
-    Define = {
-        Fragment = {
-            "MATERIAL_BASEUV_TO_COLOR"
-        }
-    }
-})
+local MAINSHADER
 
-local MAINSHADER = lovr.graphics.newShader(V,F)
+Renderer.GetMainShader = function()
+    return MAINSHADER
+end
+
+Renderer.SetMainShader = function(Shader)
+    MAINSHADER = Shader
+end
 
 local OITCOMPOSITE = lovr.graphics.newShader('fill',[[
     uniform sampler2DMS TexSolid;
@@ -181,7 +179,14 @@ end
 
 local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
 
-@macro<L,!USEBRACK>{PROCESSSTACK(&STACK, &PASS) =
+@macro<L,!USEBRACK>{SETMAINSHADERPARAMS(&PASS,&TRANSPARENT) = 
+    &PASS:setShader(MAINSHADER)
+    &PASS:send("Lighting_Ambience",CAMERA[9])
+    &PASS:send("Transparent",&TRANSPARENT)
+    &PASS:send("Lighting_Data",Renderer.Lighting.LightBuffer)
+}
+
+@macro<L,!USEBRACK>{PROCESSSTACK(&STACK, &PASS, &STATE) =
         for eind = 1, #&STACK do
             local E = &STACK[eind]
             local RenT = RendStorage[E]
@@ -207,7 +212,7 @@ local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
             local RETFLAG = TYPETOPROCESS[RenT[1]](&PASS, E, Comp)
             if not RETFLAG then continue end
             if RETFLAG & &F_SHADER_RESET ~= 0 then
-                &PASS:setShader(MAINSHADER)
+                SETMAINSHADERPARAMS(&PASS,&STATE)
             end
         end
 }
@@ -249,14 +254,15 @@ function Renderer.DrawSolid()
         SETPASSPARAMS(SolidPass)
         SETPASSPARAMS(TransPass)
 
-        SolidPass:send('Transparent',false)
-        SolidPass:push'state'
+        SETMAINSHADERPARAMS(SolidPass,false)
 
-        PROCESSSTACK(SolidStack,SolidPass)
+        SolidPass:push('state')
+
+        PROCESSSTACK(SolidStack,SolidPass,false)
 
         for LovrMat,t in pairs(SolidStack.Material) do
             SolidPass:setMaterial(LovrMat)
-            PROCESSSTACK(t,SolidPass)
+            PROCESSSTACK(t,SolidPass,false)
         end
 
         SolidPass:pop'state'
@@ -283,13 +289,15 @@ function Renderer.DrawTransparent()
         TransPass:setDepthTest('>=')
         TransPass:setBlendMode(1,'add','premultiplied')
         TransPass:setBlendMode(2,'add','premultiplied')
-        TransPass:send('Transparent', true)
+
+        SETMAINSHADERPARAMS(TransPass,true)
+
         TransPass:push('state')
-        PROCESSSTACK(TransparentStack,TransPass)
+        PROCESSSTACK(TransparentStack,TransPass,true)
 
         for LovrMat,t in pairs(TransparentStack.Material) do
             TransPass:setMaterial(LovrMat)
-            PROCESSSTACK(t,TransPass)
+            PROCESSSTACK(t,TransPass,true)
         end
         TransPass:pop('state')
     end

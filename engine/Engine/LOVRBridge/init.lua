@@ -238,7 +238,7 @@ end
 LVRB.LoadWindow = function()
     local Sig = require("Lib.Signal")
 
-    AstralEngine.Window.OnFocusChanged = Sig.new(Sig.Type.Default)
+    AstralEngine.Signals.OnFocusChanged = Sig.new(Sig.Type.Default)
 
     AstralEngine.Window.SetSize = lovr.system.setWindowSize
     AstralEngine.Window.IsFocused = lovr.system.isWindowFocused
@@ -255,7 +255,7 @@ LVRB.LoadWindow = function()
     AstralEngine.Window.GetWindowDensity = lovr.system.getWindowDensity
 
     function lovr.focus(f)
-        AstralEngine.Window.OnFocusChanged:Fire(f)
+        AstralEngine.Signals.OnFocusChanged:Fire(f)
     end
 
     AstralEngine.Signals.OnWindowResize = Sig.new(Sig.Type.RTC)

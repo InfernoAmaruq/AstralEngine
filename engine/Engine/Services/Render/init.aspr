@@ -128,11 +128,6 @@ end
 
 local Component = GetService("Component", "Component")
 
-local LT = ENUM({
-    Cel = 1,
-    Shadowmap = 2
-}, "LightingTechnology", { CanAppend = true, Strict = true })
-
 local RT = ENUM({}, "RenderType", { CanAppend = true, Strict = true })
 
 for _, File in ipairs(lovr.filesystem.getAliasedFiles("RenderCalls")) do
@@ -141,6 +136,25 @@ for _, File in ipairs(lovr.filesystem.getAliasedFiles("RenderCalls")) do
         Renderer.Late[#Renderer.Late+1] = f
     end
 end
+
+local SignalLib = require("Lib/Signal")
+AstralEngine.Signals.OnMainShaderChanged = SignalLib.new(SignalLib.Type.RTC)
+
+local ShaderService = GetService("ShaderService","ShaderService")
+local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
+    Include = {"Material","Lighting","PBR"},
+    Define = {
+        Fragment = {
+            "MATERIAL_BASEUV_TO_COLOR"
+        }
+    }
+})
+
+print(F)
+
+Renderer.SetMainShader(lovr.graphics.newShader(V,F,{flags = {normalMap = true}}))
+
+Renderer.Lighting = loadfile("Lighting")(Renderer)
 
 GetService.AddService("Renderer", Renderer)
 

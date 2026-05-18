@@ -243,3 +243,7 @@ void lovrSystemSetWindowSize(uint32_t width, uint32_t height) {
 void lovrSystemSetCursorIcon(int Icon){
     os_set_cursor_icon(Icon);
 };
+
+int lovrSystemSetPreciseMouse(int Bool){
+    return os_set_precise_mouse(Bool);
+}

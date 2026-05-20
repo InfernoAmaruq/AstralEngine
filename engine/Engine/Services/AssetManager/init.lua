@@ -104,12 +104,13 @@ local function NewImage(Path, ...)
 end
 
 local function GetRawImageData(ImagePath)
-    local Image = Cache[TypeEnum.ImageData][ImagePath]
+    local Hash = FNV1A32(ImagePath)
+    local Image = Cache[TypeEnum.ImageData][Hash]
 
     if not Image then
-        Image = DeadCache[TypeEnum.ImageData][ImagePath]
+        Image = DeadCache[TypeEnum.ImageData][Hash]
         if Image then
-            Cache[TypeEnum.ImageData][ImagePath], DeadCache[TypeEnum.ImageData][ImagePath] = Image, nil
+            Cache[TypeEnum.ImageData][Hash], DeadCache[TypeEnum.ImageData][Hash] = Image, nil
             return Image
         end
     else
@@ -127,7 +128,7 @@ local function GetRawImageData(ImagePath)
                 CTX = _G.CONTEXT and _G.CONTEXT.Gen or 0,
             }
 
-            Cache[TypeEnum.ImageData][FNV1A32(ImagePath)] = Table
+            Cache[TypeEnum.ImageData][Hash] = Table
             return Table
         end
     end
@@ -153,11 +154,22 @@ function AssetManager.NewModelData() end
 -- gpu
 
 function AssetManager.NewTexture(Path, Options)
-    local CanonPath = GetPath(Path)
-    local ImageData = GetRawImageData(CanonPath)
+
+    local CanonPath
+    local ImageData
+    if rtype(Path) == "table" then
+        ImageData = {}
+        for i,v in pairs(Path) do
+            local RawData = GetRawImageData(GetPath(v))
+            ImageData[i] = RawData.DATA
+        end
+    else
+        CanonPath = GetPath(Path)
+        ImageData = GetRawImageData(CanonPath).DATA
+    end
 
     if ImageData then
-        return AstralEngine.Graphics.NewTexture(ImageData.DATA, Options)
+        return AstralEngine.Graphics.NewTexture(ImageData, Options)
     else
         return nil
     end
@@ -189,6 +201,9 @@ local function ProcessMaterialInput(Input)
     local Str = ""
 
     local InputProcessed = {}
+    InputProcessed.NormalScale = 1
+    InputProcessed.Metalness = 1
+    InputProcessed.Roughness = 1
 
     for i, v in pairs(Input) do
         if i == "Color" or i == "Glow" then
@@ -197,11 +212,15 @@ local function ProcessMaterialInput(Input)
             local t = rtype(v)
             if t == "table" then
                 r, g, b, a = unpack(v)
+                r = r / 255
+                g = g / 255
+                b = b / 255
+                a = a / 255
             else
-                r, g, b, a = v:unpack()
+                r, g, b, a = v:div(255):unpack()
             end
 
-            InputProcessed[i] = { r, g, b, a }
+            InputProcessed[i] = { r, g, b, a or 1 }
         elseif i == "UvShift" or i == "UvScale" then
             local x, y
 

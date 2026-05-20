@@ -79,26 +79,41 @@ local FIELDS = {
     Density = 25,
     ProjectionMatrix = 26,
     OnResize = 27,
+    Skybox = 28,
+    SHBuffer = 29,
 }
 
 local function RawViewToRay(self, Vector)
+    local EntPtr = self.__EntityPtr
+    local Transform = EntPtr.Transform
+
     local NDCx = Vector.x * 2 - 1
     local NDCy = 1 - Vector.y * 2
 
     local Aspect = self[FIELDS.Aspect]
 
-    local FOV = self[FIELDS.RadFOV]
-    local TanHalf = math.tan(FOV * 0.5)
-
-    local x = NDCx * TanHalf * Aspect
-    local y = NDCy * TanHalf
-
-    local EntPtr = self.__EntityPtr
-    local Transform = EntPtr.Transform
-
     local Forward, Right, Up = Transform.ForwardVector, Transform.RightVector, Transform.UpVector
 
-    local Dir = vec3(Forward + Right * x + Up * y):normalize()
+    local Dir
+
+    if not self.Orthographic then
+        local FOV = self[FIELDS.RadFOV]
+        local TanHalf = math.tan(FOV * 0.5)
+
+        local x = NDCx * TanHalf * Aspect
+        local y = NDCy * TanHalf
+
+        Dir = vec3(Forward + Right * x + Up * y):normalize()
+    else
+        local Res = self.TrueResolution / 2
+        local XWorld = NDCx * Res.x * Aspect
+        local YWorld = NDCy * Res.y
+
+        local NearDist = self.Near or 0
+        local Origin = Transform.Position + Right * XWorld + Up * YWorld + Forward * -NearDist
+
+        return Origin, vec3(Forward):normalize()
+    end
 
     return Transform.Position, Dir
 end
@@ -110,21 +125,40 @@ local function RawWorldToView(self, Pos)
     local CamRot = Transform.Orientation
 
     local LocalPos = Pos - CamPos
+
     local View = CamRot:conjugate() * LocalPos
 
-    if View.z >= 0 then
-        return nil
+    if not self.Orthographic then
+        if View.z >= 0 then
+            return nil
+        end
+
+        local Aspect = self[FIELDS.Aspect]
+        local TanHalf = math.tan(self[FIELDS.RadFOV] * 0.5)
+
+        local NDCx = (View.x / -View.z) / (TanHalf * Aspect)
+        local NDCy = (View.y / -View.z) / TanHalf
+
+        local UVX = NDCx * 0.5 + 0.5
+        local UVY = 1 - (NDCy * 0.5 + 0.5)
+        return vec2(UVX, UVY)
+    else
+        local Near = self[FIELDS.Near]
+        local Far = self[FIELDS.Far]
+
+        if View.z > -Near or View.z < -Far then
+            return nil
+        end
+
+        local Res = self.TrueResolution
+
+        local NDCx = View.x / Res.x
+        local NDCy = View.y / Res.y
+
+        local UVX = NDCx * 0.5 + 0.5
+        local UVY = 1 - (NDCy * 0.5 + 0.5)
+        return vec2(UVX, UVY)
     end
-
-    local Aspect = self[FIELDS.Aspect]
-    local TanHalf = math.tan(self[FIELDS.RadFOV] * 0.5)
-
-    local NDCx = (View.x / -View.z) / (TanHalf * Aspect)
-    local NDCy = (View.y / -View.z) / TanHalf
-
-    local UVX = NDCx * 0.5 + 0.5
-    local UVY = 1 - (NDCy * 0.5 + 0.5)
-    return vec2(UVX, UVY)
 end
 
 local METHODS = {
@@ -194,7 +228,8 @@ local SETTER = {
         end
     end,
     Ambience = function(self, Val)
-        self[9]:set(Val:unpack())
+        local R, G, B, A = Val:div(255):unpack()
+        self[9]:set(R, G, B, A or 1)
     end,
 }
 
@@ -203,7 +238,7 @@ local GETTER = {
         return math.deg(self[FIELDS.RadFOV])
     end,
     Ambience = function(self)
-        return color.fromRGBA(self[9]:unpack())
+        return vec4(self[9] * 255)
     end,
     Resolution = function(self)
         return vec2(self[FIELDS.W], self[FIELDS.H]) / self[FIELDS.Density]
@@ -212,6 +247,34 @@ local GETTER = {
         return vec2(self[FIELDS.W], self[FIELDS.H])
     end,
 }
+
+local SHIndexMap = {
+    LinearX = 2, -- lovr 1-indexes GLSL buffers for us
+    LinearY = 3,
+    LinearZ = 4,
+    QuadX2 = 5,
+    QuadXY = 6,
+    QuadY2 = 7,
+    QuadYZ = 8,
+    QuadZ2 = 9,
+}
+
+local function SHIndex(self, key)
+    local LuaBuffer = self.__LuaSHBuffer
+
+    local Key = SHIndexMap[key]
+    return LuaBuffer[Key] * 255
+end
+
+local function SHNewIndex(self, key, v)
+    local LuaBuffer = self.__LuaSHBuffer
+    local GPUBuffer = self[29]
+
+    local Key = SHIndexMap[key]
+    LuaBuffer[Key]:set(v:div(255).rgb)
+
+    GPUBuffer:setData(LuaBuffer)
+end
 
 local mt = {
     __index = function(self, k)
@@ -222,12 +285,26 @@ local mt = {
         if Val then
             return self[Val]
         end
+
+        local s = tostring(k)
+        if s:find("SphericalHarmonics") then
+            local SubStr = s:sub(string.len("SphericalHarmonics") + 1)
+            return SHIndex(self, SubStr)
+        end
+
         return METHODS[k]
     end,
     __newindex = function(self, k, v)
         if SETTER[k] then
             return SETTER[k](self, v)
         end
+
+        local s = tostring(k)
+        if s:find("SphericalHarmonics") then
+            local SubStr = s:sub(string.len("SphericalHarmonics") + 1)
+            return SHNewIndex(self, SubStr, v)
+        end
+
         if READ_ONLY[k] then
             AstralEngine.Error("Attempt to write to Read Only value on Camera component", "CAMERA")
         end
@@ -238,7 +315,7 @@ local mt = {
 local BasePriority = 42069
 local BoundCameras = 0
 
-local BaseAmbience = color.fromRGBA(180, 180, 180, 255)
+local BaseAmbience = Vec4(180, 180, 180, 255)
 
 local OIT_CONF = { format = "rg16f", samples = 4, usage = { "render", "sample" }, mipmaps = false }
 local DEPTH_CONF = { format = "d32f", samples = 4, usage = { "render", "sample" }, mipmaps = false, linear = true }
@@ -255,6 +332,7 @@ local function RebuildTexture(V, w, h)
     elseif CamRef.__REBUILT_TEX == TEXCTR then
         v = true
     end
+    OldV:release()
     return v
 end
 
@@ -320,6 +398,8 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     local SolidTex = AstralEngine.Graphics.NewTexture(W, H, MSAASolid)
     local DepthTexture = AstralEngine.Graphics.NewTexture(W, H, DEPTH_CONF)
 
+    Data.Skybox = Input.Skybox
+
     W = W * Density
     H = H * Density
 
@@ -346,7 +426,9 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
 
     Data.OITPass:setClear({ { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, depth = false })
 
-    Data.Ambience = Vec4((Input.Ambience or BaseAmbience):unpack())
+    local Color = Input.Ambience or BaseAmbience
+    local R, G, B, A = Color:unpack()
+    Data.Ambience = Vec4(R, G, B, A or 1):div(255)
 
     Data.OITPass.ResizeCallback = REBUILD_CALLBACK
     Data.CameraPass.ResizeCallback = REBUILD_CALLBACK
@@ -365,6 +447,24 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Renderer.PassStorage.AddPass(false, Data.SolidPass, BasePriority + BoundCameras, true)
     Renderer.PassStorage.AddPass(false, Data.OITPass, BasePriority + BoundCameras + 1, true)
     Renderer.PassStorage.AddPass(false, Data.CameraPass, BasePriority + BoundCameras + 2, true)
+
+    -- last but not least lets construct the spherical harmonics buffer
+    local MainShader = Renderer.GetMainShader()
+    local BufferFormat = MainShader:getBufferFormat("PBR_SphericalHarmonics")
+
+    local SHData = {
+        Vec3(),
+        Vec3(),
+        Vec3(),
+        Vec3(),
+        Vec3(),
+        Vec3(),
+        Vec3(),
+        Vec3(),
+        Vec3(),
+    }
+    local Buffer = lovr.graphics.newBuffer(BufferFormat, SHData)
+    Data.SHBuffer = Buffer
 
     for i, v in pairs(Input) do
         if not Data[i] then
@@ -409,6 +509,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     BoundCameras = BoundCameras + 3
 
     rawset(D, "__EntityPtr", GetService("World").GetEntityFromId(Entity))
+    rawset(D, "__LuaSHBuffer", SHData)
 
     D:ReconstructProjectionMatrix()
 

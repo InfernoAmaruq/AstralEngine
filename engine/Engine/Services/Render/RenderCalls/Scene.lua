@@ -173,17 +173,22 @@ end
         &PV:reset()
         &PV:setViewPose(1, MATRIX)
         &PV:setProjection(1, Projection)
-        &PV:setShader(MAINSHADER)
         &PV:setFaceCull(CULL)
 }
 
 local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
 
-@macro<L,!USEBRACK>{SETMAINSHADERPARAMS(&PASS,&TRANSPARENT) = 
+@macro<L,!USEBRACK>{SETMAINSHADERPARAMS(&PASS,&TRANSPARENT,&SH,&SB) = 
     &PASS:setShader(MAINSHADER)
     &PASS:send("Lighting_Ambience",CAMERA[9])
     &PASS:send("Transparent",&TRANSPARENT)
     &PASS:send("Lighting_Data",Renderer.Lighting.LightBuffer)
+
+    &PASS:send("PBR_SphericalHarmonics",&SH)
+
+    if &SB then
+        &PASS:send("PBR_EnvMap",&SB)
+    end
 }
 
 @macro<L,!USEBRACK>{PROCESSSTACK(&STACK, &PASS, &STATE) =
@@ -196,14 +201,13 @@ local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
                 continue
             end
             if Mat then
-                &PASS:setColor(Mat[4],Mat[5],Mat[6],Mat[7])
+                &PASS:setColor(Mat[4])
                 &PASS:send("Material_UVScale",Mat[2])
                 &PASS:send("Material_UVOffset",Mat[3])
-                &PASS:send("Material_FillMode",Mat[11])
+                &PASS:send("Material_FillMode",Mat[5])
                 &PASS:send("Material_ObjectScale",Comp.Transform[5])
-                &PASS:setSampler(Mat[12] and "nearest" or "linear")
+                &PASS:setSampler(Mat[6] and "nearest" or "linear")
             else
-                &PASS:setColor(1,1,1,1)
                 &PASS:send("Material_UVScale",VecOne)
                 &PASS:send("Material_UVOffset",VecZero)
                 &PASS:send("Material_FillMode",0)
@@ -212,7 +216,7 @@ local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
             local RETFLAG = TYPETOPROCESS[RenT[1]](&PASS, E, Comp)
             if not RETFLAG then continue end
             if RETFLAG & &F_SHADER_RESET ~= 0 then
-                SETMAINSHADERPARAMS(&PASS,&STATE)
+                SETMAINSHADERPARAMS(&PASS,&STATE,sh,sb)
             end
         end
 }
@@ -254,7 +258,14 @@ function Renderer.DrawSolid()
         SETPASSPARAMS(SolidPass)
         SETPASSPARAMS(TransPass)
 
-        SETMAINSHADERPARAMS(SolidPass,false)
+        local sb = CAMERA[28]
+        local sh = CAMERA[29]
+        if sb then
+            sb = sb[1] or sb
+            SolidPass:skybox(sb)
+        end
+
+        SETMAINSHADERPARAMS(SolidPass,false,sh,sb)
 
         SolidPass:push('state')
 
@@ -290,7 +301,11 @@ function Renderer.DrawTransparent()
         TransPass:setBlendMode(1,'add','premultiplied')
         TransPass:setBlendMode(2,'add','premultiplied')
 
-        SETMAINSHADERPARAMS(TransPass,true)
+        local sb = CAMERA[28]
+        local sh = CAMERA[29]
+        sb = sb and sb[1] or sb
+
+        SETMAINSHADERPARAMS(TransPass,true,sh,sb)
 
         TransPass:push('state')
         PROCESSSTACK(TransparentStack,TransPass,true)

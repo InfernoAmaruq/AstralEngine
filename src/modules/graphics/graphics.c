@@ -343,6 +343,7 @@ typedef struct {
   struct { float x, y, z; } position;
   struct { float x, y, z; } normal;
   struct { float u, v; } uv;
+  struct { float x, y, z, w; } tangent;
 } ShapeVertex;
 
 typedef struct {
@@ -810,7 +811,7 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
     .attributes[1] = { 0, 11, offsetof(ShapeVertex, normal), GPU_TYPE_F32x3 },
     .attributes[2] = { 0, 12, offsetof(ShapeVertex, uv), GPU_TYPE_F32x2 },
     .attributes[3] = { 1, 13, 16, GPU_TYPE_F32x4 },
-    .attributes[4] = { 1, 14, 0, GPU_TYPE_F32x4 }
+    .attributes[4] = { 0, 14, offsetof(ShapeVertex, tangent), GPU_TYPE_F32x4 }
   };
 
   state.vertexFormats[VERTEX_POINT] = (gpu_vertex_format) {
@@ -3776,15 +3777,59 @@ const DataField* lovrShaderGetBufferFormat(Shader* shader, const char* name, uin
 
 // Material
 
+static Texture* defaultNormalMap = NULL;
+static Texture* defaultRoughnessAndMetalnessMap = NULL; // lovr uses G and B channels for each
+static Texture* defaultEmissiveMap = NULL;
+
+void lovrInitDefaultMaps(){
+    if (defaultNormalMap) return;
+
+    Image* img[1];
+    Image** images = img;
+
+    TextureInfo texInf = {
+        .type = TEXTURE_2D,
+        .format = FORMAT_RGBA8,
+        .width = 1,
+        .height = 1,
+        .layers = 1,
+        .mipmaps = ~0u,
+        .samples = 1,
+        .usage = TEXTURE_SAMPLE,
+        .imageCount = 1,
+        .srgb = false,
+        .images = images
+    };
+
+    float normalPixel[4] = {.5f,.5f,1.f,1.f};
+    Image* tempImage = lovrImageCreateRaw(1,1,FORMAT_RGBA8, true);
+    images[0] = tempImage;
+    lovrImageSetPixel(tempImage,0,0,normalPixel);
+    defaultNormalMap = lovrTextureCreate(&texInf);
+
+    float RnMPixel[4] = {0.f,.5f,0.f,1.f};
+
+    lovrImageSetPixel(tempImage,0,0,RnMPixel);
+    defaultRoughnessAndMetalnessMap = lovrTextureCreate(&texInf);
+
+    float emissivePixel[4] = {1.f,1.f,1.f,1.f};
+    lovrImageSetPixel(tempImage,0,0,emissivePixel);
+    defaultEmissiveMap = lovrTextureCreate(&texInf);
+
+    lovrRelease(tempImage,lovrImageDestroy);
+}
+
 Material* lovrMaterialCreate(const MaterialInfo* info) {
+  lovrInitDefaultMaps();
+
   Texture* textures[] = {
     info->texture,
-    info->glowTexture,
-    info->metalnessTexture,
-    info->roughnessTexture,
+    info->glowTexture ? info->glowTexture : defaultEmissiveMap,
+    info->metalnessTexture ? info->metalnessTexture : defaultRoughnessAndMetalnessMap,
+    info->roughnessTexture ? info->roughnessTexture : defaultRoughnessAndMetalnessMap,
     info->clearcoatTexture,
     info->occlusionTexture,
-    info->normalTexture
+    info->normalTexture ? info->normalTexture : defaultNormalMap
   };
 
   for (uint32_t i = 0; i < COUNTOF(textures); i++) {
@@ -6827,6 +6872,7 @@ static bool lovrPassResolveVertices(Pass* pass, DrawInfo* info, Draw* draw) {
 
   if (!info->vertex.buffer && info->vertex.count > 0) {
     lovrCheck(info->vertex.count <= UINT16_MAX, "Shape has too many vertices (max is 65535)");
+
     uint32_t stride = state.vertexFormats[info->vertex.format].bufferStrides[0];
     BufferView view = lovrPassGetBuffer(pass, info->vertex.count * stride, stride);
     if (!view.buffer) return false;
@@ -6870,6 +6916,93 @@ static bool lovrPassResolveVertices(Pass* pass, DrawInfo* info, Draw* draw) {
   }
 
   return true;
+}
+
+void lovrComputeTangents(ShapeVertex* vertices, uint32_t vertexCount, uint16_t* indices, uint32_t indexCount){
+    float* tangentAccum = lovrCalloc(vertexCount * 3 * sizeof(float));
+    float* handednessAccum = lovrCalloc(vertexCount * sizeof(float));
+
+    for (uint32_t i = 0; i < indexCount; i+= 3){
+        uint16_t i0 = indices[i], i1 = indices[i+1], i2 = indices[i+2];
+
+        ShapeVertex* v0 = &vertices[i0];
+        ShapeVertex* v1 = &vertices[i1];
+        ShapeVertex* v2 = &vertices[i2];
+
+        float e1[3] = {
+            v1->position.x - v0->position.x,
+            v1->position.y - v0->position.y,
+            v1->position.z - v0->position.z,
+        };
+
+        float e2[3] = {
+            v2->position.x - v0->position.x,
+            v2->position.y - v0->position.y,
+            v2->position.z - v0->position.z,
+        };
+
+        float du1 = v1->uv.u - v0->uv.u;
+        float dv1 = v1->uv.v - v0->uv.v;
+        float du2 = v2->uv.u - v0->uv.u;
+        float dv2 = v2->uv.v - v0->uv.v;
+
+        float det = du1 * dv2 - du2 * dv1;
+        if (fabs(det) < 1e-6f) continue;
+
+        float handedness = (det < 0.0f) ? -1.0f : 1.0f;
+
+        float r = 1.0f / det;
+        float tangent[3] = {
+            (dv2 * e1[0] - dv1 * e2[0]) * r,
+            (dv2 * e1[1] - dv1 * e2[1]) * r,
+            (dv2 * e1[2] - dv1 * e2[2]) * r
+        };
+
+        tangentAccum[i0 * 3 + 0] += tangent[0];
+        tangentAccum[i0 * 3 + 1] += tangent[1];
+        tangentAccum[i0 * 3 + 2] += tangent[2];
+        handednessAccum[i0] += handedness;
+
+        tangentAccum[i1 * 3 + 0] += tangent[0];
+        tangentAccum[i1 * 3 + 1] += tangent[1];
+        tangentAccum[i1 * 3 + 2] += tangent[2];
+        handednessAccum[i1] += handedness;
+
+        tangentAccum[i2 * 3 + 0] += tangent[0];
+        tangentAccum[i2 * 3 + 1] += tangent[1];
+        tangentAccum[i2 * 3 + 2] += tangent[2];
+        handednessAccum[i2] += handedness;
+    }
+
+    for (uint8_t i = 0; i < vertexCount; i++){
+        float* T = &tangentAccum[i * 3];
+        float* N = (float*)&vertices[i].normal;
+
+        float dot = T[0]*N[0] + T[1]*N[1] + T[2]*N[2];
+        T[0] -= dot * N[0];
+        T[1] -= dot * N[1];
+        T[2] -= dot * N[2];
+
+        float len = sqrtf(T[0]*T[0] + T[1]*T[1] + T[2]*T[2]);
+        if (len > 1e-6f){
+            vertices[i].tangent.x = T[0]/len;
+            vertices[i].tangent.y = T[1]/len;
+            vertices[i].tangent.z = T[2]/len;
+        } else {
+            vertices[i].tangent.x = 1.0f;
+            vertices[i].tangent.y = 0.0f;
+            vertices[i].tangent.z = 0.0f;
+            if (fabs(N[0]) > 0.9f){
+                vertices[i].tangent.x = 0.0f;
+                vertices[i].tangent.y = 1.0f;
+            }
+        }
+
+        vertices[i].tangent.w = handednessAccum[i] >= 0.0f ? 1.0f : -1.0f;
+    }
+
+    free(tangentAccum);
+    free(handednessAccum);
 }
 
 bool lovrPassDraw(Pass* pass, DrawInfo* info) {
@@ -7239,6 +7372,7 @@ bool lovrPassBox(Pass* pass, float* transform, DrawStyle style) {
       memcpy(indices, indexData, sizeof(indexData));
     }
   } else {
+    static uint8_t valid = 0;
     static ShapeVertex vertexData[] = {
       { { -.5f, -.5f, -.5f }, {  0.f,  0.f, -1.f }, { 0.f, 0.f } }, // Front
       { { -.5f,  .5f, -.5f }, {  0.f,  0.f, -1.f }, { 0.f, 1.f } },
@@ -7274,6 +7408,11 @@ bool lovrPassBox(Pass* pass, float* transform, DrawStyle style) {
       16, 17, 18, 18, 17, 19,
       20, 21, 22, 22, 21, 23
     };
+
+    if (!valid){
+        valid = 1;
+        lovrComputeTangents(vertexData,COUNTOF(vertexData),indexData,COUNTOF(indexData));
+    }
 
     DrawInfo draw = {
       .hash = hash64(key, sizeof(key)),

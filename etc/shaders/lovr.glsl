@@ -6,9 +6,9 @@ layout(constant_id = 1003) const bool flag_materialColor = true;
 layout(constant_id = 1004) const bool flag_vertexColors = true;
 layout(constant_id = 1005) const bool flag_uvTransform = true;
 layout(constant_id = 1006) const bool flag_alphaCutoff = false;
-layout(constant_id = 1007) const bool flag_glow = false;
-layout(constant_id = 1008) const bool flag_normalMap = false;
-layout(constant_id = 1009) const bool flag_vertexTangents = false;
+layout(constant_id = 1007) const bool flag_glow = true;
+layout(constant_id = 1008) const bool flag_normalMap = true;
+layout(constant_id = 1009) const bool flag_vertexTangents = true;
 layout(constant_id = 1010) const bool flag_colorTexture = true;
 layout(constant_id = 1011) const bool flag_glowTexture = true;
 layout(constant_id = 1012) const bool flag_metalnessTexture = true;
@@ -240,8 +240,9 @@ mat3 getTangentMatrix() {
     vec3 N = normalize(Normal);
     vec3 dp1 = dFdx(PositionWorld);
     vec3 dp2 = dFdy(PositionWorld);
-    vec2 duv1 = dFdx(UV);
-    vec2 duv2 = dFdy(UV);
+    vec2 modUV = mod(UV,1);
+    vec2 duv1 = dFdx(modUV);
+    vec2 duv2 = dFdy(modUV);
     vec3 dp2perp = cross(dp2, N);
     vec3 dp1perp = cross(N, dp1);
     vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
@@ -372,7 +373,7 @@ vec3 getLighting(const Surface surface, vec3 direction, vec4 color, float visibi
   // Parameters
   vec3 N = surface.normal;
   vec3 V = surface.view;
-  vec3 L = normalize(-direction);
+  vec3 L = normalize(direction);
   vec3 H = normalize(V + L);
   vec3 R = surface.reflection;
   float NoV = abs(dot(N, V)) + 1e-8;
@@ -525,7 +526,7 @@ vec4 lovrmain();
 void main() {
   PositionWorld = vec3(WorldFromLocal * VertexPosition);
   Normal = NormalMatrix * VertexNormal;
-  UV = VertexUV;
+  UV = vec2(-1,-1) - VertexUV;
 
   Color = vec4(1.0);
   if (flag_passColor) Color *= PassColor;
@@ -550,14 +551,6 @@ void main() {
 vec4 lovrmain();
 void main() {
   PixelColor = lovrmain();
-
-  if (flag_glow) {
-    if (flag_glowTexture) {
-      PixelColor.rgb += getPixel(GlowTexture, UV).rgb * Material.glow.rgb * Material.glow.a;
-    } else {
-      PixelColor.rgb += Material.glow.rgb * Material.glow.a;
-    }
-  }
 
   if (flag_tonemap) {
     PixelColor.rgb = tonemap(PixelColor.rgb);

@@ -4,66 +4,91 @@
 
 #define MAX_LIGHTS 256
 
+#define LIGHTTYPE_POINT 0
+#define LIGHTTYPE_SPOT 1
+#define LIGHTTYPE_SURFACE 2
+
 uniform Lighting_Data {
     uint Light_LightCount;
+
     vec4 Light_Positions[MAX_LIGHTS]; // where w is max distance
-    vec4 Light_Directions[MAX_LIGHTS]; // where w is angle and MUST be > 0
+    vec4 Light_Directions[MAX_LIGHTS]; // where w is angle and MUST be > 0. If angle is < 0, interpret it as a point light!
     vec4 Light_Colors[MAX_LIGHTS];
+    vec4 Light_Extras[MAX_LIGHTS];
 };
 
-vec3 lighting_getLightPosition(int i){
-    return Light_Positions[i].xyz;
+struct Light {
+    vec3 position;
+    float rad2;
+    float brightness;
+    vec3 color;
+    float angleCos;
+    vec3 direction;
+    vec2 surfaceSize;
+    int type;
+    float hardness;
+};
+
+Light lighting_getLight(int id){
+    Light l;
+
+    vec4 pos = Light_Positions[id];
+    vec4 color = Light_Colors[id];
+    vec4 dir = Light_Directions[id];
+    vec4 extras = Light_Extras[id];
+
+    l.color = color.rgb;
+    l.position = pos.xyz;
+    l.rad2 = pos.w;
+    l.brightness = color.a;
+    l.angleCos = dir.w;
+    l.direction = dir.xyz;
+    l.hardness = extras.w;
+    l.surfaceSize = extras.xy;
+    l.type = int(extras.z);
+
+    return l;
 }
 
-vec3 lighting_getLight(vec3 Normal, uint i){
-    vec3 normNormal = normalize(Normal);
+vec3 lighting_getLights(const Surface s){
+    vec3 AccumColor = vec3(0);
+    for (int i = 0; i < Light_LightCount; ++i){
+        Light l = lighting_getLight(i);
 
-    vec4 lp_raw = Light_Positions[i];
-    vec4 ld_raw = Light_Directions[i];
-    vec4 lc = Light_Colors[i];
-    vec3 lp = lp_raw.xyz;
-    float maxDistSqr = lp_raw.w;
+        vec3 diff = l.position - PositionWorld;
 
-    vec3 diff = lp - PositionWorld;
-    float distSqr = dot(diff,diff);
-
-    float intensity = lc.a;
-
-    if (distSqr > maxDistSqr) return vec3(0);
-
-    float att = 1.0 - distSqr / maxDistSqr;
-    vec3 lDir = diff * inversesqrt(distSqr);
-    float NdotL = max(dot(normNormal, lDir),0.0);
-
-    return lc.rgb * intensity * att * NdotL;
-}
-
-vec3 lighting_getLights(vec3 Normal){
-    vec3 color = vec3(0.0);
-    vec3 normNormal = normalize(Normal);
-
-    for (int i = 0; i < Light_LightCount; ++i) {
-        vec4 lp_raw = Light_Positions[i];
-        vec4 ld_raw = Light_Directions[i];
-        vec4 lc = Light_Colors[i];
-        vec3 lp = lp_raw.xyz;
-        float maxDistSqr = lp_raw.w;
-
-        vec3 diff = lp - PositionWorld;
         float distSqr = dot(diff,diff);
 
-        float intensity = lc.a;
+        if (distSqr > l.rad2) continue;
 
-        if (distSqr > maxDistSqr) continue;
+        float h = l.hardness;
 
-        float att = 1.0 - distSqr / maxDistSqr;
-        vec3 lDir = diff * inversesqrt(distSqr);
-        float NdotL = max(dot(normNormal, lDir),0.0);
+        float distAtt = pow(1.0 - distSqr / l.rad2,h);
 
-        color += lc.rgb * intensity * att * NdotL;
+        // calculate angle
+
+        float spot = 1.0;
+
+        if (l.type == LIGHTTYPE_SPOT){
+            float directionality = dot(normalize(diff),l.direction);
+            if (directionality < l.angleCos){
+                continue;
+            }
+
+            float s = smoothstep(l.angleCos,1.0,directionality);
+
+            spot = pow(s,h);
+        }
+
+        // do color
+
+        float att = distAtt * spot;
+
+        vec3 clr = getLighting(s,diff,vec4(l.color,l.brightness * 2.5),att); // tweak brightness so it looks a bit brighter
+
+        AccumColor += clr;
     }
-
-    return color;
+    return AccumColor;
 }
 
 vec4 astral_main(){

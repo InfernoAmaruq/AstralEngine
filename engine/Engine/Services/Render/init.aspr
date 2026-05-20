@@ -1,5 +1,3 @@
-local Component = GetService("Component", "Component")
-
 local ShaderService = require("ShaderService")
 
 local Renderer = {}
@@ -7,27 +5,6 @@ Renderer.CamMask = ~0
 local Stack = {}
 local Cams = {}
 local PassTable = {}
-
-local DepthEnum = ENUM({
-    GreaterEqual = 0b110,
-    Equal = 0b100,
-    Greater = 0b010,
-    Less = 0b001,
-    LessEqual = 0b101,
-    None = 0
-},"DepthTest")
-
-local DepthTranslationTable = {
-    [DepthEnum.GreaterEqual.RawValue] = ">=",
-    [DepthEnum.Equal.RawValue] = "=",
-    [DepthEnum.Greater.RawValue] = ">",
-    [DepthEnum.Less.RawValue] = "<",
-    [DepthEnum.LessEqual.RawValue] = "<="
-}
-
-Renderer.TranslateDepthEnum = function(Enum)
-    return DepthTranslationTable[rtype(Enum) == "number" and Enum or Enum.RawValue]
-end
 
 -- PASS STORAGE
 @execute<UNSAFE>{if lovr.headset then return "local CONSTOFFSET = 2" else return "local CONSTOFFSET = 1" end}
@@ -126,8 +103,6 @@ end
 
 -- RENDERING DATA
 
-local Component = GetService("Component", "Component")
-
 local RT = ENUM({}, "RenderType", { CanAppend = true, Strict = true })
 
 for _, File in ipairs(lovr.filesystem.getAliasedFiles("RenderCalls")) do
@@ -140,8 +115,7 @@ end
 local SignalLib = require("Lib/Signal")
 AstralEngine.Signals.OnMainShaderChanged = SignalLib.new(SignalLib.Type.RTC)
 
-local ShaderService = GetService("ShaderService","ShaderService")
-local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
+local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"OIT/Write",{
     Include = {"Material","Lighting","PBR"},
     Define = {
         Fragment = {
@@ -150,9 +124,7 @@ local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
     }
 })
 
-print(F)
-
-Renderer.SetMainShader(lovr.graphics.newShader(V,F,{flags = {normalMap = true}}))
+Renderer.SetMainShader(lovr.graphics.newShader(V,F,{flags = {normalMap = true, vertexTangents = true}}))
 
 Renderer.Lighting = loadfile("Lighting")(Renderer)
 

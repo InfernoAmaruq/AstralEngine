@@ -3091,12 +3091,12 @@ static ModelData* newModelDataFB(uint64_t key) {
       .transform.scale = { 1.f, 1.f, 1.f },
       .child = ~0u,
       .sibling = ~0u,
-      .parent = i == 0 ? ~0u : parent,
+      .parent = parent < meta->jointCount ? parent : ~0u,
       .mesh = ~0u,
       .skin = ~0u
     };
 
-    if (i > 0) {
+    if (parent < meta->jointCount) {
       meta->nodes[i].sibling = meta->nodes[parent].child;
       meta->nodes[parent].child = i;
     }
@@ -3137,6 +3137,8 @@ static ModelData* newModelDataFB(uint64_t key) {
   meta->nodes[XR_HAND_JOINT_WRIST_EXT].sibling = meta->jointCount;
   meta->nodes[XR_HAND_JOINT_WRIST_EXT].parent = meta->rootNode;
   meta->nodes[meta->jointCount].parent = meta->rootNode;
+
+  lovrModelDataFinalize(model);
 
   return model;
 }

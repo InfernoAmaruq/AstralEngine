@@ -21,17 +21,18 @@ local LightRegistry = {} -- we use this to hold LightEntity = IdInBuffer registr
 
 local LightType = ENUM({
     Point = 0,
-    Spotlight = 1,
+    Spot = 1,
     Surface = 2,
 }, "LightType")
 
-Lighting.AddLight = function(LightEntity)
-    local Color = LightEntity.Light.Color
-    local Distance = LightEntity.Light.Distance
+Lighting.AddLight = function(LightEntity, EarlyLightComponent)
+    local LC = EarlyLightComponent or LightEntity.Light
+    local Color = LC.Color
+    local Distance = LC.Distance
     local Angle = LightEntity.Orientation
-    local TargetAngle = LightEntity.Light.Angle or -1
+    local TargetAngle = LC.Angle or -1
 
-    local Type = (LightEntity.Light.Type or LightType.Point).RawValue
+    local Type = (LC.Type or LightType.Point).RawValue
 
     Angle = Angle and Angle:direction() or vec3(0, 0, 1)
     local ReadyAngle = vec4(Angle.x, Angle.y, Angle.z, math.cos(math.rad(TargetAngle / 2)))
@@ -47,6 +48,7 @@ Lighting.AddLight = function(LightEntity)
     if not Id then
         LightCount = LightCount + 1
         Id = LightCount
+        LightRegistry[LightEntity] = Id
         CacheTable.Light_LightCount = LightCount
     end
 
@@ -60,9 +62,9 @@ Lighting.AddLight = function(LightEntity)
     CacheTable.Light_Directions[Id]:set(ReadyAngle)
 
     local ExtrasVector = vec4()
-    ExtrasVector.xy = LightEntity.Light.SurfaceSize or vec2.zero
+    ExtrasVector.xy = LC.SurfaceSize or vec2.zero
     ExtrasVector.z = Type
-    ExtrasVector.w = 1 / (LightEntity.Light.Hardness or 1)
+    ExtrasVector.w = 1 / (LC.Hardness or 1)
 
     CacheTable.Light_Extras[Id] = CacheTable.Light_Extras[Id] or Vec4()
     CacheTable.Light_Extras[Id]:set(ExtrasVector)
@@ -71,7 +73,29 @@ Lighting.AddLight = function(LightEntity)
 end
 
 Lighting.RemoveLight = function(LightEntity)
-    --
+    local Id = LightRegistry[LightEntity]
+
+    local Top = LightCount
+    if Top == 1 then
+        CacheTable.Light_Colors[Id]:set(0)
+        CacheTable.Light_Positions[Id]:set(0)
+        CacheTable.Light_Directions[Id]:set(0)
+        CacheTable.Light_Extras[Id]:set(0)
+    elseif Top ~= Id then
+        local TopEnt = table.find(LightRegistry, Top)
+        LightRegistry[TopEnt] = Id
+
+        CacheTable.Light_Colors[Id]:set(CacheTable.Light_Colors[Top])
+        CacheTable.Light_Positions[Id]:set(CacheTable.Light_Positions[Top])
+        CacheTable.Light_Directions[Id]:set(CacheTable.Light_Directions[Top])
+        CacheTable.Light_Extras[Id]:set(CacheTable.Light_Extras[Top])
+    end
+
+    LightRegistry[LightEntity] = nil
+
+    LightCount = LightCount - 1
+    CacheTable.Light_LightCount = LightCount
+    LightBuffer:setData(CacheTable)
 end
 
 return Lighting

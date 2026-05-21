@@ -288,6 +288,7 @@ local function GetIncluded(Into,IncludeTable)
 end
 
 function ShaderService.ComposeShader(Type,Search,Params)
+    Params = Params or {}
     Type = rtype(Type) == "number" and Type or Type.RawValue
 
     Search = Search or ""
@@ -337,6 +338,12 @@ function ShaderService.ComposeShader(Type,Search,Params)
         Buckets[&ST_Vertex].Define = Params.Define and Params.Define.Vertex
         Buckets[&ST_Fragment].Define = Params.Define and Params.Define.Fragment
         return CompileGraphics(Buckets)
+    elseif Type == &ST_Fragment then
+        Buckets[&ST_Fragment].Define = Params.Define and Params.Define.Fragment or Params.Define
+        return Compile(Buckets[&ST_Fragment], &ST_Fragment)
+    elseif Type == &ST_Vertex then
+        Buckets[&ST_Vertex].Define = Params.Define and Params.Define.Vertex or Params.Define
+        return Compile(Buckets[&ST_Vertex], &ST_Vertex)
     else
         Buckets[&ST_Compute].Define = Params.Define and Params.Define.Compute or Params.Define
         return CompileCompute(unpack(Buckets))

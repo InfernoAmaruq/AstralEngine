@@ -32,50 +32,8 @@ Renderer.SetMainShader = function(Shader)
     MAINSHADER = Shader
 end
 
-local OITCOMPOSITE = lovr.graphics.newShader('fill',[[
-    uniform sampler2DMS TexSolid;
-    uniform sampler2DMS TexTransparent;
-    uniform sampler2DMS TexReveal;
-
-    const int Samples = 4;
-
-    vec3 ResolveRGB(sampler2DMS InputSampler, ivec2 UV){
-        vec3 AccumColor = vec3(0.0);
-        for (int i = 0; i < Samples; ++i){
-            AccumColor += texelFetch(InputSampler,UV,i).rgb * 0.25;
-        }
-        return AccumColor;
-    }
-
-    vec2 ResolveRG(sampler2DMS InputSampler, ivec2 UV){
-        vec2 AccumColor = vec2(0.0);
-        for (int i = 0; i < Samples; ++i){
-            AccumColor += texelFetch(InputSampler,UV,i).rg * 0.25;
-        }
-        return AccumColor;
-    }
-
-    vec4 lovrmain()
-    {
-        //vec3 Solid = getPixel(TexSolid,UV).rgb;
-        //vec3 Accum = getPixel(TexTransparent,UV).rgb;
-        //vec4 Reveal = getPixel(TexReveal,UV);
-
-        ivec2 iUV = ivec2(UV.xy * Resolution);
-
-        vec3 Solid = ResolveRGB(TexSolid,iUV);
-        vec3 Accum = ResolveRGB(TexTransparent,iUV);
-        vec2 Reveal = ResolveRG(TexReveal,iUV);
-
-        float Norm = max(Reveal.g, 1e-5);
-        vec3 TransColor = Accum / Norm;
-        float TransAlpha = 1.0 - exp(-Reveal.r);
-
-        return vec4(Solid * (1.0 - TransAlpha) + TransColor * TransAlpha,1.0);
-
-        //return vec4(vec3(TransAlpha),1);
-    }
-]])
+local F = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "OIT/Composite",{Include = {"PostProcessing/HBAO"}})
+local OITCOMPOSITE = lovr.graphics.newShader('fill',F)
 
 -- VARS
 -- cams
@@ -332,13 +290,24 @@ function Renderer.Composite()
         local Transparent = CAMERA[13][1]
         local Reveal = CAMERA[23][1]
 
+        local Proj = CAMERA[26]
+        local Inv = mat4(Proj):invert()
+
         pass:push('state')
         pass:setShader(OITCOMPOSITE)
         pass:setFaceCull()
         pass:setBlendMode("none")
-        pass:send("TexSolid",Solid)
-        pass:send("TexTransparent",Transparent)
-        pass:send("TexReveal",Reveal)
+
+        pass:send("OIT_TexSolid",Solid)
+        pass:send("OIT_TexTransparent",Transparent)
+        pass:send("OIT_TexReveal",Reveal)
+        pass:send("OIT_TexDepth", CAMERA[24][1])
+        pass:send("OIT_TexNormal", CAMERA[30][1])
+
+        -- push hbao
+        pass:send("Proj",Proj)
+        pass:send("ProjInv",Inv)
+
         pass:setDepthTest()
         pass:setDepthWrite(false)
         pass:setSampler'nearest'

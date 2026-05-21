@@ -22,7 +22,7 @@ local MaterialFitMode = ENUM({ Stretch = 0, Tile = 1, Crop = 2 }, "MaterialFitMo
 local Mt = {
     __index = function(self, k)
         if k == "Color" then
-            return self[4]
+            return self[4] * 255
         elseif k == "Material" then
             return self[7]
         elseif k == "UVOffset" then

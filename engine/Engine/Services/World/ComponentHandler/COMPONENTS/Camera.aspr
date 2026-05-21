@@ -21,7 +21,7 @@ local MSAASolid = { samples = 4, usage = { "render", "sample" }, mipmaps = false
 local TextureConfig = { samples = 1, usage = { "render", "sample" }, mipmaps = false }
 local TexConf2 = { samples = 4, usage = { "render", "sample" }, mipmaps = false, format = "rgba16f" }
 
-local TEXCTR = 5 -- number of textures used in the camera
+local TEXCTR = 6 -- number of textures used in the camera
 
 Camera.Name = "Camera"
 Camera.Pattern = {
@@ -81,6 +81,7 @@ local FIELDS = {
     OnResize = 27,
     Skybox = 28,
     SHBuffer = 29,
+    NormalBuffer = 30,
 }
 
 local function RawViewToRay(self, Vector)
@@ -319,6 +320,7 @@ local BaseAmbience = Vec4(180, 180, 180, 255)
 
 local OIT_CONF = { format = "rg16f", samples = 4, usage = { "render", "sample" }, mipmaps = false }
 local DEPTH_CONF = { format = "d32f", samples = 4, usage = { "render", "sample" }, mipmaps = false, linear = true }
+local NORMAL_CONF = { format = "rgba16f", samples = 4, usage = { "render", "sample" }, mipmaps = false }
 
 local function RebuildTexture(V, w, h)
     local OldV = V[1]
@@ -346,14 +348,15 @@ local function RebuildPasses(CameraRef)
     })
     CameraRef.SolidPass[1]:setCanvas({
         CameraRef.SolidTex[1],
+        CameraRef.NormalBuffer[1],
         depth = CameraRef.DepthTexture[1],
-        samples = 1,
+        samples = 4,
     })
     CameraRef.OITPass[1]:setCanvas({
         CameraRef.OITTex[1],
         CameraRef.OITDepth[1],
         depth = CameraRef.DepthTexture[1],
-        samples = 1,
+        samples = 4,
     })
 end
 
@@ -397,6 +400,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     local OITDepth = AstralEngine.Graphics.NewTexture(W, H, OIT_CONF)
     local SolidTex = AstralEngine.Graphics.NewTexture(W, H, MSAASolid)
     local DepthTexture = AstralEngine.Graphics.NewTexture(W, H, DEPTH_CONF)
+    local NormalBuffer = AstralEngine.Graphics.NewTexture(W, H, NORMAL_CONF)
 
     Data.Skybox = Input.Skybox
 
@@ -413,6 +417,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     SolidTex.ResizeCallback = REBUILD_CALLBACK
     DepthTexture.ResizeCallback = REBUILD_CALLBACK
     Texture.ResizeCallback = REBUILD_CALLBACK
+    NormalBuffer.ResizeCallback = REBUILD_CALLBACK
 
     Data.CameraPass = AstralEngine.Graphics.NewPass({ Texture[1], samples = 1 })
     Data.CameraTex = Texture
@@ -420,9 +425,15 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.OITDepth = OITDepth
     Data.SolidTex = SolidTex
     Data.DepthTexture = DepthTexture
+    Data.NormalBuffer = NormalBuffer
     Data.OITPass =
         AstralEngine.Graphics.NewPass({ OITTex[1], OITDepth[1], depth = { texture = DepthTexture[1] }, samples = 4 })
-    Data.SolidPass = AstralEngine.Graphics.NewPass({ SolidTex[1], depth = { texture = DepthTexture[1] }, samples = 4 })
+    Data.SolidPass = AstralEngine.Graphics.NewPass({
+        SolidTex[1],
+        NormalBuffer[1],
+        depth = { texture = DepthTexture[1] },
+        samples = 4,
+    })
 
     Data.OITPass:setClear({ { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, depth = false })
 
@@ -452,17 +463,11 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     local MainShader = Renderer.GetMainShader()
     local BufferFormat = MainShader:getBufferFormat("PBR_SphericalHarmonics")
 
-    local SHData = {
-        Vec3(),
-        Vec3(),
-        Vec3(),
-        Vec3(),
-        Vec3(),
-        Vec3(),
-        Vec3(),
-        Vec3(),
-        Vec3(),
-    }
+    local SHData = table.alloc(9, 0)
+    for i = 1, 9 do
+        SHData[i] = Vec3()
+    end
+
     local Buffer = lovr.graphics.newBuffer(BufferFormat, SHData)
     Data.SHBuffer = Buffer
 
@@ -488,6 +493,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.CameraPass.CREF = D
     Data.CameraTex.CREF = D
     Data.DepthTexture.CREF = D
+    Data.NormalBuffer.CREF = D
 
     Data.ShouldRebuild = Input.ShouldRebuild == nil and true or Input.ShouldRebuild
 

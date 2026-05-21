@@ -53,6 +53,11 @@ local function FromPose(T, x, y, z, a, ax, ay, az)
     M:set(P, S, O)
     local ex, ey, ez = O:getEuler()
     R:set(ex, ey, ez)
+
+    local l = Component.HasComponent(T[7], "Light")
+    if l then
+        l:__OnTransformChanged()
+    end
 end
 
 local function GetVector(self, Type)
@@ -121,7 +126,7 @@ local function MTNewIndex(Ret, k, v)
         if k == "Rotation" then
             GetOrientation(Ret)
         elseif k == "Scale" then
-            local c = Component.HasComponent(Ret[9], "Collider")
+            local c = Component.HasComponent(Ret[6], "Collider")
             if c then
                 c:OnObjectResize(Ret[5])
             end
@@ -134,10 +139,14 @@ local function MTNewIndex(Ret, k, v)
         end
     end
 
-    local Col = Component.HasComponent(Ret[9], "Collider")
+    local Col = Component.HasComponent(Ret[6], "Collider")
+    local Light = Component.HasComponent(Ret[6], "Light")
     if Col then
         Col:__TransformMoved(Ret[1], Ret[2])
         Physics.__QueueToSyncLTJ(Col.World, Col.ColRef, Ret)
+    end
+    if Light then
+        Light:__OnTransformChanged()
     end
 end
 
@@ -150,7 +159,7 @@ Transform.Metadata.__remove = function(self)
 end
 
 Transform.Metadata.__create = function(DATA, Entity)
-    local Ret = { [9] = Entity }
+    local Ret = { [6] = Entity }
 
     if DATA then
         for i, v in pairs(DATA) do

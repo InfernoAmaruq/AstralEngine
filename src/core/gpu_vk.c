@@ -495,6 +495,10 @@ gpu_address gpu_buffer_get_address(gpu_buffer* buffer, uint32_t offset) {
   }) + offset;
 }
 
+void gpu_buffer_flush(gpu_buffer* buffer, uint32_t offset, uint32_t extent) {
+  //
+}
+
 // Tree
 
 bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info) {

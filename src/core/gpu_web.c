@@ -6,6 +6,7 @@
 
 struct gpu_buffer {
   WGpuBuffer handle;
+  void* data;
 };
 
 struct gpu_texture {
@@ -95,6 +96,11 @@ static WGpuPipelineConstant* convertShaderFlags(gpu_shader_flag* flags, uint32_t
 // Buffer
 
 bool gpu_buffer_init(gpu_buffer* buffer, gpu_buffer_info* info) {
+  if (info->type != GPU_BUFFER_STATIC) {
+    buffer->data = malloc(info->size);
+    if (info->pointer) *info->pointer = buffer->data;
+  }
+
   static const WGPU_BUFFER_USAGE_FLAGS usages[] = {
     [GPU_BUFFER_STATIC] =
       WGPU_BUFFER_USAGE_VERTEX |
@@ -112,7 +118,8 @@ bool gpu_buffer_init(gpu_buffer* buffer, gpu_buffer_info* info) {
       WGPU_BUFFER_USAGE_COPY_SRC |
       WGPU_BUFFER_USAGE_COPY_DST,
     [GPU_BUFFER_UPLOAD] =
-      WGPU_BUFFER_USAGE_COPY_SRC,
+      WGPU_BUFFER_USAGE_COPY_SRC |
+      WGPU_BUFFER_USAGE_COPY_DST,
     [GPU_BUFFER_DOWNLOAD] =
       WGPU_BUFFER_USAGE_COPY_DST |
       WGPU_BUFFER_USAGE_STORAGE
@@ -129,8 +136,6 @@ bool gpu_buffer_init(gpu_buffer* buffer, gpu_buffer_info* info) {
 
   wgpu_object_set_label(buffer->handle, info->label);
 
-  // TODO mapping
-
   return true;
 }
 
@@ -140,6 +145,12 @@ void gpu_buffer_destroy(gpu_buffer* buffer) {
 
 gpu_address gpu_buffer_get_address(gpu_buffer* buffer, uint32_t offset) {
   return 0;
+}
+
+void gpu_buffer_flush(gpu_buffer* buffer, uint32_t offset, uint32_t extent) {
+  if (extent > 0) {
+    wgpu_queue_write_buffer(state.queue, buffer->handle, offset, buffer->data, extent);
+  }
 }
 
 // Tree

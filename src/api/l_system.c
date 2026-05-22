@@ -366,7 +366,7 @@ static int l_lovrSystemSetWindowSize(lua_State* L)
     h = lua_tonumber(L,1);
     w = lua_tonumber(L,2);
 
-    lovrSystemSetWindowSize(w,h);
+    lovrSystemSetWindowSize(h,w);
 
     return 0;
 }

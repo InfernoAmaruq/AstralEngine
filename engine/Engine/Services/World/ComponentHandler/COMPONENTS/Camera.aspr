@@ -21,8 +21,6 @@ local MSAASolid = { samples = 4, usage = { "render", "sample" }, mipmaps = false
 local TextureConfig = { samples = 1, usage = { "render", "sample" }, mipmaps = false }
 local TexConf2 = { samples = 4, usage = { "render", "sample" }, mipmaps = false, format = "rgba16f" }
 
-local TEXCTR = 6 -- number of textures used in the camera
-
 Camera.Name = "Camera"
 Camera.Pattern = {
     RadFOV = math.rad(70),
@@ -201,7 +199,6 @@ local METHODS = {
         if State then
             local HalfRes = self.TrueResolution / 2
             CurrentMatrix:orthographic(-HalfRes.x, HalfRes.x, -HalfRes.y, HalfRes.y, Far == 0 and 100 or Far, Near)
-            --CurrentMatrix:orthographic(self.TrueResolution.x, self.TrueResolution.y, 0.01, 100)
         else
             CurrentMatrix:perspective(self.RadFOV, self.Aspect, Near, Far)
         end
@@ -214,7 +211,6 @@ local READ_ONLY = {
     Height = true,
     Aspect = true,
     Density = true,
-    OnResize = true,
 }
 
 local SETTER = {
@@ -250,8 +246,8 @@ local GETTER = {
 }
 
 local SHIndexMap = {
-    LinearX = 2, -- lovr 1-indexes GLSL buffers for us
-    LinearY = 3,
+    LinearY = 2,
+    LinearX = 3, -- lovr 1-indexes GLSL buffers for us
     LinearZ = 4,
     QuadX2 = 5,
     QuadXY = 6,
@@ -313,33 +309,34 @@ local mt = {
     end,
 }
 
-local BasePriority = 42069
-local BoundCameras = 0
-
 local BaseAmbience = Vec4(180, 180, 180, 255)
 
 local OIT_CONF = { format = "rg16f", samples = 4, usage = { "render", "sample" }, mipmaps = false }
 local DEPTH_CONF = { format = "d32f", samples = 4, usage = { "render", "sample" }, mipmaps = false, linear = true }
 local NORMAL_CONF = { format = "rgba16f", samples = 4, usage = { "render", "sample" }, mipmaps = false }
 
-local function RebuildTexture(V, w, h)
-    local OldV = V[1]
-    local NewV = AstralEngine.Graphics.NewRawTexture(w, h, V.__CAPTURE[3])
-    V[1] = NewV
-    local CamRef = V.CREF
-    CamRef.__REBUILT_TEX = (CamRef.__REBUILT_TEX or 0) + 1
-    local v = false
-    if CamRef.__REBUILT_TEX > TEXCTR then
-        AstralEngine.Log("FATAL: __REBUILT_TEX COUNTER OVERFLOW OVER TEXCTR CONSTANT", "error", "CAMERA")
-    elseif CamRef.__REBUILT_TEX == TEXCTR then
-        v = true
-    end
-    OldV:release()
-    return v
-end
+local Textures = {
+    12,
+    13,
+    20,
+    23,
+    24,
+    30,
+}
 
-local function RebuildPasses(CameraRef)
-    CameraRef.__REBUILT_TEX = 0
+local function OnRebuld(V, _, w, h, d)
+    d = d or lovr.system.getWindowDensity()
+    w = w * d
+    h = h * d
+
+    local CameraRef = V.CREF
+
+    for _, TextureIDs in ipairs(Textures) do
+        local OldV = CameraRef[TextureIDs]
+        local NewV = AstralEngine.Graphics.NewRawTexture(w, h, OldV.__CAPTURE[3])
+        OldV[1]:release()
+        OldV[1] = NewV
+    end
 
     CameraRef.CameraPass[1]:setCanvas({
         CameraRef.CameraTex[1],
@@ -358,35 +355,26 @@ local function RebuildPasses(CameraRef)
         depth = CameraRef.DepthTexture[1],
         samples = 4,
     })
+
+    CameraRef[FIELDS.W] = w
+    CameraRef[FIELDS.H] = h
+    CameraRef[FIELDS.Aspect] = w / h
+    CameraRef[FIELDS.Density] = d
+
+    METHODS.ReconstructProjectionMatrix(CameraRef)
+
+    CameraRef.OnResize:Fire(w, h, d)
 end
 
-local function Rebuild(V, IsPass, w, h, Density)
-    if not V.CREF.ShouldRebuild then
-        return
-    end
-    Density = Density or lovr.system.getWindowDensity()
-    w = w * Density
-    h = h * Density
-    if not IsPass then
-        local PassesReady = RebuildTexture(V, w, h)
-        if PassesReady then
-            RebuildPasses(V.CREF)
-            V.CREF[FIELDS.W] = w
-            V.CREF[FIELDS.H] = h
-            V.CREF[FIELDS.Aspect] = w / h
-            V.CREF[FIELDS.Density] = Density
-            METHODS.ReconstructProjectionMatrix(V.CREF)
-            V.CREF.OnResize:Fire(w, h)
-        end
-    end
-end
+local GeomPriority = 10000
+local CommitPriority = 10050
 
 Camera.Metadata.__create = function(Input, Entity, Sink)
     if not Sink and not Component.HasComponent(Entity, "Transform") then
         Component.AddComponent(Entity, "Transform", { Position = vec3(), Orientation = quat() })
     end
 
-    local REBUILD_CALLBACK = Input.RebuildCallback or Rebuild
+    local REBUILD_CALLBACK = Input.RebuildCallback or OnRebuld
 
     local Data = {}
 
@@ -412,13 +400,6 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.Aspect = W / H
     Data.RadFOV = Input and (Input.RadFOV or (Input.FOV and math.rad(Input.FOV))) or math.rad(90)
 
-    OITTex.ResizeCallback = REBUILD_CALLBACK
-    OITDepth.ResizeCallback = REBUILD_CALLBACK
-    SolidTex.ResizeCallback = REBUILD_CALLBACK
-    DepthTexture.ResizeCallback = REBUILD_CALLBACK
-    Texture.ResizeCallback = REBUILD_CALLBACK
-    NormalBuffer.ResizeCallback = REBUILD_CALLBACK
-
     Data.CameraPass = AstralEngine.Graphics.NewPass({ Texture[1], samples = 1 })
     Data.CameraTex = Texture
     Data.OITTex = OITTex
@@ -441,9 +422,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     local R, G, B, A = Color:unpack()
     Data.Ambience = Vec4(R, G, B, A or 1):div(255)
 
-    Data.OITPass.ResizeCallback = REBUILD_CALLBACK
     Data.CameraPass.ResizeCallback = REBUILD_CALLBACK
-    Data.SolidPass.ResizeCallback = REBUILD_CALLBACK
 
     Data.__Resizables = setmetatable({
         OITTex,
@@ -455,9 +434,9 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     }, { __mode = "v" })
 
     Renderer.AddCamera(Entity)
-    Renderer.PassStorage.AddPass(false, Data.SolidPass, BasePriority + BoundCameras, true)
-    Renderer.PassStorage.AddPass(false, Data.OITPass, BasePriority + BoundCameras + 1, true)
-    Renderer.PassStorage.AddPass(false, Data.CameraPass, BasePriority + BoundCameras + 2, true)
+    Renderer.PassStorage.AddPass(false, Data.SolidPass, CommitPriority, true)
+    Renderer.PassStorage.AddPass(false, Data.OITPass, CommitPriority + 1, true)
+    Renderer.PassStorage.AddPass(false, Data.CameraPass, GeomPriority + 2, true)
 
     -- last but not least lets construct the spherical harmonics buffer
     local MainShader = Renderer.GetMainShader()
@@ -485,15 +464,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
 
     local D = setmetatable({}, mt)
 
-    Data.OITDepth.CREF = D
-    Data.OITPass.CREF = D
-    Data.OITTex.CREF = D
-    Data.SolidPass.CREF = D
-    Data.SolidTex.CREF = D
     Data.CameraPass.CREF = D
-    Data.CameraTex.CREF = D
-    Data.DepthTexture.CREF = D
-    Data.NormalBuffer.CREF = D
 
     Data.ShouldRebuild = Input.ShouldRebuild == nil and true or Input.ShouldRebuild
 
@@ -511,8 +482,6 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     end
 
     D[FIELDS.OnResize] = Signal.new(Signal.Type.NoCtx | Signal.Type.RTC)
-
-    BoundCameras = BoundCameras + 3
 
     rawset(D, "__EntityPtr", GetService("World").GetEntityFromId(Entity))
     rawset(D, "__LuaSHBuffer", SHData)
@@ -535,6 +504,7 @@ Camera.Metadata.__remove = function(self, Entity)
     OIT:release()
     local Solid = self.SolidPass[1] or self.SolidPass
     Solid:release()
+    local CameraPass = self.CameraPass[1] or self.CameraPass
     local CameraPass = self.CameraPass[1] or self.CameraPass
     CameraPass:release()
 end

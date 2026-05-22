@@ -23,6 +23,7 @@ vec4 astral_main(){
     else
     {
         if (a < 0.95) discard;
+
         SecondColor = vec4((s.normal + 1) / 2,1);
         terminate vec4(CurrentColor.rgb,1);
     }

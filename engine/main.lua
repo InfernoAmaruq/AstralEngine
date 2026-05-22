@@ -320,9 +320,9 @@ function lovr.run()
                     RETURNFIELD = RETURNFIELD..[[
                         local Headset = HGetPass()
                         if Headset and (not lovr.draw or lovr.draw(Headset)) then Headset = nil end]]
-                    CONCAT = "local Idx = #PassTable+1\nPassTable[Idx] = Headset\nPassTable[Idx+1] = Window\nSubmit(PassTable)\nPassTable[Idx] = nil\nPassTable[Idx+1] = nil\n"
+                    CONCAT = "local Idx = #PassTable+1\nPassTable[Idx] = Headset\nPassTable[Idx+1] = Window\nSubmit(PassTable)\nPassTable[Idx] = false\nPassTable[Idx+1] = false\n"
                 else
-                    CONCAT = "local Idx = #PassTable+1\nPassTable[Idx] = Window\nSubmit(PassTable)\nPassTable[Idx] = nil\n"
+                    CONCAT = "local Idx = #PassTable+1\nPassTable[Idx] = Window\nSubmit(PassTable)\nPassTable[Idx] = false\n"
                 end
                 RETURNFIELD = RETURNFIELD..[[
                     local Window = WGetPass()

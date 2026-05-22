@@ -1,18 +1,25 @@
 @TYPE:FRAGMENT;
 @PRIORITY:100;
-@IDENTIFIER:HBAO;
+@IDENTIFIER:SSAO;
 
 uniform mat4 Proj;
 
 uniform mat4 ProjInv;
 
-#define HBAO_Rad 0.05
-#define HBAO_Bias 0.01
-#define HBAO_N_Dir 8
-#define HBAO_S_Dir 6
-#define HBAO_Strength 2
+uniform mat4 ViewMatrix;
 
-vec3 HBAO_ReconstructViewPos(vec2 UV, float z){
+uniform sampler2D SSAO_Noise;
+
+#define SSAO_Bias 0.0005
+#define SSAO_Samples 16
+#define SSAO_Radius 4
+#define SSAO_Power .3
+#define SSAO_MaxDist 1
+
+// NTS: adaptive radius w dist
+// NTS 2: hard corners softer soft corners rougher
+
+vec3 SSAO_ReconstructViewPos(vec2 UV, float z){
     vec4 clip = vec4(UV * 2.0 - 1.0, z, 1.0);
     vec4 view = ProjInv * clip;
     vec3 pos = view.xyz / view.w;
@@ -21,40 +28,58 @@ vec3 HBAO_ReconstructViewPos(vec2 UV, float z){
 
 vec4 astral_main(){
     ivec2 iUV = ivec2(UV * Resolution);
-    float z = OIT_ResolveRG(OIT_TexDepth,iUV).r;
+    vec3 normal = OIT_ResolveRGB(OIT_TexNormal, iUV) * 2 - 1;
 
-    vec3 pos = HBAO_ReconstructViewPos(UV,z);
-    vec3 normal = OIT_ResolveRGB(OIT_TexNormal,iUV);
+    normal = normalize(mat3(ViewMatrix) * normal);
 
-    // marching
-    float occlusion = 0.0;
+    float depth = OIT_ResolveRG(OIT_TexDepth, iUV).r;
 
-    for (int d = 0; d < HBAO_N_Dir; ++d){
-        float angle = (2.0 * PI * d) / HBAO_N_Dir;
-        vec2 dir = vec2(cos(angle),sin(angle));
+    float ao = 0;
 
-        for (int s = 1; s <= HBAO_S_Dir; ++s){
-            float t = pow(s * (HBAO_Rad / HBAO_S_Dir),s / 4);
-            vec3 samplePos = pos + (vec3(dir,0) * t);
+    vec3 position = SSAO_ReconstructViewPos(UV,depth);
 
-            vec4 projSample = Proj * vec4(samplePos,1.0);
-            vec2 sampleUV = projSample.xy / projSample.w * 0.5 + 0.5;
-            ivec2 sampleIUV = ivec2(sampleUV * Resolution);
+    if (depth < 0.999){
+        vec2 noiseUV = mod(iUV, vec2(4)) / vec2(4);
+        vec2 randomDir = texture(SSAO_Noise, noiseUV).xy * 2 - 1;
 
-            float sampleDepth = OIT_ResolveRG(OIT_TexDepth,sampleIUV).r;
-            vec3 sampleViewPos = HBAO_ReconstructViewPos(sampleUV,sampleDepth);
+        for (int i = 0; i < SSAO_Samples; i++){
+            float angle = (float(i) / float(SSAO_Samples)) * TAU;
 
-            vec3 v = sampleViewPos - pos;
-            float height = dot(v,normal);
-            float dist = length(v);
-            float contribution = smoothstep(HBAO_Bias, HBAO_Rad, -height) * (1.0 / (1.0 + dist));
-            occlusion += contribution;
+            vec2 dir = vec2(cos(angle), sin(angle));
+
+            float s = sin(randomDir.x * TAU);
+            float c = cos(randomDir.x * TAU);
+            dir = vec2(
+                dir.x * c - dir.y * s,
+                dir.x * s + dir.y * c
+            );
+
+            vec2 sampleOffset = dir * SSAO_Radius;
+            vec2 sampleUV = UV + sampleOffset / Resolution;
+
+            float sampleDepth = OIT_ResolveRG(OIT_TexDepth, ivec2(sampleUV * Resolution)).r;
+            vec3 samplePos = SSAO_ReconstructViewPos(sampleUV, sampleDepth);
+
+            vec3 diff = samplePos - position;
+            float dist = length(diff);
+
+            if (dist > SSAO_MaxDist) continue;
+
+            vec3 biasedPos = position + normal + SSAO_Bias;
+            diff = samplePos - biasedPos;
+            dist = length(diff);
+
+            if(samplePos.z > position.z){
+                float falloff = 1.0 - smoothstep(0.0, SSAO_MaxDist, dist);
+                ao += falloff;
+            }
         }
+
+        ao /= float(SSAO_Samples);
+        ao = pow(clamp(ao, 0, 1), SSAO_Power);
     }
 
-    occlusion /= float(HBAO_N_Dir * HBAO_S_Dir);
-    float ao = 1 - clamp(occlusion * HBAO_Strength,0.0,1.0);
+    ao = smoothstep(0,1,ao);
 
-    CurrentColor.rgb *= ao;
-    CurrentColor.rgb = vec3(1) * ao;
+    CurrentColor.rgb *= 1 - ao;
 }

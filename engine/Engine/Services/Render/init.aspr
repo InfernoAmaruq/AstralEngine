@@ -15,15 +15,13 @@ Renderer.PassStorage = {
     PassTable = PassTable,
     PreTable = {},
     PostTable = {},
-    ToggleTable = {} -- post array has an offset of (#Pre + i+1)
 }
 
-function Renderer.PassStorage.AddPass(P, Pass, Id, Enabled)
-    Enabled = Enabled == nil and true or Enabled
-
+function Renderer.PassStorage.AddPass(P, Pass, Id)
     local T = Renderer.PassStorage[P and "PostTable" or "PreTable"]
-    if T[Id] then error("PASS ALREADY EXISTS AT TABLE SLOT: "..Id) end
-    T[Id] = Pass
+
+    T[Id] = T[Id] or {}
+    table.insert(T[Id],Pass)
 
     Renderer.PassStorage.RebuildPassTable()
 end
@@ -31,18 +29,16 @@ end
 function Renderer.PassStorage.RemovePass(Pass)
     for i = 1,2 do
         local Search = i == 1 and "PreTable" or "PostTable"
-        for j,P in pairs(Renderer.PassStorage[Search]) do
-            if P == Pass then
-                Renderer.PassStorage[Search][j] = nil
-                break
+        for _,T in pairs(Renderer.PassStorage[Search]) do
+            for j,P in pairs(T) do
+                if P == Pass then
+                    Renderer.PassStorage[Search][j] = nil
+                    break
+                end
             end
         end
     end
 
-    Renderer.PassStorage.RebuildPassTable()
-end
-
-function Renderer.PassStorage.SetEnabled(P, Id, S)
     Renderer.PassStorage.RebuildPassTable()
 end
 
@@ -62,9 +58,15 @@ function Renderer.PassStorage.RebuildPassTable()
     table.sort(Keys)
 
     for _,Id in ipairs(Keys) do
-        Top = Top + 1
         local v = Renderer.PassStorage.PreTable[Id]
-        PassTable[Top] = v[1] or v
+        for _, Pass in ipairs(v) do
+            Top = Top + 1
+            PassTable[Top] = Pass[1] or Pass
+        end
+    end
+
+    for i = Top + 1, Top + CONSTOFFSET do
+        PassTable[i] = false
     end
 
     Top = Top + CONSTOFFSET
@@ -74,10 +76,13 @@ function Renderer.PassStorage.RebuildPassTable()
         Keys[#Keys+1] = id
     end
     table.sort(Keys)
+
     for _,Id in ipairs(Keys) do
-        Top = Top + 1
-        local v = Renderer.PassStorage.PreTable[Id]
-        PassTable[Top] = v[1] or v
+        local v = Renderer.PassStorage.PostTable[Id]
+        for _, Pass in ipairs(v) do
+            Top = Top + 1
+            PassTable[Top] = Pass[1] or Pass
+        end
     end
 
 end
@@ -124,7 +129,7 @@ local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"OIT/Write",{
     }
 })
 
-Renderer.SetMainShader(lovr.graphics.newShader(V,F,{flags = {normalMap = true, vertexTangents = true}}))
+Renderer.SetMainShader(lovr.graphics.newShader(V,F,{flags = {normalMap = true}}))
 
 Renderer.Lighting = loadfile("Lighting")(Renderer)
 

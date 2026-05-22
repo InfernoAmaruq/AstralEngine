@@ -27,6 +27,9 @@ struct Light {
     vec2 surfaceSize;
     int type;
     float hardness;
+
+    float linear;
+    float quadratic;
 };
 
 Light lighting_getLight(int id){
@@ -63,7 +66,9 @@ vec3 lighting_getLights(const Surface s){
 
         float h = l.hardness;
 
-        float distAtt = pow(1.0 - distSqr / l.rad2,h);
+        float d = distSqr / l.rad2;
+
+        float distAtt = pow(1.0 - d,h);
 
         // calculate angle
 

@@ -276,9 +276,21 @@ function Renderer.DrawTransparent()
     end
 end
 
+local SSAO_Noise_Image = lovr.data.newImage(4,4,"rgba8")
+math.randomseed(os.clock() * tonumber(debug.getaddress({})))
+SSAO_Noise_Image:mapPixel(function()
+    local x = math.random()
+    local y = math.random()
+    local Unit = vec2(x,y):normalize() * 255
+    return Unit.x,Unit.y
+end)
+local SSAO_Noise_Texture = AstralEngine.Graphics.NewRawTexture(SSAO_Noise_Image,{usage = {"sample"}})
+SSAO_Noise_Image:release()
+
 function Renderer.Composite()
     local Cams = Cams
     local CamStorage = Component.Components.Camera.Storage
+    local TransStorage = Component.Components.Transform.Storage
 
     for cind = 1, #Cams do
         local e = Cams[cind]
@@ -304,9 +316,11 @@ function Renderer.Composite()
         pass:send("OIT_TexDepth", CAMERA[24][1])
         pass:send("OIT_TexNormal", CAMERA[30][1])
 
-        -- push hbao
+        -- push ssao
         pass:send("Proj",Proj)
         pass:send("ProjInv",Inv)
+        pass:send("ViewMatrix",mat4(TransStorage[e][3]):invert())
+        pass:send("SSAO_Noise",SSAO_Noise_Texture)
 
         pass:setDepthTest()
         pass:setDepthWrite(false)

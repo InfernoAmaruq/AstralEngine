@@ -1,12 +1,32 @@
 local l_NewBlobFile = lovr.filesystem.newBlob
 local l_NewBlob = lovr.data.newBlob
 
-local STRICT_LOAD = meta.getdefined("Asset", "StrictLoad")
-
 local NormalizePath = lovr.filesystem.normalize
 
 local function GetPath(Path, Stack)
     return NormalizePath(lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath(3 + (Stack or 0))) .. Path)
+end
+
+local function GetPaths(Default,Check,Stack)
+    Stack = Stack or 0
+
+    for i = 1, Default and 4 or 3 do
+        local ToSearch
+
+        if i == 4 then
+            ToSearch = NormalizePath(Default.."/"..Check)
+        elseif i == 3 then
+            ToSearch = NormalizePath("GAMEFILE/"..Check)
+        elseif i == 2 then
+            ToSearch = Check
+        else
+            ToSearch = GetPath(Check,Stack + 1)
+        end
+
+        if lovr.filesystem.isFile(ToSearch) then
+            return ToSearch
+        end
+    end
 end
 
 local function FNV1A32(Str)
@@ -45,17 +65,6 @@ for _, v in pairs(TypeEnum) do
     DeadCache[v] = setmetatable({}, WT)
 end
 
-local function SearchCache(CacheObj, Obj, FilterBy)
-    for Type, SubCache in pairs(CacheObj) do
-        for Hash, Object in pairs(SubCache) do
-            if Obj == (FilterBy and Hash or Object) then
-                return true, (FilterBy and Object or Hash), Type
-            end
-        end
-    end
-    return false, nil, nil
-end
-
 local function GetObjPath(self)
     return RegToPath[self]
 end
@@ -68,7 +77,7 @@ function AssetManager.NewBlob(Path, Type, Name)
 
     if InputType == "string" then
         -- if string, it means its hashable
-        local ConstPath = GetPath(Path)
+        local ConstPath = GetPaths(nil,Path) --GetPath(Path)
         local Success, Res = pcall(GetBlob, ConstPath, Type) -- pcall because Type hint may be missing. We don't want an error here
         Blob = Success and Res or l_NewBlobFile(ConstPath)
 
@@ -135,7 +144,7 @@ local function GetRawImageData(ImagePath)
 end
 
 function AssetManager.NewImage(ImagePath)
-    local CanonPath = GetPath(ImagePath)
+    local CanonPath = GetPaths(nil,ImagePath)
     local Image = GetRawImageData(CanonPath)
 
     local ReturnValue = nil
@@ -160,11 +169,11 @@ function AssetManager.NewTexture(Path, Options)
     if rtype(Path) == "table" then
         ImageData = {}
         for i,v in pairs(Path) do
-            local RawData = GetRawImageData(GetPath(v))
+            local RawData = GetRawImageData(GetPaths(nil,v))
             ImageData[i] = RawData.DATA
         end
     else
-        CanonPath = GetPath(Path)
+        CanonPath = GetPaths(nil,Path)
         ImageData = GetRawImageData(CanonPath).DATA
     end
 

@@ -11,6 +11,7 @@ CacheTable.Light_Positions = table.alloc(256, 0)
 CacheTable.Light_Colors = table.alloc(256, 0)
 CacheTable.Light_Directions = table.alloc(256, 0)
 CacheTable.Light_Extras = table.alloc(256, 0)
+CacheTable.Light_ExtrasTwo = table.alloc(256, 0)
 
 local LightBuffer = lovr.graphics.newBuffer(MainBufferFormat)
 Lighting.LightBuffer = LightBuffer

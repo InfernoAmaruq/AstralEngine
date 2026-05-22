@@ -32,7 +32,7 @@ Renderer.SetMainShader = function(Shader)
     MAINSHADER = Shader
 end
 
-local F = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "OIT/Composite",{Include = {"PostProcessing/HBAO"}})
+local F = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "OIT/Composite",{Include = {"PostProcessing/AO/SSAO"}})
 local OITCOMPOSITE = lovr.graphics.newShader('fill',F)
 
 -- VARS

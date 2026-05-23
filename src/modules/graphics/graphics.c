@@ -5310,6 +5310,10 @@ void lovrModelResetBlendShapes(Model* model) {
   model->blendShapesDirty = true;
 }
 
+bool lovrModelAnimationCollapse(Model* model){
+    return true;
+}
+
 bool lovrModelAnimate(Model* model, uint32_t animationIndex, float time, float alpha) {
   if (alpha <= 0.f) return true;
 

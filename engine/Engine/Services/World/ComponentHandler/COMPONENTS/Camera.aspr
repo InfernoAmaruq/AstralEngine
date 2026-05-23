@@ -80,6 +80,18 @@ local FIELDS = {
     Skybox = 28,
     SHBuffer = 29,
     NormalBuffer = 30,
+    BloomBlurred = 31,
+    ColorBlurred = 32,
+    CompositedTexture = 33,
+    AOTexture = 34,
+    BlurredAO = 35,
+    BloomThresholdTexture = 36,
+    CompositePass = 37,
+    BlurPassH = 38,
+    BlurPassV = 39,
+    ColorBlurredS1 = 40,
+    BloomBlurredS1 = 41,
+    BlurredAOS1 = 42,
 }
 
 local function RawViewToRay(self, Vector)
@@ -161,11 +173,8 @@ local function RawWorldToView(self, Pos)
 end
 
 local METHODS = {
-    Resize = function(self, NewSize, Density)
-        Density = Density or lovr.system.getWindowDensity()
-        for _, v in ipairs(self.__Resizables) do
-            v.ResizeCallback(v, v.__IsPass, NewSize.x, NewSize.y, Density)
-        end
+    Resize = function(self, w, h, d)
+        self.CameraPass.ResizeCallback(w, h, d)
     end,
     ScreenPointToRay = function(self, V1, V2)
         local Vector = typeof(V1) == "Vec2" and V1 or vec2(V1, V2)
@@ -313,7 +322,10 @@ local BaseAmbience = Vec4(180, 180, 180, 255)
 
 local OIT_CONF = { format = "rg16f", samples = 4, usage = { "render", "sample" }, mipmaps = false }
 local DEPTH_CONF = { format = "d32f", samples = 4, usage = { "render", "sample" }, mipmaps = false, linear = true }
-local NORMAL_CONF = { format = "rgba16f", samples = 4, usage = { "render", "sample" }, mipmaps = false }
+local NORMAL_CONF = { format = "rgba8", samples = 4, usage = { "render", "sample" }, mipmaps = false }
+
+local NORMAL_COMPOSITE_CONF = { format = "rgba8", samples = 1, usage = { "render", "sample" }, mipmaps = false }
+local AO_CONF = { format = "r16", usage = { "render", "sample" }, mipmaps = false, samples = 1 }
 
 local Textures = {
     12,
@@ -322,6 +334,15 @@ local Textures = {
     23,
     24,
     30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    40,
+    41,
+    42,
 }
 
 local function OnRebuld(V, _, w, h, d)
@@ -338,22 +359,44 @@ local function OnRebuld(V, _, w, h, d)
         OldV[1] = NewV
     end
 
-    CameraRef.CameraPass[1]:setCanvas({
-        CameraRef.CameraTex[1],
-        depth = CameraRef.CameraPass[1]:getCanvas().depth,
-        samples = 1,
-    })
     CameraRef.SolidPass[1]:setCanvas({
         CameraRef.SolidTex[1],
         CameraRef.NormalBuffer[1],
         depth = CameraRef.DepthTexture[1],
         samples = 4,
     })
+
     CameraRef.OITPass[1]:setCanvas({
         CameraRef.OITTex[1],
         CameraRef.OITDepth[1],
         depth = CameraRef.DepthTexture[1],
         samples = 4,
+    })
+
+    Camera.CompositePass[1]:setCanvas({
+        CameraRef.CompositedTexture[1],
+        CameraRef.AOTexture[1],
+        CameraRef.BloomThresholdTexture[1],
+        samples = 1,
+    })
+
+    CameraRef.BlurPassH[1]:setCanvas({
+        CameraRef.ColorBlurredS1[1],
+        CameraRef.BlurredAOS1[1],
+        CameraRef.BloomBlurredS1[1],
+        samples = 1,
+    })
+
+    CameraRef.BlurPassV[1]:setCanvas({
+        CameraRef.ColorBlurred[1],
+        CameraRef.BlurredAO[1],
+        CameraRef.BloomBlurred[1],
+        samples = 1,
+    })
+
+    CameraRef.CameraPass[1]:setCanvas({
+        CameraRef.CameraTex[1],
+        samples = 1,
     })
 
     CameraRef[FIELDS.W] = w
@@ -388,7 +431,20 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     local OITDepth = AstralEngine.Graphics.NewTexture(W, H, OIT_CONF)
     local SolidTex = AstralEngine.Graphics.NewTexture(W, H, MSAASolid)
     local DepthTexture = AstralEngine.Graphics.NewTexture(W, H, DEPTH_CONF)
+
     local NormalBuffer = AstralEngine.Graphics.NewTexture(W, H, NORMAL_CONF)
+
+    local BloomThreshold = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local CompositedTexture = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local AOTexture = AstralEngine.Graphics.NewTexture(W, H, AO_CONF)
+
+    local BloomBlurred = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local ColorBlurred = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local BlurredAO = AstralEngine.Graphics.NewTexture(W, H, AO_CONF)
+
+    local BloomBlurredS1 = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local ColorBlurredS1 = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local BlurredAOS1 = AstralEngine.Graphics.NewTexture(W, H, AO_CONF)
 
     Data.Skybox = Input.Skybox
 
@@ -400,13 +456,26 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.Aspect = W / H
     Data.RadFOV = Input and (Input.RadFOV or (Input.FOV and math.rad(Input.FOV))) or math.rad(90)
 
-    Data.CameraPass = AstralEngine.Graphics.NewPass({ Texture[1], samples = 1 })
     Data.CameraTex = Texture
     Data.OITTex = OITTex
     Data.OITDepth = OITDepth
     Data.SolidTex = SolidTex
     Data.DepthTexture = DepthTexture
     Data.NormalBuffer = NormalBuffer
+
+    Data.BloomBlurred = BloomBlurred
+    Data.BlurredAO = BlurredAO
+    Data.ColorBlurred = ColorBlurred
+
+    Data.BloomBlurredS1 = BloomBlurredS1
+    Data.BloomThresholdTexture = BloomThreshold
+    Data.CompositedTexture = CompositedTexture
+    Data.AOTexture = AOTexture
+    Data.BlurredAOS1 = BlurredAOS1
+    Data.ColorBlurredS1 = ColorBlurredS1
+
+    Data.CameraPass = AstralEngine.Graphics.NewPass({ Texture[1], samples = 1 })
+
     Data.OITPass =
         AstralEngine.Graphics.NewPass({ OITTex[1], OITDepth[1], depth = { texture = DepthTexture[1] }, samples = 4 })
     Data.SolidPass = AstralEngine.Graphics.NewPass({
@@ -415,6 +484,13 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
         depth = { texture = DepthTexture[1] },
         samples = 4,
     })
+
+    Data.CompositePass =
+        AstralEngine.Graphics.NewPass({ CompositedTexture[1], AOTexture[1], BloomThreshold[1], samples = 1 })
+
+    Data.BlurPassH =
+        AstralEngine.Graphics.NewPass({ ColorBlurredS1[1], BlurredAOS1[1], BloomBlurredS1[1], samples = 1 })
+    Data.BlurPassV = AstralEngine.Graphics.NewPass({ ColorBlurred[1], BlurredAO[1], BloomBlurred[1], samples = 1 })
 
     Data.OITPass:setClear({ { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, depth = false })
 
@@ -430,13 +506,15 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
         SolidTex,
         DepthTexture,
         Texture,
-        HistoryTexture,
     }, { __mode = "v" })
 
     Renderer.AddCamera(Entity)
-    Renderer.PassStorage.AddPass(false, Data.SolidPass, CommitPriority, true)
-    Renderer.PassStorage.AddPass(false, Data.OITPass, CommitPriority + 1, true)
-    Renderer.PassStorage.AddPass(false, Data.CameraPass, GeomPriority + 2, true)
+    Renderer.PassStorage.AddPass(false, Data.SolidPass, GeomPriority, true)
+    Renderer.PassStorage.AddPass(false, Data.OITPass, GeomPriority + 1, true)
+    Renderer.PassStorage.AddPass(false, Data.CompositePass, GeomPriority + 10, true)
+    Renderer.PassStorage.AddPass(false, Data.BlurPassH, GeomPriority + 13, true)
+    Renderer.PassStorage.AddPass(false, Data.BlurPassV, GeomPriority + 16, true)
+    Renderer.PassStorage.AddPass(false, Data.CameraPass, CommitPriority + 2, true)
 
     -- last but not least lets construct the spherical harmonics buffer
     local MainShader = Renderer.GetMainShader()

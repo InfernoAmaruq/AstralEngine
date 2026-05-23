@@ -32,8 +32,8 @@ Renderer.SetMainShader = function(Shader)
     MAINSHADER = Shader
 end
 
-local F = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "OIT/Composite",{Include = {"PostProcessing/AO/SSAO"}})
-local OITCOMPOSITE = lovr.graphics.newShader('fill',F)
+local OitExtractRaw = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "OIT/Composite",{Include = {"PostProcessing/AO/SSAO", "PostProcessing/Bloom/Extract.glsl"}})
+local OITEXTRACT = lovr.graphics.newShader('fill',OitExtractRaw)
 
 -- VARS
 -- cams
@@ -287,6 +287,13 @@ end)
 local SSAO_Noise_Texture = AstralEngine.Graphics.NewRawTexture(SSAO_Noise_Image,{usage = {"sample"}})
 SSAO_Noise_Image:release()
 
+local BlurShaderRaw = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "Camera/BlurPass")
+local BlurSampler = lovr.graphics.newSampler({wrap = "clamp"})
+local BlurShader = lovr.graphics.newShader("fill",BlurShaderRaw)
+
+local FinalShaderRaw = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "Camera/Finalise")
+local FinalShader = lovr.graphics.newShader("fill",FinalShaderRaw)
+
 function Renderer.Composite()
     local Cams = Cams
     local CamStorage = Component.Components.Camera.Storage
@@ -297,6 +304,9 @@ function Renderer.Composite()
         local CAMERA = CamStorage[e]
 
         local pass = CAMERA[11][1]
+        local compositePass = CAMERA[37][1]
+        local blurPassH = CAMERA[38][1]
+        local blurPassV = CAMERA[39][1]
 
         local Solid = CAMERA[20][1]
         local Transparent = CAMERA[13][1]
@@ -304,29 +314,92 @@ function Renderer.Composite()
 
         local Proj = CAMERA[26]
         local Inv = mat4(Proj):invert()
+        local VM = mat4(TransStorage[e][3]):invert()
 
-        pass:push('state')
-        pass:setShader(OITCOMPOSITE)
-        pass:setFaceCull()
-        pass:setBlendMode("none")
+        local Depth = CAMERA[24][1]
 
-        pass:send("OIT_TexSolid",Solid)
-        pass:send("OIT_TexTransparent",Transparent)
-        pass:send("OIT_TexReveal",Reveal)
-        pass:send("OIT_TexDepth", CAMERA[24][1])
-        pass:send("OIT_TexNormal", CAMERA[30][1])
+        -- STEPS: Compsite, AO, Extract
 
-        -- push ssao
-        pass:send("Proj",Proj)
-        pass:send("ProjInv",Inv)
-        pass:send("ViewMatrix",mat4(TransStorage[e][3]):invert())
-        pass:send("SSAO_Noise",SSAO_Noise_Texture)
+        compositePass:reset()
+        compositePass:setShader(OITEXTRACT)
+        compositePass:setFaceCull()
+        compositePass:setBlendMode("none")
 
-        pass:setDepthTest()
-        pass:setDepthWrite(false)
-        pass:setSampler'nearest'
+        -- extract conf
+        compositePass:send("OIT_TexSolid",Solid)
+        compositePass:send("OIT_TexTransparent",Transparent)
+        compositePass:send("OIT_TexReveal",Reveal)
+        compositePass:send("OIT_TexDepth", Depth)
+        compositePass:send("OIT_TexNormal", CAMERA[30][1])
+
+        -- ssao conf
+        compositePass:send("Proj",Proj)
+        compositePass:send("ProjInv",Inv)
+        compositePass:send("ViewMatrix",VM)
+        compositePass:send("SSAO_Noise",SSAO_Noise_Texture)
+
+        -- blur conf
+        --compositePass:send("Blur_Threshold", nil)
+
+        compositePass:setDepthWrite(false)
+        compositePass:setSampler'nearest'
+        compositePass:fill()
+
+        -- now we blur
+
+        blurPassH:reset()
+        blurPassH:setShader(BlurShader)
+        blurPassH:setSampler(BlurSampler)
+        blurPassH:send("Horizontal",true)
+        blurPassH:send("AO_Tex",CAMERA[34][1])
+        blurPassH:send("Bloom_Tex",CAMERA[36][1])
+        blurPassH:fill()
+
+        blurPassV:reset()
+        blurPassV:setShader(BlurShader)
+        blurPassV:setSampler(BlurSampler)
+        blurPassV:send("Horizontal",false)
+        blurPassV:send("AO_Tex",CAMERA[42][1])
+        blurPassV:send("Bloom_Tex",CAMERA[41][1])
+        blurPassV:fill()
+
+        -- now to main
+        pass:reset()
+        pass:setShader(FinalShader)
+
+        pass:send("ColorTex",CAMERA[33][1])
+        pass:send("AO",CAMERA[35][1])
+        pass:send("Bloom",CAMERA[31][1])
+
+        -- set gamma and exposure
+        pass:send("gamma",.9)
+        pass:send("exposure",1)
+
         pass:fill()
-        pass:pop('state')
+
+        if false then
+            pass:setShader(OITCOMPOSITE)
+            pass:setFaceCull()
+            pass:setBlendMode("none")
+
+            pass:send("OIT_TexSolid",Solid)
+            pass:send("OIT_TexTransparent",Transparent)
+            pass:send("OIT_TexReveal",Reveal)
+            pass:send("OIT_TexDepth", CAMERA[24][1])
+            pass:send("OIT_TexNormal", CAMERA[30][1])
+
+            -- push ssao
+            pass:send("Proj",Proj)
+            pass:send("ProjInv",Inv)
+            pass:send("ViewMatrix",VM)
+            pass:send("SSAO_Noise",SSAO_Noise_Texture)
+
+            pass:setDepthTest()
+            pass:setDepthWrite(false)
+            pass:setSampler'nearest'
+            pass:fill()
+            pass:pop('state')
+        end
     end
 end
 

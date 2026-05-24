@@ -14,7 +14,7 @@ jobs:
         shell: cmd
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: 'recursive'
       - name: Configure
@@ -44,7 +44,7 @@ jobs:
       - name: Install Packages
         run: sudo apt install -y xorg-dev libx11-xcb-dev libxcb-glx0-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-xkb-dev libfuse2 libcurl4-openssl-dev libssl-dev
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: 'recursive'
       - name: Init
@@ -83,7 +83,7 @@ jobs:
       - name: Install Android
         run: ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-${{ matrix.android_version }}"
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: 'recursive'
       - name: Init
@@ -131,7 +131,7 @@ jobs:
           export VULKAN_SDK=${{ runner.temp }}/vulkan && echo "VULKAN_SDK=$VULKAN_SDK/macOS" >> $GITHUB_ENV
           sudo vulkansdk-macOS-$VKV.app/Contents/MacOS/vulkansdk-macOS-$VKV --root $VULKAN_SDK --accept-licenses --default-answer --confirm-command install
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: 'recursive'
       - name: Init

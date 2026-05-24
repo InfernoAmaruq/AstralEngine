@@ -21,8 +21,6 @@ local MSAASolid = { samples = 4, usage = { "render", "sample" }, mipmaps = false
 local TextureConfig = { samples = 1, usage = { "render", "sample" }, mipmaps = false }
 local TexConf2 = { samples = 4, usage = { "render", "sample" }, mipmaps = false, format = "rgba16f" }
 
-local TEXCTR = 5 -- number of textures used in the camera
-
 Camera.Name = "Camera"
 Camera.Pattern = {
     RadFOV = math.rad(70),
@@ -30,7 +28,6 @@ Camera.Pattern = {
     Near = 0.05,
     Orthographic = false,
     CameraMask = Renderer.CamMask,
-    Lighting = ENUM.LightingTechnology.Cel,
     DrawToScreen = false,
     CameraPass = nil,
     CameraTex = nil,
@@ -61,7 +58,7 @@ local FIELDS = {
     Width = 7,
     H = 8,
     Height = 8,
-    Lighting = 9,
+    Ambience = 9,
     DrawToScreen = 10,
     CameraPass = 11,
     CameraTex = 12,
@@ -80,26 +77,54 @@ local FIELDS = {
     Density = 25,
     ProjectionMatrix = 26,
     OnResize = 27,
+    Skybox = 28,
+    SHBuffer = 29,
+    NormalBuffer = 30,
+    BloomBlurred = 31,
+    ColorBlurred = 32,
+    CompositedTexture = 33,
+    AOTexture = 34,
+    BlurredAO = 35,
+    BloomThresholdTexture = 36,
+    CompositePass = 37,
+    BlurPassH = 38,
+    BlurPassV = 39,
+    ColorBlurredS1 = 40,
+    BloomBlurredS1 = 41,
+    BlurredAOS1 = 42,
 }
 
 local function RawViewToRay(self, Vector)
+    local EntPtr = self.__EntityPtr
+    local Transform = EntPtr.Transform
+
     local NDCx = Vector.x * 2 - 1
     local NDCy = 1 - Vector.y * 2
 
     local Aspect = self[FIELDS.Aspect]
 
-    local FOV = self[FIELDS.RadFOV]
-    local TanHalf = math.tan(FOV * 0.5)
-
-    local x = NDCx * TanHalf * Aspect
-    local y = NDCy * TanHalf
-
-    local EntPtr = self.__EntityPtr
-    local Transform = EntPtr.Transform
-
     local Forward, Right, Up = Transform.ForwardVector, Transform.RightVector, Transform.UpVector
 
-    local Dir = vec3(Forward + Right * x + Up * y):normalize()
+    local Dir
+
+    if not self.Orthographic then
+        local FOV = self[FIELDS.RadFOV]
+        local TanHalf = math.tan(FOV * 0.5)
+
+        local x = NDCx * TanHalf * Aspect
+        local y = NDCy * TanHalf
+
+        Dir = vec3(Forward + Right * x + Up * y):normalize()
+    else
+        local Res = self.TrueResolution / 2
+        local XWorld = NDCx * Res.x * Aspect
+        local YWorld = NDCy * Res.y
+
+        local NearDist = self.Near or 0
+        local Origin = Transform.Position + Right * XWorld + Up * YWorld + Forward * -NearDist
+
+        return Origin, vec3(Forward):normalize()
+    end
 
     return Transform.Position, Dir
 end
@@ -111,29 +136,45 @@ local function RawWorldToView(self, Pos)
     local CamRot = Transform.Orientation
 
     local LocalPos = Pos - CamPos
+
     local View = CamRot:conjugate() * LocalPos
 
-    if View.z >= 0 then
-        return nil
+    if not self.Orthographic then
+        if View.z >= 0 then
+            return nil
+        end
+
+        local Aspect = self[FIELDS.Aspect]
+        local TanHalf = math.tan(self[FIELDS.RadFOV] * 0.5)
+
+        local NDCx = (View.x / -View.z) / (TanHalf * Aspect)
+        local NDCy = (View.y / -View.z) / TanHalf
+
+        local UVX = NDCx * 0.5 + 0.5
+        local UVY = 1 - (NDCy * 0.5 + 0.5)
+        return vec2(UVX, UVY)
+    else
+        local Near = self[FIELDS.Near]
+        local Far = self[FIELDS.Far]
+
+        if View.z > -Near or View.z < -Far then
+            return nil
+        end
+
+        local Res = self.TrueResolution
+
+        local NDCx = View.x / Res.x
+        local NDCy = View.y / Res.y
+
+        local UVX = NDCx * 0.5 + 0.5
+        local UVY = 1 - (NDCy * 0.5 + 0.5)
+        return vec2(UVX, UVY)
     end
-
-    local Aspect = self[FIELDS.Aspect]
-    local TanHalf = math.tan(self[FIELDS.RadFOV] * 0.5)
-
-    local NDCx = (View.x / -View.z) / (TanHalf * Aspect)
-    local NDCy = (View.y / -View.z) / TanHalf
-
-    local UVX = NDCx * 0.5 + 0.5
-    local UVY = 1 - (NDCy * 0.5 + 0.5)
-    return vec2(UVX, UVY)
 end
 
 local METHODS = {
-    Resize = function(self, NewSize, Density)
-        Density = Density or lovr.system.getWindowDensity()
-        for _, v in ipairs(self.__Resizables) do
-            v.ResizeCallback(v, v.__IsPass, NewSize.x, NewSize.y, Density)
-        end
+    Resize = function(self, w, h, d)
+        self.CameraPass.ResizeCallback(w, h, d)
     end,
     ScreenPointToRay = function(self, V1, V2)
         local Vector = typeof(V1) == "Vec2" and V1 or vec2(V1, V2)
@@ -167,7 +208,6 @@ local METHODS = {
         if State then
             local HalfRes = self.TrueResolution / 2
             CurrentMatrix:orthographic(-HalfRes.x, HalfRes.x, -HalfRes.y, HalfRes.y, Far == 0 and 100 or Far, Near)
-            --CurrentMatrix:orthographic(self.TrueResolution.x, self.TrueResolution.y, 0.01, 100)
         else
             CurrentMatrix:perspective(self.RadFOV, self.Aspect, Near, Far)
         end
@@ -180,7 +220,6 @@ local READ_ONLY = {
     Height = true,
     Aspect = true,
     Density = true,
-    OnResize = true,
 }
 
 local SETTER = {
@@ -194,10 +233,18 @@ local SETTER = {
             AstralEngine.Error("CANNOT SET PRIMARY CAMERA, FUNCTION MISSING", "CAMERA", 2)
         end
     end,
+    Ambience = function(self, Val)
+        local R, G, B, A = Val:div(255):unpack()
+        self[9]:set(R, G, B, A or 1)
+    end,
 }
+
 local GETTER = {
     FOV = function(self)
         return math.deg(self[FIELDS.RadFOV])
+    end,
+    Ambience = function(self)
+        return vec4(self[9] * 255)
     end,
     Resolution = function(self)
         return vec2(self[FIELDS.W], self[FIELDS.H]) / self[FIELDS.Density]
@@ -206,6 +253,34 @@ local GETTER = {
         return vec2(self[FIELDS.W], self[FIELDS.H])
     end,
 }
+
+local SHIndexMap = {
+    LinearY = 2,
+    LinearX = 3, -- lovr 1-indexes GLSL buffers for us
+    LinearZ = 4,
+    QuadX2 = 5,
+    QuadXY = 6,
+    QuadY2 = 7,
+    QuadYZ = 8,
+    QuadZ2 = 9,
+}
+
+local function SHIndex(self, key)
+    local LuaBuffer = self.__LuaSHBuffer
+
+    local Key = SHIndexMap[key]
+    return LuaBuffer[Key] * 255
+end
+
+local function SHNewIndex(self, key, v)
+    local LuaBuffer = self.__LuaSHBuffer
+    local GPUBuffer = self[29]
+
+    local Key = SHIndexMap[key]
+    LuaBuffer[Key]:set(v:div(255).rgb)
+
+    GPUBuffer:setData(LuaBuffer)
+end
 
 local mt = {
     __index = function(self, k)
@@ -216,12 +291,26 @@ local mt = {
         if Val then
             return self[Val]
         end
+
+        local s = tostring(k)
+        if s:find("SphericalHarmonics") then
+            local SubStr = s:sub(string.len("SphericalHarmonics") + 1)
+            return SHIndex(self, SubStr)
+        end
+
         return METHODS[k]
     end,
     __newindex = function(self, k, v)
         if SETTER[k] then
             return SETTER[k](self, v)
         end
+
+        local s = tostring(k)
+        if s:find("SphericalHarmonics") then
+            local SubStr = s:sub(string.len("SphericalHarmonics") + 1)
+            return SHNewIndex(self, SubStr, v)
+        end
+
         if READ_ONLY[k] then
             AstralEngine.Error("Attempt to write to Read Only value on Camera component", "CAMERA")
         end
@@ -229,75 +318,106 @@ local mt = {
     end,
 }
 
-local BasePriority = 42069
-local BoundCameras = 0
+local BaseAmbience = Vec4(180, 180, 180, 255)
 
 local OIT_CONF = { format = "rg16f", samples = 4, usage = { "render", "sample" }, mipmaps = false }
 local DEPTH_CONF = { format = "d32f", samples = 4, usage = { "render", "sample" }, mipmaps = false, linear = true }
+local NORMAL_CONF = { format = "rgba8", samples = 4, usage = { "render", "sample" }, mipmaps = false }
 
-local function RebuildTexture(V, w, h)
-    local OldV = V[1]
-    local NewV = AstralEngine.Graphics.NewRawTexture(w, h, V.__CAPTURE[3])
-    V[1] = NewV
-    local CamRef = V.CREF
-    CamRef.__REBUILT_TEX = (CamRef.__REBUILT_TEX or 0) + 1
-    local v = false
-    if CamRef.__REBUILT_TEX > TEXCTR then
-        AstralEngine.Log("FATAL: __REBUILT_TEX COUNTER OVERFLOW OVER TEXCTR CONSTANT", "error", "CAMERA")
-    elseif CamRef.__REBUILT_TEX == TEXCTR then
-        v = true
+local NORMAL_COMPOSITE_CONF = { format = "rgba8", samples = 1, usage = { "render", "sample" }, mipmaps = false }
+local AO_CONF = { format = "r16", usage = { "render", "sample" }, mipmaps = false, samples = 1 }
+
+local Textures = {
+    12,
+    13,
+    20,
+    23,
+    24,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    40,
+    41,
+    42,
+}
+
+local function OnRebuld(V, _, w, h, d)
+    d = d or lovr.system.getWindowDensity()
+    w = w * d
+    h = h * d
+
+    local CameraRef = V.CREF
+
+    for _, TextureIDs in ipairs(Textures) do
+        local OldV = CameraRef[TextureIDs]
+        local NewV = AstralEngine.Graphics.NewRawTexture(w, h, OldV.__CAPTURE[3])
+        OldV[1]:release()
+        OldV[1] = NewV
     end
-    return v
-end
 
-local function RebuildPasses(CameraRef)
-    CameraRef.__REBUILT_TEX = 0
-
-    CameraRef.CameraPass[1]:setCanvas({
-        CameraRef.CameraTex[1],
-        depth = CameraRef.CameraPass[1]:getCanvas().depth,
-        samples = 1,
-    })
     CameraRef.SolidPass[1]:setCanvas({
         CameraRef.SolidTex[1],
+        CameraRef.NormalBuffer[1],
         depth = CameraRef.DepthTexture[1],
-        samples = 1,
+        samples = 4,
     })
+
     CameraRef.OITPass[1]:setCanvas({
         CameraRef.OITTex[1],
         CameraRef.OITDepth[1],
         depth = CameraRef.DepthTexture[1],
+        samples = 4,
+    })
+
+    Camera.CompositePass[1]:setCanvas({
+        CameraRef.CompositedTexture[1],
+        CameraRef.AOTexture[1],
+        CameraRef.BloomThresholdTexture[1],
         samples = 1,
     })
+
+    CameraRef.BlurPassH[1]:setCanvas({
+        CameraRef.ColorBlurredS1[1],
+        CameraRef.BlurredAOS1[1],
+        CameraRef.BloomBlurredS1[1],
+        samples = 1,
+    })
+
+    CameraRef.BlurPassV[1]:setCanvas({
+        CameraRef.ColorBlurred[1],
+        CameraRef.BlurredAO[1],
+        CameraRef.BloomBlurred[1],
+        samples = 1,
+    })
+
+    CameraRef.CameraPass[1]:setCanvas({
+        CameraRef.CameraTex[1],
+        samples = 1,
+    })
+
+    CameraRef[FIELDS.W] = w
+    CameraRef[FIELDS.H] = h
+    CameraRef[FIELDS.Aspect] = w / h
+    CameraRef[FIELDS.Density] = d
+
+    METHODS.ReconstructProjectionMatrix(CameraRef)
+
+    CameraRef.OnResize:Fire(w, h, d)
 end
 
-local function Rebuild(V, IsPass, w, h, Density)
-    if not V.CREF.ShouldRebuild then
-        return
-    end
-    Density = Density or lovr.system.getWindowDensity()
-    w = w * Density
-    h = h * Density
-    if not IsPass then
-        local PassesReady = RebuildTexture(V, w, h)
-        if PassesReady then
-            RebuildPasses(V.CREF)
-            V.CREF[FIELDS.W] = w
-            V.CREF[FIELDS.H] = h
-            V.CREF[FIELDS.Aspect] = w / h
-            V.CREF[FIELDS.Density] = Density
-            METHODS.ReconstructProjectionMatrix(V.CREF)
-            V.CREF.OnResize:Fire(w, h)
-        end
-    end
-end
+local GeomPriority = 10000
+local CommitPriority = 10050
 
 Camera.Metadata.__create = function(Input, Entity, Sink)
     if not Sink and not Component.HasComponent(Entity, "Transform") then
         Component.AddComponent(Entity, "Transform", { Position = vec3(), Orientation = quat() })
     end
 
-    local REBUILD_CALLBACK = Input.RebuildCallback or Rebuild
+    local REBUILD_CALLBACK = Input.RebuildCallback or OnRebuld
 
     local Data = {}
 
@@ -312,6 +432,22 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     local SolidTex = AstralEngine.Graphics.NewTexture(W, H, MSAASolid)
     local DepthTexture = AstralEngine.Graphics.NewTexture(W, H, DEPTH_CONF)
 
+    local NormalBuffer = AstralEngine.Graphics.NewTexture(W, H, NORMAL_CONF)
+
+    local BloomThreshold = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local CompositedTexture = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local AOTexture = AstralEngine.Graphics.NewTexture(W, H, AO_CONF)
+
+    local BloomBlurred = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local ColorBlurred = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local BlurredAO = AstralEngine.Graphics.NewTexture(W, H, AO_CONF)
+
+    local BloomBlurredS1 = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local ColorBlurredS1 = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
+    local BlurredAOS1 = AstralEngine.Graphics.NewTexture(W, H, AO_CONF)
+
+    Data.Skybox = Input.Skybox
+
     W = W * Density
     H = H * Density
 
@@ -320,27 +456,49 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.Aspect = W / H
     Data.RadFOV = Input and (Input.RadFOV or (Input.FOV and math.rad(Input.FOV))) or math.rad(90)
 
-    OITTex.ResizeCallback = REBUILD_CALLBACK
-    OITDepth.ResizeCallback = REBUILD_CALLBACK
-    SolidTex.ResizeCallback = REBUILD_CALLBACK
-    DepthTexture.ResizeCallback = REBUILD_CALLBACK
-    Texture.ResizeCallback = REBUILD_CALLBACK
-
-    Data.CameraPass = AstralEngine.Graphics.NewPass({ Texture[1], samples = 1 })
     Data.CameraTex = Texture
     Data.OITTex = OITTex
     Data.OITDepth = OITDepth
     Data.SolidTex = SolidTex
     Data.DepthTexture = DepthTexture
+    Data.NormalBuffer = NormalBuffer
+
+    Data.BloomBlurred = BloomBlurred
+    Data.BlurredAO = BlurredAO
+    Data.ColorBlurred = ColorBlurred
+
+    Data.BloomBlurredS1 = BloomBlurredS1
+    Data.BloomThresholdTexture = BloomThreshold
+    Data.CompositedTexture = CompositedTexture
+    Data.AOTexture = AOTexture
+    Data.BlurredAOS1 = BlurredAOS1
+    Data.ColorBlurredS1 = ColorBlurredS1
+
+    Data.CameraPass = AstralEngine.Graphics.NewPass({ Texture[1], samples = 1 })
+
     Data.OITPass =
         AstralEngine.Graphics.NewPass({ OITTex[1], OITDepth[1], depth = { texture = DepthTexture[1] }, samples = 4 })
-    Data.SolidPass = AstralEngine.Graphics.NewPass({ SolidTex[1], depth = { texture = DepthTexture[1] }, samples = 4 })
+    Data.SolidPass = AstralEngine.Graphics.NewPass({
+        SolidTex[1],
+        NormalBuffer[1],
+        depth = { texture = DepthTexture[1] },
+        samples = 4,
+    })
+
+    Data.CompositePass =
+        AstralEngine.Graphics.NewPass({ CompositedTexture[1], AOTexture[1], BloomThreshold[1], samples = 1 })
+
+    Data.BlurPassH =
+        AstralEngine.Graphics.NewPass({ ColorBlurredS1[1], BlurredAOS1[1], BloomBlurredS1[1], samples = 1 })
+    Data.BlurPassV = AstralEngine.Graphics.NewPass({ ColorBlurred[1], BlurredAO[1], BloomBlurred[1], samples = 1 })
 
     Data.OITPass:setClear({ { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, depth = false })
 
-    Data.OITPass.ResizeCallback = REBUILD_CALLBACK
+    local Color = Input.Ambience or BaseAmbience
+    local R, G, B, A = Color:unpack()
+    Data.Ambience = Vec4(R, G, B, A or 1):div(255)
+
     Data.CameraPass.ResizeCallback = REBUILD_CALLBACK
-    Data.SolidPass.ResizeCallback = REBUILD_CALLBACK
 
     Data.__Resizables = setmetatable({
         OITTex,
@@ -348,13 +506,27 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
         SolidTex,
         DepthTexture,
         Texture,
-        HistoryTexture,
     }, { __mode = "v" })
 
     Renderer.AddCamera(Entity)
-    Renderer.PassStorage.AddPass(false, Data.SolidPass, BasePriority + BoundCameras, true)
-    Renderer.PassStorage.AddPass(false, Data.OITPass, BasePriority + BoundCameras + 1, true)
-    Renderer.PassStorage.AddPass(false, Data.CameraPass, BasePriority + BoundCameras + 2, true)
+    Renderer.PassStorage.AddPass(false, Data.SolidPass, GeomPriority, true)
+    Renderer.PassStorage.AddPass(false, Data.OITPass, GeomPriority + 1, true)
+    Renderer.PassStorage.AddPass(false, Data.CompositePass, GeomPriority + 10, true)
+    Renderer.PassStorage.AddPass(false, Data.BlurPassH, GeomPriority + 13, true)
+    Renderer.PassStorage.AddPass(false, Data.BlurPassV, GeomPriority + 16, true)
+    Renderer.PassStorage.AddPass(false, Data.CameraPass, CommitPriority + 2, true)
+
+    -- last but not least lets construct the spherical harmonics buffer
+    local MainShader = Renderer.GetMainShader()
+    local BufferFormat = MainShader:getBufferFormat("PBR_SphericalHarmonics")
+
+    local SHData = table.alloc(9, 0)
+    for i = 1, 9 do
+        SHData[i] = Vec3()
+    end
+
+    local Buffer = lovr.graphics.newBuffer(BufferFormat, SHData)
+    Data.SHBuffer = Buffer
 
     for i, v in pairs(Input) do
         if not Data[i] then
@@ -370,14 +542,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
 
     local D = setmetatable({}, mt)
 
-    Data.OITDepth.CREF = D
-    Data.OITPass.CREF = D
-    Data.OITTex.CREF = D
-    Data.SolidPass.CREF = D
-    Data.SolidTex.CREF = D
     Data.CameraPass.CREF = D
-    Data.CameraTex.CREF = D
-    Data.DepthTexture.CREF = D
 
     Data.ShouldRebuild = Input.ShouldRebuild == nil and true or Input.ShouldRebuild
 
@@ -396,9 +561,8 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
 
     D[FIELDS.OnResize] = Signal.new(Signal.Type.NoCtx | Signal.Type.RTC)
 
-    BoundCameras = BoundCameras + 3
-
     rawset(D, "__EntityPtr", GetService("World").GetEntityFromId(Entity))
+    rawset(D, "__LuaSHBuffer", SHData)
 
     D:ReconstructProjectionMatrix()
 
@@ -418,6 +582,7 @@ Camera.Metadata.__remove = function(self, Entity)
     OIT:release()
     local Solid = self.SolidPass[1] or self.SolidPass
     Solid:release()
+    local CameraPass = self.CameraPass[1] or self.CameraPass
     local CameraPass = self.CameraPass[1] or self.CameraPass
     CameraPass:release()
 end

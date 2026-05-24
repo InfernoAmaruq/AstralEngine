@@ -1,5 +1,3 @@
-local Component = GetService("Component", "Component")
-
 local ShaderService = require("ShaderService")
 
 local Renderer = {}
@@ -7,27 +5,6 @@ Renderer.CamMask = ~0
 local Stack = {}
 local Cams = {}
 local PassTable = {}
-
-local DepthEnum = ENUM({
-    GreaterEqual = 0b110,
-    Equal = 0b100,
-    Greater = 0b010,
-    Less = 0b001,
-    LessEqual = 0b101,
-    None = 0
-},"DepthTest")
-
-local DepthTranslationTable = {
-    [DepthEnum.GreaterEqual.RawValue] = ">=",
-    [DepthEnum.Equal.RawValue] = "=",
-    [DepthEnum.Greater.RawValue] = ">",
-    [DepthEnum.Less.RawValue] = "<",
-    [DepthEnum.LessEqual.RawValue] = "<="
-}
-
-Renderer.TranslateDepthEnum = function(Enum)
-    return DepthTranslationTable[rtype(Enum) == "number" and Enum or Enum.RawValue]
-end
 
 -- PASS STORAGE
 @execute<UNSAFE>{if lovr.headset then return "local CONSTOFFSET = 2" else return "local CONSTOFFSET = 1" end}
@@ -38,15 +15,13 @@ Renderer.PassStorage = {
     PassTable = PassTable,
     PreTable = {},
     PostTable = {},
-    ToggleTable = {} -- post array has an offset of (#Pre + i+1)
 }
 
-function Renderer.PassStorage.AddPass(P, Pass, Id, Enabled)
-    Enabled = Enabled == nil and true or Enabled
-
+function Renderer.PassStorage.AddPass(P, Pass, Id)
     local T = Renderer.PassStorage[P and "PostTable" or "PreTable"]
-    if T[Id] then error("PASS ALREADY EXISTS AT TABLE SLOT: "..Id) end
-    T[Id] = Pass
+
+    T[Id] = T[Id] or {}
+    table.insert(T[Id],Pass)
 
     Renderer.PassStorage.RebuildPassTable()
 end
@@ -54,18 +29,16 @@ end
 function Renderer.PassStorage.RemovePass(Pass)
     for i = 1,2 do
         local Search = i == 1 and "PreTable" or "PostTable"
-        for j,P in pairs(Renderer.PassStorage[Search]) do
-            if P == Pass then
-                Renderer.PassStorage[Search][j] = nil
-                break
+        for _,T in pairs(Renderer.PassStorage[Search]) do
+            for j,P in pairs(T) do
+                if P == Pass then
+                    Renderer.PassStorage[Search][j] = nil
+                    break
+                end
             end
         end
     end
 
-    Renderer.PassStorage.RebuildPassTable()
-end
-
-function Renderer.PassStorage.SetEnabled(P, Id, S)
     Renderer.PassStorage.RebuildPassTable()
 end
 
@@ -85,9 +58,15 @@ function Renderer.PassStorage.RebuildPassTable()
     table.sort(Keys)
 
     for _,Id in ipairs(Keys) do
-        Top = Top + 1
         local v = Renderer.PassStorage.PreTable[Id]
-        PassTable[Top] = v[1] or v
+        for _, Pass in ipairs(v) do
+            Top = Top + 1
+            PassTable[Top] = Pass[1] or Pass
+        end
+    end
+
+    for i = Top + 1, Top + CONSTOFFSET do
+        PassTable[i] = false
     end
 
     Top = Top + CONSTOFFSET
@@ -97,10 +76,13 @@ function Renderer.PassStorage.RebuildPassTable()
         Keys[#Keys+1] = id
     end
     table.sort(Keys)
+
     for _,Id in ipairs(Keys) do
-        Top = Top + 1
-        local v = Renderer.PassStorage.PreTable[Id]
-        PassTable[Top] = v[1] or v
+        local v = Renderer.PassStorage.PostTable[Id]
+        for _, Pass in ipairs(v) do
+            Top = Top + 1
+            PassTable[Top] = Pass[1] or Pass
+        end
     end
 
 end
@@ -126,13 +108,6 @@ end
 
 -- RENDERING DATA
 
-local Component = GetService("Component", "Component")
-
-local LT = ENUM({
-    Cel = 1,
-    Shadowmap = 2
-}, "LightingTechnology", { CanAppend = true, Strict = true })
-
 local RT = ENUM({}, "RenderType", { CanAppend = true, Strict = true })
 
 for _, File in ipairs(lovr.filesystem.getAliasedFiles("RenderCalls")) do
@@ -141,6 +116,22 @@ for _, File in ipairs(lovr.filesystem.getAliasedFiles("RenderCalls")) do
         Renderer.Late[#Renderer.Late+1] = f
     end
 end
+
+local SignalLib = require("Lib/Signal")
+AstralEngine.Signals.OnMainShaderChanged = SignalLib.new(SignalLib.Type.RTC)
+
+local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"OIT/Write",{
+    Include = {"Material","Lighting","PBR"},
+    Define = {
+        Fragment = {
+            "MATERIAL_BASEUV_TO_COLOR"
+        }
+    }
+})
+
+Renderer.SetMainShader(lovr.graphics.newShader(V,F,{flags = {normalMap = true}}))
+
+Renderer.Lighting = loadfile("Lighting")(Renderer)
 
 GetService.AddService("Renderer", Renderer)
 

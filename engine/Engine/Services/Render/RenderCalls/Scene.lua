@@ -22,62 +22,18 @@ Renderer.Flags = {
     SHADER_RESET = &F_SHADER_RESET
 }
 
-local ShaderService = GetService("ShaderService","ShaderService")
-local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"Camera",{
-    Include = {"Material"},
-    Define = {
-        Fragment = {
-            "MATERIAL_BASEUV_TO_COLOR"
-        }
-    }
-})
+local MAINSHADER
 
-local MAINSHADER = lovr.graphics.newShader(V,F)
+Renderer.GetMainShader = function()
+    return MAINSHADER
+end
 
-local OITCOMPOSITE = lovr.graphics.newShader('fill',[[
-    uniform sampler2DMS TexSolid;
-    uniform sampler2DMS TexTransparent;
-    uniform sampler2DMS TexReveal;
+Renderer.SetMainShader = function(Shader)
+    MAINSHADER = Shader
+end
 
-    const int Samples = 4;
-
-    vec3 ResolveRGB(sampler2DMS InputSampler, ivec2 UV){
-        vec3 AccumColor = vec3(0.0);
-        for (int i = 0; i < Samples; ++i){
-            AccumColor += texelFetch(InputSampler,UV,i).rgb * 0.25;
-        }
-        return AccumColor;
-    }
-
-    vec2 ResolveRG(sampler2DMS InputSampler, ivec2 UV){
-        vec2 AccumColor = vec2(0.0);
-        for (int i = 0; i < Samples; ++i){
-            AccumColor += texelFetch(InputSampler,UV,i).rg * 0.25;
-        }
-        return AccumColor;
-    }
-
-    vec4 lovrmain()
-    {
-        //vec3 Solid = getPixel(TexSolid,UV).rgb;
-        //vec3 Accum = getPixel(TexTransparent,UV).rgb;
-        //vec4 Reveal = getPixel(TexReveal,UV);
-
-        ivec2 iUV = ivec2(UV.xy * Resolution);
-
-        vec3 Solid = ResolveRGB(TexSolid,iUV);
-        vec3 Accum = ResolveRGB(TexTransparent,iUV);
-        vec2 Reveal = ResolveRG(TexReveal,iUV);
-
-        float Norm = max(Reveal.g, 1e-5);
-        vec3 TransColor = Accum / Norm;
-        float TransAlpha = 1.0 - exp(-Reveal.r);
-
-        return vec4(Solid * (1.0 - TransAlpha) + TransColor * TransAlpha,1.0);
-
-        //return vec4(vec3(TransAlpha),1);
-    }
-]])
+local OitExtractRaw = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "OIT/Composite",{Include = {"PostProcessing/AO/SSAO", "PostProcessing/Bloom/Extract.glsl"}})
+local OITEXTRACT = lovr.graphics.newShader('fill',OitExtractRaw)
 
 -- VARS
 -- cams
@@ -175,13 +131,25 @@ end
         &PV:reset()
         &PV:setViewPose(1, MATRIX)
         &PV:setProjection(1, Projection)
-        &PV:setShader(MAINSHADER)
         &PV:setFaceCull(CULL)
 }
 
 local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
 
-@macro<L,!USEBRACK>{PROCESSSTACK(&STACK, &PASS) =
+@macro<L,!USEBRACK>{SETMAINSHADERPARAMS(&PASS,&TRANSPARENT,&SH,&SB) = 
+    &PASS:setShader(MAINSHADER)
+    &PASS:send("Lighting_Ambience",CAMERA[9])
+    &PASS:send("Transparent",&TRANSPARENT)
+    &PASS:send("Lighting_Data",Renderer.Lighting.LightBuffer)
+
+    &PASS:send("PBR_SphericalHarmonics",&SH)
+
+    if &SB then
+        &PASS:send("PBR_EnvMap",&SB)
+    end
+}
+
+@macro<L,!USEBRACK>{PROCESSSTACK(&STACK, &PASS, &STATE) =
         for eind = 1, #&STACK do
             local E = &STACK[eind]
             local RenT = RendStorage[E]
@@ -191,14 +159,13 @@ local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
                 continue
             end
             if Mat then
-                &PASS:setColor(Mat[4],Mat[5],Mat[6],Mat[7])
+                &PASS:setColor(Mat[4])
                 &PASS:send("Material_UVScale",Mat[2])
                 &PASS:send("Material_UVOffset",Mat[3])
-                &PASS:send("Material_FillMode",Mat[11])
+                &PASS:send("Material_FillMode",Mat[5])
                 &PASS:send("Material_ObjectScale",Comp.Transform[5])
-                &PASS:setSampler(Mat[12] and "nearest" or "linear")
+                &PASS:setSampler(Mat[6] and "nearest" or "linear")
             else
-                &PASS:setColor(1,1,1,1)
                 &PASS:send("Material_UVScale",VecOne)
                 &PASS:send("Material_UVOffset",VecZero)
                 &PASS:send("Material_FillMode",0)
@@ -207,7 +174,7 @@ local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
             local RETFLAG = TYPETOPROCESS[RenT[1]](&PASS, E, Comp)
             if not RETFLAG then continue end
             if RETFLAG & &F_SHADER_RESET ~= 0 then
-                &PASS:setShader(MAINSHADER)
+                SETMAINSHADERPARAMS(&PASS,&STATE,sh,sb)
             end
         end
 }
@@ -249,14 +216,22 @@ function Renderer.DrawSolid()
         SETPASSPARAMS(SolidPass)
         SETPASSPARAMS(TransPass)
 
-        SolidPass:send('Transparent',false)
-        SolidPass:push'state'
+        local sb = CAMERA[28]
+        local sh = CAMERA[29]
+        if sb then
+            sb = sb[1] or sb
+            SolidPass:skybox(sb)
+        end
 
-        PROCESSSTACK(SolidStack,SolidPass)
+        SETMAINSHADERPARAMS(SolidPass,false,sh,sb)
+
+        SolidPass:push('state')
+
+        PROCESSSTACK(SolidStack,SolidPass,false)
 
         for LovrMat,t in pairs(SolidStack.Material) do
             SolidPass:setMaterial(LovrMat)
-            PROCESSSTACK(t,SolidPass)
+            PROCESSSTACK(t,SolidPass,false)
         end
 
         SolidPass:pop'state'
@@ -283,44 +258,148 @@ function Renderer.DrawTransparent()
         TransPass:setDepthTest('>=')
         TransPass:setBlendMode(1,'add','premultiplied')
         TransPass:setBlendMode(2,'add','premultiplied')
-        TransPass:send('Transparent', true)
+
+        local sb = CAMERA[28]
+        local sh = CAMERA[29]
+        sb = sb and sb[1] or sb
+
+        SETMAINSHADERPARAMS(TransPass,true,sh,sb)
+
         TransPass:push('state')
-        PROCESSSTACK(TransparentStack,TransPass)
+        PROCESSSTACK(TransparentStack,TransPass,true)
 
         for LovrMat,t in pairs(TransparentStack.Material) do
             TransPass:setMaterial(LovrMat)
-            PROCESSSTACK(t,TransPass)
+            PROCESSSTACK(t,TransPass,true)
         end
         TransPass:pop('state')
     end
 end
 
+local SSAO_Noise_Image = lovr.data.newImage(4,4,"rgba8")
+math.randomseed(os.clock() * tonumber(debug.getaddress({})))
+SSAO_Noise_Image:mapPixel(function()
+    local x = math.random()
+    local y = math.random()
+    local Unit = vec2(x,y):normalize() * 255
+    return Unit.x,Unit.y
+end)
+local SSAO_Noise_Texture = AstralEngine.Graphics.NewRawTexture(SSAO_Noise_Image,{usage = {"sample"}})
+SSAO_Noise_Image:release()
+
+local BlurShaderRaw = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "Camera/BlurPass")
+local BlurSampler = lovr.graphics.newSampler({wrap = "clamp"})
+local BlurShader = lovr.graphics.newShader("fill",BlurShaderRaw)
+
+local FinalShaderRaw = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "Camera/Finalise")
+local FinalShader = lovr.graphics.newShader("fill",FinalShaderRaw)
+
 function Renderer.Composite()
     local Cams = Cams
     local CamStorage = Component.Components.Camera.Storage
+    local TransStorage = Component.Components.Transform.Storage
 
     for cind = 1, #Cams do
         local e = Cams[cind]
         local CAMERA = CamStorage[e]
 
         local pass = CAMERA[11][1]
+        local compositePass = CAMERA[37][1]
+        local blurPassH = CAMERA[38][1]
+        local blurPassV = CAMERA[39][1]
 
         local Solid = CAMERA[20][1]
         local Transparent = CAMERA[13][1]
         local Reveal = CAMERA[23][1]
 
-        pass:push('state')
-        pass:setShader(OITCOMPOSITE)
-        pass:setFaceCull()
-        pass:setBlendMode("none")
-        pass:send("TexSolid",Solid)
-        pass:send("TexTransparent",Transparent)
-        pass:send("TexReveal",Reveal)
-        pass:setDepthTest()
-        pass:setDepthWrite(false)
-        pass:setSampler'nearest'
+        local Proj = CAMERA[26]
+        local Inv = mat4(Proj):invert()
+        local VM = mat4(TransStorage[e][3]):invert()
+
+        local Depth = CAMERA[24][1]
+
+        -- STEPS: Compsite, AO, Extract
+
+        compositePass:reset()
+        compositePass:setShader(OITEXTRACT)
+        compositePass:setFaceCull()
+        compositePass:setBlendMode("none")
+
+        -- extract conf
+        compositePass:send("OIT_TexSolid",Solid)
+        compositePass:send("OIT_TexTransparent",Transparent)
+        compositePass:send("OIT_TexReveal",Reveal)
+        compositePass:send("OIT_TexDepth", Depth)
+        compositePass:send("OIT_TexNormal", CAMERA[30][1])
+
+        -- ssao conf
+        compositePass:send("Proj",Proj)
+        compositePass:send("ProjInv",Inv)
+        compositePass:send("ViewMatrix",VM)
+        compositePass:send("SSAO_Noise",SSAO_Noise_Texture)
+
+        -- blur conf
+        --compositePass:send("Blur_Threshold", nil)
+
+        compositePass:setDepthWrite(false)
+        compositePass:setSampler'nearest'
+        compositePass:fill()
+
+        -- now we blur
+
+        blurPassH:reset()
+        blurPassH:setShader(BlurShader)
+        blurPassH:setSampler(BlurSampler)
+        blurPassH:send("Horizontal",true)
+        blurPassH:send("AO_Tex",CAMERA[34][1])
+        blurPassH:send("Bloom_Tex",CAMERA[36][1])
+        blurPassH:fill()
+
+        blurPassV:reset()
+        blurPassV:setShader(BlurShader)
+        blurPassV:setSampler(BlurSampler)
+        blurPassV:send("Horizontal",false)
+        blurPassV:send("AO_Tex",CAMERA[42][1])
+        blurPassV:send("Bloom_Tex",CAMERA[41][1])
+        blurPassV:fill()
+
+        -- now to main
+        pass:reset()
+        pass:setShader(FinalShader)
+
+        pass:send("ColorTex",CAMERA[33][1])
+        pass:send("AO",CAMERA[35][1])
+        pass:send("Bloom",CAMERA[31][1])
+
+        -- set gamma and exposure
+        pass:send("gamma",.9)
+        pass:send("exposure",1)
+
         pass:fill()
-        pass:pop('state')
+
+        if false then
+            pass:setShader(OITCOMPOSITE)
+            pass:setFaceCull()
+            pass:setBlendMode("none")
+
+            pass:send("OIT_TexSolid",Solid)
+            pass:send("OIT_TexTransparent",Transparent)
+            pass:send("OIT_TexReveal",Reveal)
+            pass:send("OIT_TexDepth", CAMERA[24][1])
+            pass:send("OIT_TexNormal", CAMERA[30][1])
+
+            -- push ssao
+            pass:send("Proj",Proj)
+            pass:send("ProjInv",Inv)
+            pass:send("ViewMatrix",VM)
+            pass:send("SSAO_Noise",SSAO_Noise_Texture)
+
+            pass:setDepthTest()
+            pass:setDepthWrite(false)
+            pass:setSampler'nearest'
+            pass:fill()
+            pass:pop('state')
+        end
     end
 end
 

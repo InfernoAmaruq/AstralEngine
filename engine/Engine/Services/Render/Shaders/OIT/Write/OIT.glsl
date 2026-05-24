@@ -2,12 +2,12 @@
 @PRIORITY:100000;
 @IDENTIFIER:OIT_DRAW;
 
-layout(location = 1) out vec2 SecondColor;
+layout(location = 1) out vec4 SecondColor;
 uniform bool Transparent;
 
 vec4 astral_main(){
     float a = CurrentColor.a;
-    if (a < 0.05) discard;
+    if (a < 0.02) discard;
 
     if (Transparent){
         if (a > 0.95) discard;
@@ -17,12 +17,14 @@ vec4 astral_main(){
 
         float Weight = a * (0.2 + 1.5 * DepthWeight);
 
-        SecondColor = vec2(- log(1.0-a),Weight);
+        SecondColor = vec4(- log(1.0-a),Weight,0,0);
         terminate vec4(CurrentColor.rgb * a * Weight, 1);
     }
     else
     {
         if (a < 0.95) discard;
+
+        SecondColor = vec4((s.normal + 1) / 2,1);
         terminate vec4(CurrentColor.rgb,1);
     }
 }

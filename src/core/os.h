@@ -226,3 +226,4 @@ uintptr_t os_get_xcb_window(void);
 
 void os_set_window_size(uint32_t width, uint32_t height);
 void os_set_cursor_icon(os_cursor_icon icon);
+int os_set_precise_mouse(int Bool);

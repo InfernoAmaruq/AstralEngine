@@ -1,12 +1,32 @@
 local l_NewBlobFile = lovr.filesystem.newBlob
 local l_NewBlob = lovr.data.newBlob
 
-local STRICT_LOAD = meta.getdefined("Asset", "StrictLoad")
-
 local NormalizePath = lovr.filesystem.normalize
 
 local function GetPath(Path, Stack)
     return NormalizePath(lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath(3 + (Stack or 0))) .. Path)
+end
+
+local function GetPaths(Default,Check,Stack)
+    Stack = Stack or 0
+
+    for i = 1, Default and 4 or 3 do
+        local ToSearch
+
+        if i == 4 then
+            ToSearch = NormalizePath(Default.."/"..Check)
+        elseif i == 3 then
+            ToSearch = NormalizePath("GAMEFILE/"..Check)
+        elseif i == 2 then
+            ToSearch = Check
+        else
+            ToSearch = GetPath(Check,Stack + 1)
+        end
+
+        if lovr.filesystem.isFile(ToSearch) then
+            return ToSearch
+        end
+    end
 end
 
 local function FNV1A32(Str)
@@ -45,17 +65,6 @@ for _, v in pairs(TypeEnum) do
     DeadCache[v] = setmetatable({}, WT)
 end
 
-local function SearchCache(CacheObj, Obj, FilterBy)
-    for Type, SubCache in pairs(CacheObj) do
-        for Hash, Object in pairs(SubCache) do
-            if Obj == (FilterBy and Hash or Object) then
-                return true, (FilterBy and Object or Hash), Type
-            end
-        end
-    end
-    return false, nil, nil
-end
-
 local function GetObjPath(self)
     return RegToPath[self]
 end
@@ -68,7 +77,7 @@ function AssetManager.NewBlob(Path, Type, Name)
 
     if InputType == "string" then
         -- if string, it means its hashable
-        local ConstPath = GetPath(Path)
+        local ConstPath = GetPaths(nil,Path) --GetPath(Path)
         local Success, Res = pcall(GetBlob, ConstPath, Type) -- pcall because Type hint may be missing. We don't want an error here
         Blob = Success and Res or l_NewBlobFile(ConstPath)
 
@@ -104,12 +113,13 @@ local function NewImage(Path, ...)
 end
 
 local function GetRawImageData(ImagePath)
-    local Image = Cache[TypeEnum.ImageData][ImagePath]
+    local Hash = FNV1A32(ImagePath)
+    local Image = Cache[TypeEnum.ImageData][Hash]
 
     if not Image then
-        Image = DeadCache[TypeEnum.ImageData][ImagePath]
+        Image = DeadCache[TypeEnum.ImageData][Hash]
         if Image then
-            Cache[TypeEnum.ImageData][ImagePath], DeadCache[TypeEnum.ImageData][ImagePath] = Image, nil
+            Cache[TypeEnum.ImageData][Hash], DeadCache[TypeEnum.ImageData][Hash] = Image, nil
             return Image
         end
     else
@@ -127,14 +137,14 @@ local function GetRawImageData(ImagePath)
                 CTX = _G.CONTEXT and _G.CONTEXT.Gen or 0,
             }
 
-            Cache[TypeEnum.ImageData][FNV1A32(ImagePath)] = Table
+            Cache[TypeEnum.ImageData][Hash] = Table
             return Table
         end
     end
 end
 
 function AssetManager.NewImage(ImagePath)
-    local CanonPath = GetPath(ImagePath)
+    local CanonPath = GetPaths(nil,ImagePath)
     local Image = GetRawImageData(CanonPath)
 
     local ReturnValue = nil
@@ -153,11 +163,22 @@ function AssetManager.NewModelData() end
 -- gpu
 
 function AssetManager.NewTexture(Path, Options)
-    local CanonPath = GetPath(Path)
-    local ImageData = GetRawImageData(CanonPath)
+
+    local CanonPath
+    local ImageData
+    if rtype(Path) == "table" then
+        ImageData = {}
+        for i,v in pairs(Path) do
+            local RawData = GetRawImageData(GetPaths(nil,v))
+            ImageData[i] = RawData.DATA
+        end
+    else
+        CanonPath = GetPaths(nil,Path)
+        ImageData = GetRawImageData(CanonPath).DATA
+    end
 
     if ImageData then
-        return AstralEngine.Graphics.NewTexture(ImageData.DATA, Options)
+        return AstralEngine.Graphics.NewTexture(ImageData, Options)
     else
         return nil
     end
@@ -189,6 +210,9 @@ local function ProcessMaterialInput(Input)
     local Str = ""
 
     local InputProcessed = {}
+    InputProcessed.NormalScale = 1
+    InputProcessed.Metalness = 1
+    InputProcessed.Roughness = 1
 
     for i, v in pairs(Input) do
         if i == "Color" or i == "Glow" then
@@ -196,12 +220,16 @@ local function ProcessMaterialInput(Input)
 
             local t = rtype(v)
             if t == "table" then
-                r, g, b, a = unpack(t)
+                r, g, b, a = unpack(v)
+                r = r / 255
+                g = g / 255
+                b = b / 255
+                a = a / 255
             else
-                r, g, b, a = v:unpack()
+                r, g, b, a = v:div(255):unpack()
             end
 
-            InputProcessed[i] = { r, g, b, a }
+            InputProcessed[i] = { r, g, b, a or 1 }
         elseif i == "UvShift" or i == "UvScale" then
             local x, y
 
@@ -225,6 +253,10 @@ local function ProcessMaterialInput(Input)
         else
             InputProcessed[i] = v
         end
+    end
+
+    if not Input.Glow and Input.GlowTexture then
+        InputProcessed.Glow = {1,1,1,1}
     end
 
     for _, Field in ipairs(MaterialKeyArray) do

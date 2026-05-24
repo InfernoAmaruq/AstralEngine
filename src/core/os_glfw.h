@@ -112,7 +112,9 @@ uintptr_t os_get_xcb_window(void) {
 
 void os_set_window_size(uint w, uint h){return;}
 
-void os_set_cursor_icon(os_cursor_icon Cursor){return;;}
+void os_set_cursor_icon(os_cursor_icon Cursor){return;}
+
+int os_set_precise_mouse(int Bool){return 0;}
 
 #else
 
@@ -548,6 +550,15 @@ bool os_is_key_down(os_key key) {
 void os_set_cursor_icon(os_cursor_icon Cursor){
     glfwSetCursor(glfwState.window, glfwState.cursors[Cursor]);
     glfwState.current_cursor = Cursor;
+}
+
+int os_set_precise_mouse(int State){
+    int supported = glfwRawMouseMotionSupported();
+
+    if (supported)
+        glfwSetInputMode(glfwState.window,GLFW_RAW_MOUSE_MOTION,State ? GLFW_TRUE : GLFW_FALSE);
+
+    return supported;
 }
 
 #if defined(_WIN32)

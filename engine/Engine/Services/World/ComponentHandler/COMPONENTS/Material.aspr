@@ -10,7 +10,7 @@ Comp.ComponentAdded:Connect(function(e, id, c)
         if Mat[1] then
             c:SetMaterial(Mat[1])
         else
-            local Alpha = Mat[7]
+            local Alpha = Mat[4].w
             c:RemoveFromStack()
             c:SwapStacks(Alpha == 1)
         end
@@ -22,9 +22,9 @@ local MaterialFitMode = ENUM({ Stretch = 0, Tile = 1, Crop = 2 }, "MaterialFitMo
 local Mt = {
     __index = function(self, k)
         if k == "Color" then
-            return self[8]
+            return self[4] * 255
         elseif k == "Material" then
-            return self[9]
+            return self[7]
         elseif k == "UVOffset" then
             return vec2(self[3])
         elseif k == "UVScale" then
@@ -32,13 +32,13 @@ local Mt = {
         elseif k == "FitMode" then
             return rawget(self, "__FitEnum")
         elseif k == "UseNearest" then
-            return self[12]
+            return self[6]
         end
     end,
     __newindex = function(self, k, v)
         if k == "Material" then
-            local RT = Comp.HasComponent(self[10], "RenderTarget")
-            self[9] = v
+            local RT = Comp.HasComponent(self[8], "RenderTarget")
+            self[7] = v
             self[1] = v and v.__lmat or v[1] or v
 
             if RT then
@@ -46,13 +46,13 @@ local Mt = {
             end
         elseif k == "Color" then
             local RT = Comp.HasComponent(self[10], "RenderTarget")
-            v = v or color.fromRGBA(255, 255, 255, 255)
-            self[8] = v
-            local OldAlpha = self[7]
-            self[4], self[5], self[6], self[7] = v:unpack()
+            v = v or vec4(255, 255, 255, 255)
+            local OldAlpha = self[4].w
+            local r, g, b, a = v:div(255):unpack()
+            self[4]:set(r, g, b, a or 1)
 
-            if RT and OldAlpha ~= self[7] and not self[1] then
-                RT:SwapStacks(self[7] == 1)
+            if RT and OldAlpha ~= v.w and not self[1] then
+                RT:SwapStacks(v.w == 1)
             end
         elseif k == "UVOffset" then
             self[3]:set(v)
@@ -60,9 +60,9 @@ local Mt = {
             self[2]:set(v)
         elseif k == "FitMode" then
             rawset(self, "__FitEnum", v)
-            self[11] = v.RawValue
+            self[5] = v.RawValue
         elseif k == "UseNearest" then
-            self[12] = v
+            self[6] = v
         end
     end,
 }
@@ -77,27 +77,28 @@ Material.Metadata.__create = function(Data, Ent)
     Storage[2] = Data and Data.UVScale and Vec2(Data.UVScale) or Vec2(1, 1)
     Storage[3] = Data and Data.UVOffset and Vec2(Data.UVOffset) or Vec2(0, 0)
 
-    local Color = Data and Data.Color or color.fromRGBA(255, 255, 255, 255)
-    Storage[4], Storage[5], Storage[6], Storage[7] = Color:unpack()
-    Storage[8] = Color
-    Storage[9] = Mat
-    Storage[10] = Ent
+    local InColor = Data and Data.Color or vec4(255, 255, 255, 255)
+    local R, G, B, A = InColor:unpack()
+    local Color = Vec4(R, G, B, A or 1):div(255)
+    Storage[4] = Color
+    Storage[7] = Mat
+    Storage[8] = Ent
 
     local FitMode = Data.FitMode or MaterialFitMode.Stretch
     Storage.__FitEnum = FitMode
-    Storage[11] = FitMode.RawValue
-    Storage[12] = Data.UseNearest or false
+    Storage[5] = FitMode.RawValue
+    Storage[6] = Data.UseNearest or false
 
-    if Storage[9] and Storage[9].Properties then
-        Storage[3]:set(Storage[3], Storage[9].Properties.Texture)
-    elseif Storage[9] then
-        Storage[3]:set(Storage[3], Storage[9][1] or Storage[9])
+    if Storage[7] and Storage[7].Properties then
+        Storage[3]:set(Storage[3], Storage[7].Properties.Texture)
+    elseif Storage[7] then
+        Storage[3]:set(Storage[3], Storage[7][1] or Storage[7])
     end
 
     if RT and Storage[1] then
         RT:SetMaterial(Storage[1])
     elseif RT then
-        local a = Storage[7]
+        local a = Color.w
         RT:SwapStacks(a == 1)
     end
 

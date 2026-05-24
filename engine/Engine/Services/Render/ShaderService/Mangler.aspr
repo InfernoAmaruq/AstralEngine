@@ -6,6 +6,7 @@ local Exclude = {
 
 local SkipModifiers = {
     uniform = true,
+    struct = true,
     [Def.SYMBOLS.FLAG] = true,
 }
 
@@ -34,9 +35,17 @@ local function Mangle(Text, Prefix)
         local Window = Text:sub(math.max(1, Pos - 20), Pos)
 
         for i in pairs(SkipModifiers) do
-            local _, E = Window:find(i)
-            if _ and E then
-                Pos = Pos + E
+            local S, E = Window:find(i)
+            if S and E then
+                if i == "struct" then
+                    local FindStart = Text:find("{", Pos + S)
+                    local FindEnd = Text:find("}", FindStart)
+
+                    Pos = Pos + FindEnd
+                else
+                    Pos = Pos + E
+                end
+
                 continue
             end
         end

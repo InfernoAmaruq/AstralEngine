@@ -58,6 +58,8 @@ void lovrModelDataDestroy(void* ref) {
   lovrFree(model->indices);
   lovrFree(model->metadata);
   lovrFree(model->data);
+  lovrFree(model->animQueue.animations);
+  lovrFree(model->animQueue.queuedLookup);
   lovrFree(model);
 }
 
@@ -133,6 +135,9 @@ bool lovrModelDataFinalize(ModelData* model) {
       model->primitives[j].skin = node->skin;
     }
   }
+
+  model->animQueue.animations = lovrCalloc(sizeof(QueuedAnimation) * model->animationCount);
+  model->animQueue.queuedLookup = lovrCalloc(sizeof(uint8_t) * model->animationCount);
 
   size_t maxIndexSize = 0;
 

@@ -5311,10 +5311,150 @@ void lovrModelResetBlendShapes(Model* model) {
 }
 
 bool lovrModelAnimationCollapse(Model* model){
+    ModelData* data = model->info.data;
+    AnimationQueue* queue = &data->animQueue;
+
+    memset(queue->queuedLookup,0,sizeof(uint8_t) * data->animationCount);
+
+    lovrModelResetBlendShapes(model);
+    lovrModelResetNodeTransforms(model);
+
+    for (int i = 0; i < queue->count ; i++){
+        QueuedAnimation* animInfo = &queue->animations[i];
+
+        uint32_t animationIndex = animInfo->animationIndex;
+        float time = animInfo->time;
+        float alpha = animInfo->alpha;
+
+        if (alpha <= 0.f) continue;
+
+        ModelAnimation* animation = &data->animations[animationIndex];
+        time = fmodf(time, animation->duration);
+
+        // logic
+
+  size_t stack = tempPush(&state.allocator);
+
+  for (uint32_t i = 0; i < animation->channelCount; i++) {
+    ModelAnimationChannel* channel = &animation->channels[i];
+    uint32_t node = channel->nodeIndex;
+
+    uint32_t keyframe = 0;
+    while (keyframe < channel->keyframeCount && channel->times[keyframe] < time) {
+      keyframe++;
+    }
+
+    size_t n;
+    switch (channel->property) {
+      case PROP_TRANSLATION: n = 3; break;
+      case PROP_SCALE: n = 3; break;
+      case PROP_ROTATION: n = 4; break;
+      case PROP_WEIGHTS: n = data->nodes[node].blendShapeCount; break;
+    }
+
+    float* property = tempAlloc(&state.allocator, n * sizeof(float));
+
+    // Handle the first/last keyframe case (no interpolation)
+    if (keyframe == 0 || keyframe >= channel->keyframeCount) {
+      size_t index = MIN(keyframe, channel->keyframeCount - 1);
+
+      // For cubic interpolation, each keyframe has 3 parts, and the actual data is in the middle
+      if (channel->smoothing == SMOOTH_CUBIC) {
+        index = 3 * index + 1;
+      }
+
+      memcpy(property, channel->data + index * n, n * sizeof(float));
+    } else {
+      float t1 = channel->times[keyframe - 1];
+      float t2 = channel->times[keyframe];
+      float z = (time - t1) / (t2 - t1);
+
+      switch (channel->smoothing) {
+        case SMOOTH_STEP:
+          memcpy(property, channel->data + (z >= .5f ? keyframe : keyframe - 1) * n, n * sizeof(float));
+          break;
+        case SMOOTH_LINEAR:
+          memcpy(property, channel->data + (keyframe - 1) * n, n * sizeof(float));
+          if (channel->property == PROP_ROTATION) {
+            quat_slerp(property, channel->data + keyframe * n, z);
+          } else {
+            float* target = channel->data + keyframe * n;
+            for (uint32_t i = 0; i < n; i++) {
+              property[i] += (target[i] - property[i]) * z;
+            }
+          }
+          break;
+        case SMOOTH_CUBIC: {
+          size_t stride = 3 * n;
+          float* p0 = channel->data + (keyframe - 1) * stride + 1 * n;
+          float* m0 = channel->data + (keyframe - 1) * stride + 2 * n;
+          float* p1 = channel->data + (keyframe - 0) * stride + 1 * n;
+          float* m1 = channel->data + (keyframe - 0) * stride + 0 * n;
+          float dt = t2 - t1;
+          float z2 = z * z;
+          float z3 = z2 * z;
+          float a = 2.f * z3 - 3.f * z2 + 1.f;
+          float b = 2.f * z3 - 3.f * z2 + 1.f;
+          float c = -2.f * z3 + 3.f * z2;
+          float d = (z3 * -z2) * dt;
+          for (size_t j = 0; j < n; j++) {
+            property[j] = a * p0[j] + b * m0[j] + c * p1[j] + d * m1[j];
+          }
+          break;
+        }
+        default: break;
+      }
+    }
+
+    if (channel->property == PROP_WEIGHTS) {
+      model->blendShapesDirty = true;
+    } else {
+      model->transformsDirty = true;
+    }
+
+    float* dst;
+    switch (channel->property) {
+      case PROP_TRANSLATION: dst = model->localTransforms[node].position; break;
+      case PROP_SCALE: dst = model->localTransforms[node].scale; break;
+      case PROP_ROTATION: dst = model->localTransforms[node].rotation; break;
+      case PROP_WEIGHTS: dst = &model->blendShapeWeights[data->nodes[node].blendShapeIndex]; break;
+    }
+
+      for (uint32_t i = 0; i < n; i++) {
+        dst[i] += (property[i] - dst[i]) * alpha;
+      }
+  }
+
+  tempPop(&state.allocator, stack);
+    }
+
+    queue->count = 0;
+
     return true;
 }
 
 bool lovrModelAnimate(Model* model, uint32_t animationIndex, float time, float alpha) {
+    ModelData* data = model->info.data;
+
+  lovrCheck(animationIndex < data->animationCount, "Invalid animation index '%d' (Model has %d animation%s)", animationIndex + 1, data->animationCount, data->animationCount == 1 ? "" : "s");
+
+    AnimationQueue* queue = &data->animQueue;
+
+    uint8_t idx = queue->queuedLookup[animationIndex];
+    if (idx){
+        uint8_t realidx = idx - 1;
+        queue->animations[realidx] = (QueuedAnimation){.animationIndex = animationIndex,.time = time,.alpha = alpha};
+    }
+    else {
+        if (alpha <= 0.f) return true;
+        uint8_t top = queue->count;
+        queue->queuedLookup[animationIndex] = top + 1; // to pass 0 checks
+        queue->animations[top] = (QueuedAnimation){.animationIndex = animationIndex,.time = time,.alpha = alpha};
+
+        queue->count++;
+    }
+
+    /*
   if (alpha <= 0.f) return true;
 
   ModelData* data = model->info.data;
@@ -5419,6 +5559,7 @@ bool lovrModelAnimate(Model* model, uint32_t animationIndex, float time, float a
   }
 
   tempPop(&state.allocator, stack);
+  */
   return true;
 }
 

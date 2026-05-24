@@ -153,6 +153,18 @@ typedef struct {
 } ModelSkin;
 
 typedef struct {
+    uint32_t animationIndex;
+    float time;
+    float alpha;
+} QueuedAnimation;
+
+typedef struct {
+    uint8_t* queuedLookup;
+    QueuedAnimation* animations;
+    uint32_t count;
+} AnimationQueue;
+
+typedef struct {
   const char* name;
   union {
     float matrix[16];
@@ -203,6 +215,8 @@ typedef struct ModelData {
   uint32_t animationCount;
   uint32_t skinCount;
   uint32_t nodeCount;
+
+  AnimationQueue animQueue;
 
   ModelAnimationChannel* channels;
   ModelBlendData* blendData;

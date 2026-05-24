@@ -306,7 +306,7 @@ void os_poll_events(void) {
         break;
 
       case XCB_MOTION_NOTIFY:
-        if (state.mouseMode == MOUSE_MODE_GRABBED) break;
+        if (state.mouseMode == OS_MOUSE_RELATIVE) break;
         if (state.mouseX == event.motion->event_x && state.mouseY == event.motion->event_y) break;
 
         state.mouseX = event.motion->event_x;
@@ -318,7 +318,7 @@ void os_poll_events(void) {
         break;
 
       case XCB_GE_GENERIC:
-        if (event.generic->event_type == XCB_INPUT_RAW_MOTION && state.mouseMode == MOUSE_MODE_GRABBED) {
+        if (event.generic->event_type == XCB_INPUT_RAW_MOTION && state.mouseMode == OS_MOUSE_RELATIVE) {
           uint32_t* mask = xcb_input_raw_button_press_valuator_mask(event.raw);
 
           if (state.onMouseMove && (mask[0] & 0x3) == 0x3) {
@@ -581,7 +581,7 @@ void os_set_mouse_mode(os_mouse_mode mode) {
 
   rawInput.info.deviceid = XCB_INPUT_DEVICE_ALL_MASTER;
   rawInput.info.mask_len = 1;
-  rawInput.mask = mode == MOUSE_MODE_GRABBED ? XCB_INPUT_XI_EVENT_MASK_RAW_MOTION : 0;
+  rawInput.mask = mode == OS_MOUSE_RELATIVE ? XCB_INPUT_XI_EVENT_MASK_RAW_MOTION : 0;
   xcb_input_xi_select_events(state.connection, state.screen->root, 1, &rawInput.info);
 
   if (mode == OS_MOUSE_RELATIVE) {

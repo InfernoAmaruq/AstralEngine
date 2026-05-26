@@ -17,10 +17,6 @@ local Component = GetService("Component")
 
 local Camera = {}
 
-local MSAASolid = { samples = 4, usage = { "render", "sample" }, mipmaps = false }
-local TextureConfig = { samples = 1, usage = { "render", "sample" }, mipmaps = false }
-local TexConf2 = { samples = 4, usage = { "render", "sample" }, mipmaps = false, format = "rgba16f" }
-
 Camera.Name = "Camera"
 Camera.Pattern = {
     RadFOV = math.rad(70),
@@ -323,6 +319,10 @@ local BaseAmbience = Vec4(180, 180, 180, 255)
 local OIT_CONF = { format = "rg16f", samples = 4, usage = { "render", "sample" }, mipmaps = false }
 local DEPTH_CONF = { format = "d32f", samples = 4, usage = { "render", "sample" }, mipmaps = false, linear = true }
 local NORMAL_CONF = { format = "rgba8", samples = 4, usage = { "render", "sample" }, mipmaps = false }
+
+local MSAASolid = { samples = 4, usage = { "render", "sample" }, mipmaps = false, format = "rgba16" }
+local TextureConfig = { samples = 1, usage = { "render", "sample" }, mipmaps = false, format = "rgba16" }
+local TexConf2 = { samples = 4, usage = { "render", "sample" }, mipmaps = false, format = "rgba16" }
 
 local NORMAL_COMPOSITE_CONF = { format = "rgba8", samples = 1, usage = { "render", "sample" }, mipmaps = false }
 local AO_CONF = { format = "r16", usage = { "render", "sample" }, mipmaps = false, samples = 1 }

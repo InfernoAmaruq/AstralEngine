@@ -2,6 +2,8 @@
 @IDENTIFIER:LIGHTING_SHADOWMAP;
 @PRIORITY:19;
 
-uniform sampler2DArray Lighting_ShadowMaps;
+#define MAX_LIGHTS 256
+
+uniform sampler2D Lighting_ShadowMaps;
 
 vec4 astral_main(){}

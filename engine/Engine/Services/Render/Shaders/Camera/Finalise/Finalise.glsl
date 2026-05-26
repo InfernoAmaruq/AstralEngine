@@ -9,12 +9,18 @@ uniform sampler2D Bloom;
 uniform float exposure;
 uniform float gamma;
 
+uniform bool DoBloom;
+
 vec4 astral_main(){
     vec3 c = getPixel(ColorTex,UV).rgb;
     float ao = getPixel(AO,UV).r;
-    vec3 bloomColor = getPixel(Bloom,UV).rgb;
 
-    c += bloomColor;
+    c *= ao;
+
+    if (DoBloom){
+        vec3 bloomColor = getPixel(Bloom,UV).rgb;
+        c += bloomColor;
+    }
 
     vec3 result = vec3(1.0) - exp(-c * exposure);
 

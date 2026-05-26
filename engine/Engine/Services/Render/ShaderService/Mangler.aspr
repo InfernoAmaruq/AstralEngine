@@ -6,6 +6,7 @@ local Exclude = {
 
 local SkipModifiers = {
     uniform = true,
+    unmangled = true,
     struct = true,
     [Def.SYMBOLS.FLAG] = true,
 }
@@ -42,6 +43,10 @@ local function Mangle(Text, Prefix)
                     local FindEnd = Text:find("}", FindStart)
 
                     Pos = Pos + FindEnd
+                elseif i == "unmangled" then
+                    local Ms, Me = Text:sub(0, Start - 1):find("%w+%s*$")
+                    local s = Text:sub(0, Ms - 1)
+                    Text = s .. Text:sub(Me)
                 else
                     Pos = Pos + E
                 end

@@ -822,11 +822,13 @@ static bool zip_init(Archive* archive, const char* filename, const char* root) {
         arr_push(&archive->nodes, node);
         node.firstChild = index;
       } else {
-        uint32_t childIndex = node.firstChild;
-        zip_node* parent = &archive->nodes.data[index];
-        zip_node* child = &archive->nodes.data[childIndex];
-        child->nextSibling = parent->firstChild;
-        parent->firstChild = childIndex;
+        if (node.firstChild != ~0u) {
+          uint32_t childIndex = node.firstChild;
+          zip_node* parent = &archive->nodes.data[index];
+          zip_node* child = &archive->nodes.data[childIndex];
+          child->nextSibling = parent->firstChild;
+          parent->firstChild = childIndex;
+        }
         break;
       }
 

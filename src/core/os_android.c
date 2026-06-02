@@ -183,7 +183,7 @@ void os_destroy(void) {
     state.onPermissionEvent = NULL;
     ANativeActivity_finish(state.app->activity);
     while (!state.app->destroyRequested) {
-      os_poll_events();
+      os_poll_events(0.);
     }
   }
   memset(&state, 0, sizeof(state));

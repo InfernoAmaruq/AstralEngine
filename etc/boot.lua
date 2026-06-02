@@ -155,9 +155,9 @@ function lovr.boot()
     end
   end
 
-  if lovr.headset and conf.headset.connect then
+  if lovr.headset and (not conf.headset or conf.headset.connect) then
     local ok, message = lovr.headset.connect()
-    if not ok and conf.headset.debug then
+    if not ok and conf.headset and conf.headset.debug then
       lovr.log(string.format('Could not connect to headset, falling back to simulator (%s)', message), 'warn', 'XR')
     end
   end
@@ -170,7 +170,7 @@ function lovr.boot()
     lovr.system.openWindow(conf.window)
   end
 
-  if lovr.headset and conf.headset.start then
+  if lovr.headset and (not conf.headset or conf.headset.start) then
     lovr.headset.start()
   end
 

@@ -8,6 +8,7 @@
 #include <knownfolders.h>
 #include <dwmapi.h>
 #include <shlobj.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -438,7 +439,13 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM param, LPAR
   return DefWindowProcW(window, message, param, lparam);
 }
 
-void os_poll_events() {
+void os_poll_events(double timeout) {
+  if (timeout < 0. || isinf(timeout)) {
+    WaitMessage();
+  } else if (timeout > 0.) {
+    MsgWaitForMultipleObjects(0, NULL, false, (DWORD) (timeout * 1e3), QS_ALLINPUT);
+  }
+
   MSG message;
   while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
     TranslateMessage(&message);

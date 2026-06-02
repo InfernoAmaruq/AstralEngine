@@ -254,7 +254,8 @@ static int l_lovrSystemGetWindowDensity(lua_State* L) {
 }
 
 static int l_lovrSystemPollEvents(lua_State* L) {
-  lovrSystemPollEvents();
+  double timeout = luaL_optnumber(L, 1, 0.);
+  lovrSystemPollEvents(timeout);
   return 0;
 }
 

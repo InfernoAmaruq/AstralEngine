@@ -278,7 +278,7 @@ void os_thread_set_name(const char* name) {
   //
 }
 
-void os_poll_events(void) {
+void os_poll_events(double timeout) {
   //
 }
 

@@ -175,11 +175,11 @@ float lovrSystemGetWindowDensity(void) {
   return os_window_get_pixel_density();
 }
 
-void lovrSystemPollEvents(void) {
+void lovrSystemPollEvents(double timeout) {
   memcpy(state.prevKeyState, state.keyState, sizeof(state.keyState));
   memcpy(state.prevMouseState, state.mouseState, sizeof(state.mouseState));
   state.scrollDelta = 0.;
-  os_poll_events();
+  os_poll_events(timeout);
 }
 
 bool lovrSystemIsKeyDown(int keycode) {

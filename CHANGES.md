@@ -132,6 +132,7 @@ dev
 - Change `Buffer:getData` and `Texture:getPixels` to be async.
 - Change `lovr.timer.sleep` to be async.
 - Change `Mesh:getVertices` and `Mesh:getIndices` to return `nil` for meshes with `gpu` storage.
+- Change `lovr.system.pollEvents` to take an optional timeout.
 
 ### Fix
 

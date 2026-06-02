@@ -28,7 +28,7 @@ bool lovrSystemIsWindowFullscreen(void);
 void lovrSystemSetWindowFullscreen(bool fullscreen);
 void lovrSystemGetWindowSize(uint32_t* width, uint32_t* height);
 float lovrSystemGetWindowDensity(void);
-void lovrSystemPollEvents(void);
+void lovrSystemPollEvents(double timeout);
 bool lovrSystemIsKeyDown(int keycode);
 bool lovrSystemWasKeyPressed(int keycode);
 bool lovrSystemWasKeyReleased(int keycode);

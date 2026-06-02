@@ -11,12 +11,14 @@
 #include "os_glfw.h"
 #else
 #include <linux/input.h>
+#include <poll.h>
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
 #include <xcb/xinput.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-x11.h>
 #include <xkbcommon/xkbcommon-compose.h>
+#include <math.h>
 
 static struct {
   xcb_connection_t* connection;
@@ -222,7 +224,7 @@ static os_key convertKey(uint8_t keycode) {
   }
 }
 
-void os_poll_events(void) {
+void os_poll_events(double timeout) {
   if (!state.connection) return;
 
   union {
@@ -239,7 +241,20 @@ void os_poll_events(void) {
     xcb_xkb_state_notify_event_t* keystate;
   } event;
 
-  while ((event.any = xcb_poll_for_event(state.connection)) != NULL) {
+  event.any = xcb_poll_for_event(state.connection);
+
+  if (timeout != 0. && !event.any) {
+    if (timeout < 0. || isinf(timeout)) {
+      event.any = xcb_wait_for_event(state.connection);
+    } else {
+      xcb_flush(state.connection);
+      struct pollfd fd = { xcb_get_file_descriptor(state.connection), POLLIN };
+      poll(&fd, 1, (int) (timeout * 1000.));
+      event.any = xcb_poll_for_event(state.connection);
+    }
+  }
+
+  while (event.any) {
     uint8_t type = event.any->response_type & 0x7f;
 
     switch (type) {
@@ -359,6 +374,8 @@ void os_poll_events(void) {
     }
 
     free(event.any);
+
+    event.any = xcb_poll_for_event(state.connection);
   }
 }
 
@@ -546,6 +563,14 @@ bool os_window_is_visible(void) {
 
 bool os_window_is_focused(void) {
   return state.focused;
+}
+
+bool os_window_is_fullscreen(void) {
+  return false; // TODO
+}
+
+void os_window_set_fullscreen(bool fullscreen) {
+  // TODO
 }
 
 void os_window_get_size(uint32_t* width, uint32_t* height) {

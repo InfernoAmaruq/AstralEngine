@@ -8,7 +8,7 @@ void os_set_clipboard_text(const char* text) {
   //
 }
 
-void os_poll_events(void) {
+void os_poll_events(double timeout) {
   //
 }
 
@@ -104,6 +104,7 @@ uintptr_t os_get_xcb_window(void) {
 #else
 
 #include <stdio.h>
+#include <math.h>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -343,9 +344,15 @@ void os_set_clipboard_text(const char* text) {
   glfwSetClipboardString(NULL, text);
 }
 
-void os_poll_events(void) {
+void os_poll_events(double timeout) {
   if (glfwState.window) {
-    glfwPollEvents();
+    if (timeout == 0.) {
+      glfwPollEvents();
+    } else if (timeout < 0. || isinf(timeout)) {
+      glfwWaitEvents();
+    } else {
+      glfwWaitEventsTimeout(timeout);
+    }
   }
 }
 

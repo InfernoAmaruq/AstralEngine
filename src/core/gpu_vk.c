@@ -1088,6 +1088,20 @@ bool gpu_surface_resize(uint32_t width, uint32_t height) {
     return true;
   }
 
+  VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+  if (surface->capabilities.supportedUsageFlags & VK_IMAGE_USAGE_SAMPLED_BIT) {
+    usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+  }
+
+  if (surface->capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) {
+    usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  }
+
+  if (surface->capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) {
+    usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  }
+
   VkSwapchainCreateInfoKHR swapchainInfo = {
     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
     .surface = surface->handle,
@@ -1096,7 +1110,7 @@ bool gpu_surface_resize(uint32_t width, uint32_t height) {
     .imageColorSpace = surface->vkformat.colorSpace,
     .imageExtent = { width, height },
     .imageArrayLayers = 1,
-    .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    .imageUsage = usage,
     .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
     .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
     .presentMode = surface->vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR,

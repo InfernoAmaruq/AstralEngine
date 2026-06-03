@@ -2367,7 +2367,7 @@ bool lovrGraphicsGetWindowTexture(Texture** texture) {
       .layers = 1,
       .mipmaps = 1,
       .samples = 1,
-      .usage = TEXTURE_RENDER,
+      .usage = TEXTURE_SAMPLE | TEXTURE_RENDER | TEXTURE_TRANSFER,
       .srgb = true
     };
 
@@ -9332,6 +9332,7 @@ static bool supportsSRGB(TextureFormat format) {
     case FORMAT_R8:
     case FORMAT_RG8:
     case FORMAT_RGBA8:
+    case FORMAT_BGRA8:
     case FORMAT_BC1:
     case FORMAT_BC2:
     case FORMAT_BC3:
@@ -9367,6 +9368,7 @@ static uint32_t measureTexture(TextureFormat format, uint32_t w, uint32_t h, uin
     case FORMAT_RGB5A1:
     case FORMAT_D16: return w * h * d * 2;
     case FORMAT_RGBA8:
+    case FORMAT_BGRA8:
     case FORMAT_RG16:
     case FORMAT_RG16F:
     case FORMAT_R32F:

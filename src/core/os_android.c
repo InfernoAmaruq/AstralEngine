@@ -293,8 +293,8 @@ void os_thread_set_name(const char* name) {
 void os_poll_events(double timeout) {
   if (!state.app->destroyRequested) {
     struct android_poll_source* source;
-    int timeout = (state.app->window && state.app->activityState == APP_CMD_RESUME) ? (int) (timeout * 1000.) : -1;
-    ALooper_pollOnce(timeout, NULL, NULL, (void**) &source);
+    int timeoutMS = (state.app->window && state.app->activityState == APP_CMD_RESUME) ? (int) (timeout * 1000.) : -1;
+    ALooper_pollOnce(timeoutMS, NULL, NULL, (void**) &source);
 
     if (source) {
       source->process(state.app, source);

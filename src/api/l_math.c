@@ -195,7 +195,7 @@ int luaopen_lovr_math(lua_State* L) {
 
 #ifndef LOVR_USE_LUAU
   // Table vectors
-  if (!luaL_loadbuffer(L, (const char*) src_api_l_math_lua, src_api_l_math_lua_len, "@math.lua")) {
+  if (!luaL_loadbuffer(L, (const char*) src_api_l_math_lua, src_api_l_math_lua_len, "=vector")) {
     luaL_newmetatable(L, "Vec2");
     luaL_newmetatable(L, "Vec3");
     luaL_newmetatable(L, "Vec4");

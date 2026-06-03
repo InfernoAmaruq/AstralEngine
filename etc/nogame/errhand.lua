@@ -155,7 +155,9 @@ function lovr.errhand(message)
         end
       end
 
-      if frame.short_src and frame.currentline ~= -1 then
+      if frame.short_src == 'vector' then
+        frame.short_src = '[vector]:' .. frame.currentline
+      elseif frame.short_src and frame.currentline ~= -1 then
         frame.short_src = frame.short_src .. ':' .. frame.currentline
       end
 
@@ -166,7 +168,7 @@ function lovr.errhand(message)
       table.remove(stack)
     end
 
-    while stack[level].what == 'C' do
+    while stack[level].what == 'C' or stack[level].short_src:match('[vector]') do
       level = level + 1
     end
 

@@ -1587,6 +1587,16 @@ bool lovrColliderResetMassData(Collider* collider) {
 }
 
 void lovrColliderGetDegreesOfFreedom(Collider* collider, bool translation[3], bool rotation[3]) {
+  if (lovrColliderIsKinematic(collider)) {
+    translation[0] = false;
+    translation[1] = false;
+    translation[2] = false;
+    rotation[0] = false;
+    rotation[1] = false;
+    rotation[2] = false;
+    return;
+  }
+
   JPH_MotionProperties* motion = JPH_Body_GetMotionProperties(collider->body);
   JPH_AllowedDOFs dofs = JPH_MotionProperties_GetAllowedDOFs(motion);
   translation[0] = dofs & JPH_AllowedDOFs_TranslationX;
@@ -1732,21 +1742,37 @@ bool lovrColliderSetAngularVelocity(Collider* collider, float velocity[3]) {
 }
 
 float lovrColliderGetLinearDamping(Collider* collider) {
-  JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
-  return JPH_MotionProperties_GetLinearDamping(properties);
+  if (JPH_BodyInterface_GetMotionType(getBodyInterface(collider, READ), collider->id) == JPH_MotionType_Static) {
+    return 0.f;
+  } else {
+    JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
+    return JPH_MotionProperties_GetLinearDamping(properties);
+  }
 }
 
 void lovrColliderSetLinearDamping(Collider* collider, float damping) {
+  if (JPH_BodyInterface_GetMotionType(getBodyInterface(collider, READ), collider->id) == JPH_MotionType_Static) {
+    return;
+  }
+
   JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
   JPH_MotionProperties_SetLinearDamping(properties, MAX(damping, 0.f));
 }
 
 float lovrColliderGetAngularDamping(Collider* collider) {
-  JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
-  return JPH_MotionProperties_GetAngularDamping(properties);
+  if (JPH_BodyInterface_GetMotionType(getBodyInterface(collider, READ), collider->id) == JPH_MotionType_Static) {
+    return 0.f;
+  } else {
+    JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
+    return JPH_MotionProperties_GetAngularDamping(properties);
+  }
 }
 
 void lovrColliderSetAngularDamping(Collider* collider, float damping) {
+  if (JPH_BodyInterface_GetMotionType(getBodyInterface(collider, READ), collider->id) == JPH_MotionType_Static) {
+    return;
+  }
+
   JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
   JPH_MotionProperties_SetAngularDamping(properties, MAX(damping, 0.f));
 }

@@ -2986,7 +2986,7 @@ static ModelData* newModelDataFB(uint64_t key) {
   uint32_t indexCount = mesh.indexCapacityInput = mesh.indexCountOutput;
 
   // Sum all the sizes to get the total amount of memory required
-  size_t sizes[10];
+  size_t sizes[9];
   size_t totalSize = 0;
   size_t alignment = 8;
   totalSize += sizes[0] = ALIGN(jointCount * sizeof(XrPosef), alignment);
@@ -2998,7 +2998,6 @@ static ModelData* newModelDataFB(uint64_t key) {
   totalSize += sizes[6] = ALIGN(vertexCount * sizeof(XrVector4sFB), alignment);
   totalSize += sizes[7] = ALIGN(vertexCount * sizeof(XrVector4f), alignment);
   totalSize += sizes[8] = ALIGN(indexCount * sizeof(int16_t), alignment);
-  totalSize += sizes[9] = ALIGN(jointCount * 16 * sizeof(float), alignment);
 
   // Allocate
   char* meshData = lovrMalloc(totalSize);
@@ -3014,7 +3013,6 @@ static ModelData* newModelDataFB(uint64_t key) {
   mesh.vertexBlendIndices = (XrVector4sFB*) (meshData + offset), offset += sizes[6];
   mesh.vertexBlendWeights = (XrVector4f*) (meshData + offset), offset += sizes[7];
   mesh.indices = (int16_t*) (meshData + offset), offset += sizes[8];
-  float* inverseBindMatrices = (float*) (meshData + offset); offset += sizes[9];
   if (offset != totalSize) lovrUnreachable();
 
   // Populate the data
@@ -3028,12 +3026,14 @@ static ModelData* newModelDataFB(uint64_t key) {
   model->ref = 1;
   model->meta.id = key;
   model->meta.meshCount = 1;
+  model->meta.partCount = 1;
   model->meta.skinCount = 1;
   model->meta.nodeCount = 2 + jointCount;
   model->meta.jointCount = jointCount;
   model->meta.vertexCount = vertexCount;
   model->meta.indexCount = indexCount;
   model->meta.skinnedVertexCount = vertexCount;
+  model->meta.animatedVertexCount = vertexCount;
   model->meta.indexSize = 2;
   lovrModelDataAllocate(model);
 
@@ -3067,10 +3067,17 @@ static ModelData* newModelDataFB(uint64_t key) {
 
   memcpy(model->indices, mesh.indices, meta->indexCount * meta->indexSize);
 
+  meta->meshes[0].parts = meta->parts;
+  meta->meshes[0].partCount = 1;
   meta->meshes[0].vertexOffset = 0;
   meta->meshes[0].vertexCount = vertexCount;
   meta->meshes[0].indexOffset = 0;
   meta->meshes[0].indexCount = indexCount;
+  meta->meshes[0].skinDataOffset = 0;
+
+  meta->parts[0].start = 0;
+  meta->parts[0].count = indexCount;
+  meta->parts[0].baseVertex = 0;
 
   meta->skins[0] = (ModelSkin) {
     .jointCount = meta->jointCount,
@@ -3103,7 +3110,7 @@ static ModelData* newModelDataFB(uint64_t key) {
 
     // Inverse bind matrix
     XrPosef* pose = &mesh.jointBindPoses[i];
-    float* inverseBindMatrix = inverseBindMatrices + 16 * i;
+    float* inverseBindMatrix = meta->inverseBindMatrices + 16 * i;
     mat4_fromPose(inverseBindMatrix, &pose->position.x, &pose->orientation.x);
     mat4_invert(inverseBindMatrix);
   }

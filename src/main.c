@@ -11,19 +11,19 @@
 bool step(void* arg) {
   lua_State* T = arg;
 
-  if (luax_resume(T, 0) != LUA_YIELD) {
-    if (lua_type(T, 1) == LUA_TSTRING && !strcmp(lua_tostring(T, 1), "restart")) {
-      return false;
-    } else {
-      int status = lua_tointeger(T, -1);
-      lua_close(T);
-      os_destroy();
-      exit(status);
-      return false;
-    }
+  if (luax_resume(T, 0) == LUA_YIELD) {
+    return true;
   }
 
-  return true;
+  if (lua_type(T, 1) == LUA_TSTRING && !strcmp(lua_tostring(T, 1), "restart")) {
+    return false;
+  } else {
+    int status = lua_tointeger(T, -1);
+    luax_close(T);
+    os_destroy();
+    exit(status);
+    return false;
+  }
 }
 
 int main(int argc, char** argv) {

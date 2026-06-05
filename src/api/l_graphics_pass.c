@@ -900,13 +900,13 @@ static void luax_readvertices(lua_State* L, int index, float* vertices, uint32_t
               lua_rawgeti(L, -3, 3);
             } else {
               lua_pushliteral(L, "x");
-              lua_gettable(L, index);
+              lua_gettable(L, -2);
 
               lua_pushliteral(L, "y");
-              lua_gettable(L, index);
+              lua_gettable(L, -3);
 
               lua_pushliteral(L, "z");
-              lua_gettable(L, index);
+              lua_gettable(L, -4);
             }
             vertices[0] = luax_tofloat(L, -3);
             vertices[1] = luax_tofloat(L, -2);

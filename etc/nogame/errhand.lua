@@ -168,7 +168,7 @@ function lovr.errhand(message)
       table.remove(stack)
     end
 
-    while stack[level].what == 'C' or stack[level].short_src:match('[vector]') do
+    while stack[level].what == 'C' or stack[level].short_src:match('^%[vector%]') do
       level = level + 1
     end
 

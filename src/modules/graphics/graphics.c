@@ -4463,11 +4463,11 @@ float lovrFontGetWidth(Font* font, ColoredString* strings, uint32_t count) {
   float x = 0.f;
   float maxWidth = 0.f;
   float space = lovrRasterizerGetAdvance(font->info.rasterizer, ' ');
+  uint32_t previous = '\0';
+  uint32_t codepoint;
 
   for (uint32_t i = 0; i < count; i++) {
     size_t bytes;
-    uint32_t codepoint;
-    uint32_t previous = '\0';
     const char* str = strings[i].string;
     const char* end = strings[i].string + strings[i].length;
     while ((bytes = utf8_decode(str, end, &codepoint)) > 0) {
@@ -4591,6 +4591,8 @@ bool lovrFontGetVertices(Font* font, ColoredString* strings, uint32_t count, flo
   uint32_t vertexCount = 0;
   uint32_t lineStart = 0;
   uint32_t wordStart = 0;
+  uint32_t previous = '\0';
+  uint32_t codepoint;
   *glyphCount = 0;
   *lineCount = 1;
 
@@ -4603,8 +4605,6 @@ bool lovrFontGetVertices(Font* font, ColoredString* strings, uint32_t count, flo
 
   for (uint32_t i = 0; i < count; i++) {
     size_t bytes;
-    uint32_t codepoint;
-    uint32_t previous = '\0';
     const char* str = strings[i].string;
     const char* end = strings[i].string + strings[i].length;
     float rf = lovrMathGammaToLinear(strings[i].color[0]);

@@ -35,6 +35,8 @@ local function Mangle(Text, Prefix)
         local Start, End, Type, Name = Text:find("(%w+)%s+(%w+)%s*[%[(;=]", Pos)
         local Window = Text:sub(math.max(1, Pos - 20), Pos)
 
+        local Found
+
         for i in pairs(SkipModifiers) do
             local S, E = Window:find(i)
             if S and E then
@@ -42,7 +44,7 @@ local function Mangle(Text, Prefix)
                     local FindStart = Text:find("{", Pos + S)
                     local FindEnd = Text:find("}", FindStart)
 
-                    Pos = Pos + FindEnd
+                    Pos = FindEnd
                 elseif i == "unmangled" then
                     local Ms, Me = Text:sub(0, Start - 1):find("%w+%s*$")
                     local s = Text:sub(0, Ms - 1)
@@ -51,8 +53,12 @@ local function Mangle(Text, Prefix)
                     Pos = Pos + E
                 end
 
-                continue
+                Found = true
             end
+        end
+
+        if Found then
+            continue
         end
 
         if Type and Compare[Type] and Name and not Exclude[Name] and Start == Pos then

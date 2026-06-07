@@ -674,11 +674,21 @@ static int l_lovrPassSend(lua_State* L) {
   size_t length;
   const char* name = luaL_checklstring(L, 2, &length);
 
+  int isTable = lua_type(L,3) == LUA_TTABLE;
+  uint32_t len = isTable ? luax_len(L,3) : -1;
+  int idx = 3;
+
+  if (isTable && len >= 1){
+    // push first onto stack
+    lua_rawgeti(L,3,1);
+    idx = -1;
+  }
+
   if (lua_isnoneornil(L, 3)) {
     return luax_typeerror(L, 3, "Buffer, Texture, Sampler, number, vector, table, or boolean");
   }
 
-  Buffer* buffer = luax_totype(L, 3, Buffer);
+  Buffer* buffer = luax_totype(L, idx, Buffer);
 
   if (buffer) {
     uint32_t offset = lua_tointeger(L, 4);
@@ -687,18 +697,38 @@ static int l_lovrPassSend(lua_State* L) {
     return 0;
   }
 
-  Texture* texture = luax_totype(L, 3, Texture);
+  Texture* texture = luax_totype(L, idx, Texture);
 
   if (texture) {
-    luax_assert(L, lovrPassSendTexture(pass, name, length, texture));
+    if (isTable){
+        lua_pop(L,1);
+        for (int i = 1; i <= len; i++){
+            lua_rawgeti(L, 3, i);
+            
+            Texture* t = luax_totype(L,-1,Texture);
+            if (!t) {luax_typeerror(L,3,"Table's first object is a texture. Found non-texture object in table"); return 0; lua_pop(L,1);}
+
+            luax_assert(L, lovrPassSendTexture(pass,name,length,t,i - 1));
+
+            lua_pop(L,1);
+        }
+    }
+    else {
+        uint32_t position = luaL_optinteger(L,4,0);
+        luax_assert(L, lovrPassSendTexture(pass, name, length, texture, position));
+    }
     return 0;
   }
 
-  Sampler* sampler = luax_totype(L, 3, Sampler);
+  Sampler* sampler = luax_totype(L, idx, Sampler);
 
   if (sampler) {
     luax_assert(L, lovrPassSendSampler(pass, name, length, sampler));
     return 0;
+  }
+
+  if (isTable && len >= 1){
+      lua_pop(L,1);
   }
 
   void* pointer;

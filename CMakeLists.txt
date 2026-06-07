@@ -404,6 +404,7 @@ if(LOVR_ENABLE_DATA)
     src/api/l_data_blob.c
     src/api/l_data_image.c
     src/api/l_data_modelData.c
+    src/api/l_data_animation.c
     src/api/l_data_rasterizer.c
     src/api/l_data_sound.c
     src/lib/minimp3/minimp3.c

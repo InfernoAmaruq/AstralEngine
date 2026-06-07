@@ -129,6 +129,8 @@ local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"OIT/Write",{
     }
 })
 
+print(V,F)
+
 Renderer.SetMainShader(lovr.graphics.newShader(V,F,{flags = {normalMap = true}}))
 
 Renderer.Lighting = loadfile("Lighting")(Renderer)

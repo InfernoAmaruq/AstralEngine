@@ -244,6 +244,7 @@ typedef struct {
   uint32_t number;
   gpu_slot_type type;
   uint32_t stages;
+  uint16_t arraySize;
 } gpu_slot;
 
 typedef struct {

@@ -50,6 +50,8 @@ function lovr.load()
     Signal.Scheduler = MainScheduler
     Signal.Clock = lovr.timer.getTime
 
+    require("Engine/Services/AssetManager")
+
     Renderer = require("Engine/Services/Render")
 
     World = require("Engine/Services/World")
@@ -62,7 +64,6 @@ function lovr.load()
 
     -- LOAD COMPONENTS AND SCRIPT SYSTEM
 
-    require("Engine/Services/AssetManager")
     SS = require("Engine/Services/ScriptSystem")
 
     World.Component.LoadComponents()

@@ -18,6 +18,7 @@ uniform Lighting_Data {
     vec4 Light_Directions[MAX_LIGHTS]; // where w is angle and MUST be > 0. If angle is < 0, interpret it as a point light!
     vec4 Light_Colors[MAX_LIGHTS];
     vec4 Light_Extras[MAX_LIGHTS];
+    vec4 Light_ExtrasTwo[MAX_LIGHTS];
 };
 
 uniform mat4 CamTransform;
@@ -27,11 +28,13 @@ struct Light {
     float rad2;
     float brightness;
     vec3 color;
+    vec3 upVec;
+    bool castShadow;
     float angleCos;
     vec3 direction;
     vec2 surfaceSize;
     int type;
-    float hardness;
+    float hardness; 
 };
 
 Light lighting_getLight(int id){
@@ -41,6 +44,7 @@ Light lighting_getLight(int id){
     vec4 color = Light_Colors[id];
     vec4 dir = Light_Directions[id];
     vec4 extras = Light_Extras[id];
+    vec4 ext2 = Light_ExtrasTwo[id];
 
     l.color = color.rgb;
     l.position = pos.xyz;
@@ -51,78 +55,19 @@ Light lighting_getLight(int id){
     l.hardness = extras.w;
     l.surfaceSize = extras.xy;
     l.type = int(extras.z);
+    l.upVec = ext2.xyz;
+    l.castShadow = ext2.w == 1 ? true : false;
 
     return l;
 }
 
-vec3 IntegrateEdgeVec(vec3 v1, vec3 v2)
-{
-    float x = dot(v1, v2);
-    float y = abs(x);
+float lighting_getAngularFalloff(vec3 lightToFrag, vec3 lightDirection, float cosAngle){
+    float dir = dot(lightToFrag, lightDirection);
+    if (dir < cosAngle) return 0;
 
-    float a = 0.8543985 + (0.4965155 + 0.0145206*y)*y;
-    float b = 3.4175940 + (4.1616724 + y)*y;
-    float v = a / b;
+    float s = smoothstep(cosAngle, 1.0, dir);
 
-    float theta_sintheta = (x > 0.0) ? v : 0.5*inversesqrt(max(1.0 - x*x, 1e-7)) - v;
-
-    return cross(v1, v2)*theta_sintheta;
-}
-
-vec3 LTC_Evaluate(vec3 N, vec3 V, vec3 P, mat3 Minv, vec3 points[4])
-{
-    vec3 T1, T2;
-    T1 = normalize(V - N * dot(V, N));
-    T2 = cross(N, T1);
-
-    // rotate area light in (T1, T2, N) basis
-    Minv = Minv * transpose(mat3(T1, T2, N));
-
-    // polygon (allocate 4 vertices for clipping)
-    vec3 L[4];
-    // transform polygon from LTC back to origin Do (cosine weighted)
-    L[0] = Minv * (points[0] - P);
-    L[1] = Minv * (points[1] - P);
-    L[2] = Minv * (points[2] - P);
-    L[3] = Minv * (points[3] - P);
-
-    // use tabulated horizon-clipped sphere
-    // check if the shading point is behind the light
-    vec3 dir = points[0] - P; // LTC space
-    vec3 lightNormal = cross(points[1] - points[0], points[3] - points[0]);
-    bool behind = (dot(dir, lightNormal) < 0.0);
-
-    // cos weighted space
-    L[0] = normalize(L[0]);
-    L[1] = normalize(L[1]);
-    L[2] = normalize(L[2]);
-    L[3] = normalize(L[3]);
-
-    // integrate
-    vec3 vsum = vec3(0.0);
-    vsum += IntegrateEdgeVec(L[0], L[1]);
-    vsum += IntegrateEdgeVec(L[1], L[2]);
-    vsum += IntegrateEdgeVec(L[2], L[3]);
-    vsum += IntegrateEdgeVec(L[3], L[0]);
-
-    // form factor of the polygon in direction vsum
-    float len = length(vsum);
-
-    float z = vsum.z/len;
-    if (behind)
-        z = -z;
-
-    vec2 uv = vec2(z*0.5f + 0.5f, len); // range [0, 1]
-
-    float sum = len;
-    if (!behind)
-        sum = 0.0;
-
-    vec3 lightCenter = (points[0] + points[1] + points[2] + points[3]) * 0.25;
-    float distToLight = length(lightCenter - P);
-    float att = 1.0 / (distToLight * distToLight);
-
-    return vec3(sum) * att;
+    return s;
 }
 
 vec3 lighting_getLights(const Surface s){
@@ -131,23 +76,53 @@ vec3 lighting_getLights(const Surface s){
         Light l = lighting_getLight(i);
 
         float distAtt;
+        float distSqr;
+        float d;
         vec3 diff;
         float h = l.hardness;
 
-        if (l.type == LIGHTTYPE_DIRECTIONAL){
-            distAtt = 1;
-            diff = l.direction;
-        }
-        else{
-            diff = l.position - PositionWorld;
+        vec3 up = l.upVec;
+        bool shadow = l.castShadow;
 
-            float distSqr = dot(diff,diff);
+        switch(l.type){
+            case LIGHTTYPE_DIRECTIONAL:
+                diff = l.direction;
+                distAtt = 1;
+                break;
+            case LIGHTTYPE_POINT:
+            case LIGHTTYPE_SPOT:
+                diff = l.position - PositionWorld;
 
-            if (distSqr > l.rad2) continue;
+                distSqr = dot(diff,diff);
 
-            float d = distSqr / l.rad2;
+                if (distSqr > l.rad2) continue;
 
-            distAtt = pow(1.0 - d,h);
+                d = distSqr / l.rad2;
+
+                distAtt = pow(1.0 - d,h);
+                break;
+            case LIGHTTYPE_SURFACE:
+                vec3 right = cross(l.direction,up);
+                float halfWidth = (l.surfaceSize.x * 0.5);
+                float halfHeight = (l.surfaceSize.y * 0.5);
+
+                float x = dot(diff, right);
+                float y = dot(diff, up);
+
+                x = clamp(x, -halfWidth, halfWidth);
+                y = clamp(y, -halfHeight, halfHeight);
+
+                vec3 closest = l.position + right * x + up * y;
+
+                diff = closest - PositionWorld;
+                distSqr = dot(diff, diff);
+
+                if (distSqr > l.rad2) continue;
+
+                d = distSqr / l.rad2;
+                distAtt = pow(1.0 - d,h);
+
+                break;
         }
 
         // calculate angle
@@ -155,20 +130,21 @@ vec3 lighting_getLights(const Surface s){
         float spot = 1.0;
 
         if (l.type == LIGHTTYPE_SPOT){
-            float directionality = dot(normalize(diff),l.direction);
-            if (directionality < l.angleCos){
-                continue;
-            }
-
-            float s = smoothstep(l.angleCos,1.0,directionality);
-
-            spot = pow(s,h);
+            spot = pow(
+                lighting_getAngularFalloff(normalize(diff), l.direction, l.angleCos)
+            ,h);
         }
-        else if (l.type == LIGHTTYPE_SURFACE){
+
+        if (l.type == LIGHTTYPE_SURFACE){
+            /*
             vec3 points[4];
 
-            vec3 halfWidth = l.direction * (l.surfaceSize.x * 0.5);
-            vec3 halfHeight = vec3(0,1,0) * (l.surfaceSize.y * 0.5);
+            points[0] = l.position - halfWidth - halfHeight;
+            points[1] = l.position + halfWidth - halfHeight;
+            points[2] = l.position + halfWidth + halfHeight;
+            points[3] = l.position - halfWidth + halfHeight;
+            */
+            //distAtt = AreaLightBrightness(PositionWorld, l.position, l.direction, points, h);
         }
 
         // do color

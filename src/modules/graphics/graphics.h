@@ -627,7 +627,7 @@ void lovrPassSetWinding(Pass* pass, Winding winding);
 void lovrPassSetWireframe(Pass* pass, bool wireframe);
 
 bool lovrPassSendBuffer(Pass* pass, const char* name, size_t length, Buffer* buffer, uint32_t offset, uint32_t extent);
-bool lovrPassSendTexture(Pass* pass, const char* name, size_t length, Texture* texture);
+bool lovrPassSendTexture(Pass* pass, const char* name, size_t length, Texture* texture, uint32_t to);
 bool lovrPassSendSampler(Pass* pass, const char* name, size_t length, Sampler* sampler);
 bool lovrPassSendData(Pass* pass, const char* name, size_t length, void** data, DataField** format);
 

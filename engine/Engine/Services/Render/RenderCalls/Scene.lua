@@ -33,7 +33,6 @@ Renderer.SetMainShader = function(Shader)
 end
 
 local OitExtractRaw = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "OIT/Composite",{Include = {"PostProcessing/AO/SSAO", "PostProcessing/Bloom/Extract.glsl", "Fog"}})
-print(OitExtractRaw)
 local OITEXTRACT = lovr.graphics.newShader('fill',OitExtractRaw)
 
 -- VARS

@@ -13,6 +13,14 @@ CacheTable.Light_Directions = table.alloc(256, 0)
 CacheTable.Light_Extras = table.alloc(256, 0)
 CacheTable.Light_ExtrasTwo = table.alloc(256, 0)
 
+-- lets make LTC texture now
+
+local AS = GetService("AssetService")
+Lighting.LTCMat = AS.NewTexture("ltc_mat.dds")
+Lighting.LTCAmp = AS.NewTexture("ltc_amp.dds")
+
+-- finish buffer
+
 local LightBuffer = lovr.graphics.newBuffer(MainBufferFormat)
 Lighting.LightBuffer = LightBuffer
 
@@ -29,7 +37,7 @@ local LightType = ENUM({
 
 Lighting.AddLight = function(LightEntity, EarlyLightComponent)
     local LC = EarlyLightComponent or LightEntity.Light
-    local Color = LC.Color
+    local Color = LC[1]
     local Distance = LC.Distance
     local Angle = LightEntity.Orientation
     local TargetAngle = LC.Angle or -1
@@ -64,14 +72,25 @@ Lighting.AddLight = function(LightEntity, EarlyLightComponent)
     CacheTable.Light_Directions[Id]:set(ReadyAngle)
 
     local ExtrasVector = vec4()
-    ExtrasVector.xy = LC.SurfaceSize or vec2.zero
-    ExtrasVector.z = Type
-    ExtrasVector.w = 1 / (LC.Hardness or 1)
+    ExtrasVector.xy = LC.SurfaceSize or vec2.zero -- area light size
+    ExtrasVector.z = Type                      -- type of light
+    ExtrasVector.w = 1 / (LC.Hardness or 1)    -- hardness
 
     CacheTable.Light_Extras[Id] = CacheTable.Light_Extras[Id] or Vec4()
     CacheTable.Light_Extras[Id]:set(ExtrasVector)
 
+    local Extras2Vec = vec4()
+    Extras2Vec.xyz = LightEntity.Transform.UpVector
+    Extras2Vec.w = LC.ShadowCasting and 1 or 0
+
+    CacheTable.Light_ExtrasTwo[Id] = CacheTable.Light_ExtrasTwo[Id] or Vec4()
+    CacheTable.Light_ExtrasTwo[Id]:set(Extras2Vec)
+
     LightBuffer:setData(CacheTable)
+end
+
+Lighting.Translate = function(LightEntity)
+    Lighting.AddLight(LightEntity)
 end
 
 Lighting.RemoveLight = function(LightEntity)

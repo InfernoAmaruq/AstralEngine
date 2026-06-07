@@ -138,6 +138,7 @@ typedef struct {
 } ModelAnimationChannel;
 
 typedef struct {
+  uint32_t ref;
   const char* name;
   ModelAnimationChannel* channels;
   uint32_t channelCount;

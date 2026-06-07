@@ -15,11 +15,12 @@ local KeyMap = {
     Angle = 4,
     Type = 5,
     Enabled = 7,
+    SurfaceSize = 8,
 }
 
 local Methods = {
     __OnTransformChanged = function(self)
-        LightService.AddLight(self[6])
+        LightService.Translate(self[6])
     end,
 }
 
@@ -27,7 +28,9 @@ local MetaTable = {
     __index = function(self, k)
         local Key = KeyMap[k]
         if Key == KeyMap.Color then
-            return vec4(self[1])
+            return vec4(self[1]):mul(255)
+        elseif Key == KeyMap.SurfaceSize then
+            return vec2(self[8])
         end
         return Key and self[Key] or Methods[k]
     end,
@@ -37,6 +40,8 @@ local MetaTable = {
             if Key == KeyMap.Color then
                 local R, G, B, A = (v / 255):unpack()
                 self[1]:set(R, G, B, A or 1)
+            elseif Key == KeyMap.SurfaceSize then
+                self[8]:set(v)
             elseif Key == KeyMap.Enabled then
                 self[Key] = v
                 if not v then
@@ -70,6 +75,7 @@ Light.Metadata.__create = function(Input, Ent)
     L[5] = Type
     L[6] = EntRef
     L[7] = Input.Enabled == nil and true or Input.Enabled
+    L[8] = Input.SurfaceSize or Vec2()
 
     setmetatable(L, MetaTable)
 

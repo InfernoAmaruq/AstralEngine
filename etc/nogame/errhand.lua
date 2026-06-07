@@ -165,11 +165,23 @@ function lovr.errhand(message)
       buildVariableTable(frame)
     end
 
-    while stack[#stack].short_src and (stack[#stack].short_src:match('boot.lua') or stack[#stack].short_src:match('[C]')) do
+    while #stack > 0 and stack[#stack].short_src and (stack[#stack].short_src:match('boot.lua') or stack[#stack].short_src:match('[C]')) do
       table.remove(stack)
     end
 
-    while stack[level].what == 'C' or stack[level].short_src:match('^%[vector%]') do
+    if #stack == 0 then
+      table.insert(stack, {
+        label = '<none>',
+        short_src = '',
+        variables = {},
+        expanded = {},
+        rows = {},
+        rowIndex = 1,
+        scroll = 0
+      })
+    end
+
+    while level < #stack and stack[level].what == 'C' or (stack[level].short_src and stack[level].short_src:match('^%[vector%]')) do
       level = level + 1
     end
 

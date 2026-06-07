@@ -241,6 +241,12 @@ static int l_lovrModelHasJoints(lua_State* L) {
   return 1;
 }
 
+static int l_lovrModelAnimationCollapse(lua_State* L){
+  Model* model = luax_checktype(L, 1, Model);
+  luax_assert(L, lovrModelAnimationCollapse(model));
+  return 0;
+}
+
 static int l_lovrModelAnimate(lua_State* L) {
   Model* model = luax_checktype(L, 1, Model);
   uint32_t animation = luax_checkanimationindex(L, 2, lovrModelGetInfo(model)->data);
@@ -401,6 +407,7 @@ const luaL_Reg lovrModel[] = {
   { "getAnimationName", l_lovrModelGetAnimationName },
   { "getAnimationDuration", l_lovrModelGetAnimationDuration },
   { "hasJoints", l_lovrModelHasJoints },
+  { "collapseAnimations", l_lovrModelAnimationCollapse },
   { "animate", l_lovrModelAnimate },
   { "getBlendShapeCount", l_lovrModelGetBlendShapeCount },
   { "getBlendShapeName", l_lovrModelGetBlendShapeName },

@@ -32,7 +32,8 @@ Renderer.SetMainShader = function(Shader)
     MAINSHADER = Shader
 end
 
-local OitExtractRaw = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "OIT/Composite",{Include = {"PostProcessing/AO/SSAO", "PostProcessing/Bloom/Extract.glsl"}})
+local OitExtractRaw = GetService"ShaderService".ComposeShader(ENUM.ShaderType.Fragment, "OIT/Composite",{Include = {"PostProcessing/AO/SSAO", "PostProcessing/Bloom/Extract.glsl", "Fog"}})
+print(OitExtractRaw)
 local OITEXTRACT = lovr.graphics.newShader('fill',OitExtractRaw)
 
 -- VARS
@@ -296,8 +297,9 @@ local FinalShader = lovr.graphics.newShader("fill",FinalShaderRaw)
 
 function Renderer.Composite()
     local Cams = Cams
-    local CamStorage = Component.Components.Camera.Storage
-    local TransStorage = Component.Components.Transform.Storage
+    local Components = Component.Components
+    local CamStorage = Components.Camera.Storage
+    local TransStorage = Components.Transform.Storage
 
     for cind = 1, #Cams do
         local e = Cams[cind]
@@ -316,7 +318,19 @@ function Renderer.Composite()
         local Inv = mat4(Proj):invert()
         local VM = mat4(TransStorage[e][3]):invert()
 
+        local Near = CAMERA[5]
+
         local Depth = CAMERA[24][1]
+
+        -- get our camera data
+        local BloomData = Components.BloomFX.Storage[e]
+        local DoBloom = BloomData and BloomData.Active or false
+
+        local DOFData = Components.DepthOfFieldFX.Storage[e]
+        local DoDOF = DOFData and DOFData.Active or false
+
+        local FogData = Components.FogFX.Storage[e]
+        local DoFog = FogData and FogData.Active or false
 
         -- STEPS: Compsite, AO, Extract
 
@@ -332,43 +346,86 @@ function Renderer.Composite()
         compositePass:send("OIT_TexDepth", Depth)
         compositePass:send("OIT_TexNormal", CAMERA[30][1])
 
+        -- config fog
+        compositePass:send("Fog_DoFog",DoFog)
+        if DoFog then
+            compositePass:send("Fog_CamNear",Near)
+            compositePass:send("Fog_Info",FogData.__gpuBuffer)
+        end
+
+        -- config bloom
+        compositePass:send("ExtractBloom",DoBloom)
+        if DoBloom then
+            compositePass:send("BrightnessThreshold",BloomData.Threshold)
+        end
+
         -- ssao conf
         compositePass:send("Proj",Proj)
         compositePass:send("ProjInv",Inv)
         compositePass:send("ViewMatrix",VM)
         compositePass:send("SSAO_Noise",SSAO_Noise_Texture)
 
-        -- blur conf
-        --compositePass:send("Blur_Threshold", nil)
-
         compositePass:setDepthWrite(false)
-        compositePass:setSampler'nearest'
+        compositePass:setSampler('nearest')
         compositePass:fill()
 
         -- now we blur
+
+        blurPassV:reset()
+        blurPassV:setShader(BlurShader)
+        blurPassV:setSampler(BlurSampler)
 
         blurPassH:reset()
         blurPassH:setShader(BlurShader)
         blurPassH:setSampler(BlurSampler)
         blurPassH:send("Horizontal",true)
         blurPassH:send("AO_Tex",CAMERA[34][1])
-        blurPassH:send("Bloom_Tex",CAMERA[36][1])
+        blurPassH:send("DoBloom",DoBloom)
+        blurPassH:send("Color_Tex",CAMERA[33][1])
+
+        blurPassH:send("CamNear", Near)
+        blurPassH:send("Depth_Tex",Depth)
+        blurPassV:send("CamNear", Near)
+        blurPassV:send("Depth_Tex",Depth)
+
+        blurPassH:send("DoDOF",DoDOF)
+        blurPassV:send("DoDOF",DoDOF)
+        if DoDOF then
+            local Dat = DOFData.__gpuBuffer
+            local DataDist = DOFData.FadeDistance
+            blurPassH:send("DOFData",Dat)
+            blurPassH:send("DOFFadeDist",DataDist)
+            blurPassV:send("DOFData",Dat)
+            blurPassV:send("DOFFadeDist",DataDist)
+        end
+
+        if DoBloom then
+            local Size, Strength = BloomData.Size, BloomData.Strength
+
+            blurPassH:send("Bloom_Tex",CAMERA[36][1])
+            blurPassH:send("BloomSize",Size)
+            blurPassH:send("BloomStrength",Strength)
+
+            blurPassV:send("BloomSize",Size)
+            blurPassV:send("BloomStrength",Strength)
+            blurPassV:send("Bloom_Tex",CAMERA[41][1])
+        end
+
         blurPassH:fill()
 
-        blurPassV:reset()
-        blurPassV:setShader(BlurShader)
-        blurPassV:setSampler(BlurSampler)
         blurPassV:send("Horizontal",false)
         blurPassV:send("AO_Tex",CAMERA[42][1])
-        blurPassV:send("Bloom_Tex",CAMERA[41][1])
+        blurPassV:send("Color_Tex",CAMERA[40][1])
+        blurPassV:send("DoBloom",DoBloom)
         blurPassV:fill()
 
         -- now to main
         pass:reset()
         pass:setShader(FinalShader)
 
-        pass:send("ColorTex",CAMERA[33][1])
+        pass:send("ColorTex",CAMERA[32][1])
         pass:send("AO",CAMERA[35][1])
+        pass:send("DoBloom",DoBloom)
         pass:send("Bloom",CAMERA[31][1])
 
         -- set gamma and exposure
@@ -376,30 +433,6 @@ function Renderer.Composite()
         pass:send("exposure",1)
 
         pass:fill()
-
-        if false then
-            pass:setShader(OITCOMPOSITE)
-            pass:setFaceCull()
-            pass:setBlendMode("none")
-
-            pass:send("OIT_TexSolid",Solid)
-            pass:send("OIT_TexTransparent",Transparent)
-            pass:send("OIT_TexReveal",Reveal)
-            pass:send("OIT_TexDepth", CAMERA[24][1])
-            pass:send("OIT_TexNormal", CAMERA[30][1])
-
-            -- push ssao
-            pass:send("Proj",Proj)
-            pass:send("ProjInv",Inv)
-            pass:send("ViewMatrix",VM)
-            pass:send("SSAO_Noise",SSAO_Noise_Texture)
-
-            pass:setDepthTest()
-            pass:setDepthWrite(false)
-            pass:setSampler'nearest'
-            pass:fill()
-            pass:pop('state')
-        end
     end
 end
 

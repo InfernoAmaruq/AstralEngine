@@ -24,6 +24,7 @@ local LightType = ENUM({
     Point = 0,
     Spot = 1,
     Surface = 2,
+    Directional = 3,
 }, "LightType")
 
 Lighting.AddLight = function(LightEntity, EarlyLightComponent)

@@ -13,7 +13,7 @@ dev
 - Add support for passing Luau `vector` and `quaternion` types to functions.
 - Add `vector` and `quaternion` modules.
 
-#### `lovr.audio`
+#### Audio
 
 - Add `AudioMesh` and `lovr.audio.newAudioMesh`.
 - Add support for ambisonic source playback.
@@ -28,7 +28,7 @@ dev
 - Add `lovr.audio.getStream`.
 - Add `t.audio.debug` and `t.audio.reverb` settings to `lovr.conf`.
 
-#### `lovr.data`
+#### Data
 
 - Add `AudioStream` and `lovr.data.newAudioStream`.
 - Add `Blob:setI8/setU8/setI16/setU16/setI32/setU32/setF32/setF64`.
@@ -41,7 +41,7 @@ dev
 - Add support for importing two sets of UVs in `ModelData`.
 - Add `Sound:get/setFrame`.
 
-#### `lovr.graphics`
+#### Graphics
 
 - Add `Raytracer`, `lovr.graphics.newRaytracer`, and `raytracing` `GraphicsFeature`.
 - Add `raytracer` option to `lovr.graphics.newMesh` and `lovr.graphics.newModel`.
@@ -61,7 +61,7 @@ dev
 - Add `bgra8` TextureFormat.
 - Add `Buffer:newBlob`.
 
-#### `lovr.headset`
+#### Headset
 
 - Add `lovr.modelschanged` event.
 - Add `lovr.headset.getModelKeys`.
@@ -77,22 +77,22 @@ dev
 - Add `lovr.headset.connect` and `t.headset.connect`.
 - Add `lovr.headset.setPosition/Orientation/Pose` and `lovr.headset.setButton`.
 
-#### `lovr.math`
+#### Math
 
 - Add `Curve:getLength` and `Curve:step`.
 - Add `Mat4:setPosition/Orientation/Scale/Pose`.
 
-#### `lovr.physics`
+#### Physics
 
 - Add support for non-uniform scale in `ConvexShape` and `MeshShape`.
 
-#### `lovr.system`
+#### System
 
 - Add `t.window.centered`.
 - Add `lovr.system.is/setWindowFullscreen`.
 - Add `lovr.system.get/setMouseMode`.
 
-#### `lovr.thread`
+#### Thread
 
 - Add `lovr.thread.call`.
 - Add `lovr.thread.getWorkerCount`.

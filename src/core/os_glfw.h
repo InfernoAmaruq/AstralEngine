@@ -382,24 +382,28 @@ bool os_window_open(const os_window_config* config) {
   }
 
   GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-  const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-  uint32_t width = config->fullscreen ? (uint32_t) mode->width : config->width;
-  uint32_t height = config->fullscreen ? (uint32_t) mode->height : config->height;
 
   if (config->fullscreen) {
-    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-  }
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 
-  glfwState.window = glfwCreateWindow(width, height, config->title, NULL, NULL);
+    glfwWindowHint(GLFW_RED_BITS, mode->redBits);
+    glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
+    glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
+    glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+
+    glfwState.window = glfwCreateWindow(mode->width, mode->height, config->title, monitor, NULL);
+  } else {
+    glfwState.window = glfwCreateWindow(config->width, config->height, config->title, NULL, NULL);
+  }
 
   if (!glfwState.window) {
     return false;
   }
 
-  if (center) {
+  if (center && !config->fullscreen) {
     int x, y, w, h;
     glfwGetMonitorWorkarea(monitor, &x, &y, &w, &h);
-    glfwSetWindowPos(glfwState.window, x + (w - width) / 2, y + (h - height) / 2);
+    glfwSetWindowPos(glfwState.window, x + (w - config->width) / 2, y + (h - config->height) / 2);
     glfwShowWindow(glfwState.window);
   }
 
@@ -453,18 +457,14 @@ void os_window_set_fullscreen(bool fullscreen) {
     os_window_get_size(&glfwState.width, &glfwState.height);
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-    glfwSetWindowSize(glfwState.window, mode->width, mode->height);
-    glfwSetWindowAttrib(glfwState.window, GLFW_DECORATED, false);
-    glfwSetWindowPos(glfwState.window, 0, 0);
+    glfwSetWindowMonitor(glfwState.window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
   } else {
     int x, y, w, h;
     int width = (int) glfwState.width;
     int height = (int) glfwState.height;
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
     glfwGetMonitorWorkarea(monitor, &x, &y, &w, &h);
-    glfwSetWindowSize(glfwState.window, width, height);
-    glfwSetWindowAttrib(glfwState.window, GLFW_DECORATED, true);
-    glfwSetWindowPos(glfwState.window, x + (w - width) / 2, y + (h - height) / 2);
+    glfwSetWindowMonitor(glfwState.window, NULL, x + (w - width) / 2, y + (h - height) / 2, width, height, 0);
   }
 }
 

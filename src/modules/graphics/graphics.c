@@ -8792,7 +8792,7 @@ bool lovrPassDrawPart(Pass* pass, Model* model, uint32_t meshIndex, uint32_t par
   }
 
   for (uint32_t i = 0; i < partCount; i++) {
-    ModelPart* part = &model->meta.parts[partIndex + i];
+    ModelPart* part = &mesh->parts[partIndex + i];
 
     DrawInfo draw = {
       .mode = part->mode == DRAW_POINT_LIST ? DRAW_POINTS : part->mode == DRAW_LINE_LIST ? DRAW_LINES : DRAW_TRIANGLES,

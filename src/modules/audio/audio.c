@@ -918,9 +918,9 @@ static float applyAttenuation(IPLfloat32 distance, void* userdata) {
 static float applyDirectivity(IPLVector3 sourceToListener, void* userdata) {
   Source* source = userdata;
 
-  float sourceDirection[3];
-  quat_getDirection(source->orientation, sourceDirection);
-  float angle = vec3_angle(sourceDirection, &sourceToListener.x);
+  float forward[3];
+  vec3_set(forward, 0.f, 0.f, -1.f);
+  float angle = vec3_angle(&sourceToListener.x, forward);
 
   if (angle <= source->innerAngle) {
     return 1.f;

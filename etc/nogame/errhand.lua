@@ -440,7 +440,7 @@ function lovr.errhand(message)
   return function()
     lovr.timer.step()
 
-    local timeout = (not rendered or lovr.headset.isActive()) and 0 or math.huge
+    local timeout = (not rendered or (lovr.headset and lovr.headset.isActive())) and 0 or math.huge
     lovr.system.pollEvents(timeout)
 
     for name, a, b, c in lovr.event.poll() do

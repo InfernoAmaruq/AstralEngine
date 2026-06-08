@@ -17,8 +17,6 @@ static struct {
   fn_mouse_button* onMouseButton;
   fn_mouse_move* onMouseMove;
   fn_mousewheel_move* onMouseWheelMove;
-  bool keyMap[OS_KEY_COUNT];
-  bool mouseMap[2];
   os_mouse_mode mouseMode;
   long mouseX;
   long mouseY;
@@ -66,25 +64,25 @@ static EM_BOOL onResize(int type, const EmscriptenUiEvent* data, void* userdata)
 }
 
 static EM_BOOL onMouseButton(int type, const EmscriptenMouseEvent* data, void* userdata) {
-  os_mouse_button button;
+  int button;
+
   switch (data->button) {
-    case 0: button = MOUSE_LEFT; break;
-    case 2: button = MOUSE_RIGHT; break;
+    case 0: button = 0; break;
+    case 2: button = 1; break;
     default: return false;
   }
 
   bool pressed = type == EMSCRIPTEN_EVENT_MOUSEDOWN;
 
   if (state.onMouseButton) {
-    state.onMouseButton((int) button, pressed);
+    state.onMouseButton(button, pressed);
   }
 
-  state.mouseMap[button] = pressed;
   return false;
 }
 
 static EM_BOOL onMouseMove(int type, const EmscriptenMouseEvent* data, void* userdata) {
-  if (state.mouseMode == MOUSE_MODE_GRABBED) {
+  if (state.mouseMode == MOUSE_MODE_RELATIVE) {
     state.mouseX += data->movementX;
     state.mouseY += data->movementY;
   } else {
@@ -196,7 +194,6 @@ static EM_BOOL onKeyEvent(int type, const EmscriptenKeyboardEvent* data, void* u
   }
 
   os_button_action action = type == EMSCRIPTEN_EVENT_KEYDOWN ? BUTTON_PRESSED : BUTTON_RELEASED;
-  state.keyMap[key] = action == BUTTON_PRESSED;
 
   if (state.onKeyboardEvent) {
     state.onKeyboardEvent(action, key, scancode, data->repeat);
@@ -269,23 +266,6 @@ void os_set_clipboard_text(const char* text) {
   //
 }
 
-void* os_vm_init(size_t size) {
-  return malloc(size);
-}
-
-bool os_vm_free(void* p, size_t size) {
-  free(p);
-  return true;
-}
-
-bool os_vm_commit(void* p, size_t size) {
-  return true;
-}
-
-bool os_vm_release(void* p, size_t size) {
-  return true;
-}
-
 void os_thread_attach(void) {
   //
 }
@@ -294,7 +274,11 @@ void os_thread_detach(void) {
   //
 }
 
-void os_poll_events(void) {
+void os_thread_set_name(const char* name) {
+  //
+}
+
+void os_poll_events(double timeout) {
   //
 }
 
@@ -349,6 +333,14 @@ bool os_window_is_visible(void) {
 
 bool os_window_is_focused(void) {
   return true;
+}
+
+bool os_window_is_fullscreen(void) {
+  return false;
+}
+
+void os_window_set_fullscreen(bool fullscreen) {
+  //
 }
 
 void os_window_get_size(uint32_t* width, uint32_t* height) {
@@ -420,10 +412,17 @@ void os_set_mouse_mode(os_mouse_mode mode) {
   }
 }
 
-bool os_is_mouse_down(os_mouse_button button) {
-  return state.mouseMap[button];
-}
+typedef bool Loop(void*);
 
-bool os_is_key_down(os_key key) {
-  return state.keyMap[key];
+EM_JS(void, requestAnimationFrameLoop, (Loop* loop, void* arg), {
+  var wrappedCallback = WebAssembly.promising(getWasmTableEntry(loop));
+  async function tick() {
+    var again = await wrappedCallback(arg);
+    if (again) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})
+
+void os_set_emscripten_loop(Loop* loop, void* arg) {
+  requestAnimationFrameLoop(loop, arg);
 }

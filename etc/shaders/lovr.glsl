@@ -8,7 +8,7 @@ layout(constant_id = 1005) const bool flag_uvTransform = true;
 layout(constant_id = 1006) const bool flag_alphaCutoff = false;
 layout(constant_id = 1007) const bool flag_glow = true;
 layout(constant_id = 1008) const bool flag_normalMap = true;
-layout(constant_id = 1009) const bool flag_vertexTangents = false;
+layout(constant_id = 1009) const bool flag_vertexTangents = true;
 layout(constant_id = 1010) const bool flag_colorTexture = true;
 layout(constant_id = 1011) const bool flag_glowTexture = true;
 layout(constant_id = 1012) const bool flag_metalnessTexture = true;
@@ -74,8 +74,9 @@ layout(push_constant) uniform PushConstants {
 layout(location = 10) in vec4 VertexPosition;
 layout(location = 11) in vec3 VertexNormal;
 layout(location = 12) in vec2 VertexUV;
-layout(location = 13) in vec4 VertexColor;
-layout(location = 14) in vec4 VertexTangent;
+layout(location = 13) in vec2 VertexUV2;
+layout(location = 14) in vec4 VertexColor;
+layout(location = 15) in vec4 VertexTangent;
 #endif
 
 // Framebuffer
@@ -88,16 +89,18 @@ layout(location = 0) out vec4 PixelColor;
 layout(location = 10) out vec3 PositionWorld;
 layout(location = 11) out vec3 Normal;
 layout(location = 12) out vec2 UV;
-layout(location = 13) out vec4 Color;
-layout(location = 14) out vec4 Tangent;
+layout(location = 13) out vec2 UV2;
+layout(location = 14) out vec4 Color;
+layout(location = 15) out vec4 Tangent;
 #endif
 
 #ifdef GL_FRAGMENT_SHADER
 layout(location = 10) in vec3 PositionWorld;
 layout(location = 11) in vec3 Normal;
 layout(location = 12) in vec2 UV;
-layout(location = 13) in vec4 Color;
-layout(location = 14) in vec4 Tangent;
+layout(location = 13) in vec2 UV2;
+layout(location = 14) in vec4 Color;
+layout(location = 15) in vec4 Tangent;
 #endif
 
 // Builtins
@@ -113,7 +116,11 @@ layout(location = 14) in vec4 Tangent;
 #define ClipDistance gl_ClipDistance
 #define CullDistance gl_CullDistance
 #define PrimitiveID gl_PrimitiveID
+#ifdef WEBGPU
+#define ViewIndex 0
+#else
 #define ViewIndex gl_ViewIndex
+#endif
 #endif
 
 #ifdef GL_VERTEX_SHADER
@@ -145,6 +152,7 @@ layout(location = 14) in vec4 Tangent;
 // Helpers
 
 #define Constants uniform DefaultUniformBlock
+#define raytracer accelerationStructureEXT
 
 #ifndef GL_COMPUTE_SHADER
 #define Projection Cameras[ViewIndex].projection
@@ -240,9 +248,8 @@ mat3 getTangentMatrix() {
     vec3 N = normalize(Normal);
     vec3 dp1 = dFdx(PositionWorld);
     vec3 dp2 = dFdy(PositionWorld);
-    vec2 modUV = mod(UV,1);
-    vec2 duv1 = dFdx(modUV);
-    vec2 duv2 = dFdy(modUV);
+    vec2 duv1 = dFdx(UV);
+    vec2 duv2 = dFdy(UV);
     vec3 dp2perp = cross(dp2, N);
     vec3 dp1perp = cross(N, dp1);
     vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
@@ -526,7 +533,8 @@ vec4 lovrmain();
 void main() {
   PositionWorld = vec3(WorldFromLocal * VertexPosition);
   Normal = NormalMatrix * VertexNormal;
-  UV = vec2(-1,-1) - VertexUV;
+  UV = vec2(-1) - VertexUV;
+  UV2 = vec2(-1) - VertexUV2;
 
   Color = vec4(1.0);
   if (flag_passColor) Color *= PassColor;
@@ -537,8 +545,14 @@ void main() {
     Tangent = vec4(NormalMatrix * VertexTangent.xyz, VertexTangent.w);
   }
 
+#ifdef WEBGPU
+  PointSize = 1.;
+  Position = lovrmain();
+  Position.y = -Position.y;
+#else
   PointSize = flag_pointSize;
   Position = lovrmain();
+#endif
 
   if (flag_uvTransform) {
     UV *= Material.uvScale;
@@ -551,6 +565,14 @@ void main() {
 vec4 lovrmain();
 void main() {
   PixelColor = lovrmain();
+
+  if (flag_glow) {
+    if (flag_glowTexture) {
+      PixelColor.rgb += getPixel(GlowTexture, UV).rgb * Material.glow.rgb * Material.glow.a;
+    } else {
+      PixelColor.rgb += Material.glow.rgb * Material.glow.a;
+    }
+  }
 
   if (flag_tonemap) {
     PixelColor.rgb = tonemap(PixelColor.rgb);

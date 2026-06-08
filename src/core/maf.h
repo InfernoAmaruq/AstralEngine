@@ -1,6 +1,7 @@
 #include <string.h>
 #include <math.h>
 #include <float.h>
+#include <string.h>
 
 #pragma once
 
@@ -764,6 +765,10 @@ MAF void mat4_getPosition(mat4 m, vec3 position) {
   vec3_init(position, m + 12);
 }
 
+MAF void mat4_setPosition(mat4 m, vec3 position) {
+  vec3_init(m + 12, position);
+}
+
 MAF void mat4_getOrientation(mat4 m, quat orientation) {
   quat_fromMat4(orientation, m);
 }
@@ -772,18 +777,24 @@ MAF void mat4_getAngleAxis(mat4 m, float* angle, float* ax, float* ay, float* az
   float sx = vec3_length(m + 0);
   float sy = vec3_length(m + 4);
   float sz = vec3_length(m + 8);
-  float diagonal[4] = { m[0], m[5], m[10] };
-  float axis[4] = { m[6] - m[9], m[8] - m[2], m[1] - m[4] };
-  diagonal[0] /= sx;
-  diagonal[1] /= sy;
-  diagonal[2] /= sz;
-  vec3_normalize(axis);
-  float cosangle = (diagonal[0] + diagonal[1] + diagonal[2] - 1.f) / 2.f;
+  float d[3] = { m[0] / sx, m[5] / sy, m[10] / sz };
+  float axis[3] = { m[6] - m[9], m[8] - m[2], m[1] - m[4] };
+  float cosangle = (d[0] + d[1] + d[2] - 1.f) / 2.f;
   if (fabsf(cosangle) < 1.f - FLT_EPSILON) {
     *angle = acosf(cosangle);
+  } else if (cosangle > 0.f) {
+    *angle = 0.f;
   } else {
-    *angle = cosangle > 0.f ? 0.f : (float) M_PI;
+    *angle = (float) M_PI;
+    if (d[0] > d[1] && d[0] > d[2]) {
+      vec3_set(axis, sx + m[0], m[1], m[2]);
+    } else if (d[1] > d[2]) {
+      vec3_set(axis, m[4], sy + m[5], m[6]);
+    } else {
+      vec3_set(axis, m[8], m[9], sz + m[10]);
+    }
   }
+  vec3_normalize(axis);
   *ax = axis[0];
   *ay = axis[1];
   *az = axis[2];
@@ -791,6 +802,22 @@ MAF void mat4_getAngleAxis(mat4 m, float* angle, float* ax, float* ay, float* az
 
 MAF void mat4_getScale(mat4 m, vec3 scale) {
   vec3_set(scale, vec3_length(m + 0), vec3_length(m + 4), vec3_length(m + 8));
+}
+
+MAF void mat4_setScale(mat4 m, vec3 scale) {
+  vec3_scale(m + 0, scale[0] / vec3_length(m + 0));
+  vec3_scale(m + 4, scale[1] / vec3_length(m + 4));
+  vec3_scale(m + 8, scale[2] / vec3_length(m + 8));
+}
+
+MAF void mat4_setOrientation(mat4 m, quat orientation) {
+  float t[16];
+  mat4_fromQuat(t, orientation);
+  float scale[3];
+  mat4_getScale(m, scale);
+  vec3_init(m + 0, vec3_scale(t + 0, scale[0]));
+  vec3_init(m + 4, vec3_scale(t + 4, scale[1]));
+  vec3_init(m + 8, vec3_scale(t + 8, scale[2]));
 }
 
 // Does not have a Y flip, maps z = [-n,-f] to [0,1]

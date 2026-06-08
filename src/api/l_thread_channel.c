@@ -1,6 +1,5 @@
 #include "api.h"
 #include "thread/thread.h"
-#include "event/event.h"
 #include "util.h"
 #include <math.h>
 

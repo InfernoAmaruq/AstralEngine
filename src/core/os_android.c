@@ -183,7 +183,7 @@ void os_destroy(void) {
     state.onPermissionEvent = NULL;
     ANativeActivity_finish(state.app->activity);
     while (!state.app->destroyRequested) {
-      os_poll_events();
+      os_poll_events(0.);
     }
   }
   memset(&state, 0, sizeof(state));
@@ -277,22 +277,6 @@ void os_set_clipboard_text(const char* text) {
   //
 }
 
-void* os_vm_init(size_t size) {
-  return mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-}
-
-bool os_vm_free(void* p, size_t size) {
-  return !munmap(p, size);
-}
-
-bool os_vm_commit(void* p, size_t size) {
-  return !mprotect(p, size, PROT_READ | PROT_WRITE);
-}
-
-bool os_vm_release(void* p, size_t size) {
-  return !madvise(p, size, MADV_DONTNEED);
-}
-
 void os_thread_attach(void) {
   JNIEnv* jni;
   (*state.app->activity->vm)->AttachCurrentThread(state.app->activity->vm, &jni, NULL);
@@ -302,11 +286,15 @@ void os_thread_detach(void) {
   (*state.app->activity->vm)->DetachCurrentThread(state.app->activity->vm);
 }
 
-void os_poll_events(void) {
+void os_thread_set_name(const char* name) {
+  //
+}
+
+void os_poll_events(double timeout) {
   if (!state.app->destroyRequested) {
     struct android_poll_source* source;
-    int timeout = (state.app->window && state.app->activityState == APP_CMD_RESUME) ? 0 : -1;
-    ALooper_pollOnce(timeout, NULL, NULL, (void**) &source);
+    int timeoutMS = (state.app->window && state.app->activityState == APP_CMD_RESUME) ? (int) (timeout * 1000.) : -1;
+    ALooper_pollOnce(timeoutMS, NULL, NULL, (void**) &source);
 
     if (source) {
       source->process(state.app, source);
@@ -370,6 +358,14 @@ bool os_window_is_visible(void) {
 
 bool os_window_is_focused(void) {
   return false;
+}
+
+bool os_window_is_fullscreen(void) {
+  return false;
+}
+
+void os_window_set_fullscreen(bool fullscreen) {
+  //
 }
 
 void os_window_get_size(uint32_t* width, uint32_t* height) {
@@ -438,13 +434,11 @@ void os_get_mouse_position(double* x, double* y) {
   *x = *y = 0.;
 }
 
-void os_set_mouse_mode(os_mouse_mode mode) {
-  //
-}
-
 os_mouse_mode os_get_mouse_mode(void){
     return MOUSE_MODE_NORMAL;
 }
+
+void os_set_mouse_mode(os_mouse_mode m){}
 
 bool os_is_mouse_down(os_mouse_button button) {
   return false;

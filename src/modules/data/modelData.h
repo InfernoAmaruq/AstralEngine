@@ -1,3 +1,4 @@
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -7,64 +8,33 @@
 struct Blob;
 struct Image;
 
-typedef enum {
-  META_GLTF_JSON,
-  META_HANDTRACKING_FB,
-  META_CONTROLLER_MSFT
-} MetadataType;
+typedef struct {
+  struct { float x, y, z; } position;
+#ifdef LOVR_WEBGPU
+  struct { float x, y, z; } normal;
+#else
+  uint32_t normal;
+#endif
+  struct { float u, v; } uv;
+  struct { uint16_t u, v; } uv2;
+  struct { uint8_t r, g, b, a; } color;
+#ifdef LOVR_WEBGPU
+  struct { float x, y, z, w; } tangent;
+#else
+  uint32_t tangent;
+#endif
+} ModelVertex;
 
 typedef struct {
-  uint32_t blob;
-  size_t offset;
-  size_t size;
-  size_t stride;
-  char* data;
-} ModelBuffer;
-
-typedef enum {
-  ATTR_POSITION,
-  ATTR_NORMAL,
-  ATTR_UV,
-  ATTR_COLOR,
-  ATTR_TANGENT,
-  ATTR_JOINTS,
-  ATTR_WEIGHTS,
-  MAX_DEFAULT_ATTRIBUTES
-} DefaultAttribute;
-
-typedef enum { I8, U8, I16, U16, I32, U32, F32, SN10x3 } AttributeType;
-
-typedef union {
-  void* raw;
-  int8_t* i8;
-  uint8_t* u8;
-  int16_t* i16;
-  uint16_t* u16;
-  int32_t* i32;
-  uint32_t* u32;
-  float* f32;
-} AttributeData;
+  uint8_t joints[4];
+  uint8_t weights[4];
+} SkinData;
 
 typedef struct {
-  uint32_t offset;
-  uint32_t buffer;
-  size_t stride;
-  uint32_t count;
-  AttributeType type;
-  unsigned components : 3;
-  unsigned normalized : 1;
-  unsigned matrix : 1;
-  unsigned hasMin : 1;
-  unsigned hasMax : 1;
-  float min[4];
-  float max[4];
-} ModelAttribute;
-
-typedef struct {
-  ModelAttribute* positions;
-  ModelAttribute* normals;
-  ModelAttribute* tangents;
-} ModelBlendData;
+  float x, y, z;
+  float nx, ny, nz;
+  float tx, ty, tz;
+} BlendData;
 
 typedef enum {
   DRAW_POINT_LIST,
@@ -77,14 +47,31 @@ typedef enum {
 } ModelDrawMode;
 
 typedef struct {
-  ModelAttribute* attributes[MAX_DEFAULT_ATTRIBUTES];
-  ModelAttribute* indices;
-  ModelBlendData* blendShapes;
-  uint32_t blendShapeCount;
-  ModelDrawMode mode;
+  uint32_t start;
+  uint32_t count;
+  uint32_t baseVertex;
   uint32_t material;
-  uint32_t skin;
-} ModelPrimitive;
+  ModelDrawMode mode;
+  float bounds[6];
+} ModelPart;
+
+typedef struct {
+  const char* name;
+  float weight;
+} ModelBlendShape;
+
+typedef struct {
+  ModelPart* parts;
+  uint32_t partCount;
+  uint32_t vertexOffset;
+  uint32_t vertexCount;
+  uint32_t indexOffset;
+  uint32_t indexCount;
+  uint32_t skinDataOffset;
+  uint32_t blendDataOffset;
+  uint32_t blendShapeCount;
+  ModelBlendShape* blendShapes;
+} ModelMesh;
 
 typedef struct {
   float color[4];
@@ -108,12 +95,6 @@ typedef struct {
   uint32_t normalTexture;
   const char* name;
 } ModelMaterial;
-
-typedef struct {
-  const char* name;
-  uint32_t node;
-  float weight;
-} ModelBlendShape;
 
 typedef enum {
   PROP_TRANSLATION,
@@ -146,23 +127,9 @@ typedef struct {
 
 typedef struct {
   uint32_t* joints;
-  uint32_t jointCount;
-  uint32_t vertexCount;
-  uint32_t blendedVertexCount;
   float* inverseBindMatrices;
+  uint32_t jointCount;
 } ModelSkin;
-
-typedef struct {
-    uint32_t animationIndex;
-    float time;
-    float alpha;
-} QueuedAnimation;
-
-typedef struct {
-    uint8_t* queuedLookup;
-    QueuedAnimation* animations;
-    uint32_t count;
-} AnimationQueue;
 
 typedef struct {
   const char* name;
@@ -174,84 +141,73 @@ typedef struct {
       float scale[3];
     };
   } transform;
-  uint32_t* children;
-  uint32_t childCount;
+  uint32_t child;
+  uint32_t sibling;
   uint32_t parent;
-  uint32_t primitiveIndex;
-  uint32_t primitiveCount;
-  uint32_t blendShapeIndex;
-  uint32_t blendShapeCount;
+  uint32_t mesh;
   uint32_t skin;
   bool hasMatrix;
 } ModelNode;
 
-typedef struct ModelData {
-  uint32_t ref;
-  void* data;
+typedef struct ModelMetadata {
+  struct Blob* blob;
 
-  void* metadata;
-  size_t metadataSize;
-  MetadataType metadataType;
+  uint64_t id;
+  char* comment;
+  size_t commentLength;
 
-  struct Blob** blobs;
-  struct Image** images;
-  ModelBuffer* buffers;
-  ModelAttribute* attributes;
-  ModelPrimitive* primitives;
-  ModelMaterial* materials;
-  ModelBlendShape* blendShapes;
-  ModelAnimation* animations;
-  ModelSkin* skins;
-  ModelNode* nodes;
-  uint32_t rootNode;
-
-  uint32_t blobCount;
-  uint32_t imageCount;
-  uint32_t bufferCount;
-  uint32_t attributeCount;
-  uint32_t primitiveCount;
+  uint32_t meshCount;
   uint32_t materialCount;
-  uint32_t blendShapeCount;
   uint32_t animationCount;
   uint32_t skinCount;
   uint32_t nodeCount;
+  uint32_t rootNode;
 
-  AnimationQueue animQueue;
+  ModelMesh* meshes;
+  ModelMaterial* materials;
+  ModelAnimation* animations;
+  ModelSkin* skins;
+  ModelNode* nodes;
 
-  ModelAnimationChannel* channels;
-  ModelBlendData* blendData;
-  uint32_t* children;
-  uint32_t* joints;
-  char* chars;
+  uint32_t partCount;
+  uint32_t blendShapeCount;
   uint32_t channelCount;
-  uint32_t blendDataCount;
-  uint32_t childCount;
+  uint32_t keyframeDataCount;
   uint32_t jointCount;
   uint32_t charCount;
 
-  // Computed properties (loaders don't need to fill these out)
+  ModelPart* parts;
+  ModelBlendShape* blendShapes;
+  ModelAnimationChannel* channels;
+  float* keyframeData;
+  float* inverseBindMatrices;
+  uint32_t* joints;
+  char* chars;
 
   uint32_t vertexCount;
-  uint32_t skinnedVertexCount;
-  uint32_t blendShapeVertexCount;
-  uint32_t dynamicVertexCount;
   uint32_t indexCount;
-  AttributeType indexType;
+  uint32_t skinnedVertexCount;
+  uint32_t blendedVertexCount;
+  uint32_t animatedVertexCount;
+  uint32_t indexSize;
+  uint32_t imageCount;
 
-  float boundingBox[6];
-  float boundingSphere[4];
+  uint32_t* blendShapeLookup;
+  uint32_t* animationLookup;
+  uint32_t* materialLookup;
+  uint32_t* nodeLookup;
 
-  float* vertices;
-  uint32_t* indices;
-  uint32_t totalVertexCount;
-  uint32_t totalIndexCount;
+  float bounds[6];
+} ModelMetadata;
 
-  // Lookups
-
-  void* blendShapeMap;
-  void* animationMap;
-  void* materialMap;
-  void* nodeMap;
+typedef struct ModelData {
+  atomic_uint ref;
+  ModelMetadata meta;
+  ModelVertex* vertices;
+  void* indices;
+  SkinData* skinData;
+  BlendData* blendData;
+  struct Image** images;
 } ModelData;
 
 typedef void* ModelDataIO(const char* filename, size_t* bytesRead);
@@ -263,7 +219,8 @@ bool lovrModelDataInitStl(ModelData** model, struct Blob* blob, ModelDataIO* io)
 void lovrModelDataDestroy(void* ref);
 void lovrModelDataAllocate(ModelData* model);
 bool lovrModelDataFinalize(ModelData* model);
-void lovrModelDataCopyAttribute(ModelData* data, ModelAttribute* attribute, char* dst, AttributeType type, uint32_t components, bool normalized, uint32_t count, size_t stride, uint8_t clear);
-void lovrModelDataGetBoundingBox(ModelData* data, float box[6]);
-void lovrModelDataGetBoundingSphere(ModelData* data, float sphere[4]);
-void lovrModelDataGetTriangles(ModelData* data, float** vertices, uint32_t** indices, uint32_t* vertexCount, uint32_t* indexCount);
+void lovrModelDataGetTriangles(ModelData* model, float** vertices, uint32_t** indices, uint32_t* vertexCount, uint32_t* indexCount);
+
+void lovrModelMetadataGetBoundingBox(ModelMetadata* meta, float box[6]);
+void lovrModelMetadataGetMeshBoundingBox(ModelMetadata* meta, uint32_t index, float box[6]);
+uint32_t lovrModelMetadataNextNodeWithMesh(ModelMetadata* meta, uint32_t node);

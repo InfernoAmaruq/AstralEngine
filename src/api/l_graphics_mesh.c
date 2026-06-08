@@ -60,6 +60,12 @@ static int l_lovrMeshSetIndexBuffer(lua_State* L) {
 
 static int l_lovrMeshGetVertices(lua_State* L) {
   Mesh* mesh = luax_checktype(L, 1, Mesh);
+
+  if (lovrMeshGetStorage(mesh) == MESH_GPU) {
+    lua_pushnil(L);
+    return 1;
+  }
+
   uint32_t index = luax_optu32(L, 2, 1) - 1;
   uint32_t count = luax_optu32(L, 3, ~0u);
   char* data = lovrMeshGetVertices(mesh, index, count);
@@ -86,6 +92,7 @@ static int l_lovrMeshGetVertices(lua_State* L) {
 static int l_lovrMeshSetVertices(lua_State* L) {
   Blob* blob = NULL;
   Mesh* mesh = luax_checktype(L, 1, Mesh);
+  Buffer* vertexBuffer = lovrMeshGetVertexBuffer(mesh);
   const DataField* format = lovrMeshGetVertexFormat(mesh);
   uint32_t index = luax_optu32(L, 3, 1) - 1;
   if ((blob = luax_totype(L, 2, Blob)) != NULL) {
@@ -95,6 +102,7 @@ static int l_lovrMeshSetVertices(lua_State* L) {
     void* data = lovrMeshSetVertices(mesh, index, count);
     luax_assert(L, data);
     memcpy(data, blob->data, count * format->stride);
+    if (vertexBuffer) lovrBufferFlush(vertexBuffer);
   } else if (lua_istable(L, 2)) {
     uint32_t length = luax_len(L, 2);
     uint32_t limit = MIN(length, format->length - index);
@@ -102,7 +110,9 @@ static int l_lovrMeshSetVertices(lua_State* L) {
     luax_check(L, length <= limit, "Table does not have enough data to set %d items", count);
     void* data = lovrMeshSetVertices(mesh, index, count);
     luax_assert(L, data);
-    luax_checkbufferdata(L, 2, format, data);
+    bool ok = luax_checkbufferdata(L, 2, format, data);
+    if (vertexBuffer) lovrBufferFlush(vertexBuffer);
+    if (!ok) return lua_error(L);
   } else {
     return luax_typeerror(L, 2, "table or Blob");
   }
@@ -111,6 +121,11 @@ static int l_lovrMeshSetVertices(lua_State* L) {
 
 static int l_lovrMeshGetIndices(lua_State* L) {
   Mesh* mesh = luax_checktype(L, 1, Mesh);
+
+  if (lovrMeshGetStorage(mesh) == MESH_GPU) {
+    lua_pushnil(L);
+    return 1;
+  }
 
   uint32_t count;
   DataType type;
@@ -150,27 +165,31 @@ static int l_lovrMeshSetIndices(lua_State* L) {
       return 0;
     case LUA_TTABLE: {
       uint32_t count = luax_len(L, 2);
-      if (format->length > 0xffff) {
-        uint32_t* data = lovrMeshSetIndices(mesh, count, TYPE_INDEX32);
-        luax_assert(L, data);
-        for (uint32_t i = 0; i < count; i++) {
-          lua_rawgeti(L, 2, i + 1);
-          lua_Integer x = lua_tointeger(L, -1);
-          luax_check(L, x > 0 && x <= format->length, "Mesh index #%d is out of range", i + 1);
-          data[i] = x - 1;
-          lua_pop(L, 1);
+      const DataType type = format->length > 0xffff ? TYPE_INDEX32 : TYPE_INDEX16;
+      void* p = lovrMeshSetIndices(mesh, count, type);
+      luax_assert(L, p);
+
+      Buffer* indexBuffer = lovrMeshGetIndexBuffer(mesh);
+      uint32_t* u32 = p;
+      uint16_t* u16 = p;
+
+      for (uint32_t i = 0; i < count; i++) {
+        lua_rawgeti(L, 2, i + 1);
+        lua_Integer x = lua_tointeger(L, -1);
+        if (x < 1 || x > format->length) {
+          if (indexBuffer) lovrBufferFlush(indexBuffer);
+          return luaL_error(L, "Mesh index #%d is out of range", i + 1);
         }
-      } else {
-        uint16_t* data = lovrMeshSetIndices(mesh, count, TYPE_INDEX16);
-        luax_assert(L, data);
-        for (uint32_t i = 0; i < count; i++) {
-          lua_rawgeti(L, 2, i + 1);
-          lua_Integer x = lua_tointeger(L, -1);
-          luax_check(L, x > 0 && x <= format->length, "Mesh index #%d is out of range", i + 1);
-          data[i] = x - 1;
-          lua_pop(L, 1);
+        if (type == TYPE_INDEX32) {
+          u32[i] = x - 1;
+        } else {
+          u16[i] = x - 1;
         }
+
+        lua_pop(L, 1);
       }
+
+      if (indexBuffer) lovrBufferFlush(indexBuffer);
       break;
     }
     case LUA_TUSERDATA: {
@@ -180,8 +199,10 @@ static int l_lovrMeshSetIndices(lua_State* L) {
       size_t stride = type == TYPE_U16 ? 2 : 4;
       uint32_t count = (uint32_t) MIN(blob->size / stride, UINT32_MAX);
       void* data = lovrMeshSetIndices(mesh, count, type);
+      Buffer* indexBuffer = lovrMeshGetIndexBuffer(mesh);
       luax_assert(L, data);
       memcpy(data, blob->data, count * stride);
+      if (indexBuffer) lovrBufferFlush(indexBuffer);
       break;
     }
     default: return luax_typeerror(L, 2, "nil, table, or Blob");
@@ -231,6 +252,12 @@ static int l_lovrMeshComputeBoundingBox(lua_State* L) {
   return 1;
 }
 
+static int l_lovrMeshBuildRaytracer(lua_State* L) {
+  Mesh* mesh = luax_checktype(L, 1, Mesh);
+  luax_assert(L, lovrMeshBuildRaytracer(mesh));
+  return 0;
+}
+
 static int l_lovrMeshGetDrawMode(lua_State* L) {
   Mesh* mesh = luax_checktype(L, 1, Mesh);
   DrawMode mode = lovrMeshGetDrawMode(mesh);
@@ -248,8 +275,10 @@ static int l_lovrMeshSetDrawMode(lua_State* L) {
 static int l_lovrMeshGetDrawRange(lua_State* L) {
   Mesh* mesh = luax_checktype(L, 1, Mesh);
 
-  uint32_t start, count, offset;
-  lovrMeshGetDrawRange(mesh, &start, &count, &offset);
+  uint32_t start, count;
+  lovrMeshGetDrawRange(mesh, &start, &count);
+
+  uint32_t offset = lovrMeshGetBaseVertex(mesh);
 
   if (count == 0) {
     return 0;
@@ -265,14 +294,30 @@ static int l_lovrMeshSetDrawRange(lua_State* L) {
   Mesh* mesh = luax_checktype(L, 1, Mesh);
 
   if (lua_isnoneornil(L, 2)) {
-    lovrMeshSetDrawRange(mesh, 0, 0, 0);
+    lovrMeshSetDrawRange(mesh, 0, 0);
+    lovrMeshSetBaseVertex(mesh, 0);
   } else {
     uint32_t start = luax_checku32(L, 2) - 1;
     uint32_t count = luax_checku32(L, 3);
     uint32_t offset = luax_optu32(L, 4, 0);
-    luax_assert(L, lovrMeshSetDrawRange(mesh, start, count, offset));
+    luax_assert(L, lovrMeshSetDrawRange(mesh, start, count));
+    lovrMeshSetBaseVertex(mesh, offset);
   }
 
+  return 0;
+}
+
+static int l_lovrMeshGetBaseVertex(lua_State* L) {
+  Mesh* mesh = luax_checktype(L, 1, Mesh);
+  uint32_t base = lovrMeshGetBaseVertex(mesh);
+  lua_pushinteger(L, base);
+  return 1;
+}
+
+static int l_lovrMeshSetBaseVertex(lua_State* L) {
+  Mesh* mesh = luax_checktype(L, 1, Mesh);
+  uint32_t base = luax_optu32(L, 2, 0);
+  lovrMeshSetBaseVertex(mesh, base);
   return 0;
 }
 
@@ -304,10 +349,13 @@ const luaL_Reg lovrMesh[] = {
   { "getBoundingBox", l_lovrMeshGetBoundingBox },
   { "setBoundingBox", l_lovrMeshSetBoundingBox },
   { "computeBoundingBox", l_lovrMeshComputeBoundingBox },
+  { "buildRaytracer", l_lovrMeshBuildRaytracer },
   { "getDrawMode", l_lovrMeshGetDrawMode },
   { "setDrawMode", l_lovrMeshSetDrawMode },
   { "getDrawRange", l_lovrMeshGetDrawRange },
   { "setDrawRange", l_lovrMeshSetDrawRange },
+  { "getBaseVertex", l_lovrMeshGetBaseVertex },
+  { "setBaseVertex", l_lovrMeshSetBaseVertex },
   { "getMaterial", l_lovrMeshGetMaterial },
   { "setMaterial", l_lovrMeshSetMaterial },
   { NULL, NULL }

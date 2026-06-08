@@ -1,0 +1,157 @@
+name: Build
+
+on: [push, pull_request]
+
+env:
+  CMAKE_BUILD_TYPE: ${{ github.event_name == 'pull_request' && 'Debug' || 'Release' }}
+
+jobs:
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+      - name: Configure
+        run: cmake -B build -D LOVR_VERSION_HASH=%GITHUB_SHA:~0,6%
+      - name: Build
+        run: cmake --build build --config %CMAKE_BUILD_TYPE%
+      - name: Test
+        run: build\%CMAKE_BUILD_TYPE%\lovr test --headless
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: lovr.exe
+          path: |
+            build/Release/lovr.exe
+            build/Release/lovrc.bat
+            build/Release/*.dll
+
+  linux:
+    name: Linux
+    strategy:
+      matrix:
+        arch: [x86_64, aarch64]
+    runs-on: ${{ matrix.arch == 'x86_64' && 'ubuntu-22.04' || 'ubuntu-22.04-arm' }}
+    steps:
+      - name: Update Packages
+        run: sudo apt update
+      - name: Install Packages
+        run: sudo apt install -y xorg-dev libx11-xcb-dev libxcb-glx0-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-xkb-dev libfuse2 libcurl4-openssl-dev libssl-dev
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+      - name: Init
+        run: cmake -B build -D LOVR_BUILD_BUNDLE=ON -D LOVR_VERSION_HASH=${GITHUB_SHA::6}
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ./build/bin/lovr test --headless
+      - name: AppImage
+        run: >
+          curl -sOL https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.arch }}.AppImage &&
+          chmod +x ./appimagetool-${{ matrix.arch }}.AppImage &&
+          ./appimagetool-${{ matrix.arch }}.AppImage build/bin &&
+          mv LÖVR-${{ matrix.arch }}.AppImage lovr-${{ matrix.arch }}.AppImage
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: lovr-${{ matrix.arch }}.AppImage
+          path: lovr-${{ matrix.arch }}.AppImage
+
+  android:
+    name: Android
+    strategy:
+      matrix:
+        include:
+          - abi: arm64-v8a
+            android_version: 32
+          - abi: x86_64
+            android_version: 29
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Update Packages
+        run: sudo apt update
+      - name: Install Packages
+        run: sudo apt install -y glslang-tools
+      - name: Install Android
+        run: ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-${{ matrix.android_version }}"
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+      - name: Init
+        run: >
+          mkdir build &&
+          cd build &&
+          keytool
+          -genkey
+          -dname 'cn=Unknown, ou=Unknown, o=Unknown, l=Unknown, st=Unknown, c=Unknown'
+          -keystore key.keystore
+          -keypass hunter2
+          -storepass hunter2
+          -alias key
+          -keyalg RSA
+          -keysize 2048
+          -validity 10000 &&
+          cmake ..
+          -D CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake
+          -D ANDROID_SDK=$ANDROID_HOME
+          -D ANDROID_ABI=${{ matrix.abi }}
+          -D ANDROID_STL=c++_shared
+          -D ANDROID_NATIVE_API_LEVEL=${{ matrix.android_version }}
+          -D ANDROID_BUILD_TOOLS_VERSION=37.0.0
+          -D ANDROID_KEYSTORE=key.keystore
+          -D ANDROID_KEYSTORE_PASS=pass:hunter2
+          -D LOVR_VERSION_HASH=${GITHUB_SHA::6}
+      - name: Build
+        run: cmake --build build
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.abi == 'arm64-v8a' && 'lovr.apk' || 'lovr-x64.apk' }}
+          path: build/lovr.apk
+
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - name: Install Wulkan
+        env:
+          VKV: 1.4.321.0
+        run: |
+          curl -sOL https://sdk.lunarg.com/sdk/download/$VKV/mac/vulkan_sdk.zip?Human=true
+          unzip vulkan_sdk.zip
+          export VULKAN_SDK=${{ runner.temp }}/vulkan && echo "VULKAN_SDK=$VULKAN_SDK/macOS" >> $GITHUB_ENV
+          sudo vulkansdk-macOS-$VKV.app/Contents/MacOS/vulkansdk-macOS-$VKV --root $VULKAN_SDK --accept-licenses --default-answer --confirm-command install
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+      - name: Init
+        run: cmake -B build -D LOVR_BUILD_BUNDLE=ON -D LOVR_VERSION_HASH=${GITHUB_SHA::6}
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ./build/lovr.app/Contents/MacOS/lovr test --headless
+      - name: Package
+        run: >
+          cp $VULKAN_SDK/lib/libvulkan.1.4.321.dylib build/lovr.app/Contents/MacOS/libvulkan.1.dylib &&
+          cp $VULKAN_SDK/lib/libMoltenVK.dylib build/lovr.app/Contents/MacOS &&
+          mkdir -p build/lovr.app/Contents/Resources/vulkan/icd.d &&
+          cp $VULKAN_SDK/share/vulkan/icd.d/MoltenVK_icd.json build/lovr.app/Contents/Resources/vulkan/icd.d &&
+          sed -i '' 's|../../../lib/libMoltenVK.dylib|../../../MacOS/libMoltenVK.dylib|' build/lovr.app/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json &&
+          codesign -f -s - --preserve-metadata=identifier,entitlements,flags,runtime build/lovr.app/Contents/MacOS/* &&
+          codesign -f -s - --preserve-metadata=identifier,entitlements,flags,runtime build/lovr.app &&
+          ditto -c -k --keepParent build/lovr.app lovr.zip
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: lovr.app
+          path: lovr.zip

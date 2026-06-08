@@ -17,28 +17,6 @@ StringEntry lovrAnimationProperty[] = {
   { 0 }
 };
 
-StringEntry lovrAttributeType[] = {
-  [I8] = ENTRY("i8"),
-  [U8] = ENTRY("u8"),
-  [I16] = ENTRY("i16"),
-  [U16] = ENTRY("u16"),
-  [I32] = ENTRY("i32"),
-  [U32] = ENTRY("u32"),
-  [F32] = ENTRY("f32"),
-  { 0 }
-};
-
-StringEntry lovrDefaultAttribute[] = {
-  [ATTR_POSITION] = ENTRY("position"),
-  [ATTR_NORMAL] = ENTRY("normal"),
-  [ATTR_UV] = ENTRY("uv"),
-  [ATTR_COLOR] = ENTRY("color"),
-  [ATTR_TANGENT] = ENTRY("tangent"),
-  [ATTR_JOINTS] = ENTRY("joints"),
-  [ATTR_WEIGHTS] = ENTRY("weights"),
-  { 0 }
-};
-
 StringEntry lovrModelDrawMode[] = {
   [DRAW_POINT_LIST] = ENTRY("points"),
   [DRAW_LINE_LIST] = ENTRY("lines"),
@@ -73,6 +51,18 @@ Image* luax_checkimage(lua_State* L, int index) {
   return image;
 }
 
+static int l_lovrDataNewAudioStream(lua_State* L) {
+  uint32_t frames = luax_checku32(L, 1);
+  SampleFormat format = luax_checkenum(L, 2, SampleFormat, "f32");
+  uint32_t channels = luax_checku32(L, 3);
+  uint32_t sampleRate = luax_optu32(L, 4, 48000);
+  AudioStream* stream = lovrAudioStreamCreate(frames, format, channels, sampleRate);
+  luax_assert(L, stream);
+  luax_pushtype(L, AudioStream, stream);
+  lovrRelease(stream, lovrAudioStreamDestroy);
+  return 1;
+}
+
 static int l_lovrDataNewBlob(lua_State* L) {
   size_t size;
   uint8_t* data = NULL;
@@ -97,6 +87,43 @@ static int l_lovrDataNewBlob(lua_State* L) {
   Blob* blob = lovrBlobCreate(data, size, name);
   luax_pushtype(L, Blob, blob);
   lovrRelease(blob, lovrBlobDestroy);
+  return 1;
+}
+
+static int l_lovrDataNewBlobView(lua_State* L) {
+  Blob* parent = luax_checktype(L, 1, Blob);
+  int ioffset = luaL_checknumber(L, 2);
+  luax_check(L, ioffset >= 0, "BlobView offset must be non-negative");
+  luax_check(L, ioffset < parent->size, "BlobView offset must be less than parent size");
+  size_t offset = (size_t) ioffset;
+  size_t size = 0;
+  if (lua_isnoneornil(L, 3)) {
+    size = parent->size - offset;
+  } else {
+    int isize = luaL_checknumber(L, 3);
+    luax_check(L, isize > 0, "BlobView size must be positive");
+    size = (size_t) isize;
+    luax_check(L, size <= parent->size - offset, "BlobView offset + size can't be greater then parent's size");
+  }
+  const char* name = luaL_optstring(L, 4, "");
+  Blob* blob = lovrBlobCreateView(parent, offset, size, name);
+  luax_pushtype(L, Blob, blob);
+  lovrRelease(blob, lovrBlobDestroy);
+  return 1;
+}
+
+static bool luax_loadimage(void** context) {
+  Blob* blob = *context;
+  Image* image = lovrImageCreateFromFile(blob);
+  lovrRelease(blob, lovrBlobDestroy);
+  *context = image;
+  return !!image;
+}
+
+static int luax_pushimage(lua_State* L, bool success, void* context) {
+  if (!success) return 0;
+  luax_pushtype(L, Image, context);
+  lovrRelease(context, lovrImageDestroy);
   return 1;
 }
 
@@ -128,9 +155,7 @@ static int l_lovrDataNewImage(lua_State* L) {
       memcpy(lovrImageGetLayerData(image, 0, 0), lovrImageGetLayerData(source, 0, 0), lovrImageGetLayerSize(image, 0));
     } else {
       Blob* blob = luax_readblob(L, 1, "Texture");
-      image = lovrImageCreateFromFile(blob);
-      lovrRelease(blob, lovrBlobDestroy);
-      luax_assert(L, image);
+      return luax_yieldjob(L, luax_loadimage, luax_pushimage, blob, 1);
     }
   }
 
@@ -139,14 +164,24 @@ static int l_lovrDataNewImage(lua_State* L) {
   return 1;
 }
 
-static int l_lovrDataNewModelData(lua_State* L) {
-  Blob* blob = luax_readblob(L, 1, "Model");
+static bool luax_loadmodel(void** context) {
+  Blob* blob = *context;
   ModelData* modelData = lovrModelDataCreate(blob, luax_readfile);
   lovrRelease(blob, lovrBlobDestroy);
-  luax_assert(L, modelData);
-  luax_pushtype(L, ModelData, modelData);
-  lovrRelease(modelData, lovrModelDataDestroy);
+  *context = modelData;
+  return !!modelData;
+}
+
+static int luax_pushmodel(lua_State* L, bool success, void* context) {
+  if (!success) return 0;
+  luax_pushtype(L, ModelData, context);
+  lovrRelease(context, lovrModelDataDestroy);
   return 1;
+}
+
+static int l_lovrDataNewModelData(lua_State* L) {
+  Blob* blob = luax_readblob(L, 1, "Model");
+  return luax_yieldjob(L, luax_loadmodel, luax_pushmodel, blob, 1);
 }
 
 static int l_lovrDataNewRasterizer(lua_State* L) {
@@ -168,36 +203,18 @@ static int l_lovrDataNewRasterizer(lua_State* L) {
   return 1;
 }
 
-static int l_lovrDataNewSound(lua_State* L) {
-  int type = lua_type(L, 1);
-
-  if (type == LUA_TNUMBER) {
-    uint32_t frames = luax_checku32(L, 1);
-    SampleFormat format = luax_checkenum(L, 2, SampleFormat, "f32");
-    ChannelLayout layout = luax_checkenum(L, 3, ChannelLayout, "stereo");
-    uint32_t sampleRate = luax_optu32(L, 4, 48000);
-    Blob* blob = luax_totype(L, 5, Blob);
-    const char* other = lua_tostring(L, 5);
-    bool stream = other && !strcmp(other, "stream");
-    Sound* sound = stream ?
-      lovrSoundCreateStream(frames, format, layout, sampleRate) :
-      lovrSoundCreateRaw(frames, format, layout, sampleRate, blob);
-    luax_assert(L, sound);
-    luax_pushtype(L, Sound, sound);
-    lovrRelease(sound, lovrSoundDestroy);
-    return 1;
-  } else if (type != LUA_TSTRING && type != LUA_TUSERDATA) {
-    return luax_typeerror(L, 1, "number, string, or Blob");
-  }
-
-  Blob* blob = luax_readblob(L, 1, "Sound");
-  bool decode = lua_toboolean(L, 2);
-
-  Sound* sound = lovrSoundCreateFromFile(blob, decode);
+static bool luax_loadsound(void** context) {
+  Blob* blob = *context;
+  Sound* sound = lovrSoundLoad(blob, true);
   lovrRelease(blob, lovrBlobDestroy);
-  luax_assert(L, sound);
-  luax_pushtype(L, Sound, sound);
-  lovrRelease(sound, lovrSoundDestroy);
+  *context = sound;
+  return !!sound;
+}
+
+static int luax_pushsound(lua_State* L, bool success, void* context) {
+  if (!success) return 0;
+  luax_pushtype(L, Sound, context);
+  lovrRelease(context, lovrSoundDestroy);
   return 1;
 }
 
@@ -215,16 +232,57 @@ static int l_lovrDataNewCStruct(lua_State* L){
     return 1;
 }
 
+static int l_lovrDataNewSound(lua_State* L) {
+  int type = lua_type(L, 1);
+
+  if (type == LUA_TNUMBER) {
+    uint32_t frames = luax_checku32(L, 1);
+    SampleFormat format = luax_checkenum(L, 2, SampleFormat, "f32");
+    uint32_t channels = lua_type(L, 3) == LUA_TNUMBER ? luax_checku32(L, 3) : (1 << luax_checkenum(L, 3, ChannelLayout, NULL));
+    uint32_t sampleRate = luax_optu32(L, 4, 48000);
+    Blob* blob = luax_totype(L, 5, Blob);
+    Sound* sound = lovrSoundCreate(frames, format, channels, sampleRate);
+    luax_assert(L, sound);
+
+    if (blob) {
+      Blob* dst = lovrSoundGetBlob(sound);
+      memcpy(dst->data, blob->data, MIN(blob->size, dst->size));
+    }
+
+    luax_pushtype(L, Sound, sound);
+    lovrRelease(sound, lovrSoundDestroy);
+    return 1;
+  } else if (type != LUA_TSTRING && type != LUA_TUSERDATA) {
+    return luax_typeerror(L, 1, "number, string, or Blob");
+  }
+
+  Blob* blob = luax_readblob(L, 1, "Sound");
+  bool decode = lua_toboolean(L, 2);
+
+  if (decode) {
+    return luax_yieldjob(L, luax_loadsound, luax_pushsound, blob, 1);
+  } else {
+    Sound* sound = lovrSoundLoad(blob, decode);
+    lovrRelease(blob, lovrBlobDestroy);
+    luax_assert(L, sound);
+    luax_pushtype(L, Sound, sound);
+    lovrRelease(sound, lovrSoundDestroy);
+    return 1;
+  }
+}
+
 static const luaL_Reg lovrData[] = {
+  { "newAudioStream", l_lovrDataNewAudioStream },
   { "newBlob", l_lovrDataNewBlob },
+  { "newBlobView", l_lovrDataNewBlobView },
   { "newImage", l_lovrDataNewImage },
   { "newModelData", l_lovrDataNewModelData },
   { "newRasterizer", l_lovrDataNewRasterizer },
   { "newSound", l_lovrDataNewSound },
   { "newCStruct", l_lovrDataNewCStruct },
-  { NULL, NULL }
 };
 
+extern const luaL_Reg lovrAudioStream[];
 extern const luaL_Reg lovrBlob[];
 extern const luaL_Reg lovrImage[];
 extern const luaL_Reg lovrModelData[];
@@ -235,6 +293,7 @@ extern const luaL_Reg lovrCStruct[];
 int luaopen_lovr_data(lua_State* L) {
   lua_newtable(L);
   luax_register(L, lovrData);
+  luax_registertype(L, AudioStream);
   luax_registertype(L, Blob);
   luax_registertype(L, Image);
   luax_registertype(L, ModelData);

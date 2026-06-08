@@ -4,10 +4,8 @@
 
 #pragma once
 
-#define MAX_EVENT_NAME_LENGTH 32
-
 struct Thread;
-struct Variant;
+union Variant;
 
 typedef enum {
   DISPLAY_HEADSET,
@@ -21,6 +19,7 @@ typedef enum {
   EVENT_FOCUS,
   EVENT_MOUNT,
   EVENT_RECENTER,
+  EVENT_MODELSCHANGED,
   EVENT_RESIZE,
   EVENT_KEYPRESSED,
   EVENT_KEYRELEASED,
@@ -34,59 +33,8 @@ typedef enum {
 #endif
   EVENT_FILECHANGED,
   EVENT_PERMISSION,
-  EVENT_GPJOYSTICKMOVE,
-  EVENT_GPBUTTON,
   EVENT_CUSTOM
 } EventType;
-
-typedef enum {
-  TYPE_NIL,
-  TYPE_BOOLEAN,
-  TYPE_NUMBER,
-  TYPE_STRING,
-  TYPE_MINISTRING,
-  TYPE_POINTER,
-  TYPE_OBJECT,
-  TYPE_VECTOR,
-  TYPE_MATRIX,
-  TYPE_TABLE
-} VariantType;
-
-typedef union {
-  bool boolean;
-  double number;
-  void* pointer;
-  struct {
-    char* pointer;
-    size_t length;
-  } string;
-  struct {
-    uint8_t length;
-    char data[23];
-  } ministring;
-  struct {
-    void* pointer;
-    const char* type;
-    void (*destructor)(void*);
-  } object;
-  struct {
-    int type;
-    float data[4];
-  } vector;
-  struct {
-    float* data;
-  } matrix;
-  struct {
-    struct Variant* keys;
-    struct Variant* vals;
-    size_t length;
-  } table;
-} VariantValue;
-
-typedef struct Variant {
-  VariantType type;
-  VariantValue value;
-} Variant;
 
 typedef struct {
   int exitCode;
@@ -152,8 +100,8 @@ typedef struct {
 } PermissionEvent;
 
 typedef struct {
-  char name[MAX_EVENT_NAME_LENGTH];
-  Variant data[4];
+  char name[32];
+  union Variant* data;
   uint32_t count;
 } CustomEvent;
 
@@ -177,8 +125,6 @@ typedef struct {
   EventType type;
   EventData data;
 } Event;
-
-void lovrVariantDestroy(Variant* variant);
 
 bool lovrEventInit(void);
 void lovrEventDestroy(void);

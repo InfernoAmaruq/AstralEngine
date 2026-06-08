@@ -6,16 +6,6 @@
 #include "util.h"
 #include <stdlib.h>
 
-StringEntry lovrEffect[] = {
-  [EFFECT_ABSORPTION] = ENTRY("absorption"),
-  [EFFECT_ATTENUATION] = ENTRY("attenuation"),
-  [EFFECT_OCCLUSION] = ENTRY("occlusion"),
-  [EFFECT_REVERB] = ENTRY("reverb"),
-  [EFFECT_SPATIALIZATION] = ENTRY("spatialization"),
-  [EFFECT_TRANSMISSION] = ENTRY("transmission"),
-  { 0 }
-};
-
 StringEntry lovrAudioMaterial[] = {
   [MATERIAL_GENERIC] = ENTRY("generic"),
   [MATERIAL_BRICK] = ENTRY("brick"),
@@ -55,6 +45,24 @@ StringEntry lovrVolumeUnit[] = {
   { 0 }
 };
 
+StringEntry lovrReverbMode[] = {
+  [REVERB_LISTENER] = ENTRY("listener"),
+  [REVERB_SOURCE] = ENTRY("source"),
+  { 0 }
+};
+
+StringEntry lovrReverbType[] = {
+  [REVERB_NONE] = ENTRY("none"),
+  [REVERB_CONVOLUTION] = ENTRY("convolution"),
+  [REVERB_PARAMETRIC] = ENTRY("parametric"),
+  { 0 }
+};
+
+static int l_lovrAudioGetSampleRate(lua_State *L) {
+  lua_pushinteger(L, lovrAudioGetSampleRate());
+  return 1;
+}
+
 static void onDevice(AudioDevice* device, void* userdata) {
   lua_State* L = userdata;
   lua_createtable(L, 0, 3);
@@ -91,23 +99,27 @@ static int l_lovrAudioSetDevice(lua_State *L) {
   AudioType type = luax_checkenum(L, 1, AudioType, "playback");
   void* id = lua_touserdata(L, 2);
   size_t size = id ? luax_len(L, 2) : 0;
-  Sound* sink = lua_isnoneornil(L, 3) ? NULL : luax_checktype(L, 3, Sound);
+  bool read = type == AUDIO_CAPTURE || lua_toboolean(L, 3);
+  AudioStream* stream = luax_totype(L, 3, AudioStream);
   AudioShareMode shareMode = luax_checkenum(L, 4, AudioShareMode, "shared");
-  return luax_pushsuccess(L, lovrAudioSetDevice(type, id, size, sink, shareMode));
+  return luax_pushsuccess(L, lovrAudioSetDevice(type, id, size, read, stream, shareMode));
+}
+
+static int l_lovrAudioGetStream(lua_State* L) {
+  AudioType type = luax_checkenum(L, 1, AudioType, "playback");
+  AudioStream* stream = lovrAudioGetStream(type);
+  luax_pushtype(L, AudioStream, stream);
+  return 1;
 }
 
 static int l_lovrAudioStart(lua_State* L) {
   AudioType type = luax_checkenum(L, 1, AudioType, "playback");
-  bool started = lovrAudioStart(type);
-  lua_pushboolean(L, started);
-  return 1;
+  return luax_pushsuccess(L, lovrAudioStart(type));
 }
 
 static int l_lovrAudioStop(lua_State* L) {
   AudioType type = luax_checkenum(L, 1, AudioType, "playback");
-  bool stopped = lovrAudioStop(type);
-  lua_pushboolean(L, stopped);
-  return 1;
+  return luax_pushsuccess(L, lovrAudioStop(type));
 }
 
 static int l_lovrAudioIsStarted(lua_State* L) {
@@ -115,6 +127,11 @@ static int l_lovrAudioIsStarted(lua_State* L) {
   bool started = lovrAudioIsStarted(type);
   lua_pushboolean(L, started);
   return 1;
+}
+
+static int l_lovrAudioUpdate(lua_State* L) {
+  lovrAudioUpdate(luax_checkfloat(L, 1));
+  return 0;
 }
 
 static int l_lovrAudioGetVolume(lua_State* L) {
@@ -189,57 +206,48 @@ static int l_lovrAudioSetPose(lua_State *L) {
   return 0;
 }
 
-static int l_lovrAudioSetGeometry(lua_State* L) {
-  float* vertices;
-  uint32_t* indices;
-  uint32_t vertexCount, indexCount;
-  bool shouldFree;
-  int index = luax_readmesh(L, 1, &vertices, &vertexCount, &indices, &indexCount, &shouldFree);
-  AudioMaterial material = luax_checkenum(L, index, AudioMaterial, "generic");
-  bool success = lovrAudioSetGeometry(vertices, indices, vertexCount, indexCount, material);
-  if (shouldFree) {
-    lovrFree(vertices);
-    lovrFree(indices);
-  }
-  lua_pushboolean(L, success);
-  return 1;
-}
-
-static int l_lovrAudioGetSpatializer(lua_State *L) {
-  lua_pushstring(L, lovrAudioGetSpatializer());
-  return 1;
-}
-
-static int l_lovrAudioGetSampleRate(lua_State *L) {
-  lua_pushinteger(L, lovrAudioGetSampleRate());
-  return 1;
-}
-
-static int l_lovrAudioGetAbsorption(lua_State* L) {
-  float absorption[3];
-  lovrAudioGetAbsorption(absorption);
-  lua_pushnumber(L, absorption[0]);
-  lua_pushnumber(L, absorption[1]);
-  lua_pushnumber(L, absorption[2]);
-  return 3;
-}
-
-static int l_lovrAudioSetAbsorption(lua_State* L) {
-  float absorption[3];
-  absorption[0] = luax_checkfloat(L, 1);
-  absorption[1] = luax_checkfloat(L, 2);
-  absorption[2] = luax_checkfloat(L, 3);
-  lovrAudioSetAbsorption(absorption);
+static int l_lovrAudioSetHRTF(lua_State* L) {
+  Blob* blob = lua_isnoneornil(L, 1) ? NULL : luax_readblob(L, 1, "HRTF");
+  luax_assert(L, lovrAudioSetHRTF(blob));
+  lovrRelease(blob, lovrBlobDestroy);
   return 0;
 }
 
-static int l_lovrAudioNewSource(lua_State* L) {
-  Sound* sound = luax_totype(L, 1, Sound);
+typedef struct {
+  Blob* blob;
+  bool spatial;
+  bool pitchable;
+  Source* source;
+} SourceContext;
 
+static bool luax_loadsource(void** userdata) {
+  SourceContext* context = *userdata;
+  Sound* sound = lovrSoundLoad(context->blob, true);
+  lovrRelease(context->blob, lovrBlobDestroy);
+  context->spatial |= lovrSoundGetChannelCount(sound) > 2;
+  context->source = lovrSourceCreate(sound, context->pitchable, context->spatial);
+  lovrRelease(sound, lovrSoundDestroy);
+  return context->source;
+}
+
+static int luax_pushsource(lua_State* L, bool success, void* userdata) {
+  SourceContext* context = userdata;
+  if (success) {
+    luax_pushtype(L, Source, context->source);
+    lovrRelease(context->source, lovrSourceDestroy);
+    lovrFree(context);
+    return 1;
+  } else {
+    lovrFree(context);
+    return 0;
+  }
+}
+
+static int l_lovrAudioNewSource(lua_State* L) {
   bool decode = false;
+  bool spatial = false;
   bool pitchable = true;
-  bool spatial = true;
-  uint32_t effects = ~0u;
+
   if (lua_gettop(L) >= 2) {
     luaL_checktype(L, 2, LUA_TTABLE);
 
@@ -247,43 +255,39 @@ static int l_lovrAudioNewSource(lua_State* L) {
     decode = lua_toboolean(L, -1);
     lua_pop(L, 1);
 
-    lua_getfield(L, 2, "pitchable");
-    if (!lua_isnil(L, -1)) pitchable = lua_toboolean(L, -1);
-    lua_pop(L, 1);
-
-    lua_getfield(L, 2, "effects");
-    if (!lua_isnil(L, -1)) {
-      effects = 0;
-      luax_check(L, lua_istable(L, -1), "Source effects must be a table");
-      lua_pushnil(L);
-      while (lua_next(L, -2) != 0) {
-        if (lua_type(L, -2) == LUA_TSTRING) {
-          Effect effect = luax_checkenum(L, -2, Effect, NULL);
-          bool enabled = lua_toboolean(L, -1);
-          effects |= enabled << effect;
-        } else if (lua_type(L, -2) == LUA_TNUMBER) {
-          Effect effect = luax_checkenum(L, -1, Effect, NULL);
-          effects |= 1 << effect;
-        }
-        lua_pop(L, 1);
-      }
-    }
-    lua_pop(L, 1);
-
     lua_getfield(L, 2, "spatial");
     if (!lua_isnil(L, -1)) spatial = lua_toboolean(L, -1);
     lua_pop(L, 1);
+
+    lua_getfield(L, 2, "pitchable");
+    if (!lua_isnil(L, -1)) pitchable = lua_toboolean(L, -1);
+    lua_pop(L, 1);
   }
 
-  if (!sound) {
+  AudioStream* stream = luax_totype(L, 1, AudioStream);
+  Sound* sound = stream ? lovrAudioStreamGetSound(stream) : luax_totype(L, 1, Sound);
+
+  if (lua_type(L, 1) == LUA_TSTRING || luax_totype(L, 1, Blob)) {
     Blob* blob = luax_readblob(L, 1, "Source");
-    sound = lovrSoundCreateFromFile(blob, decode);
-    lovrRelease(blob, lovrBlobDestroy);
-  } else {
+
+    if (decode) {
+      SourceContext* context = lovrCalloc(sizeof(SourceContext));
+      context->blob = blob;
+      context->spatial = spatial;
+      context->pitchable = pitchable;
+      return luax_yieldjob(L, luax_loadsource, luax_pushsource, context, 1);
+    } else {
+      sound = lovrSoundLoad(blob, decode);
+      lovrRelease(blob, lovrBlobDestroy);
+      luax_assert(L, sound);
+    }
+  } else if (sound) {
     lovrRetain(sound);
+  } else {
+    return luax_typeerror(L, 1, "string, Blob, Sound, or AudioStream");
   }
 
-  Source* source = lovrSourceCreate(sound, pitchable, spatial, effects);
+  Source* source = lovrSourceCreate(sound, pitchable, spatial);
   lovrRelease(sound, lovrSoundDestroy);
   luax_assert(L, source);
   luax_pushtype(L, Source, source);
@@ -291,13 +295,45 @@ static int l_lovrAudioNewSource(lua_State* L) {
   return 1;
 }
 
+static int l_lovrAudioNewAudioMesh(lua_State* L) {
+  float* vertices;
+  uint32_t* indices;
+  uint32_t vertexCount, indexCount;
+  int index = luax_readmesh(L, 1, &vertices, &vertexCount, &indices, &indexCount);
+
+  AudioMaterial material;
+  AudioMaterial* materials = NULL;
+  if (lua_istable(L, index)) {
+    materials = lovrMalloc(indexCount / 3 * sizeof(AudioMaterial));
+    for (uint32_t i = 0; i < indexCount / 3; i++) {
+      lua_rawgeti(L, index, i + 1);
+      materials[i] = luax_checkenum(L, index, AudioMaterial, "generic");
+      lua_pop(L, 1);
+    }
+  } else {
+    material = luax_checkenum(L, index, AudioMaterial, "generic");
+  }
+
+  AudioMesh* mesh = lovrAudioMeshCreate(vertices, indices, vertexCount, indexCount, materials, material);
+  lovrFree(vertices);
+  lovrFree(indices);
+  lovrFree(materials);
+  luax_assert(L, mesh);
+  luax_pushtype(L, AudioMesh, mesh);
+  lovrRelease(mesh, lovrAudioMeshDestroy);
+  return 1;
+}
+
 static const luaL_Reg lovrAudio[] = {
+  { "getSampleRate", l_lovrAudioGetSampleRate },
   { "getDevices", l_lovrAudioGetDevices },
   { "getDevice", l_lovrAudioGetDevice },
   { "setDevice", l_lovrAudioSetDevice },
+  { "getStream", l_lovrAudioGetStream },
   { "start", l_lovrAudioStart },
   { "stop", l_lovrAudioStop },
   { "isStarted", l_lovrAudioIsStarted },
+  { "update", l_lovrAudioUpdate },
   { "getVolume", l_lovrAudioGetVolume },
   { "setVolume", l_lovrAudioSetVolume },
   { "getPosition", l_lovrAudioGetPosition },
@@ -306,51 +342,77 @@ static const luaL_Reg lovrAudio[] = {
   { "setOrientation", l_lovrAudioSetOrientation },
   { "getPose", l_lovrAudioGetPose },
   { "setPose", l_lovrAudioSetPose },
-  { "setGeometry", l_lovrAudioSetGeometry },
-  { "getSpatializer", l_lovrAudioGetSpatializer },
-  { "getSampleRate", l_lovrAudioGetSampleRate },
-  { "getAbsorption", l_lovrAudioGetAbsorption },
-  { "setAbsorption", l_lovrAudioSetAbsorption },
+  { "setHRTF", l_lovrAudioSetHRTF },
   { "newSource", l_lovrAudioNewSource },
+  { "newAudioMesh", l_lovrAudioNewAudioMesh },
   { NULL, NULL }
 };
 
 extern const luaL_Reg lovrSource[];
+extern const luaL_Reg lovrAudioMesh[];
 
 int luaopen_lovr_audio(lua_State* L) {
-  bool start = true;
-  const char *spatializer = NULL;
-  uint32_t sampleRate = 48000; // Set default here
+  AudioConfig config = {
+    .debug = false,
+    .autostart = true,
+    .sampleRate = 48000,
+    .reverb.type = REVERB_CONVOLUTION,
+    .reverb.rays = 4096,
+    .reverb.bounces = 4,
+    .reverb.duration = 2.f,
+    .reverb.rate = .1f
+  };
+
   luax_pushconf(L);
   if (lua_istable(L, -1)) {
     lua_getfield(L, -1, "audio");
     if (lua_istable(L, -1)) {
-      lua_getfield(L, -1, "spatializer");
-      spatializer = lua_tostring(L, -1);
+      lua_getfield(L, -1, "debug");
+      config.debug = lua_toboolean(L, -1);
       lua_pop(L, 1);
 
       lua_getfield(L, -1, "samplerate");
-      sampleRate = lua_isnil(L, -1) ? sampleRate : luax_checku32(L, -1);
+      config.sampleRate = lua_isnil(L, -1) ? config.sampleRate : luax_checku32(L, -1);
       lua_pop(L, 1);
 
       lua_getfield(L, -1, "start");
-      start = lua_isnil(L, -1) || lua_toboolean(L, -1);
+      config.autostart = lua_isnil(L, -1) || lua_toboolean(L, -1);
+      lua_pop(L, 1);
+
+      lua_getfield(L, -1, "reverb");
+      if (lua_istable(L, -1)) {
+        lua_getfield(L, -1, "type");
+        config.reverb.type = luax_checkenum(L, -1, ReverbType, NULL);
+        lua_pop(L, 1);
+
+        lua_getfield(L, -1, "rays");
+        config.reverb.rays = luax_checku32(L, -1);
+        lua_pop(L, 1);
+
+        lua_getfield(L, -1, "bounces");
+        config.reverb.bounces = luax_checku32(L, -1);
+        lua_pop(L, 1);
+
+        lua_getfield(L, -1, "duration");
+        config.reverb.duration = luax_checkfloat(L, -1);
+        lua_pop(L, 1);
+
+        lua_getfield(L, -1, "rate");
+        config.reverb.rate = luax_checkfloat(L, -1);
+        lua_pop(L, 1);
+      }
       lua_pop(L, 1);
     }
     lua_pop(L, 1);
   }
   lua_pop(L, 1);
 
-  luax_assert(L, lovrAudioInit(spatializer, sampleRate));
+  luax_assert(L, lovrAudioInit(&config));
   luax_atexit(L, lovrAudioDestroy);
-
-  if (start) {
-    lovrAudioSetDevice(AUDIO_PLAYBACK, NULL, 0, NULL, AUDIO_SHARED);
-    lovrAudioStart(AUDIO_PLAYBACK);
-  }
 
   lua_newtable(L);
   luax_register(L, lovrAudio);
   luax_registertype(L, Source);
+  luax_registertype(L, AudioMesh);
   return 1;
 }

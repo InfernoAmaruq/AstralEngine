@@ -1,5 +1,4 @@
 #include "api.h"
-#include "event/event.h"
 #include "thread/thread.h"
 #include "util.h"
 

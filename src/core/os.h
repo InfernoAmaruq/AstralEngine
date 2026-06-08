@@ -1,4 +1,3 @@
-#include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -8,6 +7,7 @@
 typedef struct os_window_config {
   uint32_t width;
   uint32_t height;
+  bool centered;
   bool fullscreen;
   bool resizable;
   const char* title;
@@ -17,11 +17,6 @@ typedef struct os_window_config {
     uint32_t height;
   } icon;
 } os_window_config;
-
-typedef enum {
-  MOUSE_LEFT,
-  MOUSE_RIGHT
-} os_mouse_button;
 
 typedef enum {
   MOUSE_MODE_NORMAL,
@@ -175,15 +170,11 @@ void os_request_permission(os_permission permission);
 const char* os_get_clipboard_text(void);
 void os_set_clipboard_text(const char* text);
 
-void* os_vm_init(size_t size);
-bool os_vm_free(void* p, size_t size);
-bool os_vm_commit(void* p, size_t size);
-bool os_vm_release(void* p, size_t size);
-
 void os_thread_attach(void);
 void os_thread_detach(void);
+void os_thread_set_name(const char* name);
 
-void os_poll_events(void);
+void os_poll_events(double timeout);
 void os_on_quit(fn_quit* callback);
 void os_on_visible(fn_visible* callback);
 void os_on_focus(fn_focus* callback);
@@ -199,6 +190,8 @@ bool os_window_open(const os_window_config* config);
 bool os_window_is_open(void);
 bool os_window_is_visible(void);
 bool os_window_is_focused(void);
+bool os_window_is_fullscreen(void);
+void os_window_set_fullscreen(bool fullscreen);
 void os_window_get_size(uint32_t* width, uint32_t* height);
 float os_window_get_pixel_density(void);
 void os_window_message_box(const char* message);
@@ -206,9 +199,6 @@ void os_window_message_box(const char* message);
 void os_get_mouse_position(double* x, double* y);
 os_mouse_mode os_get_mouse_mode(void);
 void os_set_mouse_mode(os_mouse_mode mode);
-
-bool os_is_mouse_down(os_mouse_button button);
-bool os_is_key_down(os_key key);
 
 size_t os_get_home_directory(char* buffer, size_t size);
 size_t os_get_data_directory(char* buffer, size_t size);
@@ -227,3 +217,4 @@ uintptr_t os_get_xcb_window(void);
 void os_set_window_size(uint32_t width, uint32_t height);
 void os_set_cursor_icon(os_cursor_icon icon);
 int os_set_precise_mouse(int Bool);
+void os_set_emscripten_loop(bool (*loop)(void*), void* arg);

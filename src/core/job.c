@@ -4,43 +4,45 @@
 #include <string.h>
 
 #define MAX_WORKERS 64
-#define MAX_JOBS 1024
+#define MAX_JOBS 4096
+#define JOB_MASK (MAX_JOBS - 1)
 
-struct job {
-  job* next;
+typedef struct {
   fn_job* fn;
   void* arg;
-  atomic_uint done;
-};
+} job;
 
 static struct {
+  atomic_uint head;
+  atomic_uint tail;
   job jobs[MAX_JOBS];
   thrd_t workers[MAX_WORKERS];
   uint32_t workerCount;
-  job* head;
-  job* tail;
-  job* pool;
+  fn_hook* workerInit;
+  fn_hook* workerQuit;
   cnd_t hasJob;
   mtx_t lock;
   bool quit;
 } state;
 
-// Must hold lock, this will unlock it, state.head must exist
+// Must hold lock
 static void runJob(void) {
-  job* job = state.head;
-  state.head = job->next;
-  if (!job->next) state.tail = NULL;
+  job job = state.jobs[state.head++ & JOB_MASK];
   mtx_unlock(&state.lock);
-
-  job->fn(job->arg);
-  job->done = true;
+  job.fn(job.arg);
 }
 
 static int workerLoop(void* arg) {
+  uint32_t id = (uint32_t) (uintptr_t) arg;
+
+  if (state.workerInit) {
+    state.workerInit(id);
+  }
+
   for (;;) {
     mtx_lock(&state.lock);
 
-    while (!state.head && !state.quit) {
+    while (state.head == state.tail && !state.quit) {
       cnd_wait(&state.hasJob, &state.lock);
     }
 
@@ -52,18 +54,20 @@ static int workerLoop(void* arg) {
   }
 
   mtx_unlock(&state.lock);
+
+  if (state.workerQuit) {
+    state.workerQuit(id);
+  }
+
   return 0;
 }
 
-bool job_init(uint32_t count) {
+bool job_init(uint32_t count, fn_hook* init, fn_hook* quit) {
   mtx_init(&state.lock, mtx_plain);
   cnd_init(&state.hasJob);
 
-  state.pool = state.jobs;
-  for (uint32_t i = 0; i < MAX_JOBS - 1; i++) {
-    state.jobs[i].next = &state.jobs[i + 1];
-  }
-
+  state.workerInit = init;
+  state.workerQuit = quit;
   if (count > MAX_WORKERS) count = MAX_WORKERS;
   for (uint32_t i = 0; i < count; i++, state.workerCount++) {
     if (thrd_create(&state.workers[i], workerLoop, (void*) (uintptr_t) i) != thrd_success) {
@@ -75,7 +79,9 @@ bool job_init(uint32_t count) {
 }
 
 void job_destroy(void) {
+  mtx_lock(&state.lock);
   state.quit = true;
+  mtx_unlock(&state.lock);
   cnd_broadcast(&state.hasJob);
   for (uint32_t i = 0; i < state.workerCount; i++) {
     thrd_join(state.workers[i], NULL);
@@ -85,52 +91,28 @@ void job_destroy(void) {
   memset(&state, 0, sizeof(state));
 }
 
-job* job_start(fn_job* fn, void* arg) {
+bool job_start(fn_job* fn, void* arg) {
   mtx_lock(&state.lock);
 
-  if (!state.pool) {
+  if (state.tail - state.head >= MAX_JOBS) {
     mtx_unlock(&state.lock);
-    fn(arg);
-    return NULL;
+    return false;
   }
 
-  job* job = state.pool;
-  state.pool = job->next;
-
-  if (state.tail) {
-    state.tail->next = job;
-    state.tail = job;
-  } else {
-    state.head = job;
-    state.tail = job;
-    cnd_signal(&state.hasJob);
-  }
-
-  job->next = NULL;
-  job->done = false;
-  job->fn = fn;
-  job->arg = arg;
-
+  bool empty = state.head == state.tail;
+  state.jobs[(state.tail++) & JOB_MASK] = (job) { fn, arg };
+  if (empty) cnd_broadcast(&state.hasJob);
   mtx_unlock(&state.lock);
-  return job;
+  return true;
 }
 
-void job_wait(job* job) {
-  if (!job) return;
-
-  while (!job->done) {
-    mtx_lock(&state.lock);
-
-    if (state.head) {
-      runJob();
-    } else {
-      mtx_unlock(&state.lock);
-      thrd_yield();
-    }
-  }
-
+void job_spin(void) {
   mtx_lock(&state.lock);
-  job->next = state.pool;
-  state.pool = job;
-  mtx_unlock(&state.lock);
+
+  if (state.head == state.tail) {
+    mtx_unlock(&state.lock);
+    thrd_yield();
+  } else {
+    runJob();
+  }
 }

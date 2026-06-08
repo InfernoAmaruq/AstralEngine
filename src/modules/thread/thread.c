@@ -11,19 +11,21 @@
 #include <threads.h>
 
 struct Thread {
-  uint32_t ref;
+  atomic_uint ref;
   thrd_t handle;
   mtx_t lock;
+  mtx_t waitLock;
   ThreadFunction* function;
   Blob* body;
   Variant arguments[MAX_THREAD_ARGUMENTS];
   uint32_t argumentCount;
   char* error;
+  bool joinable;
   bool running;
 };
 
 struct Channel {
-  uint32_t ref;
+  atomic_uint ref;
   mtx_t lock;
   cnd_t cond;
   arr_t(Variant) messages;
@@ -33,28 +35,44 @@ struct Channel {
   uint64_t hash;
 };
 
+static atomic_uint ref;
+
 static struct {
-  uint32_t ref;
   uint32_t workers;
+  void (*onWorkerQuit)(void);
   mtx_t channelLock;
   map_t channels;
 } state;
 
-bool lovrThreadModuleInit(int32_t workers) {
-  if (atomic_fetch_add(&state.ref, 1)) return false;
+static void workerInit(uint32_t id) {
+  lovrProfileSetThreadName("Worker");
+  os_thread_set_name("Worker");
+}
+
+static void workerQuit(uint32_t id) {
+  if (state.onWorkerQuit) {
+    state.onWorkerQuit();
+  }
+}
+
+bool lovrThreadModuleInit(int32_t workers, void (*onWorkerQuit)(void)) {
+  if (!lovrModuleAcquire(&ref)) return true;
+
   mtx_init(&state.channelLock, mtx_plain);
   map_init(&state.channels, 0);
 
   uint32_t cores = os_get_core_count();
   if (workers < 0) workers += cores;
   state.workers = MAX(workers, 0);
-  job_init(state.workers);
+  state.onWorkerQuit = onWorkerQuit;
+  job_init(state.workers, workerInit, workerQuit);
 
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrThreadModuleDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) return;
+  if (!lovrModuleRelease(&ref)) return;
   for (size_t i = 0; i < state.channels.size; i++) {
     if (state.channels.values[i] != MAP_NIL) {
       lovrRelease((Channel*) (uintptr_t) state.channels.values[i], lovrChannelDestroy);
@@ -64,6 +82,7 @@ void lovrThreadModuleDestroy(void) {
   map_free(&state.channels);
   job_destroy();
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
 
 uint32_t lovrThreadGetWorkerCount(void) {
@@ -120,6 +139,7 @@ Thread* lovrThreadCreate(ThreadFunction* function, Blob* body) {
   thread->body = body;
   thread->function = function;
   mtx_init(&thread->lock, mtx_plain);
+  mtx_init(&thread->waitLock, mtx_plain);
   lovrRetain(body);
   return thread;
 }
@@ -127,7 +147,8 @@ Thread* lovrThreadCreate(ThreadFunction* function, Blob* body) {
 void lovrThreadDestroy(void* ref) {
   Thread* thread = ref;
   mtx_destroy(&thread->lock);
-  if (thread->handle) thrd_detach(thread->handle);
+  mtx_destroy(&thread->waitLock);
+  if (thread->joinable) thrd_detach(thread->handle);
   for (uint32_t i = 0; i < thread->argumentCount; i++) {
     lovrVariantDestroy(&thread->arguments[i]);
   }
@@ -163,13 +184,21 @@ bool lovrThreadStart(Thread* thread, Variant* arguments, uint32_t argumentCount)
     return lovrSetError("Could not create thread...sorry");
   }
 
+  thread->joinable = true;
   thread->running = true;
   mtx_unlock(&thread->lock);
   return true;
 }
 
 void lovrThreadWait(Thread* thread) {
-  if (thread->handle) thrd_join(thread->handle, NULL);
+  mtx_lock(&thread->waitLock);
+
+  if (thread->joinable) {
+    thrd_join(thread->handle, NULL);
+    thread->joinable = false;
+  }
+
+  mtx_unlock(&thread->waitLock);
 }
 
 bool lovrThreadIsRunning(Thread* thread) {

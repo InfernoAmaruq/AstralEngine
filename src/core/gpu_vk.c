@@ -1,11 +1,16 @@
 #include "gpu.h"
 #include <string.h>
+#include <threads.h>
+#include <stdatomic.h>
 
 #ifdef _WIN32
 #define THREAD_LOCAL __declspec(thread)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
+#ifdef __APPLE__
+#include <stdlib.h>
+#endif
 #define THREAD_LOCAL __thread
 #include <dlfcn.h>
 #endif
@@ -28,14 +33,26 @@ typedef struct gpu_memory gpu_memory;
 struct gpu_buffer {
   VkBuffer handle;
   gpu_memory* memory;
+  VkDeviceSize offset;
+};
+
+struct gpu_tree {
+  VkAccelerationStructureKHR handle;
+  VkAccelerationStructureGeometryKHR* geometries;
+  VkAccelerationStructureBuildRangeInfoKHR* ranges;
+  VkBuildAccelerationStructureFlagBitsKHR flags;
+  gpu_buffer buffer;
+  gpu_buffer scratch;
 };
 
 struct gpu_texture {
   VkImage handle;
   VkImageView view;
   gpu_memory* memory;
+  VkDeviceSize offset;
   VkImageAspectFlagBits aspect;
   VkImageLayout layout;
+  uint32_t samples;
   uint32_t layers;
   uint8_t baseLevel;
   uint8_t format;
@@ -49,7 +66,7 @@ struct gpu_sampler {
 
 struct gpu_layout {
   VkDescriptorSetLayout handle;
-  uint32_t descriptorCounts[8];
+  uint32_t descriptorCounts[9];
 };
 
 struct gpu_shader {
@@ -65,15 +82,6 @@ struct gpu_bundle {
   VkDescriptorSet handle;
 };
 
-struct gpu_pass {
-  VkRenderPass handle;
-  uint8_t colorCount;
-  uint8_t samples;
-  uint8_t loadMask;
-  bool depthLoad;
-  bool surface;
-};
-
 struct gpu_pipeline {
   VkPipeline handle;
 };
@@ -84,32 +92,37 @@ struct gpu_tally {
 
 struct gpu_stream {
   VkCommandBuffer commands;
+  gpu_stream* next;
 };
 
 size_t gpu_sizeof_buffer(void) { return sizeof(gpu_buffer); }
+size_t gpu_sizeof_tree(void) { return sizeof(gpu_tree); }
 size_t gpu_sizeof_texture(void) { return sizeof(gpu_texture); }
 size_t gpu_sizeof_sampler(void) { return sizeof(gpu_sampler); }
 size_t gpu_sizeof_layout(void) { return sizeof(gpu_layout); }
 size_t gpu_sizeof_shader(void) { return sizeof(gpu_shader); }
 size_t gpu_sizeof_bundle_pool(void) { return sizeof(gpu_bundle_pool); }
 size_t gpu_sizeof_bundle(void) { return sizeof(gpu_bundle); }
-size_t gpu_sizeof_pass(void) { return sizeof(gpu_pass); }
 size_t gpu_sizeof_pipeline(void) { return sizeof(gpu_pipeline); }
 size_t gpu_sizeof_tally(void) { return sizeof(gpu_tally); }
 
 // Internals
 
-struct gpu_memory {
-  VkDeviceMemory handle;
-  void* pointer;
-  uint32_t refs;
-};
+#define FRAME_DEPTH 2
+
+// GPU memory blocks are divided into 16 KB pages. Allocators have arrays with
+// an entry for every page, which they use to track regions of allocated and
+// free spaces.
+
+#define GPU_PAGE_SIZE (1 << 14)
+#define GPU_MAX_PAGES ((1 << 26) / GPU_PAGE_SIZE)
 
 typedef enum {
   GPU_MEMORY_BUFFER_STATIC,
   GPU_MEMORY_BUFFER_STREAM,
   GPU_MEMORY_BUFFER_UPLOAD,
   GPU_MEMORY_BUFFER_DOWNLOAD,
+  GPU_MEMORY_BUFFER_TREE,
   GPU_MEMORY_TEXTURE_COLOR,
   GPU_MEMORY_TEXTURE_D16,
   GPU_MEMORY_TEXTURE_D24,
@@ -125,43 +138,67 @@ typedef enum {
   GPU_MEMORY_COUNT
 } gpu_memory_type;
 
-typedef struct {
-  gpu_memory* block;
-  uint32_t cursor;
-  uint16_t memoryType;
-  uint16_t memoryFlags;
-} gpu_allocator;
+struct gpu_memory {
+  VkDeviceMemory handle;
+  void* pointer;
+  uint32_t refs;
+  gpu_memory_type type;
+};
 
 typedef struct {
-  void* handle;
+  uint16_t allocated : 1;
+  uint16_t pageCount : 15;
+} gpu_alloc_entry;
+
+typedef struct {
+  gpu_memory* block;
+  uint32_t pageCount;
+  uint32_t heapIndex;
+  uint32_t memoryType;
+  uint32_t fallbackMemoryType;
+  VkMemoryPropertyFlags memoryFlags;
+  gpu_alloc_entry regions[GPU_MAX_PAGES];
+} gpu_allocator;
+
+typedef struct gpu_victim {
+  struct gpu_victim* next;
   VkObjectType type;
   uint32_t tick;
+  void* handle;
 } gpu_victim;
 
 typedef struct {
-  uint32_t head;
-  uint32_t tail;
-  gpu_victim data[1024];
+  gpu_victim* head;
+  gpu_victim* tail;
+  gpu_victim* pool;
+  mtx_t lock;
 } gpu_morgue;
 
 typedef struct {
   VkSurfaceKHR handle;
   VkSwapchainKHR swapchain;
   VkSurfaceCapabilitiesKHR capabilities;
-  VkSurfaceFormatKHR format;
-  VkSemaphore semaphore;
+  VkSurfaceFormatKHR vkformat;
+  gpu_texture_format format;
+  uint32_t acquireTick[FRAME_DEPTH];
+  VkSemaphore acquireSemaphores[FRAME_DEPTH];
+  VkSemaphore acquireSemaphore;
+  VkSemaphore presentSemaphores[8];
   gpu_texture images[8];
   uint32_t imageIndex;
+  uint32_t width;
+  uint32_t height;
   bool vsync;
   bool valid;
 } gpu_surface;
 
-typedef struct {
-  VkCommandPool pool;
-  gpu_stream streams[64];
-  VkSemaphore semaphores[2];
-  VkFence fence;
-} gpu_tick;
+typedef struct gpu_stream_pool {
+  struct gpu_stream_pool* next;
+  VkCommandPool handle;
+  gpu_stream* head;
+  gpu_stream* tail;
+  uint32_t tick;
+} gpu_stream_pool;
 
 typedef struct {
   bool portability;
@@ -176,15 +213,32 @@ typedef struct {
   bool formatList;
   bool renderPass2;
   bool synchronization2;
+  bool dynamicRendering;
+  bool timelineSemaphore;
   bool scalarBlockLayout;
   bool foveation;
+  bool pipelineCacheControl;
+  bool memoryBudget;
+  bool accelerationStructure;
+  bool bufferDeviceAddress;
+  bool descriptorIndexing;
+  bool deferredHostOperations;
+  bool shaderFloatControls;
+  bool spirv14;
+  bool rayQuery;
 } gpu_extensions;
 
 // State
 
-static THREAD_LOCAL struct {
-  char error[256];
-} thread;
+typedef struct gpu_thread_state {
+  struct gpu_thread_state* next;
+  gpu_stream_pool* streamPools;
+  gpu_stream_pool* activeStreamPool;
+  char error[255];
+  bool initialized;
+} gpu_thread_state;
+
+static THREAD_LOCAL gpu_thread_state thread;
 
 static struct {
   void* library;
@@ -196,14 +250,16 @@ static struct {
   VkDevice device;
   VkQueue queue;
   uint32_t queueFamilyIndex;
+  uint32_t tick;
+  uint32_t frame;
+  VkSemaphore semaphore;
   VkPipelineCache pipelineCache;
   VkDebugUtilsMessengerEXT messenger;
   gpu_allocator allocators[GPU_MEMORY_COUNT];
   uint8_t allocatorLookup[GPU_MEMORY_COUNT];
+  mtx_t allocatorLock;
   gpu_memory memory[1024];
-  uint32_t streamCount;
-  uint32_t tick[2];
-  gpu_tick ticks[2];
+  _Atomic(gpu_thread_state*) threads;
   gpu_morgue morgue;
 } state;
 
@@ -219,19 +275,20 @@ enum { LINEAR, SRGB };
 #define LOG(s) if (state.config.fnLog) state.config.fnLog(state.config.userdata, s)
 #define VK(f, s) if (!vkcheck(f, s))
 #define ASSERT(c, s) if (!(c) && (error(s), true))
-#define TICK_MASK (COUNTOF(state.ticks) - 1)
-#define MORGUE_MASK (COUNTOF(state.morgue.data) - 1)
+#define FRAME_MASK (FRAME_DEPTH - 1)
 
 static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkDeviceSize* offset);
-static void release(gpu_memory* memory);
+static void release(gpu_memory* memory, VkDeviceSize offset);
 static void condemn(void* handle, VkObjectType type);
-static void expunge(void);
+static void expunge(uint64_t tick);
+static uint64_t getFinishedTick(void);
 static bool hasLayer(VkLayerProperties* layers, uint32_t count, const char* layer);
 static bool hasExtension(VkExtensionProperties* extensions, uint32_t count, const char* extension);
 static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type);
 static bool transitionAttachment(gpu_texture* texture, bool begin, bool resolve, bool discard, VkImageMemoryBarrier2KHR* barrier);
 static VkImageLayout getNaturalLayout(uint32_t usage, VkImageAspectFlags aspect);
 static VkFormat convertFormat(gpu_texture_format format, int colorspace);
+static VkFormat convertAttributeType(gpu_attribute_type type);
 static VkPipelineStageFlags2 convertPhase(gpu_phase phase, bool dst);
 static VkAccessFlags2 convertCache(gpu_cache cache);
 static VkBool32 relay(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT flags, const VkDebugUtilsMessengerCallbackDataEXT* data, void* userdata);
@@ -257,7 +314,7 @@ static void error(const char* message);
   X(vkEnumeratePhysicalDevices)\
   X(vkGetPhysicalDeviceProperties2)\
   X(vkGetPhysicalDeviceFeatures2)\
-  X(vkGetPhysicalDeviceMemoryProperties)\
+  X(vkGetPhysicalDeviceMemoryProperties2)\
   X(vkGetPhysicalDeviceFormatProperties)\
   X(vkGetPhysicalDeviceQueueFamilyProperties)\
   X(vkGetPhysicalDeviceSurfaceSupportKHR)\
@@ -292,6 +349,8 @@ static void error(const char* message);
   X(vkWaitForFences)\
   X(vkCreateSemaphore)\
   X(vkDestroySemaphore)\
+  X(vkWaitSemaphoresKHR)\
+  X(vkGetSemaphoreCounterValueKHR)\
   X(vkCmdPipelineBarrier2KHR)\
   X(vkCreateQueryPool)\
   X(vkDestroyQueryPool)\
@@ -305,6 +364,7 @@ static void error(const char* message);
   X(vkDestroyBuffer)\
   X(vkGetBufferMemoryRequirements)\
   X(vkBindBufferMemory)\
+  X(vkGetBufferDeviceAddressKHR)\
   X(vkCreateImage)\
   X(vkDestroyImage)\
   X(vkGetImageMemoryRequirements)\
@@ -326,6 +386,8 @@ static void error(const char* message);
   X(vkDestroyRenderPass)\
   X(vkCmdBeginRenderPass2KHR)\
   X(vkCmdEndRenderPass2KHR)\
+  X(vkCmdBeginRenderingKHR)\
+  X(vkCmdEndRenderingKHR)\
   X(vkCreateImageView)\
   X(vkDestroyImageView)\
   X(vkCreateFramebuffer)\
@@ -359,7 +421,11 @@ static void error(const char* message);
   X(vkCmdDrawIndirect)\
   X(vkCmdDrawIndexedIndirect)\
   X(vkCmdDispatch)\
-  X(vkCmdDispatchIndirect)
+  X(vkCmdDispatchIndirect)\
+  X(vkGetAccelerationStructureBuildSizesKHR)\
+  X(vkCreateAccelerationStructureKHR)\
+  X(vkDestroyAccelerationStructureKHR)\
+  X(vkCmdBuildAccelerationStructuresKHR)
 
 // Used to load/declare Vulkan functions without lots of clutter
 #define GPU_LOAD_ANONYMOUS(fn) fn = (PFN_##fn) vkGetInstanceProcAddr(NULL, #fn);
@@ -395,23 +461,22 @@ bool gpu_buffer_init(gpu_buffer* buffer, gpu_buffer_info* info) {
 
   nickname(buffer->handle, VK_OBJECT_TYPE_BUFFER, info->label);
 
-  VkDeviceSize offset;
   VkMemoryRequirements requirements;
   vkGetBufferMemoryRequirements(state.device, buffer->handle, &requirements);
 
-  if ((buffer->memory = allocate((gpu_memory_type) info->type, requirements, &offset)) == NULL) {
+  if ((buffer->memory = allocate((gpu_memory_type) info->type, requirements, &buffer->offset)) == NULL) {
     vkDestroyBuffer(state.device, buffer->handle, NULL);
     return false;
   }
 
-  VK(vkBindBufferMemory(state.device, buffer->handle, buffer->memory->handle, offset), "vkBindBufferMemory") {
+  VK(vkBindBufferMemory(state.device, buffer->handle, buffer->memory->handle, buffer->offset), "vkBindBufferMemory") {
     vkDestroyBuffer(state.device, buffer->handle, NULL);
-    release(buffer->memory);
+    release(buffer->memory, buffer->offset);
     return false;
   }
 
   if (info->pointer) {
-    *info->pointer = buffer->memory->pointer ? (char*) buffer->memory->pointer + offset : NULL;
+    *info->pointer = buffer->memory->pointer ? (char*) buffer->memory->pointer + buffer->offset : NULL;
   }
 
   return true;
@@ -420,7 +485,147 @@ bool gpu_buffer_init(gpu_buffer* buffer, gpu_buffer_info* info) {
 void gpu_buffer_destroy(gpu_buffer* buffer) {
   if (!buffer->memory) return;
   condemn(buffer->handle, VK_OBJECT_TYPE_BUFFER);
-  release(buffer->memory);
+  release(buffer->memory, buffer->offset);
+}
+
+gpu_address gpu_buffer_get_address(gpu_buffer* buffer, uint32_t offset) {
+  return vkGetBufferDeviceAddressKHR(state.device, &(VkBufferDeviceAddressInfoKHR) {
+    .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
+    .buffer = buffer->handle
+  }) + offset;
+}
+
+void gpu_buffer_flush(gpu_buffer* buffer, uint32_t offset, uint32_t extent) {
+  //
+}
+
+// Tree
+
+bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info) {
+  VkAccelerationStructureGeometryKHR geometry;
+
+  if (info->type == GPU_TREE_TOP) {
+    geometry = (VkAccelerationStructureGeometryKHR) {
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+      .geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR,
+      .geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR
+    };
+  } else {
+    tree->geometries = state.config.fnAlloc(info->capacity * sizeof(*tree->geometries));
+    tree->ranges = state.config.fnAlloc(info->capacity * sizeof(*tree->ranges));
+    ASSERT(tree->geometries && tree->ranges, "Out of memory") return false;
+
+    gpu_geometry_info* geometry = info->geometries;
+
+    for (uint32_t i = 0; i < info->capacity; i++, geometry++) {
+      tree->geometries[i] = (VkAccelerationStructureGeometryKHR) {
+        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+        .geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR,
+        .flags = VK_GEOMETRY_OPAQUE_BIT_KHR,
+        .geometry.triangles = (VkAccelerationStructureGeometryTrianglesDataKHR) {
+          .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+          .vertexFormat = convertAttributeType(geometry->vertexType),
+          .vertexStride = geometry->vertexStride,
+          .maxVertex = geometry->vertexCount,
+          .indexType = geometry->indexOffset == ~0u ? VK_INDEX_TYPE_NONE_KHR : (VkIndexType) geometry->indexType,
+          .transformData.deviceAddress = geometry->transformOffset == ~0u ? 0 : 1
+        }
+      };
+
+      tree->ranges[i] = (VkAccelerationStructureBuildRangeInfoKHR) {
+        .primitiveCount = geometry->triangleCount,
+        .primitiveOffset = geometry->indexOffset == ~0u ? geometry->vertexOffset : geometry->indexOffset,
+        .firstVertex = geometry->baseVertex,
+        .transformOffset = geometry->transformOffset == ~0u ? 0 : geometry->transformOffset
+      };
+    }
+  }
+
+  tree->flags =
+    ((info->flags & GPU_TREE_WILL_UPDATE) ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR : 0) |
+    ((info->flags & GPU_TREE_FAST_TRACE) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR : 0) |
+    ((info->flags & GPU_TREE_FAST_BUILD) ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR : 0) |
+    ((info->flags & GPU_TREE_LOW_MEMORY) ? VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR : 0);
+
+  VkAccelerationStructureBuildGeometryInfoKHR buildInfo = {
+    .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+    .type = info->type == GPU_TREE_TOP ?
+      VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :
+      VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+    .flags = tree->flags,
+    .geometryCount = info->type == GPU_TREE_TOP ? 1 : info->capacity,
+    .pGeometries = info->type == GPU_TREE_TOP ? &geometry : tree->geometries
+  };
+
+  VkAccelerationStructureBuildSizesInfoKHR sizes = { .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
+  VkAccelerationStructureBuildTypeKHR buildType = VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR;
+
+  uint32_t* counts;
+  if (info->type == GPU_TREE_TOP) {
+    counts = &info->capacity;
+  } else if (info->capacity == 1) {
+    counts = &info->geometries[0].triangleCount;
+  } else {
+    counts = state.config.fnAlloc(info->capacity * sizeof(uint32_t));
+    ASSERT(counts, "Out of memory") return false;
+    for (uint32_t i = 0; i < info->capacity; i++) {
+      counts[i] = info->geometries[i].triangleCount;
+    }
+  }
+
+  vkGetAccelerationStructureBuildSizesKHR(state.device, buildType, &buildInfo, counts, &sizes);
+
+  if (info->type == GPU_TREE_BOTTOM && info->capacity > 1) {
+    state.config.fnFree(counts);
+  }
+
+  gpu_buffer_info bufferInfo = {
+    .type = GPU_BUFFER_TREE,
+    .size = sizes.accelerationStructureSize,
+    .label = "Tree Buffer"
+  };
+
+  if (!gpu_buffer_init(&tree->buffer, &bufferInfo)) {
+    return false;
+  }
+
+  gpu_buffer_info scratchInfo = {
+    .type = GPU_BUFFER_STATIC,
+    .size = MAX(sizes.updateScratchSize, sizes.buildScratchSize) + 256,
+    .label = "Scratch Buffer"
+  };
+
+  if (!gpu_buffer_init(&tree->scratch, &scratchInfo)) {
+    gpu_buffer_destroy(&tree->buffer);
+    return false;
+  }
+
+  VkAccelerationStructureCreateInfoKHR createInfo = {
+    .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
+    .buffer = tree->buffer.handle,
+    .size = sizes.accelerationStructureSize,
+    .type = buildInfo.type
+  };
+
+  VK(vkCreateAccelerationStructureKHR(state.device, &createInfo, NULL, &tree->handle), "vkCreateAccelerationStructureKHR") {
+    gpu_buffer_destroy(&tree->scratch);
+    gpu_buffer_destroy(&tree->buffer);
+    return false;
+  }
+
+  return true;
+}
+
+void gpu_tree_destroy(gpu_tree* tree) {
+  condemn(tree->handle, VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR);
+  state.config.fnFree(tree->geometries);
+  state.config.fnFree(tree->ranges);
+  gpu_buffer_destroy(&tree->buffer);
+  gpu_buffer_destroy(&tree->scratch);
+}
+
+gpu_address gpu_tree_get_address(gpu_tree* tree) {
+  return gpu_buffer_get_address(&tree->buffer, 0);
 }
 
 // Texture
@@ -443,6 +648,7 @@ bool gpu_texture_init(gpu_texture* texture, gpu_texture_info* info) {
   }
 
   texture->layout = getNaturalLayout(info->usage, texture->aspect);
+  texture->samples = info->samples;
   texture->layers = info->type == GPU_TEXTURE_3D ? 0 : info->size[2];
   texture->baseLevel = 0;
   texture->format = info->format;
@@ -526,24 +732,23 @@ bool gpu_texture_init(gpu_texture* texture, gpu_texture_info* info) {
     default: memoryType = transient ? GPU_MEMORY_TEXTURE_LAZY_COLOR : GPU_MEMORY_TEXTURE_COLOR; break;
   }
 
-  VkDeviceSize offset;
   VkMemoryRequirements requirements;
   vkGetImageMemoryRequirements(state.device, texture->handle, &requirements);
 
-  if ((texture->memory = allocate(memoryType, requirements, &offset)) == NULL) {
+  if ((texture->memory = allocate(memoryType, requirements, &texture->offset)) == NULL) {
     vkDestroyImage(state.device, texture->handle, NULL);
     return false;
   }
 
-  VK(vkBindImageMemory(state.device, texture->handle, texture->memory->handle, offset), "vkBindImageMemory") {
+  VK(vkBindImageMemory(state.device, texture->handle, texture->memory->handle, texture->offset), "vkBindImageMemory") {
     vkDestroyImage(state.device, texture->handle, NULL);
-    release(texture->memory);
+    release(texture->memory, texture->offset);
     return false;
   }
 
   if (!gpu_texture_init_view(texture, &viewInfo)) {
     vkDestroyImage(state.device, texture->handle, NULL);
-    release(texture->memory);
+    release(texture->memory, texture->offset);
     return false;
   }
 
@@ -666,11 +871,13 @@ bool gpu_texture_init(gpu_texture* texture, gpu_texture_info* info) {
 
 bool gpu_texture_init_view(gpu_texture* texture, gpu_texture_view_info* info) {
   if (texture != info->source) {
+    uint32_t layers = info->layerCount ? info->layerCount : (info->source->layers - info->layerIndex);
     texture->handle = info->source->handle;
     texture->memory = NULL;
     texture->imported = false;
     texture->layout = info->source->layout;
-    texture->layers = info->layerCount ? info->layerCount : (info->source->layers - info->layerIndex);
+    texture->samples = info->source->samples;
+    texture->layers = info->type == GPU_TEXTURE_3D ? 0 : layers;
     texture->baseLevel = info->levelIndex;
     texture->format = info->source->format;
     texture->srgb = info->srgb;
@@ -719,7 +926,7 @@ bool gpu_texture_init_view(gpu_texture* texture, gpu_texture_view_info* info) {
       .baseMipLevel = info->levelIndex,
       .levelCount = info->levelCount ? info->levelCount : VK_REMAINING_MIP_LEVELS,
       .baseArrayLayer = info ? info->layerIndex : 0,
-      .layerCount = info->layerCount ? info->layerCount : VK_REMAINING_ARRAY_LAYERS
+      .layerCount = info->source->layers && info->layerCount ? info->layerCount : VK_REMAINING_ARRAY_LAYERS
     }
   };
 
@@ -737,7 +944,7 @@ void gpu_texture_destroy(gpu_texture* texture) {
   if (texture->imported) return;
   if (!texture->memory) return;
   condemn(texture->handle, VK_OBJECT_TYPE_IMAGE);
-  release(texture->memory);
+  release(texture->memory, texture->offset);
 }
 
 // Surface
@@ -802,91 +1009,148 @@ bool gpu_surface_init(gpu_surface_info* info) {
   uint32_t formatCount = COUNTOF(formats);
   vkGetPhysicalDeviceSurfaceFormatsKHR(state.adapter, surface->handle, &formatCount, formats);
 
-  for (uint32_t i = 0; i < formatCount; i++) {
-    if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB || formats[i].format == VK_FORMAT_B8G8R8A8_SRGB) {
-      surface->format = formats[i];
-      break;
+  surface->vkformat.format = VK_FORMAT_UNDEFINED;
+
+  if (info->hdr && state.extensions.colorspace) {
+    for (uint32_t i = 0; i < formatCount; i++) {
+      if (formats[i].format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 && formats[i].colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT) {
+        surface->format = GPU_FORMAT_RGB10A2;
+        surface->vkformat = formats[i];
+        break;
+      }
     }
   }
 
-  ASSERT(surface->format.format != VK_FORMAT_UNDEFINED, "No supported swapchain texture format is available") {
+  if (!surface->vkformat.format) {
+    for (uint32_t i = 0; i < formatCount; i++) {
+      if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB) {
+        surface->format = GPU_FORMAT_RGBA8;
+        surface->vkformat = formats[i];
+        break;
+      } else if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB) {
+        surface->format = GPU_FORMAT_BGRA8;
+        surface->vkformat = formats[i];
+        break;
+      }
+    }
+  }
+
+  ASSERT(surface->vkformat.format != VK_FORMAT_UNDEFINED, "No supported swapchain texture format is available") {
     LOG("Surface unavailable because no supported texture format is available");
     vkDestroySurfaceKHR(state.instance, surface->handle, NULL);
     return false;
   }
 
-  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(state.adapter, surface->handle, &surface->capabilities);
-
   surface->imageIndex = ~0u;
   surface->vsync = info->vsync;
 
   gpu_surface_resize(info->width, info->height);
+
   return true;
 }
 
+gpu_texture_format gpu_surface_get_format(void) {
+  return state.surface.format;
+}
+
+bool gpu_surface_is_hdr(void) {
+  return state.surface.vkformat.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 && state.surface.vkformat.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT;
+}
+
 bool gpu_surface_resize(uint32_t width, uint32_t height) {
+  gpu_surface* surface = &state.surface;
+
+  surface->valid = false;
+  surface->width = 0;
+  surface->height = 0;
+
+  if (surface->swapchain) {
+    VK(vkDeviceWaitIdle(state.device), "vkDeviceWaitIdle") {
+      return false;
+    }
+  }
+
+  VK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(state.adapter, surface->handle, &surface->capabilities), "vkGetPhysicalDeviceSurfaceCapabilitiesKHR") {
+    return false;
+  }
+
+  if (width == ~0u || height == ~0u) {
+    width = surface->capabilities.currentExtent.width;
+    height = surface->capabilities.currentExtent.height;
+  }
+
+  width = MIN(width, surface->capabilities.maxImageExtent.width);
+  width = MAX(width, surface->capabilities.minImageExtent.width);
+  height = MIN(height, surface->capabilities.maxImageExtent.height);
+  height = MAX(height, surface->capabilities.minImageExtent.height);
+
   if (width == 0 || height == 0) {
-    state.surface.valid = false;
     return true;
   }
 
-  gpu_surface* surface = &state.surface;
-  VkSwapchainKHR oldSwapchain = surface->swapchain;
+  VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-  if (oldSwapchain) {
-    vkDeviceWaitIdle(state.device);
-    surface->swapchain = VK_NULL_HANDLE;
+  if (surface->capabilities.supportedUsageFlags & VK_IMAGE_USAGE_SAMPLED_BIT) {
+    usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+  }
+
+  if (surface->capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) {
+    usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  }
+
+  if (surface->capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) {
+    usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
   }
 
   VkSwapchainCreateInfoKHR swapchainInfo = {
     .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
     .surface = surface->handle,
     .minImageCount = surface->capabilities.minImageCount,
-    .imageFormat = surface->format.format,
-    .imageColorSpace = surface->format.colorSpace,
+    .imageFormat = surface->vkformat.format,
+    .imageColorSpace = surface->vkformat.colorSpace,
     .imageExtent = { width, height },
     .imageArrayLayers = 1,
-    .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    .imageUsage = usage,
     .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
     .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
     .presentMode = surface->vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR,
     .clipped = VK_TRUE,
-    .oldSwapchain = oldSwapchain
+    .oldSwapchain = surface->swapchain
   };
 
   VK(vkCreateSwapchainKHR(state.device, &swapchainInfo, NULL, &surface->swapchain), "vkCreateSwapchainKHR") {
     return false;
   }
 
-  if (oldSwapchain) {
-    for (uint32_t i = 0; i < COUNTOF(surface->images); i++) {
-      if (surface->images[i].view) {
-        vkDestroyImageView(state.device, surface->images[i].view, NULL);
-      }
+  if (swapchainInfo.oldSwapchain) {
+    for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
+      vkDestroySemaphore(state.device, surface->acquireSemaphores[i], NULL);
+      surface->acquireSemaphores[i] = VK_NULL_HANDLE;
+      surface->acquireTick[i] = 0;
     }
 
-    memset(surface->images, 0, sizeof(surface->images));
-    vkDestroySwapchainKHR(state.device, oldSwapchain, NULL);
+    for (uint32_t i = 0; i < COUNTOF(surface->images); i++) {
+      vkDestroySemaphore(state.device, surface->presentSemaphores[i], NULL);
+      vkDestroyImageView(state.device, surface->images[i].view, NULL);
+      surface->presentSemaphores[i] = VK_NULL_HANDLE;
+      surface->images[i].view = VK_NULL_HANDLE;
+    }
+
+    vkDestroySwapchainKHR(state.device, swapchainInfo.oldSwapchain, NULL);
   }
 
   uint32_t imageCount;
   VkImage images[COUNTOF(surface->images)];
   VK(vkGetSwapchainImagesKHR(state.device, surface->swapchain, &imageCount, NULL), "vkGetSwapchainImagesKHR") {
-    vkDestroySwapchainKHR(state.device, oldSwapchain, NULL);
-    surface->swapchain = VK_NULL_HANDLE;
-    return false;
+    goto fail;
   }
 
   ASSERT(imageCount <= COUNTOF(images), "Too many swapchain images!") {
-    vkDestroySwapchainKHR(state.device, oldSwapchain, NULL);
-    surface->swapchain = VK_NULL_HANDLE;
-    return false;
+    goto fail;
   }
 
   VK(vkGetSwapchainImagesKHR(state.device, surface->swapchain, &imageCount, images), "vkGetSwapchainImagesKHR") {
-    vkDestroySwapchainKHR(state.device, oldSwapchain, NULL);
-    surface->swapchain = VK_NULL_HANDLE;
-    return false;
+    goto fail;
   }
 
   for (uint32_t i = 0; i < imageCount; i++) {
@@ -896,9 +1160,10 @@ bool gpu_surface_resize(uint32_t width, uint32_t height) {
     texture->aspect = VK_IMAGE_ASPECT_COLOR_BIT;
     texture->layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     texture->memory = NULL;
+    texture->samples = 1;
     texture->layers = 1;
-    texture->format = GPU_FORMAT_SURFACE;
-    texture->srgb = true;
+    texture->format = surface->format;
+    texture->srgb = surface->vkformat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
     gpu_texture_view_info view = {
       .source = texture,
@@ -907,48 +1172,94 @@ bool gpu_surface_resize(uint32_t width, uint32_t height) {
     };
 
     if (!gpu_texture_init_view(texture, &view)) {
-      vkDestroySwapchainKHR(state.device, surface->swapchain, NULL);
-      surface->swapchain = VK_NULL_HANDLE;
-      return false;
+      goto fail;
     }
   }
 
+  VkSemaphoreCreateInfo semaphoreInfo = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+
+  for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
+    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &surface->acquireSemaphores[i]), "vkCreateSemaphore") {
+      goto fail;
+    }
+  }
+
+  for (uint32_t i = 0; i < imageCount; i++) {
+    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &surface->presentSemaphores[i]), "vkCreateSemaphore") {
+      goto fail;
+    }
+  }
+
+  surface->width = width;
+  surface->height = height;
   surface->valid = true;
   return true;
+fail:
+  for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
+    vkDestroySemaphore(state.device, surface->acquireSemaphores[i], NULL);
+    surface->acquireSemaphores[i] = VK_NULL_HANDLE;
+  }
+
+  for (uint32_t i = 0; i < COUNTOF(surface->images); i++) {
+    vkDestroySemaphore(state.device, surface->presentSemaphores[i], NULL);
+    vkDestroyImageView(state.device, surface->images[i].view, NULL);
+    surface->presentSemaphores[i] = VK_NULL_HANDLE;
+    surface->images[i].view = VK_NULL_HANDLE;
+  }
+
+  vkDestroySwapchainKHR(state.device, surface->swapchain, NULL);
+  surface->swapchain = VK_NULL_HANDLE;
+  return false;
 }
 
-bool gpu_surface_acquire(gpu_texture** texture) {
-  if (!state.surface.valid) {
+bool gpu_surface_acquire(gpu_texture** texture, uint32_t* width, uint32_t* height) {
+  gpu_surface* surface = &state.surface;
+
+  *width = surface->width;
+  *height = surface->height;
+
+  if (!surface->valid) {
     *texture = NULL;
     return true;
   }
 
-  gpu_surface* surface = &state.surface;
-  gpu_tick* tick = &state.ticks[state.tick[CPU] & TICK_MASK];
-  VkResult result = vkAcquireNextImageKHR(state.device, surface->swapchain, UINT64_MAX, tick->semaphores[0], VK_NULL_HANDLE, &surface->imageIndex);
+  gpu_wait_tick(surface->acquireTick[state.frame & FRAME_MASK]);
+  VkSemaphore semaphore = surface->acquireSemaphores[state.frame & FRAME_MASK];
+  VkResult result = vkAcquireNextImageKHR(state.device, surface->swapchain, UINT64_MAX, semaphore, VK_NULL_HANDLE, &surface->imageIndex);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    surface->imageIndex = ~0u;
-    surface->valid = false;
-    *texture = NULL;
-    return true;
+    gpu_surface_resize(~0u, ~0u);
+    return gpu_surface_acquire(texture, width, height);
   } else if (result < 0) {
     vkerror(result, "vkAcquireNextImageKHR");
     return false;
   }
 
-  surface->semaphore = tick->semaphores[0];
   *texture = &surface->images[surface->imageIndex];
+  surface->acquireSemaphore = semaphore;
   return true;
 }
 
 bool gpu_surface_present(void) {
-  VkSemaphore semaphore = state.ticks[state.tick[CPU] & TICK_MASK].semaphores[1];
+  gpu_surface* surface = &state.surface;
+
+  VkSemaphore presentSemaphore = surface->presentSemaphores[surface->imageIndex];
+  VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR;
 
   VkSubmitInfo submit = {
     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+    .pNext = &(VkTimelineSemaphoreSubmitInfo) {
+      .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+      .waitSemaphoreValueCount = 1,
+      .pWaitSemaphoreValues = (uint64_t[1]) { state.tick },
+      .signalSemaphoreValueCount = 1,
+      .pSignalSemaphoreValues = (uint64_t[1]) { 0 }
+    },
+    .waitSemaphoreCount = 1,
+    .pWaitSemaphores = &state.semaphore,
+    .pWaitDstStageMask = &waitStage,
     .signalSemaphoreCount = 1,
-    .pSignalSemaphores = &semaphore
+    .pSignalSemaphores = &presentSemaphore
   };
 
   VK(vkQueueSubmit(state.queue, 1, &submit, VK_NULL_HANDLE), "vkQueueSubmit") {
@@ -958,16 +1269,16 @@ bool gpu_surface_present(void) {
   VkPresentInfoKHR present = {
     .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
     .waitSemaphoreCount = 1,
-    .pWaitSemaphores = &semaphore,
+    .pWaitSemaphores = &presentSemaphore,
     .swapchainCount = 1,
-    .pSwapchains = &state.surface.swapchain,
-    .pImageIndices = &state.surface.imageIndex
+    .pSwapchains = &surface->swapchain,
+    .pImageIndices = &surface->imageIndex
   };
 
   VkResult result = vkQueuePresentKHR(state.queue, &present);
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    state.surface.valid = false;
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    gpu_surface_resize(~0u, ~0u);
   } else if (result < 0) {
     // TODO wait on semaphore, for errors that don't wait on it
     vkerror(result, "vkQueuePresentKHR");
@@ -975,6 +1286,7 @@ bool gpu_surface_present(void) {
   }
 
   state.surface.imageIndex = ~0u;
+  state.frame++;
   return true;
 }
 
@@ -1046,7 +1358,8 @@ bool gpu_layout_init(gpu_layout* layout, gpu_layout_info* info) {
     [GPU_SLOT_TEXTURE_WITH_SAMPLER] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
     [GPU_SLOT_SAMPLED_TEXTURE] = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
     [GPU_SLOT_STORAGE_TEXTURE] = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER
+    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER,
+    [GPU_SLOT_TREE] = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
   };
 
   VkDescriptorSetLayoutBinding bindings[32];
@@ -1160,7 +1473,8 @@ bool gpu_bundle_pool_init(gpu_bundle_pool* pool, gpu_bundle_pool_info* info) {
     [GPU_SLOT_TEXTURE_WITH_SAMPLER] = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0 },
     [GPU_SLOT_SAMPLED_TEXTURE] = { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 0 },
     [GPU_SLOT_STORAGE_TEXTURE] = { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0 },
-    [GPU_SLOT_SAMPLER] = { VK_DESCRIPTOR_TYPE_SAMPLER, 0 }
+    [GPU_SLOT_SAMPLER] = { VK_DESCRIPTOR_TYPE_SAMPLER, 0 },
+    [GPU_SLOT_TREE] = { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 0 }
   };
 
   if (info->layout) {
@@ -1229,9 +1543,11 @@ void gpu_bundle_pool_destroy(gpu_bundle_pool* pool) {
 void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t count) {
   VkDescriptorBufferInfo bufferInfo[256];
   VkDescriptorImageInfo imageInfo[256];
+  VkWriteDescriptorSetAccelerationStructureKHR treeInfo[256];
   VkWriteDescriptorSet writes[256];
   uint32_t bufferCount = 0;
   uint32_t imageCount = 0;
+  uint32_t treeCount = 0;
   uint32_t writeCount = 0;
 
   static const VkDescriptorType types[] = {
@@ -1242,7 +1558,8 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
     [GPU_SLOT_TEXTURE_WITH_SAMPLER] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
     [GPU_SLOT_SAMPLED_TEXTURE] = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
     [GPU_SLOT_STORAGE_TEXTURE] = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER
+    [GPU_SLOT_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER,
+    [GPU_SLOT_TREE] = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
   };
 
   for (uint32_t i = 0; i < count; i++) {
@@ -1253,16 +1570,22 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
       gpu_buffer_binding* buffers = binding->count > 0 ? binding->buffers : &binding->buffer;
       gpu_texture_binding* textures = binding->count > 0 ? binding->textures : &binding->texture;
       bool image = binding->type > GPU_SLOT_STORAGE_BUFFER_DYNAMIC;
+      bool tree = binding->type == GPU_SLOT_TREE;
 
       uint32_t index = 0;
       uint32_t descriptorCount = MAX(binding->count, 1);
 
       while (index < descriptorCount) {
-        uint32_t available = image ? COUNTOF(imageInfo) - imageCount : COUNTOF(bufferInfo) - bufferCount;
+        uint32_t available =
+          tree ? COUNTOF(treeInfo) - treeCount :
+          image ? COUNTOF(imageInfo) - imageCount :
+          COUNTOF(bufferInfo) - bufferCount;
+
         uint32_t chunk = MIN(descriptorCount - index, available);
 
         writes[writeCount++] = (VkWriteDescriptorSet) {
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .pNext = tree ? &treeInfo[treeCount] : NULL,
           .dstSet = bundles[i]->handle,
           .dstBinding = binding->number,
           .dstArrayElement = index,
@@ -1272,7 +1595,15 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
           .pImageInfo = &imageInfo[imageCount]
         };
 
-        if (image) {
+        if (tree) {
+          for (uint32_t n = 0; n < chunk; n++, index++) {
+            treeInfo[treeCount++] = (VkWriteDescriptorSetAccelerationStructureKHR) {
+              .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+              .accelerationStructureCount = 1,
+              .pAccelerationStructures = &binding->tree->handle
+            };
+          }
+        } else if (image) {
           for (uint32_t n = 0; n < chunk; n++, index++) {
             imageInfo[imageCount++] = (VkDescriptorImageInfo) {
               .imageView = textures[index].object ? textures[index].object->view : NULL,
@@ -1290,9 +1621,15 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
           }
         }
 
-        if ((image ? imageCount >= COUNTOF(imageInfo) : bufferCount >= COUNTOF(bufferInfo)) || writeCount >= COUNTOF(writes)) {
+        bool flush =
+          bufferCount == COUNTOF(bufferInfo) ||
+          imageCount == COUNTOF(imageInfo) ||
+          treeCount == COUNTOF(treeInfo) ||
+          writeCount == COUNTOF(writes);
+
+        if (flush) {
           vkUpdateDescriptorSets(state.device, writeCount, writes, 0, NULL);
-          bufferCount = imageCount = writeCount = 0;
+          bufferCount = imageCount = treeCount = writeCount = 0;
         }
       }
     }
@@ -1303,225 +1640,13 @@ void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* infos, uint32_t cou
   }
 }
 
-// Canvas
-
-bool gpu_pass_init(gpu_pass* pass, gpu_pass_info* info) {
-  static const VkAttachmentLoadOp loadOps[] = {
-    [GPU_LOAD_OP_CLEAR] = VK_ATTACHMENT_LOAD_OP_CLEAR,
-    [GPU_LOAD_OP_DISCARD] = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-    [GPU_LOAD_OP_KEEP] = VK_ATTACHMENT_LOAD_OP_LOAD
-  };
-
-  static const VkAttachmentStoreOp storeOps[] = {
-    [GPU_SAVE_OP_KEEP] = VK_ATTACHMENT_STORE_OP_STORE,
-    [GPU_SAVE_OP_DISCARD] = VK_ATTACHMENT_STORE_OP_DONT_CARE
-  };
-
-  VkAttachmentDescription2 attachments[10];
-  VkAttachmentReference2 references[10];
-  bool hasColorResolve = false;
-  uint32_t attachmentCount = 0;
-
-  for (uint32_t i = 0; i < info->colorCount; i++) {
-    uint32_t index = attachmentCount++;
-
-    references[index] = (VkAttachmentReference2) {
-      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-      .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
-      .attachment = i
-    };
-
-    attachments[index] = (VkAttachmentDescription2) {
-      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-      .format = convertFormat(info->color[i].format, info->color[i].srgb),
-      .samples = info->samples,
-      .loadOp = loadOps[info->color[i].load],
-      .storeOp = info->color[i].resolve ? VK_ATTACHMENT_STORE_OP_DONT_CARE : storeOps[info->color[i].save],
-      .initialLayout = references[i].layout,
-      .finalLayout = references[i].layout
-    };
-
-    hasColorResolve |= info->color[i].resolve;
-  }
-
-  if (hasColorResolve) {
-    for (uint32_t i = 0; i < info->colorCount; i++) {
-      uint32_t referenceIndex = info->colorCount + i;
-
-      references[referenceIndex] = (VkAttachmentReference2) {
-        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-        .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
-        .attachment = info->color[i].resolve ? attachmentCount : VK_ATTACHMENT_UNUSED
-      };
-
-      if (info->color[i].resolve) {
-        attachments[attachmentCount++] = (VkAttachmentDescription2) {
-          .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-          .format = attachments[i].format,
-          .samples = VK_SAMPLE_COUNT_1_BIT,
-          .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-          .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-          .initialLayout = references[referenceIndex].layout,
-          .finalLayout = references[referenceIndex].layout
-        };
-      }
-    }
-  }
-
-  bool depth = !!info->depth.format;
-
-  if (depth) {
-    uint32_t referenceIndex = info->colorCount << hasColorResolve;
-    uint32_t index = attachmentCount++;
-
-    references[referenceIndex] = (VkAttachmentReference2) {
-      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-      .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
-      .attachment = index
-    };
-
-    attachments[index] = (VkAttachmentDescription2) {
-      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-      .format = convertFormat(info->depth.format, LINEAR),
-      .samples = info->samples,
-      .loadOp = loadOps[info->depth.load],
-      .storeOp = info->depth.resolve ? VK_ATTACHMENT_STORE_OP_DONT_CARE : storeOps[info->depth.save],
-      .stencilLoadOp = loadOps[info->depth.stencilLoad],
-      .stencilStoreOp = info->depth.resolve ? VK_ATTACHMENT_STORE_OP_DONT_CARE : storeOps[info->depth.stencilSave],
-      .initialLayout = references[referenceIndex].layout,
-      .finalLayout = references[referenceIndex].layout
-    };
-
-    if (info->depth.resolve) {
-      uint32_t referenceIndex = (info->colorCount << hasColorResolve) + 1;
-      uint32_t index = attachmentCount++;
-
-      references[referenceIndex] = (VkAttachmentReference2) {
-        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-        .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
-        .attachment = index
-      };
-
-      attachments[index] = (VkAttachmentDescription2) {
-        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-        .format = attachments[index - 1].format,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = storeOps[info->depth.stencilSave],
-        .initialLayout = references[referenceIndex].layout,
-        .finalLayout = references[referenceIndex].layout
-      };
-    }
-  }
-
-  if (info->foveated) {
-    attachments[attachmentCount++] = (VkAttachmentDescription2) {
-      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-      .format = VK_FORMAT_R8G8_UNORM,
-      .samples = VK_SAMPLE_COUNT_1_BIT,
-      .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-      .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-      .initialLayout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT,
-      .finalLayout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
-    };
-  }
-
-  uint32_t referenceCount = (info->colorCount << hasColorResolve) + (depth << info->depth.resolve);
-
-  VkSubpassDescription2 subpass = {
-    .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
-    .pNext = info->depth.resolve ? &(VkSubpassDescriptionDepthStencilResolve) {
-      .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE,
-      .depthResolveMode = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT,
-      .stencilResolveMode = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT,
-      .pDepthStencilResolveAttachment = &references[referenceCount - 1]
-    } : NULL,
-    .viewMask = (1 << info->views) - 1,
-    .colorAttachmentCount = info->colorCount,
-    .pColorAttachments = &references[0],
-    .pResolveAttachments = hasColorResolve ? &references[info->colorCount] : NULL,
-    .pDepthStencilAttachment = depth ? &references[referenceCount - 1 - info->depth.resolve] : NULL
-  };
-
-  VkRenderPassCreateInfo2 createInfo = {
-    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
-    .pNext = info->foveated ? &(VkRenderPassFragmentDensityMapCreateInfoEXT) {
-      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_CREATE_INFO_EXT,
-      .fragmentDensityMapAttachment = {
-        .attachment = attachmentCount - 1,
-        .layout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
-      }
-    } : NULL,
-    .attachmentCount = attachmentCount,
-    .pAttachments = attachments,
-    .subpassCount = 1,
-    .pSubpasses = &subpass
-  };
-
-  VK(vkCreateRenderPass2KHR(state.device, &createInfo, NULL, &pass->handle), "vkCreateRenderPass2KHR") {
-    return false;
-  }
-
-  pass->colorCount = info->colorCount;
-  pass->samples = info->samples;
-  pass->loadMask = 0;
-
-  for (uint32_t i = 0; i < pass->colorCount; i++) {
-    pass->loadMask |= (info->color[i].load == GPU_LOAD_OP_KEEP) ? (1 << i) : 0;
-  }
-
-  pass->depthLoad = info->depth.load == GPU_LOAD_OP_KEEP;
-  pass->surface = info->surface;
-
-  return true;
-}
-
-void gpu_pass_destroy(gpu_pass* pass) {
-  condemn(pass->handle, VK_OBJECT_TYPE_RENDER_PASS);
-}
-
 // Pipeline
 
-bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info) {
+bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info, bool* slow) {
   static const VkPrimitiveTopology topologies[] = {
     [GPU_DRAW_POINTS] = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
     [GPU_DRAW_LINES] = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
     [GPU_DRAW_TRIANGLES] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-  };
-
-  static const VkFormat attributeTypes[] = {
-    [GPU_TYPE_I8x4] = VK_FORMAT_R8G8B8A8_SINT,
-    [GPU_TYPE_U8x4] = VK_FORMAT_R8G8B8A8_UINT,
-    [GPU_TYPE_SN8x4] = VK_FORMAT_R8G8B8A8_SNORM,
-    [GPU_TYPE_UN8x4] = VK_FORMAT_R8G8B8A8_UNORM,
-    [GPU_TYPE_SN10x3] = VK_FORMAT_A2B10G10R10_SNORM_PACK32,
-    [GPU_TYPE_UN10x3] = VK_FORMAT_A2B10G10R10_UNORM_PACK32,
-    [GPU_TYPE_I16] = VK_FORMAT_R16_SINT,
-    [GPU_TYPE_I16x2] = VK_FORMAT_R16G16_SINT,
-    [GPU_TYPE_I16x4] = VK_FORMAT_R16G16B16A16_SINT,
-    [GPU_TYPE_U16] = VK_FORMAT_R16_UINT,
-    [GPU_TYPE_U16x2] = VK_FORMAT_R16G16_UINT,
-    [GPU_TYPE_U16x4] = VK_FORMAT_R16G16B16A16_UINT,
-    [GPU_TYPE_SN16x2] = VK_FORMAT_R16G16_SNORM,
-    [GPU_TYPE_SN16x4] = VK_FORMAT_R16G16B16A16_SNORM,
-    [GPU_TYPE_UN16x2] = VK_FORMAT_R16G16_UNORM,
-    [GPU_TYPE_UN16x4] = VK_FORMAT_R16G16B16A16_UNORM,
-    [GPU_TYPE_I32] = VK_FORMAT_R32_SINT,
-    [GPU_TYPE_I32x2] = VK_FORMAT_R32G32_SINT,
-    [GPU_TYPE_I32x3] = VK_FORMAT_R32G32B32_SINT,
-    [GPU_TYPE_I32x4] = VK_FORMAT_R32G32B32A32_SINT,
-    [GPU_TYPE_U32] = VK_FORMAT_R32_UINT,
-    [GPU_TYPE_U32x2] = VK_FORMAT_R32G32_UINT,
-    [GPU_TYPE_U32x3] = VK_FORMAT_R32G32B32_UINT,
-    [GPU_TYPE_U32x4] = VK_FORMAT_R32G32B32A32_UINT,
-    [GPU_TYPE_F16x2] = VK_FORMAT_R16G16_SFLOAT,
-    [GPU_TYPE_F16x4] = VK_FORMAT_R16G16B16A16_SFLOAT,
-    [GPU_TYPE_F32] = VK_FORMAT_R32_SFLOAT,
-    [GPU_TYPE_F32x2] = VK_FORMAT_R32G32_SFLOAT,
-    [GPU_TYPE_F32x3] = VK_FORMAT_R32G32B32_SFLOAT,
-    [GPU_TYPE_F32x4] = VK_FORMAT_R32G32B32A32_SFLOAT
   };
 
   static const VkCullModeFlagBits cullModes[] = {
@@ -1566,7 +1691,8 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info)
     [GPU_BLEND_DST_COLOR] = VK_BLEND_FACTOR_DST_COLOR,
     [GPU_BLEND_ONE_MINUS_DST_COLOR] = VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR,
     [GPU_BLEND_DST_ALPHA] = VK_BLEND_FACTOR_DST_ALPHA,
-    [GPU_BLEND_ONE_MINUS_DST_ALPHA] = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA
+    [GPU_BLEND_ONE_MINUS_DST_ALPHA] = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
+    [GPU_BLEND_SRC_ALPHA_SATURATED] = VK_BLEND_FACTOR_SRC_ALPHA_SATURATE
   };
 
   static const VkBlendOp blendOps[] = {
@@ -1591,7 +1717,7 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info)
     vertexAttributes[i] = (VkVertexInputAttributeDescription) {
       .location = info->vertex.attributes[i].location,
       .binding = info->vertex.attributes[i].buffer,
-      .format = attributeTypes[info->vertex.attributes[i].type],
+      .format = convertAttributeType(info->vertex.attributes[i].type),
       .offset = info->vertex.attributes[i].offset
     };
   }
@@ -1629,7 +1755,7 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info)
 
   VkPipelineMultisampleStateCreateInfo multisample = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-    .rasterizationSamples = info->pass->samples,
+    .rasterizationSamples = info->multisample.count,
     .alphaToCoverageEnable = info->multisample.alphaToCoverage,
     .alphaToOneEnable = info->multisample.alphaToOne
   };
@@ -1659,22 +1785,22 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info)
   };
 
   VkPipelineColorBlendAttachmentState colorAttachments[4];
-  for (uint32_t i = 0; i < info->pass->colorCount; i++) {
+  for (uint32_t i = 0; i < info->attachmentCount; i++) {
     colorAttachments[i] = (VkPipelineColorBlendAttachmentState) {
-      .blendEnable = info->blend[i].enabled,
-      .srcColorBlendFactor = blendFactors[info->blend[i].color.src],
-      .dstColorBlendFactor = blendFactors[info->blend[i].color.dst],
-      .colorBlendOp = blendOps[info->blend[i].color.op],
-      .srcAlphaBlendFactor = blendFactors[info->blend[i].alpha.src],
-      .dstAlphaBlendFactor = blendFactors[info->blend[i].alpha.dst],
-      .alphaBlendOp = blendOps[info->blend[i].alpha.op],
-      .colorWriteMask = info->colorMask[i]
+      .blendEnable = info->color[i].blend.enabled,
+      .srcColorBlendFactor = blendFactors[info->color[i].blend.color.src],
+      .dstColorBlendFactor = blendFactors[info->color[i].blend.color.dst],
+      .colorBlendOp = blendOps[info->color[i].blend.color.op],
+      .srcAlphaBlendFactor = blendFactors[info->color[i].blend.alpha.src],
+      .dstAlphaBlendFactor = blendFactors[info->color[i].blend.alpha.dst],
+      .alphaBlendOp = blendOps[info->color[i].blend.alpha.op],
+      .colorWriteMask = info->color[i].mask
     };
   }
 
   VkPipelineColorBlendStateCreateInfo colorBlend = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-    .attachmentCount = info->pass->colorCount,
+    .attachmentCount = info->attachmentCount,
     .pAttachments = colorAttachments
   };
 
@@ -1736,6 +1862,23 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info)
     }
   };
 
+  VkFormat colorFormats[4];
+  VkPipelineRenderingCreateInfoKHR renderingInfo = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
+    .viewMask = (1 << info->viewCount) - 1,
+    .colorAttachmentCount = info->attachmentCount,
+    .pColorAttachmentFormats = colorFormats,
+    .depthAttachmentFormat = info->depth.format ? convertFormat(info->depth.format, LINEAR) : VK_FORMAT_UNDEFINED
+  };
+
+  for (uint32_t i = 0; i < info->attachmentCount; i++) {
+    colorFormats[i] = convertFormat(info->color[i].format, info->color[i].srgb);
+  }
+
+  if (info->depth.format == GPU_FORMAT_D24S8 || info->depth.format == GPU_FORMAT_D32FS8) {
+    renderingInfo.stencilAttachmentFormat = renderingInfo.depthAttachmentFormat;
+  }
+
   VkGraphicsPipelineCreateInfo pipelineInfo = (VkGraphicsPipelineCreateInfo) {
     .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
     .stageCount = stageCount,
@@ -1748,20 +1891,121 @@ bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info)
     .pDepthStencilState = &depthStencil,
     .pColorBlendState = &colorBlend,
     .pDynamicState = &dynamicState,
-    .layout = info->shader->pipelineLayout,
-    .renderPass = info->pass->handle
+    .layout = info->shader->pipelineLayout
   };
 
-  VK(vkCreateGraphicsPipelines(state.device, state.pipelineCache, 1, &pipelineInfo, NULL, &pipeline->handle), "vkCreateGraphicsPipelines") {
-    if (constants != stackConstants) state.config.fnFree(constants);
-    if (entries != stackEntries) state.config.fnFree(entries);
-    return false;
+  if (state.extensions.pipelineCacheControl && slow) {
+    pipelineInfo.flags |= VK_PIPELINE_CREATE_FAIL_ON_PIPELINE_COMPILE_REQUIRED_BIT_EXT;
   }
 
-  nickname(pipeline->handle, VK_OBJECT_TYPE_PIPELINE, info->label);
+  if (state.extensions.dynamicRendering) {
+    pipelineInfo.pNext = &renderingInfo;
+    if (info->foveated) {
+      pipelineInfo.flags |= VK_PIPELINE_CREATE_RENDERING_FRAGMENT_DENSITY_MAP_ATTACHMENT_BIT_EXT;
+    }
+  } else {
+    bool depth = info->depth.format;
+    uint32_t colorCount = info->attachmentCount;
+    VkAttachmentDescription2 attachments[6];
+    VkAttachmentReference2 references[6];
+
+    for (uint32_t i = 0; i < colorCount; i++) {
+      references[i] = (VkAttachmentReference2) {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+        .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+        .attachment = i
+      };
+
+      attachments[i] = (VkAttachmentDescription2) {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+        .format = convertFormat(info->color[i].format, info->color[i].srgb),
+        .samples = info->multisample.count,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+        .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR
+      };
+    }
+
+    if (depth) {
+      uint32_t index = colorCount;
+
+      references[index] = (VkAttachmentReference2) {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+        .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+        .attachment = index
+      };
+
+      attachments[index] = (VkAttachmentDescription2) {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+        .format = convertFormat(info->depth.format, LINEAR),
+        .samples = info->multisample.count,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+        .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR
+      };
+    }
+
+    if (info->foveated) {
+      uint32_t index = colorCount + depth;
+
+      attachments[index] = (VkAttachmentDescription2) {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+        .format = VK_FORMAT_R8G8_UNORM,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT,
+        .finalLayout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
+      };
+    }
+
+    VkSubpassDescription2 subpass = {
+      .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
+      .viewMask = (1 << info->viewCount) - 1,
+      .colorAttachmentCount = colorCount,
+      .pColorAttachments = &references[0],
+      .pDepthStencilAttachment = depth ? &references[colorCount] : NULL
+    };
+
+    VkRenderPassCreateInfo2 passInfo = {
+      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
+      .pNext = info->foveated ? &(VkRenderPassFragmentDensityMapCreateInfoEXT) {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_CREATE_INFO_EXT,
+        .fragmentDensityMapAttachment = {
+          .attachment = colorCount + depth,
+          .layout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
+        }
+      } : NULL,
+      .attachmentCount = colorCount + depth + info->foveated,
+      .pAttachments = attachments,
+      .subpassCount = 1,
+      .pSubpasses = &subpass
+    };
+
+    VK(vkCreateRenderPass2KHR(state.device, &passInfo, NULL, &pipelineInfo.renderPass), "vkCreateRenderPass2KHR") {
+      if (constants != stackConstants) state.config.fnFree(constants);
+      if (entries != stackEntries) state.config.fnFree(entries);
+      return false;
+    }
+
+    condemn(pipelineInfo.renderPass, VK_OBJECT_TYPE_RENDER_PASS);
+  }
+
+  VkResult result = vkCreateGraphicsPipelines(state.device, state.pipelineCache, 1, &pipelineInfo, NULL, &pipeline->handle);
   if (constants != stackConstants) state.config.fnFree(constants);
   if (entries != stackEntries) state.config.fnFree(entries);
-  return true;
+
+  if (!vkcheck(result, "vkCreateGraphicsPipelines")) {
+    return false;
+  } else if (result == VK_PIPELINE_COMPILE_REQUIRED_EXT) {
+    *slow = true;
+    return true;
+  } else {
+    if (slow) *slow = false;
+    return true;
+  }
 }
 
 bool gpu_pipeline_init_compute(gpu_pipeline* pipeline, gpu_compute_pipeline_info* info) {
@@ -1857,10 +2101,79 @@ void gpu_tally_destroy(gpu_tally* tally) {
 // Stream
 
 gpu_stream* gpu_stream_begin(const char* label) {
-  gpu_tick* tick = &state.ticks[state.tick[CPU] & TICK_MASK];
-  ASSERT(state.streamCount < COUNTOF(tick->streams), "Too many passes") return NULL;
-  gpu_stream* stream = &tick->streams[state.streamCount];
-  nickname(stream->commands, VK_OBJECT_TYPE_COMMAND_BUFFER, label);
+  if (!thread.initialized) {
+    thread.initialized = true;
+    thread.next = state.threads;
+    while (!atomic_compare_exchange_strong(&state.threads, &thread.next, &thread)) {
+      continue;
+    }
+  }
+
+  gpu_stream_pool* pool = thread.activeStreamPool;
+
+  if (!pool) {
+    // Find an existing pool to reuse
+    for (gpu_stream_pool* p = thread.streamPools; p; p = p->next) {
+      if (gpu_is_complete(p->tick)) {
+        pool = p;
+        VK(vkResetCommandPool(state.device, pool->handle, 0), "vkResetCommandPool") return NULL;
+        pool->tail = NULL;
+        break;
+      }
+    }
+
+    // No pool available?  Make a new one
+    if (!pool) {
+      pool = state.config.fnAlloc(sizeof(gpu_stream_pool));
+      ASSERT(pool, "Out of memory") return NULL;
+
+      VkCommandPoolCreateInfo poolInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+        .queueFamilyIndex = state.queueFamilyIndex
+      };
+
+      VK(vkCreateCommandPool(state.device, &poolInfo, NULL, &pool->handle), "vkCreateCommandPool") {
+        state.config.fnFree(pool);
+        return NULL;
+      }
+
+      pool->next = thread.streamPools;
+      thread.streamPools = pool;
+
+      pool->head = NULL;
+      pool->tail = NULL;
+      pool->tick = 0;
+    }
+
+    thread.activeStreamPool = pool;
+  }
+
+  gpu_stream* stream = pool->tail ? pool->tail->next : pool->head;
+
+  if (!stream) {
+    stream = state.config.fnAlloc(sizeof(gpu_stream));
+    ASSERT(stream, "Out of memory") return NULL;
+    stream->next = NULL;
+
+    VkCommandBufferAllocateInfo info = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool = pool->handle,
+      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+      .commandBufferCount = 1
+    };
+
+    VK(vkAllocateCommandBuffers(state.device, &info, &stream->commands), "vkAllocateCommandBuffers") {
+      state.config.fnFree(stream);
+      return NULL;
+    }
+
+    if (pool->tail) {
+      pool->tail->next = stream;
+    } else {
+      pool->head = stream;
+    }
+  }
 
   VkCommandBufferBeginInfo beginfo = {
     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1868,7 +2181,8 @@ gpu_stream* gpu_stream_begin(const char* label) {
   };
 
   VK(vkBeginCommandBuffer(stream->commands, &beginfo), "vkBeginCommandBuffer") return NULL;
-  state.streamCount++;
+  nickname(stream->commands, VK_OBJECT_TYPE_COMMAND_BUFFER, label);
+  pool->tail = stream;
   return stream;
 }
 
@@ -1878,53 +2192,16 @@ bool gpu_stream_end(gpu_stream* stream) {
 }
 
 void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas) {
-  gpu_pass* pass = canvas->pass;
-
-  // Framebuffer
-
-  VkImageView images[11];
-  VkClearValue clears[11];
-  uint32_t attachmentCount = 0;
-
-  for (uint32_t i = 0; i < pass->colorCount; i++) {
-    images[i] = canvas->color[i].texture->view;
-    memcpy(clears[i].color.float32, canvas->color[i].clear, 4 * sizeof(float));
-    attachmentCount++;
-  }
-
-  for (uint32_t i = 0; i < pass->colorCount; i++) {
-    if (canvas->color[i].resolve) images[attachmentCount++] = canvas->color[i].resolve->view;
-  }
-
-  if (canvas->depth.texture) {
-    uint32_t index = attachmentCount++;
-    images[index] = canvas->depth.texture->view;
-    clears[index].depthStencil.depth = canvas->depth.clear;
-    clears[index].depthStencil.stencil = canvas->depth.stencilClear;
-
-    if (canvas->depth.resolve) {
-      images[attachmentCount++] = canvas->depth.resolve->view;
-    }
-  }
-
-  if (canvas->foveation) {
-    uint32_t index = attachmentCount++;
-    images[index] = canvas->foveation->view;
-  }
-
-  VkFramebufferCreateInfo info = {
-    .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-    .renderPass = pass->handle,
-    .attachmentCount = attachmentCount,
-    .pAttachments = images,
-    .width = canvas->width,
-    .height = canvas->height,
-    .layers = 1
+  static const VkAttachmentLoadOp loadOps[] = {
+    [GPU_LOAD_OP_CLEAR] = VK_ATTACHMENT_LOAD_OP_CLEAR,
+    [GPU_LOAD_OP_DISCARD] = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+    [GPU_LOAD_OP_KEEP] = VK_ATTACHMENT_LOAD_OP_LOAD
   };
 
-  VkFramebuffer framebuffer;
-  VK(vkCreateFramebuffer(state.device, &info, NULL, &framebuffer), "vkCreateFramebuffer") {} // Ignoring error
-  condemn(framebuffer, VK_OBJECT_TYPE_FRAMEBUFFER);
+  static const VkAttachmentStoreOp storeOps[] = {
+    [GPU_SAVE_OP_KEEP] = VK_ATTACHMENT_STORE_OP_STORE,
+    [GPU_SAVE_OP_DISCARD] = VK_ATTACHMENT_STORE_OP_DONT_CARE
+  };
 
   // Layout transitions
 
@@ -1934,14 +2211,14 @@ void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas) {
   bool BEGIN = true;
   bool RESOLVE = true;
 
-  for (uint32_t i = 0; i < pass->colorCount; i++) {
-    bool DISCARD = ~pass->loadMask & (1 << i);
+  for (uint32_t i = 0; i < 4 && canvas->color[i].texture; i++) {
+    bool DISCARD = canvas->color[i].load != GPU_LOAD_OP_KEEP;
     barrierCount += transitionAttachment(canvas->color[i].texture, BEGIN, !RESOLVE, DISCARD, &barriers[barrierCount]);
     barrierCount += transitionAttachment(canvas->color[i].resolve, BEGIN, RESOLVE, true, &barriers[barrierCount]);
   }
 
   if (canvas->depth.texture) {
-    bool DISCARD = !pass->depthLoad;
+    bool DISCARD = canvas->depth.load != GPU_LOAD_OP_KEEP;
     barrierCount += transitionAttachment(canvas->depth.texture, BEGIN, !RESOLVE, DISCARD, &barriers[barrierCount]);
     barrierCount += transitionAttachment(canvas->depth.resolve, BEGIN, RESOLVE, true, &barriers[barrierCount]);
   }
@@ -1954,30 +2231,303 @@ void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas) {
     });
   }
 
-  // Do it!
+  // Begin pass
 
-  VkRenderPassBeginInfo beginfo = {
-    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-    .renderPass = pass->handle,
-    .framebuffer = framebuffer,
-    .renderArea.offset = { canvas->area[0], canvas->area[1] },
-    .renderArea.extent.width = canvas->area[2] ? canvas->area[2] : canvas->width,
-    .renderArea.extent.height = canvas->area[3] ? canvas->area[3] : canvas->height,
-    .clearValueCount = attachmentCount,
-    .pClearValues = clears
-  };
+  if (state.extensions.dynamicRendering) {
+    uint32_t colorAttachmentCount = 0;
+    VkRenderingAttachmentInfo color[4], depth, stencil;
 
-  vkCmdBeginRenderPass2KHR(stream->commands, &beginfo, &(VkSubpassBeginInfo) {
-    .sType = VK_STRUCTURE_TYPE_SUBPASS_BEGIN_INFO
-  });
+    for (uint32_t i = 0; i < 4 && canvas->color[i].texture; i++, colorAttachmentCount++) {
+      color[i] = (VkRenderingAttachmentInfo) {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = canvas->color[i].texture->view,
+        .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+        .resolveMode = canvas->color[i].resolve ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE,
+        .resolveImageView = canvas->color[i].resolve ? canvas->color[i].resolve->view : VK_NULL_HANDLE,
+        .resolveImageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+        .loadOp = loadOps[canvas->color[i].load],
+        .storeOp = storeOps[canvas->color[i].save],
+        .clearValue.color.float32 = {
+          canvas->color[i].clear[0],
+          canvas->color[i].clear[1],
+          canvas->color[i].clear[2],
+          canvas->color[i].clear[3]
+        }
+      };
+    }
+
+    bool hasStencil = canvas->depth.texture && (canvas->depth.texture->aspect & VK_IMAGE_ASPECT_STENCIL_BIT);
+
+    if (canvas->depth.texture) {
+      depth = (VkRenderingAttachmentInfo) {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = canvas->depth.texture->view,
+        .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+        .resolveMode = canvas->depth.resolve ? VK_RESOLVE_MODE_SAMPLE_ZERO_BIT : VK_RESOLVE_MODE_NONE,
+        .resolveImageView = canvas->depth.resolve ? canvas->depth.resolve->view : VK_NULL_HANDLE,
+        .resolveImageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+        .loadOp = loadOps[canvas->depth.load],
+        .storeOp = storeOps[canvas->depth.save],
+        .clearValue.depthStencil.depth = canvas->depth.clear
+      };
+
+      if (hasStencil) {
+        stencil = depth;
+        stencil.loadOp = loadOps[canvas->depth.stencilLoad];
+        stencil.storeOp = storeOps[canvas->depth.stencilSave];
+        stencil.clearValue.depthStencil.stencil = canvas->depth.stencilClear;
+      }
+    }
+
+    VkRenderingFragmentDensityMapAttachmentInfoEXT foveation;
+
+    if (canvas->foveation) {
+      foveation = (VkRenderingFragmentDensityMapAttachmentInfoEXT) {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_FRAGMENT_DENSITY_MAP_ATTACHMENT_INFO_EXT,
+        .imageView = canvas->foveation->view,
+        .imageLayout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
+      };
+    }
+
+    uint32_t views = colorAttachmentCount > 0 ? canvas->color[0].texture->layers : canvas->depth.texture->layers;
+
+    vkCmdBeginRenderingKHR(stream->commands, &(VkRenderingInfo) {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+      .pNext = canvas->foveation ? &foveation : NULL,
+      .renderArea = {
+        .offset = { canvas->area[0], canvas->area[1] },
+        .extent = { canvas->area[2] ? canvas->area[2] : canvas->width, canvas->area[3] ? canvas->area[3] : canvas->height }
+      },
+      .layerCount = 1,
+      .viewMask = (1 << views) - 1,
+      .colorAttachmentCount = colorAttachmentCount,
+      .pColorAttachments = color,
+      .pDepthAttachment = canvas->depth.texture ? &depth : NULL,
+      .pStencilAttachment = hasStencil ? &stencil : NULL
+    });
+  } else {
+    uint32_t attachmentCount = 0;
+    uint32_t colorAttachmentCount = 0;
+    VkAttachmentDescription2 attachments[11];
+    VkAttachmentReference2 references[11];
+    bool hasColorResolve = false;
+    bool hasDepthResolve = !!canvas->depth.resolve;
+    bool depth = !!canvas->depth.texture;
+
+    for (uint32_t i = 0; i < 4 && canvas->color[i].texture; i++, colorAttachmentCount++) {
+      uint32_t index = attachmentCount++;
+
+      references[index] = (VkAttachmentReference2) {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+        .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+        .attachment = i
+      };
+
+      attachments[index] = (VkAttachmentDescription2) {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+        .format = convertFormat(canvas->color[i].texture->format, canvas->color[i].texture->srgb),
+        .samples = canvas->color[i].texture->samples,
+        .loadOp = loadOps[canvas->color[i].load],
+        .storeOp = canvas->color[i].resolve ? VK_ATTACHMENT_STORE_OP_DONT_CARE : storeOps[canvas->color[i].save],
+        .initialLayout = references[i].layout,
+        .finalLayout = references[i].layout
+      };
+
+      hasColorResolve |= !!canvas->color[i].resolve;
+    }
+
+    if (hasColorResolve) {
+      for (uint32_t i = 0; i < colorAttachmentCount; i++) {
+        uint32_t referenceIndex = colorAttachmentCount + i;
+
+        references[referenceIndex] = (VkAttachmentReference2) {
+          .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+          .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+          .attachment = canvas->color[i].resolve ? attachmentCount : VK_ATTACHMENT_UNUSED
+        };
+
+        if (canvas->color[i].resolve) {
+          attachments[attachmentCount++] = (VkAttachmentDescription2) {
+            .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+            .format = attachments[i].format,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .initialLayout = references[referenceIndex].layout,
+            .finalLayout = references[referenceIndex].layout
+          };
+        }
+      }
+    }
+
+    if (depth) {
+      uint32_t referenceIndex = colorAttachmentCount << hasColorResolve;
+      uint32_t index = attachmentCount++;
+
+      references[referenceIndex] = (VkAttachmentReference2) {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+        .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+        .attachment = index
+      };
+
+      attachments[index] = (VkAttachmentDescription2) {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+        .format = convertFormat(canvas->depth.texture->format, LINEAR),
+        .samples = canvas->depth.texture->samples,
+        .loadOp = loadOps[canvas->depth.load],
+        .storeOp = canvas->depth.resolve ? VK_ATTACHMENT_STORE_OP_DONT_CARE : storeOps[canvas->depth.save],
+        .stencilLoadOp = loadOps[canvas->depth.stencilLoad],
+        .stencilStoreOp = canvas->depth.resolve ? VK_ATTACHMENT_STORE_OP_DONT_CARE : storeOps[canvas->depth.stencilSave],
+        .initialLayout = references[referenceIndex].layout,
+        .finalLayout = references[referenceIndex].layout
+      };
+
+      if (canvas->depth.resolve) {
+        uint32_t referenceIndex = (colorAttachmentCount << hasColorResolve) + 1;
+        uint32_t index = attachmentCount++;
+
+        references[referenceIndex] = (VkAttachmentReference2) {
+          .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+          .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+          .attachment = index
+        };
+
+        attachments[index] = (VkAttachmentDescription2) {
+          .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+          .format = attachments[index - 1].format,
+          .samples = VK_SAMPLE_COUNT_1_BIT,
+          .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+          .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+          .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+          .stencilStoreOp = storeOps[canvas->depth.stencilSave],
+          .initialLayout = references[referenceIndex].layout,
+          .finalLayout = references[referenceIndex].layout
+        };
+      }
+    }
+
+    if (canvas->foveation) {
+      attachments[attachmentCount++] = (VkAttachmentDescription2) {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+        .format = VK_FORMAT_R8G8_UNORM,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT,
+        .finalLayout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
+      };
+    }
+
+    uint32_t referenceCount = (colorAttachmentCount << hasColorResolve) + (depth << hasDepthResolve);
+    uint32_t views = colorAttachmentCount > 0 ? canvas->color[0].texture->layers : canvas->depth.texture->layers;
+
+    VkSubpassDescription2 subpass = {
+      .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
+      .pNext = canvas->depth.resolve ? &(VkSubpassDescriptionDepthStencilResolve) {
+        .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE,
+        .depthResolveMode = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT,
+        .stencilResolveMode = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT,
+        .pDepthStencilResolveAttachment = &references[referenceCount - 1]
+      } : NULL,
+      .viewMask = (1 << views) - 1,
+      .colorAttachmentCount = colorAttachmentCount,
+      .pColorAttachments = &references[0],
+      .pResolveAttachments = hasColorResolve ? &references[colorAttachmentCount] : NULL,
+      .pDepthStencilAttachment = canvas->depth.texture ? &references[referenceCount - 1 - hasDepthResolve] : NULL
+    };
+
+    VkRenderPassCreateInfo2 passInfo = {
+      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
+      .pNext = canvas->foveation ? &(VkRenderPassFragmentDensityMapCreateInfoEXT) {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_FRAGMENT_DENSITY_MAP_CREATE_INFO_EXT,
+        .fragmentDensityMapAttachment = {
+          .attachment = attachmentCount - 1,
+          .layout = VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT
+        }
+      } : NULL,
+      .attachmentCount = attachmentCount,
+      .pAttachments = attachments,
+      .subpassCount = 1,
+      .pSubpasses = &subpass
+    };
+
+    VkRenderPass renderPass;
+    VK(vkCreateRenderPass2KHR(state.device, &passInfo, NULL, &renderPass), "vkCreateRenderPass2KHR") {} // Ignoring error
+    condemn(renderPass, VK_OBJECT_TYPE_RENDER_PASS);
+
+    // Framebuffer
+
+    VkImageView images[11];
+    VkClearValue clears[11];
+    uint32_t imageCount = 0;
+
+    for (uint32_t i = 0; i < 4 && canvas->color[i].texture; i++) {
+      images[i] = canvas->color[i].texture->view;
+      memcpy(clears[i].color.float32, canvas->color[i].clear, 4 * sizeof(float));
+      imageCount++;
+    }
+
+    for (uint32_t i = 0; i < 4 && canvas->color[i].texture; i++) {
+      if (canvas->color[i].resolve) images[imageCount++] = canvas->color[i].resolve->view;
+    }
+
+    if (canvas->depth.texture) {
+      uint32_t index = imageCount++;
+      images[index] = canvas->depth.texture->view;
+      clears[index].depthStencil.depth = canvas->depth.clear;
+      clears[index].depthStencil.stencil = canvas->depth.stencilClear;
+
+      if (canvas->depth.resolve) {
+        images[imageCount++] = canvas->depth.resolve->view;
+      }
+    }
+
+    if (canvas->foveation) {
+      uint32_t index = imageCount++;
+      images[index] = canvas->foveation->view;
+    }
+
+    VkFramebufferCreateInfo framebufferInfo = {
+      .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+      .renderPass = renderPass,
+      .attachmentCount = imageCount,
+      .pAttachments = images,
+      .width = canvas->width,
+      .height = canvas->height,
+      .layers = 1
+    };
+
+    VkFramebuffer framebuffer;
+    VK(vkCreateFramebuffer(state.device, &framebufferInfo, NULL, &framebuffer), "vkCreateFramebuffer") {} // Ignoring error
+    condemn(framebuffer, VK_OBJECT_TYPE_FRAMEBUFFER);
+
+    // Do it!
+
+    VkRenderPassBeginInfo beginfo = {
+      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+      .renderPass = renderPass,
+      .framebuffer = framebuffer,
+      .renderArea.offset = { canvas->area[0], canvas->area[1] },
+      .renderArea.extent.width = canvas->area[2] ? canvas->area[2] : canvas->width,
+      .renderArea.extent.height = canvas->area[3] ? canvas->area[3] : canvas->height,
+      .clearValueCount = attachmentCount,
+      .pClearValues = clears
+    };
+
+    vkCmdBeginRenderPass2KHR(stream->commands, &beginfo, &(VkSubpassBeginInfo) {
+      .sType = VK_STRUCTURE_TYPE_SUBPASS_BEGIN_INFO
+    });
+  }
 }
 
 void gpu_render_end(gpu_stream* stream, gpu_canvas* canvas) {
-  vkCmdEndRenderPass2KHR(stream->commands, &(VkSubpassEndInfo) {
-    .sType = VK_STRUCTURE_TYPE_SUBPASS_END_INFO
-  });
-
-  gpu_pass* pass = canvas->pass;
+  if (state.extensions.dynamicRendering) {
+    vkCmdEndRenderingKHR(stream->commands);
+  } else {
+    vkCmdEndRenderPass2KHR(stream->commands, &(VkSubpassEndInfo) {
+      .sType = VK_STRUCTURE_TYPE_SUBPASS_END_INFO
+    });
+  }
 
   // Layout transitions
 
@@ -1988,7 +2538,7 @@ void gpu_render_end(gpu_stream* stream, gpu_canvas* canvas) {
   bool RESOLVE = true;
   bool DISCARD = true;
 
-  for (uint32_t i = 0; i < pass->colorCount; i++) {
+  for (uint32_t i = 0; i < 4 && canvas->color[i].texture; i++) {
     barrierCount += transitionAttachment(canvas->color[i].texture, !BEGIN, !RESOLVE, !DISCARD, &barriers[barrierCount]);
     barrierCount += transitionAttachment(canvas->color[i].resolve, !BEGIN, RESOLVE, !DISCARD, &barriers[barrierCount]);
   }
@@ -2152,8 +2702,8 @@ void gpu_clear_texture(gpu_stream* stream, gpu_texture* texture, float value[4],
     .aspectMask = texture->aspect,
     .baseMipLevel = level,
     .levelCount = levelCount,
-    .baseArrayLayer = layer,
-    .layerCount = layerCount
+    .baseArrayLayer = texture->layers ? layer : 0,
+    .layerCount = texture->layers ? layerCount : 1
   };
 
   if (texture->aspect == VK_IMAGE_ASPECT_COLOR_BIT) {
@@ -2198,6 +2748,51 @@ void gpu_blit(gpu_stream* stream, gpu_texture* src, gpu_texture* dst, uint32_t s
   };
 
   vkCmdBlitImage(stream->commands, src->handle, VK_IMAGE_LAYOUT_GENERAL, dst->handle, VK_IMAGE_LAYOUT_GENERAL, 1, &region, filters[filter]);
+}
+
+void gpu_build_tree(gpu_stream* stream, gpu_tree* tree, gpu_build_info* info) {
+  VkAccelerationStructureGeometryKHR geometry;
+
+  if (info->type == GPU_TREE_TOP) {
+    geometry = (VkAccelerationStructureGeometryKHR) {
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+      .geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR,
+      .geometry.instances = {
+        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR,
+        .data.deviceAddress = info->instances
+      }
+    };
+  } else {
+    for (uint32_t i = 0; i < info->count; i++) {
+      tree->geometries[i].geometry.triangles.vertexData.deviceAddress = info->vertices;
+      tree->geometries[i].geometry.triangles.indexData.deviceAddress = info->indices;
+      tree->geometries[i].geometry.triangles.transformData.deviceAddress = info->transforms;
+    }
+  }
+
+  VkAccelerationStructureBuildGeometryInfoKHR build = {
+    .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+    .type = info->type == GPU_TREE_TOP ?
+      VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :
+      VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+    .flags = tree->flags,
+    .mode = info->mode == GPU_TREE_BUILD ?
+      VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR :
+      VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR,
+    .srcAccelerationStructure = tree->handle,
+    .dstAccelerationStructure = tree->handle,
+    .geometryCount = info->type == GPU_TREE_TOP ? 1 : info->count,
+    .pGeometries = info->type == GPU_TREE_TOP ? &geometry : tree->geometries,
+    .scratchData = ALIGN(gpu_buffer_get_address(&tree->scratch, 0), 256)
+  };
+
+  VkAccelerationStructureBuildRangeInfoKHR range = { .primitiveCount = info->count };
+
+  const VkAccelerationStructureBuildRangeInfoKHR* ranges[1] = {
+    info->type == GPU_TREE_TOP ? &range : tree->ranges
+  };
+
+  vkCmdBuildAccelerationStructuresKHR(stream->commands, 1, &build, ranges);
 }
 
 void gpu_sync(gpu_stream* stream, gpu_barrier* barriers, uint32_t count) {
@@ -2285,8 +2880,10 @@ bool gpu_init(gpu_config* config) {
   ASSERT(state.library, "Failed to load vulkan library") goto fail;
   vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr) GetProcAddress(state.library, "vkGetInstanceProcAddr");
 #elif __APPLE__
-  state.library = dlopen("libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
+  state.library = dlopen("libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
+  if (!state.library) state.library = dlopen("libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
   if (!state.library) state.library = dlopen("libMoltenVK.dylib", RTLD_NOW | RTLD_LOCAL);
+  if (!state.library && !getenv("DYLD_FALLBACK_LIBRARY_PATH")) state.library = dlopen("/usr/local/lib/libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
   ASSERT(state.library, "Failed to load vulkan library") goto fail;
   vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr) dlsym(state.library, "vkGetInstanceProcAddr");
 #else
@@ -2389,7 +2986,7 @@ bool gpu_init(gpu_config* config) {
         VK(vkCreateDebugUtilsMessengerEXT(state.instance, &messengerInfo, NULL, &state.messenger), "vkCreateDebugUtilsMessengerEXT") goto fail;
 
         if (!state.extensions.validation) {
-          LOG("Warning: GPU debugging is enabled, but validation layer is not installed");
+          LOG("Warning: GPU debugging is enabled, but validation layer is not installed, so no debug logs will be shown");
         }
       } else {
         LOG("Warning: GPU debugging is enabled, but debug extension is not supported");
@@ -2400,23 +2997,41 @@ bool gpu_init(gpu_config* config) {
   { // Device
     if (config->vk.getPhysicalDevice) {
       config->vk.getPhysicalDevice(state.instance, (uintptr_t) &state.adapter);
-    } else {
+    }
+
+    if (!state.adapter) {
       uint32_t deviceCount = 1;
       VK(vkEnumeratePhysicalDevices(state.instance, &deviceCount, &state.adapter), "vkEnumeratePhysicalDevices") goto fail;
+    }
+
+    if (!state.adapter) {
+      error("No suitable graphics device available");
+      goto fail;
     }
 
     // Device Extensions
 
     struct { const char* name; bool shouldEnable; bool* flag; } extensions[] = {
+      { "VK_KHR_acceleration_structure", true, &state.extensions.accelerationStructure },
+      { "VK_KHR_buffer_device_address", true, &state.extensions.bufferDeviceAddress },
       { "VK_KHR_create_renderpass2", true, &state.extensions.renderPass2 },
+      { "VK_KHR_deferred_host_operations", true, &state.extensions.deferredHostOperations },
       { "VK_KHR_swapchain", true, &state.extensions.swapchain },
       { "VK_KHR_portability_subset", true, &state.extensions.portability },
       { "VK_KHR_depth_stencil_resolve", true, &state.extensions.depthResolve },
+      { "VK_KHR_ray_query", true, &state.extensions.rayQuery },
       { "VK_KHR_shader_non_semantic_info", config->debug, &state.extensions.shaderDebug },
+      { "VK_KHR_shader_float_controls", true, &state.extensions.shaderFloatControls },
+      { "VK_KHR_spirv_1_4", true, &state.extensions.spirv14 },
       { "VK_KHR_image_format_list", true, &state.extensions.formatList },
       { "VK_KHR_synchronization2", true, &state.extensions.synchronization2 },
+      { "VK_KHR_dynamic_rendering", true, &state.extensions.dynamicRendering },
+      { "VK_KHR_timeline_semaphore", true, &state.extensions.timelineSemaphore },
+      { "VK_EXT_descriptor_indexing", true, &state.extensions.descriptorIndexing },
       { "VK_EXT_scalar_block_layout", true, &state.extensions.scalarBlockLayout },
-      { "VK_EXT_fragment_density_map", true, &state.extensions.foveation }
+      { "VK_EXT_fragment_density_map", true, &state.extensions.foveation },
+      { "VK_EXT_pipeline_creation_cache_control", true, &state.extensions.pipelineCacheControl },
+      { "VK_EXT_memory_budget", true, &state.extensions.memoryBudget }
     };
 
     uint32_t extensionCount = 0;
@@ -2436,6 +3051,7 @@ bool gpu_init(gpu_config* config) {
 
     ASSERT(state.extensions.renderPass2, "GPU driver is missing required Vulkan extension VK_KHR_render_pass2") goto fail;
     ASSERT(state.extensions.synchronization2, "GPU driver is missing required Vulkan extension VK_KHR_synchronization2") goto fail;
+    ASSERT(state.extensions.timelineSemaphore, "GPU driver is missing required Vulkan extension VK_KHR_timeline_semaphore") goto fail;
 
     config->fnFree(extensionInfo);
 
@@ -2501,89 +3117,111 @@ bool gpu_init(gpu_config* config) {
 
     // Features
 
-    VkPhysicalDeviceFragmentDensityMapFeaturesEXT fragmentDensityMapFeatures = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT
-    };
+    VkPhysicalDeviceFeatures2 supported = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    VkPhysicalDeviceMultiviewFeatures multiviewFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES };
+    VkPhysicalDeviceShaderDrawParameterFeatures shaderDrawParameterFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETER_FEATURES };
+    VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR };
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR };
+    VkPhysicalDeviceScalarBlockLayoutFeaturesEXT scalarBlockLayoutFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES_EXT };
+    VkPhysicalDeviceFragmentDensityMapFeaturesEXT fragmentDensityMapFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT };
+    VkPhysicalDevicePipelineCreationCacheControlFeaturesEXT pipelineCreationCacheControlFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES_EXT };
+    VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timelineSemaphoreFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR };
+    VkPhysicalDeviceBufferDeviceAddressFeaturesKHR bufferDeviceAddressFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR };
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
+    VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
 
-    VkPhysicalDeviceScalarBlockLayoutFeaturesEXT scalarBlockLayoutFeatures = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES_EXT
-    };
+    vkGetPhysicalDeviceFeatures2(state.adapter, &supported);
 
-    VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR
-    };
+    VkPhysicalDeviceFeatures2 enabled = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    #define CHAIN(x) x.pNext = enabled.pNext; enabled.pNext = &x
 
-    VkPhysicalDeviceShaderDrawParameterFeatures shaderDrawParameterFeatures = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETER_FEATURES,
-      .pNext = &synchronization2Features
-    };
+    enabled.features.fullDrawIndexUint32 = true;
+    enabled.features.imageCubeArray = true;
+    enabled.features.independentBlend = true;
+    enabled.features.sampleRateShading = true;
+    enabled.features.samplerAnisotropy = supported.features.samplerAnisotropy;
+    enabled.features.multiDrawIndirect = supported.features.multiDrawIndirect;
+    enabled.features.shaderClipDistance = supported.features.shaderClipDistance;
+    enabled.features.shaderCullDistance = supported.features.shaderCullDistance;
+    enabled.features.largePoints = supported.features.largePoints;
+    enabled.features.textureCompressionBC = supported.features.textureCompressionBC;
+    enabled.features.textureCompressionASTC_LDR = supported.features.textureCompressionASTC_LDR;
+    enabled.features.fillModeNonSolid = supported.features.fillModeNonSolid;
+    enabled.features.depthClamp = supported.features.depthClamp;
+    enabled.features.drawIndirectFirstInstance = supported.features.drawIndirectFirstInstance;
+    enabled.features.shaderFloat64 = supported.features.shaderFloat64;
+    enabled.features.shaderInt64 = supported.features.shaderInt64;
+    enabled.features.shaderInt16 = supported.features.shaderInt16;
 
-    VkPhysicalDeviceMultiviewFeatures multiviewFeatures = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
-      .pNext = &shaderDrawParameterFeatures
-    };
+    multiviewFeatures.multiview = true;
+    CHAIN(multiviewFeatures);
 
-    VkPhysicalDeviceFeatures2 enabledFeatures = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-      .pNext = &multiviewFeatures
-    };
+    shaderDrawParameterFeatures.shaderDrawParameters = true;
+    CHAIN(shaderDrawParameterFeatures);
+
+    synchronization2Features.synchronization2 = true;
+    CHAIN(synchronization2Features);
+
+    timelineSemaphoreFeatures.timelineSemaphore = true;
+    CHAIN(timelineSemaphoreFeatures);
+
+    if (state.extensions.dynamicRendering) {
+      dynamicRenderingFeatures.dynamicRendering = true;
+      CHAIN(dynamicRenderingFeatures);
+    }
+
+    if (state.extensions.scalarBlockLayout) {
+      scalarBlockLayoutFeatures.scalarBlockLayout = true;
+      CHAIN(scalarBlockLayoutFeatures);
+    }
+
+    if (state.extensions.foveation) {
+      fragmentDensityMapFeatures.fragmentDensityMap = true;
+      fragmentDensityMapFeatures.fragmentDensityMapNonSubsampledImages = true;
+      CHAIN(fragmentDensityMapFeatures);
+    }
+
+    if (state.extensions.pipelineCacheControl) {
+      pipelineCreationCacheControlFeatures.pipelineCreationCacheControl = true;
+      CHAIN(pipelineCreationCacheControlFeatures);
+    }
+
+    if (state.extensions.bufferDeviceAddress) {
+      bufferDeviceAddressFeatures.bufferDeviceAddress = true;
+      CHAIN(bufferDeviceAddressFeatures);
+    }
+
+    if (state.extensions.accelerationStructure) {
+      accelerationStructureFeatures.accelerationStructure = true;
+      CHAIN(accelerationStructureFeatures);
+    }
+
+    if (state.extensions.rayQuery) {
+      rayQueryFeatures.rayQuery = true;
+      CHAIN(rayQueryFeatures);
+    }
 
     if (config->features) {
-      VkPhysicalDeviceFeatures2 features2 = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
-      VkPhysicalDeviceFeatures* enable = &enabledFeatures.features;
-      VkPhysicalDeviceFeatures* supports = &features2.features;
-
-      if (state.extensions.foveation) {
-        fragmentDensityMapFeatures.pNext = features2.pNext;
-        features2.pNext = &fragmentDensityMapFeatures;
-      }
-
-      vkGetPhysicalDeviceFeatures2(state.adapter, &features2);
-
-      // Required features
-      enable->fullDrawIndexUint32 = true;
-      enable->imageCubeArray = true;
-      enable->independentBlend = true;
-      enable->sampleRateShading = true;
-      synchronization2Features.synchronization2 = true;
-      multiviewFeatures.multiview = true;
-      shaderDrawParameterFeatures.shaderDrawParameters = true;
-
-      // Internal features (exposed as limits)
-      enable->samplerAnisotropy = supports->samplerAnisotropy;
-      enable->multiDrawIndirect = supports->multiDrawIndirect;
-      enable->shaderClipDistance = supports->shaderClipDistance;
-      enable->shaderCullDistance = supports->shaderCullDistance;
-      enable->largePoints = supports->largePoints;
-
-      // Optional features (currently always enabled when supported)
-      config->features->textureBC = (enable->textureCompressionBC = supports->textureCompressionBC);
-      config->features->textureASTC = (enable->textureCompressionASTC_LDR = supports->textureCompressionASTC_LDR);
-      config->features->wireframe = (enable->fillModeNonSolid = supports->fillModeNonSolid);
-      config->features->depthClamp = (enable->depthClamp = supports->depthClamp);
-      config->features->indirectDrawFirstInstance = (enable->drawIndirectFirstInstance = supports->drawIndirectFirstInstance);
-      config->features->float64 = (enable->shaderFloat64 = supports->shaderFloat64);
-      config->features->int64 = (enable->shaderInt64 = supports->shaderInt64);
-      config->features->int16 = (enable->shaderInt16 = supports->shaderInt16);
-
-      // Extension "features"
+      config->features->textureBC = enabled.features.textureCompressionBC;
+      config->features->textureASTC = enabled.features.textureCompressionASTC_LDR;
+      config->features->wireframe = enabled.features.fillModeNonSolid;
+      config->features->depthClamp = enabled.features.depthClamp;
       config->features->depthResolve = state.extensions.depthResolve;
+      config->features->foveation = state.extensions.foveation;
+      config->features->rayQuery = state.extensions.rayQuery && state.extensions.accelerationStructure;
+      config->features->indirectDrawFirstInstance = enabled.features.drawIndirectFirstInstance;
       config->features->packedBuffers = state.extensions.scalarBlockLayout;
       config->features->shaderDebug = state.extensions.shaderDebug;
-
-      if (state.extensions.scalarBlockLayout) {
-        scalarBlockLayoutFeatures.scalarBlockLayout = true;
-        scalarBlockLayoutFeatures.pNext = enabledFeatures.pNext;
-        enabledFeatures.pNext = &scalarBlockLayoutFeatures;
-      }
-
-      if (state.extensions.foveation && fragmentDensityMapFeatures.fragmentDensityMap) {
-        fragmentDensityMapFeatures.fragmentDensityMapDynamic = false;
-        fragmentDensityMapFeatures.fragmentDensityMapNonSubsampledImages = true;
-        fragmentDensityMapFeatures.pNext = enabledFeatures.pNext;
-        enabledFeatures.pNext = &fragmentDensityMapFeatures;
-        config->features->foveation = true;
-      }
+      config->features->subgroupVote = subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_VOTE_BIT;
+      config->features->subgroupArithmetic = subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_ARITHMETIC_BIT;
+      config->features->subgroupBallot = subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_BALLOT_BIT;
+      config->features->subgroupShuffle = subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT;
+      config->features->subgroupShuffleRelative = subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT;
+      config->features->subgroupClustered = subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_CLUSTERED_BIT;
+      config->features->subgroupQuad = subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_QUAD_BIT;
+      config->features->float64 = enabled.features.shaderFloat64;
+      config->features->int64 = enabled.features.shaderInt64;
+      config->features->int16 = enabled.features.shaderInt16;
 
       // Formats
       for (uint32_t i = 0; i < GPU_FORMAT_COUNT; i++) {
@@ -2644,7 +3282,7 @@ bool gpu_init(gpu_config* config) {
 
     VkDeviceCreateInfo deviceInfo = {
       .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-      .pNext = config->features ? &enabledFeatures : NULL,
+      .pNext = &enabled,
       .queueCreateInfoCount = 1,
       .pQueueCreateInfos = &(VkDeviceQueueCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -2667,9 +3305,9 @@ bool gpu_init(gpu_config* config) {
   }
 
   { // Allocators (without VK_KHR_maintenance4, need to create objects to get memory requirements)
-    VkPhysicalDeviceMemoryProperties memoryProperties;
-    vkGetPhysicalDeviceMemoryProperties(state.adapter, &memoryProperties);
-    VkMemoryType* memoryTypes = memoryProperties.memoryTypes;
+    VkPhysicalDeviceMemoryProperties2 memory = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2 };
+    vkGetPhysicalDeviceMemoryProperties2(state.adapter, &memory);
+    VkMemoryType* memoryTypes = memory.memoryProperties.memoryTypes;
 
     VkMemoryPropertyFlags hostVisible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
@@ -2679,9 +3317,7 @@ bool gpu_init(gpu_config* config) {
     // - STATIC: Regular device-local memory.  Not necessarily mappable, fast to read on GPU.
     // - STREAM: Used to "stream" data to the GPU, to be read by shaders.  This tries to use the
     //   special 256MB memory type present on discrete GPUs because it's both device local and host-
-    //   visible and that supposedly makes it fast.  A single buffer is allocated with a "zone" for
-    //   each tick.  If one of the zones fills up, a new bigger buffer is allocated.  It's important
-    //   to have one buffer and keep it alive since streaming is expected to happen very frequently.
+    //   visible and that supposedly makes it fast.
     // - UPLOAD: Used to stage data to upload to buffers/textures.  Can only be used for transfers.
     //   Uses uncached host-visible memory to not pollute the CPU cache or waste the STREAM memory.
     // - DOWNLOAD: Used for readbacks.  Uses cached memory when available since reading from
@@ -2690,12 +3326,17 @@ bool gpu_init(gpu_config* config) {
       [GPU_MEMORY_BUFFER_STATIC] = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
       [GPU_MEMORY_BUFFER_STREAM] = hostVisible | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
       [GPU_MEMORY_BUFFER_UPLOAD] = hostVisible,
-      [GPU_MEMORY_BUFFER_DOWNLOAD] = hostVisible | VK_MEMORY_PROPERTY_HOST_CACHED_BIT
+      [GPU_MEMORY_BUFFER_DOWNLOAD] = hostVisible | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+      [GPU_MEMORY_BUFFER_TREE] = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     };
 
     for (uint32_t i = 0; i < COUNTOF(bufferFlags); i++) {
       gpu_allocator* allocator = &state.allocators[i];
       state.allocatorLookup[i] = i;
+
+      if (i == GPU_MEMORY_BUFFER_TREE && !state.extensions.accelerationStructure) {
+        continue;
+      }
 
       VkBufferCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -2709,22 +3350,30 @@ bool gpu_init(gpu_config* config) {
       vkGetBufferMemoryRequirements(state.device, buffer, &requirements);
       vkDestroyBuffer(state.device, buffer, NULL);
 
-      VkMemoryPropertyFlags fallback = i == GPU_MEMORY_BUFFER_STATIC ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : hostVisible;
+      VkMemoryPropertyFlags fallback = (bufferFlags[i] & hostVisible) ? hostVisible : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-      for (uint32_t j = 0; j < memoryProperties.memoryTypeCount; j++) {
-        if (~requirements.memoryTypeBits & (1 << j)) {
-          continue;
+      // Find fallback memory type
+      for (uint32_t j = 0; j < memory.memoryProperties.memoryTypeCount; j++) {
+        if (requirements.memoryTypeBits & (1 << j)) {
+          if ((memoryTypes[j].propertyFlags & fallback) == fallback) {
+            allocator->memoryFlags = memoryTypes[j].propertyFlags;
+            allocator->heapIndex = memoryTypes[j].heapIndex;
+            allocator->fallbackMemoryType = j;
+            allocator->memoryType = j;
+            break;
+          }
         }
+      }
 
-        if ((memoryTypes[j].propertyFlags & bufferFlags[i]) == bufferFlags[i]) {
-          allocator->memoryFlags = memoryTypes[j].propertyFlags;
-          allocator->memoryType = j;
-          break;
-        }
-
-        if ((memoryTypes[j].propertyFlags & fallback) == fallback) {
-          allocator->memoryFlags = memoryTypes[j].propertyFlags;
-          allocator->memoryType = j;
+      // Find memory type
+      for (uint32_t j = 0; j < memory.memoryProperties.memoryTypeCount; j++) {
+        if (requirements.memoryTypeBits & (1 << j)) {
+          if ((memoryTypes[j].propertyFlags & bufferFlags[i]) == bufferFlags[i]) {
+            allocator->memoryFlags = memoryTypes[j].propertyFlags;
+            allocator->heapIndex = memoryTypes[j].heapIndex;
+            allocator->memoryType = j;
+            break;
+          }
         }
       }
     }
@@ -2776,7 +3425,7 @@ bool gpu_init(gpu_config* config) {
       vkDestroyImage(state.device, image, NULL);
 
       uint16_t memoryType, memoryFlags;
-      for (uint32_t j = 0; j < memoryProperties.memoryTypeCount; j++) {
+      for (uint32_t j = 0; j < memory.memoryProperties.memoryTypeCount; j++) {
         if ((requirements.memoryTypeBits & (1 << j)) && (memoryTypes[j].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
           memoryFlags = memoryTypes[j].propertyFlags;
           memoryType = j;
@@ -2800,46 +3449,27 @@ bool gpu_init(gpu_config* config) {
       if (!merged) {
         uint32_t index = allocatorCount++;
         state.allocators[index].memoryFlags = memoryFlags;
+        state.allocators[index].heapIndex = memoryTypes[memoryType].heapIndex;
+        state.allocators[index].fallbackMemoryType = memoryType;
         state.allocators[index].memoryType = memoryType;
         state.allocatorLookup[i] = index;
       }
     }
+
+    mtx_init(&state.allocatorLock, mtx_plain);
   }
 
-  // Ticks
-  for (uint32_t i = 0; i < COUNTOF(state.ticks); i++) {
-    VkCommandPoolCreateInfo poolInfo = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-      .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-      .queueFamilyIndex = state.queueFamilyIndex
-    };
+  // Semaphore
 
-    VK(vkCreateCommandPool(state.device, &poolInfo, NULL, &state.ticks[i].pool), "vkCreateCommandPool") goto fail;
+  VkSemaphoreCreateInfo timelineSemaphoreInfo = {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+    .pNext = &(VkSemaphoreTypeCreateInfo) {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
+    }
+  };
 
-    VkCommandBufferAllocateInfo allocateInfo = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .commandPool = state.ticks[i].pool,
-      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      .commandBufferCount = COUNTOF(state.ticks[i].streams)
-    };
-
-    VkCommandBuffer* commandBuffers = &state.ticks[i].streams[0].commands;
-    VK(vkAllocateCommandBuffers(state.device, &allocateInfo, commandBuffers), "vkAllocateCommandBuffers") goto fail;
-
-    VkSemaphoreCreateInfo semaphoreInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
-    };
-
-    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &state.ticks[i].semaphores[0]), "vkCreateSemaphore") goto fail;
-    VK(vkCreateSemaphore(state.device, &semaphoreInfo, NULL, &state.ticks[i].semaphores[1]), "vkCreateSemaphore") goto fail;
-
-    VkFenceCreateInfo fenceInfo = {
-      .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-      .flags = VK_FENCE_CREATE_SIGNALED_BIT
-    };
-
-    VK(vkCreateFence(state.device, &fenceInfo, NULL, &state.ticks[i].fence), "vkCreateFence") goto fail;
-  }
+  VK(vkCreateSemaphore(state.device, &timelineSemaphoreInfo, NULL, &state.semaphore), "vkCreateSemaphore") goto fail;
 
   // Pipeline cache
 
@@ -2860,9 +3490,9 @@ bool gpu_init(gpu_config* config) {
 
   VK(vkCreatePipelineCache(state.device, &cacheInfo, NULL, &state.pipelineCache), "vkCreatePipelineCache") goto fail;
 
-  state.tick[CPU] = COUNTOF(state.ticks) - 1;
-  return true;
+  mtx_init(&state.morgue.lock, mtx_plain);
 
+  return true;
 fail:
   gpu_destroy();
   return false;
@@ -2870,20 +3500,36 @@ fail:
 
 void gpu_destroy(void) {
   if (state.device) vkDeviceWaitIdle(state.device);
-  state.tick[GPU] = state.tick[CPU];
-  expunge();
-  if (state.pipelineCache) vkDestroyPipelineCache(state.device, state.pipelineCache, NULL);
-  for (uint32_t i = 0; i < COUNTOF(state.ticks); i++) {
-    gpu_tick* tick = &state.ticks[i];
-    if (tick->pool) vkDestroyCommandPool(state.device, tick->pool, NULL);
-    if (tick->semaphores[0]) vkDestroySemaphore(state.device, tick->semaphores[0], NULL);
-    if (tick->semaphores[1]) vkDestroySemaphore(state.device, tick->semaphores[1], NULL);
-    if (tick->fence) vkDestroyFence(state.device, tick->fence, NULL);
+  expunge(UINT64_MAX);
+  for (gpu_thread_state* t = state.threads, *next; t; t = next) {
+    for (gpu_stream_pool* pool = t->streamPools, *next; pool; pool = next) {
+      vkDestroyCommandPool(state.device, pool->handle, NULL);
+      for (gpu_stream* stream = pool->head, *next; stream; stream = next) {
+        next = stream->next;
+        state.config.fnFree(stream);
+      }
+      next = pool->next;
+      state.config.fnFree(pool);
+    }
+    next = t->next;
+    memset(t, 0, sizeof(*t));
   }
+  for (gpu_victim* victim = state.morgue.pool, *next; victim; victim = next) {
+    next = victim->next;
+    state.config.fnFree(victim);
+  }
+  mtx_destroy(&state.morgue.lock);
+  mtx_destroy(&state.allocatorLock);
+  if (state.pipelineCache) vkDestroyPipelineCache(state.device, state.pipelineCache, NULL);
+  if (state.semaphore) vkDestroySemaphore(state.device, state.semaphore, NULL);
   for (uint32_t i = 0; i < COUNTOF(state.memory); i++) {
     if (state.memory[i].handle) vkFreeMemory(state.device, state.memory[i].handle, NULL);
   }
+  for (uint32_t i = 0; i < FRAME_DEPTH; i++) {
+    if (state.surface.acquireSemaphores[i]) vkDestroySemaphore(state.device, state.surface.acquireSemaphores[i], NULL);
+  }
   for (uint32_t i = 0; i < COUNTOF(state.surface.images); i++) {
+    if (state.surface.presentSemaphores[i]) vkDestroySemaphore(state.device, state.surface.presentSemaphores[i], NULL);
     if (state.surface.images[i].view) vkDestroyImageView(state.device, state.surface.images[i].view, NULL);
   }
   if (state.surface.swapchain) vkDestroySwapchainKHR(state.device, state.surface.swapchain, NULL);
@@ -2899,71 +3545,119 @@ void gpu_destroy(void) {
   memset(&state, 0, sizeof(state));
 }
 
-const char* gpu_get_error(void) {
+char* gpu_get_error(void) {
   return thread.error;
 }
 
-bool gpu_begin(uint32_t* t) {
-  uint32_t nextTick = state.tick[CPU] + 1;
-  if (!gpu_wait_tick(nextTick - COUNTOF(state.ticks), NULL)) {
+bool gpu_get_memory_info(uint64_t* budget, uint64_t* usage) {
+  if (!state.extensions.memoryBudget) {
     return false;
   }
 
-  gpu_tick* tick = &state.ticks[nextTick & TICK_MASK];
-  VK(vkResetFences(state.device, 1, &tick->fence), "vkResetFences") return false;
-  VK(vkResetCommandPool(state.device, tick->pool, 0), "vkResetCommandPool") return false;
-  state.streamCount = 0;
-  expunge();
+  VkPhysicalDeviceMemoryBudgetPropertiesEXT budgetInfo = {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT
+  };
 
-  state.tick[CPU] = nextTick;
-  if (t) *t = nextTick;
+  VkPhysicalDeviceMemoryProperties2 properties = {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,
+    .pNext = &budgetInfo
+  };
+
+  vkGetPhysicalDeviceMemoryProperties2(state.adapter, &properties);
+
+  // This currently only exposes the stats for the "primary" VRAM heap, which is the heap(s) used
+  // for STATIC buffers and COLOR textures.  Usually these use the same heap, but if they're
+  // different then we sum them together.  This isn't perfect, but is usually good enough.
+  uint32_t bufferHeap = state.allocators[state.allocatorLookup[GPU_MEMORY_BUFFER_STATIC]].heapIndex;
+  uint32_t textureHeap = state.allocators[state.allocatorLookup[GPU_MEMORY_TEXTURE_COLOR]].heapIndex;
+
+  *budget = budgetInfo.heapBudget[bufferHeap];
+  *usage = budgetInfo.heapUsage[bufferHeap];
+
+  if (textureHeap != bufferHeap) {
+    *budget += budgetInfo.heapUsage[textureHeap];
+    *usage += budgetInfo.heapUsage[textureHeap];
+  }
+
   return true;
 }
 
-bool gpu_submit(gpu_stream** streams, uint32_t count) {
-  gpu_tick* tick = &state.ticks[state.tick[CPU] & TICK_MASK];
+bool gpu_submit(gpu_stream** streams, uint32_t count, uint32_t tick) {
+  VkCommandBuffer stack[64];
+  VkCommandBuffer* commandBuffers = stack;
 
-  VkCommandBuffer commands[COUNTOF(tick->streams)];
+  if (count > COUNTOF(stack)) {
+    commandBuffers = state.config.fnAlloc(count * sizeof(VkCommandBuffer));
+    ASSERT(commandBuffers, "Out of memory") return false;
+  }
+
   for (uint32_t i = 0; i < count; i++) {
-    commands[i] = streams[i]->commands;
+    commandBuffers[i] = streams[i]->commands;
+  }
+
+  for (gpu_thread_state* t = state.threads; t; t = t->next) {
+    if (t->activeStreamPool) {
+      t->activeStreamPool->tick = tick;
+      t->activeStreamPool = NULL;
+    }
   }
 
   VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR;
 
   VkSubmitInfo submit = {
     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-    .waitSemaphoreCount = !!state.surface.semaphore,
-    .pWaitSemaphores = &state.surface.semaphore,
+    .pNext = &(VkTimelineSemaphoreSubmitInfo) {
+      .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+      .waitSemaphoreValueCount = !!state.surface.acquireSemaphore,
+      .pWaitSemaphoreValues = (uint64_t[1]) { 0 },
+      .signalSemaphoreValueCount = 1,
+      .pSignalSemaphoreValues = (uint64_t[1]) { tick }
+    },
+    .waitSemaphoreCount = !!state.surface.acquireSemaphore,
+    .pWaitSemaphores = &state.surface.acquireSemaphore,
     .pWaitDstStageMask = &waitStage,
+    .signalSemaphoreCount = 1,
+    .pSignalSemaphores = &state.semaphore,
     .commandBufferCount = count,
-    .pCommandBuffers = commands
+    .pCommandBuffers = commandBuffers
   };
 
-  VK(vkQueueSubmit(state.queue, 1, &submit, tick->fence), "vkQueueSubmit") return false;
-  state.surface.semaphore = VK_NULL_HANDLE;
+  VK(vkQueueSubmit(state.queue, 1, &submit, VK_NULL_HANDLE), "vkQueueSubmit") {
+    if (commandBuffers != stack) state.config.fnFree(commandBuffers);
+    return false;
+  }
+
+  expunge(getFinishedTick());
+
+  if (commandBuffers != stack) state.config.fnFree(commandBuffers);
+
+  if (state.surface.acquireSemaphore) {
+    state.surface.acquireSemaphore = VK_NULL_HANDLE;
+    state.surface.acquireTick[state.frame & FRAME_MASK] = tick;
+  }
+
+  state.tick = tick;
   return true;
 }
 
 bool gpu_is_complete(uint32_t tick) {
-  return state.tick[GPU] >= tick;
+  return getFinishedTick() >= (uint64_t) tick;
 }
 
-bool gpu_wait_tick(uint32_t tick, bool* waited) {
-  if (state.tick[GPU] < tick) {
-    VkFence fence = state.ticks[tick & TICK_MASK].fence;
-    VK(vkWaitForFences(state.device, 1, &fence, VK_FALSE, ~0ull), "vkWaitForFences") return false;
-    if (waited) *waited = true;
-    state.tick[GPU] = tick;
-    return true;
-  } else {
-    if (waited) *waited = false;
-    return true;
-  }
+bool gpu_wait_tick(uint32_t tick) {
+  VkSemaphoreWaitInfo info = {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+    .semaphoreCount = 1,
+    .pSemaphores = &state.semaphore,
+    .pValues = (uint64_t[1]) { tick }
+  };
+
+  VK(vkWaitSemaphoresKHR(state.device, &info, UINT64_MAX), "vkWaitSemaphores") return false;
+  return true;
 }
 
 bool gpu_wait_idle(void) {
   VK(vkDeviceWaitIdle(state.device), "vkDeviceWaitIdle") return false;
-  state.tick[GPU] = state.tick[CPU];
   return true;
 }
 
@@ -2993,28 +3687,71 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     [GPU_MEMORY_BUFFER_STREAM] = 0,
     [GPU_MEMORY_BUFFER_UPLOAD] = 0,
     [GPU_MEMORY_BUFFER_DOWNLOAD] = 0,
-    [GPU_MEMORY_TEXTURE_COLOR] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_D16] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_D24] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_D32F] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_D24S8] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_D32FS8] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_COLOR] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_D16] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_D24] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_D32F] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_D24S8] = 1 << 28,
-    [GPU_MEMORY_TEXTURE_LAZY_D32FS8] = 1 << 28
+    [GPU_MEMORY_BUFFER_TREE] = 1 << 24,
+    [GPU_MEMORY_TEXTURE_COLOR] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_D16] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_D24] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_D32F] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_D24S8] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_D32FS8] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_COLOR] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_D16] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_D24] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_D32F] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_D24S8] = 1 << 26,
+    [GPU_MEMORY_TEXTURE_LAZY_D32FS8] = 1 << 26
   };
 
   uint32_t blockSize = blockSizes[type];
-  uint32_t cursor = ALIGN(allocator->cursor, info.alignment);
+  ASSERT(blockSize <= (GPU_MAX_PAGES * GPU_PAGE_SIZE), "Block size larger than allocator can handle") return NULL;
 
-  if (allocator->block && cursor + info.size <= blockSize) {
-    allocator->cursor = cursor + info.size;
-    allocator->block->refs++;
-    *offset = cursor;
-    return allocator->block;
+  uint32_t align = MAX(info.alignment, GPU_PAGE_SIZE);
+  uint32_t requiredPages = ALIGN(info.size, align) / GPU_PAGE_SIZE;
+
+  mtx_lock(&state.allocatorLock);
+
+  if (allocator->block) {
+    // Search through regions for a free region of sufficient size
+    for (uint32_t i = 0; i < allocator->pageCount; i += allocator->regions[i].pageCount) {
+      gpu_alloc_entry* region = &allocator->regions[i];
+
+      // The alignment may require us to start the allocation later than the
+      // beginning of the region
+      uint32_t offsetPages = (ALIGN(i * GPU_PAGE_SIZE, align) / GPU_PAGE_SIZE) - i;
+      uint32_t totalPages = offsetPages + requiredPages;
+
+      if (!region->allocated && totalPages <= region->pageCount) {
+        region->allocated = true;
+
+        // If there's leftover room, mark the leftover free region, and shrink
+        // the current region
+        if (totalPages < region->pageCount) {
+          gpu_alloc_entry* freeRegion = &allocator->regions[i + totalPages];
+          freeRegion->allocated = false;
+          freeRegion->pageCount = region->pageCount - totalPages;
+          region->pageCount = totalPages;
+
+          // Coalesce with the next region, if possible
+          uint32_t nextIndex = i + totalPages + freeRegion->pageCount;
+          if (nextIndex < allocator->pageCount) {
+            gpu_alloc_entry* nextRegion = &allocator->regions[nextIndex];
+            if (!nextRegion->allocated) {
+              freeRegion->pageCount += nextRegion->pageCount;
+            }
+          }
+        }
+
+        allocator->block->refs++;
+        *offset = (i + offsetPages) * GPU_PAGE_SIZE;
+        mtx_unlock(&state.allocatorLock);
+        return allocator->block;
+      }
+    }
+  }
+
+  VkMemoryAllocateFlags flags = 0;
+  if (type == GPU_MEMORY_BUFFER_STATIC || type == GPU_MEMORY_BUFFER_STREAM || type == GPU_MEMORY_BUFFER_TREE) {
+    flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
   }
 
   // If there wasn't an active block or it overflowed, find an empty block to allocate
@@ -3022,78 +3759,164 @@ static gpu_memory* allocate(gpu_memory_type type, VkMemoryRequirements info, VkD
     if (!state.memory[i].handle) {
       gpu_memory* memory = &state.memory[i];
 
+      VkMemoryAllocateFlagsInfo flagInfo = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+        .flags = flags
+      };
+
       VkMemoryAllocateInfo memoryInfo = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext = flags ? &flagInfo : NULL,
         .allocationSize = MAX(blockSize, info.size),
         .memoryTypeIndex = allocator->memoryType
       };
 
-      VK(vkAllocateMemory(state.device, &memoryInfo, NULL, &memory->handle), "vkAllocateMemory") {
-        allocator->block = NULL;
-        return NULL;
+      VkResult result = vkAllocateMemory(state.device, &memoryInfo, NULL, &memory->handle);
+
+      if (result < 0) {
+        // If memory allocation failed, try the fallback memory type, if one exists
+        if (allocator->fallbackMemoryType != allocator->memoryType) {
+          memoryInfo.memoryTypeIndex = allocator->fallbackMemoryType;
+          result = vkAllocateMemory(state.device, &memoryInfo, NULL, &memory->handle);
+        }
+
+        VK(result, "vkAllocateMemory") {
+          allocator->block = NULL;
+          mtx_unlock(&state.allocatorLock);
+          return NULL;
+        }
       }
 
       if (allocator->memoryFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
         VK(vkMapMemory(state.device, memory->handle, 0, VK_WHOLE_SIZE, 0, &memory->pointer), "vkMapMemory") {
           vkFreeMemory(state.device, memory->handle, NULL);
           memory->handle = NULL;
+          mtx_unlock(&state.allocatorLock);
           return NULL;
         }
       } else {
         memory->pointer = NULL;
       }
 
-      allocator->block = memory;
-      allocator->cursor = info.size;
-      allocator->block->refs = 1;
+      memory->type = type;
+      memory->refs = 1;
+
+      // Memory only receives an allocator if it can host multiple allocations
+      // (i.e. it has a fixed block size and this block is not full/oversized)
+      if (blockSize && (requiredPages * GPU_PAGE_SIZE) < blockSize) {
+        allocator->block = memory;
+
+        // Mark the initial region
+        allocator->pageCount = blockSize / GPU_PAGE_SIZE;
+        allocator->regions[0].allocated = true;
+        allocator->regions[0].pageCount = requiredPages;
+
+        // Mark the free region at the end. We know there's a free region
+        // because we don't let allocators manage full or oversized blocks
+        allocator->regions[requiredPages].allocated = false;
+        allocator->regions[requiredPages].pageCount = allocator->pageCount - requiredPages;
+      }
+
       *offset = 0;
+      mtx_unlock(&state.allocatorLock);
       return memory;
     }
   }
 
   error("Out of GPU memory blocks");
+  mtx_unlock(&state.allocatorLock);
   return NULL;
 }
 
-static void release(gpu_memory* memory) {
-  if (memory && --memory->refs == 0) {
-    condemn(memory->handle, VK_OBJECT_TYPE_DEVICE_MEMORY);
-    memory->handle = NULL;
+static void release(gpu_memory* memory, VkDeviceSize offset) {
+  if (!memory) {
+    return;
+  }
 
-    for (uint32_t i = 0; i < COUNTOF(state.allocators); i++) {
-      if (state.allocators[i].block == memory) {
-        state.allocators[i].block = NULL;
-        state.allocators[i].cursor = 0;
+  gpu_allocator* allocator = &state.allocators[state.allocatorLookup[memory->type]];
+
+  mtx_lock(&state.allocatorLock);
+
+  if (--memory->refs == 0) {
+    // If the allocator manages this block, reset it, otherwise free the memory
+    if (allocator->block == memory) {
+      gpu_alloc_entry* region = &allocator->regions[0];
+      region->allocated = false;
+      region->pageCount = allocator->pageCount;
+    } else {
+      condemn(memory->handle, VK_OBJECT_TYPE_DEVICE_MEMORY);
+      memory->handle = NULL;
+    }
+  } else if (allocator->block == memory) {
+    // Mark the region for this allocation as free
+    uint32_t pageOffset = offset / GPU_PAGE_SIZE;
+    gpu_alloc_entry* region = &allocator->regions[pageOffset];
+    region->allocated = false;
+
+    // See if we can coalesce this region with the next region
+    uint32_t nextOffset = pageOffset + region->pageCount;
+    if (nextOffset < allocator->pageCount) {
+      gpu_alloc_entry* nextRegion = &allocator->regions[nextOffset];
+      if (!nextRegion->allocated) {
+        region->pageCount += nextRegion->pageCount;
+      }
+    }
+
+    // See if we can coalesce with the previous region. We have to loop
+    // through regions from the beginning because we don't know where the
+    // last region started
+    for (uint32_t i = 0; i < pageOffset; i += allocator->regions[i].pageCount) {
+      gpu_alloc_entry* previousRegion = &allocator->regions[i];
+      if (i + previousRegion->pageCount == pageOffset) {
+        // We found the previous region, coalesce if it's free
+        if (!previousRegion->allocated) {
+          previousRegion->pageCount += region->pageCount;
+        }
       }
     }
   }
+
+  mtx_unlock(&state.allocatorLock);
 }
 
 static void condemn(void* handle, VkObjectType type) {
   if (!handle) return;
+
   gpu_morgue* morgue = &state.morgue;
+  gpu_victim* victim = morgue->pool;
 
-  // If the morgue is full, try expunging to reclaim some space
-  if (morgue->head - morgue->tail >= COUNTOF(morgue->data)) {
-    expunge();
+  mtx_lock(&morgue->lock);
 
-    // If that didn't work, wait for the GPU to be done with the oldest victim and retry
-    if (morgue->head - morgue->tail >= COUNTOF(morgue->data)) {
-      gpu_wait_tick(morgue->data[morgue->tail & MORGUE_MASK].tick, NULL);
-      expunge();
-    }
-
-    // The following should be unreachable
-    ASSERT(morgue->head - morgue->tail < COUNTOF(morgue->data), "Morgue overflow!") return;
+  if (victim) {
+    morgue->pool = victim->next;
+  } else {
+    victim = state.config.fnAlloc(sizeof(*victim));
   }
 
-  morgue->data[morgue->head++ & MORGUE_MASK] = (gpu_victim) { handle, type, state.tick[CPU] };
+  victim->next = NULL;
+  victim->type = type;
+  victim->tick = state.tick + 1;
+  victim->handle = handle;
+
+  if (morgue->tail) {
+    morgue->tail->next = victim;
+  } else {
+    morgue->head = victim;
+  }
+
+  morgue->tail = victim;
+
+  mtx_unlock(&morgue->lock);
 }
 
-static void expunge(void) {
+static void expunge(uint64_t tick) {
   gpu_morgue* morgue = &state.morgue;
-  while (morgue->tail != morgue->head && state.tick[GPU] >= morgue->data[morgue->tail & MORGUE_MASK].tick) {
-    gpu_victim* victim = &morgue->data[morgue->tail++ & MORGUE_MASK];
+
+  mtx_lock(&morgue->lock);
+
+  while (morgue->head && tick >= morgue->head->tick) {
+    gpu_victim* victim = morgue->head;
+
     switch (victim->type) {
       case VK_OBJECT_TYPE_BUFFER: vkDestroyBuffer(state.device, victim->handle, NULL); break;
       case VK_OBJECT_TYPE_IMAGE: vkDestroyImage(state.device, victim->handle, NULL); break;
@@ -3106,10 +3929,27 @@ static void expunge(void) {
       case VK_OBJECT_TYPE_QUERY_POOL: vkDestroyQueryPool(state.device, victim->handle, NULL); break;
       case VK_OBJECT_TYPE_RENDER_PASS: vkDestroyRenderPass(state.device, victim->handle, NULL); break;
       case VK_OBJECT_TYPE_FRAMEBUFFER: vkDestroyFramebuffer(state.device, victim->handle, NULL); break;
+      case VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR: vkDestroyAccelerationStructureKHR(state.device, victim->handle, NULL); break;
       case VK_OBJECT_TYPE_DEVICE_MEMORY: vkFreeMemory(state.device, victim->handle, NULL); break;
       default: LOG("Trying to destroy invalid Vulkan object type!"); break;
     }
+
+    morgue->head = victim->next;
+    if (!morgue->head) {
+      morgue->tail = NULL;
+    }
+
+    victim->next = morgue->pool;
+    morgue->pool = victim;
   }
+
+  mtx_unlock(&morgue->lock);
+}
+
+static uint64_t getFinishedTick(void) {
+  uint64_t value;
+  VK(vkGetSemaphoreCounterValueKHR(state.device, state.semaphore, &value), "vkGetSemaphoreCounterValue") return 0;
+  return value;
 }
 
 static bool hasLayer(VkLayerProperties* layers, uint32_t count, const char* layer) {
@@ -3140,17 +3980,23 @@ static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type) {
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
         VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+        (state.extensions.bufferDeviceAddress ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : 0) |
+        (state.extensions.accelerationStructure ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0);
     case GPU_BUFFER_STREAM:
       return
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+        (state.extensions.bufferDeviceAddress ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : 0) |
+        (state.extensions.accelerationStructure ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0);
     case GPU_BUFFER_UPLOAD:
       return VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     case GPU_BUFFER_DOWNLOAD:
       return VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    case GPU_BUFFER_TREE:
+      return VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     default: return 0;
   }
 }
@@ -3221,6 +4067,7 @@ static VkFormat convertFormat(gpu_texture_format format, int colorspace) {
     [GPU_FORMAT_R8] = { VK_FORMAT_R8_UNORM, VK_FORMAT_R8_SRGB },
     [GPU_FORMAT_RG8] = { VK_FORMAT_R8G8_UNORM, VK_FORMAT_R8G8_SRGB },
     [GPU_FORMAT_RGBA8] = { VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_SRGB },
+    [GPU_FORMAT_BGRA8] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SRGB },
     [GPU_FORMAT_R16] = { VK_FORMAT_R16_UNORM, VK_FORMAT_R16_UNORM },
     [GPU_FORMAT_RG16] = { VK_FORMAT_R16G16_UNORM, VK_FORMAT_R16G16_UNORM },
     [GPU_FORMAT_RGBA16] = { VK_FORMAT_R16G16B16A16_UNORM, VK_FORMAT_R16G16B16A16_UNORM },
@@ -3265,11 +4112,44 @@ static VkFormat convertFormat(gpu_texture_format format, int colorspace) {
     [GPU_FORMAT_ASTC_12x12] = { VK_FORMAT_ASTC_12x12_UNORM_BLOCK, VK_FORMAT_ASTC_12x12_SRGB_BLOCK }
   };
 
-  if (format == GPU_FORMAT_SURFACE) {
-    return state.surface.format.format;
-  }
-
   return formats[format][colorspace];
+}
+
+static VkFormat convertAttributeType(gpu_attribute_type type) {
+  static const VkFormat types[] = {
+    [GPU_TYPE_I8x4] = VK_FORMAT_R8G8B8A8_SINT,
+    [GPU_TYPE_U8x4] = VK_FORMAT_R8G8B8A8_UINT,
+    [GPU_TYPE_SN8x4] = VK_FORMAT_R8G8B8A8_SNORM,
+    [GPU_TYPE_UN8x4] = VK_FORMAT_R8G8B8A8_UNORM,
+    [GPU_TYPE_SN10x3] = VK_FORMAT_A2B10G10R10_SNORM_PACK32,
+    [GPU_TYPE_UN10x3] = VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+    [GPU_TYPE_I16] = VK_FORMAT_R16_SINT,
+    [GPU_TYPE_I16x2] = VK_FORMAT_R16G16_SINT,
+    [GPU_TYPE_I16x4] = VK_FORMAT_R16G16B16A16_SINT,
+    [GPU_TYPE_U16] = VK_FORMAT_R16_UINT,
+    [GPU_TYPE_U16x2] = VK_FORMAT_R16G16_UINT,
+    [GPU_TYPE_U16x4] = VK_FORMAT_R16G16B16A16_UINT,
+    [GPU_TYPE_SN16x2] = VK_FORMAT_R16G16_SNORM,
+    [GPU_TYPE_SN16x4] = VK_FORMAT_R16G16B16A16_SNORM,
+    [GPU_TYPE_UN16x2] = VK_FORMAT_R16G16_UNORM,
+    [GPU_TYPE_UN16x4] = VK_FORMAT_R16G16B16A16_UNORM,
+    [GPU_TYPE_I32] = VK_FORMAT_R32_SINT,
+    [GPU_TYPE_I32x2] = VK_FORMAT_R32G32_SINT,
+    [GPU_TYPE_I32x3] = VK_FORMAT_R32G32B32_SINT,
+    [GPU_TYPE_I32x4] = VK_FORMAT_R32G32B32A32_SINT,
+    [GPU_TYPE_U32] = VK_FORMAT_R32_UINT,
+    [GPU_TYPE_U32x2] = VK_FORMAT_R32G32_UINT,
+    [GPU_TYPE_U32x3] = VK_FORMAT_R32G32B32_UINT,
+    [GPU_TYPE_U32x4] = VK_FORMAT_R32G32B32A32_UINT,
+    [GPU_TYPE_F16x2] = VK_FORMAT_R16G16_SFLOAT,
+    [GPU_TYPE_F16x4] = VK_FORMAT_R16G16B16A16_SFLOAT,
+    [GPU_TYPE_F32] = VK_FORMAT_R32_SFLOAT,
+    [GPU_TYPE_F32x2] = VK_FORMAT_R32G32_SFLOAT,
+    [GPU_TYPE_F32x3] = VK_FORMAT_R32G32B32_SFLOAT,
+    [GPU_TYPE_F32x4] = VK_FORMAT_R32G32B32A32_SFLOAT
+  };
+
+  return types[type];
 }
 
 static VkPipelineStageFlags2 convertPhase(gpu_phase phase, bool dst) {
@@ -3286,6 +4166,7 @@ static VkPipelineStageFlags2 convertPhase(gpu_phase phase, bool dst) {
   if (phase & GPU_PHASE_COPY) flags |= VK_PIPELINE_STAGE_2_COPY_BIT_KHR;
   if (phase & GPU_PHASE_CLEAR) flags |= VK_PIPELINE_STAGE_2_CLEAR_BIT_KHR;
   if (phase & GPU_PHASE_BLIT) flags |= VK_PIPELINE_STAGE_2_BLIT_BIT_KHR;
+  if (phase & GPU_PHASE_TREE_BUILD) flags |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
   return flags;
 }
 
@@ -3304,6 +4185,9 @@ static VkAccessFlags2 convertCache(gpu_cache cache) {
   if (cache & GPU_CACHE_COLOR_WRITE) flags |= VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR;
   if (cache & GPU_CACHE_TRANSFER_READ) flags |= VK_ACCESS_2_TRANSFER_READ_BIT_KHR;
   if (cache & GPU_CACHE_TRANSFER_WRITE) flags |= VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
+  if (cache & GPU_CACHE_TREE_INPUT) flags |= VK_ACCESS_2_SHADER_READ_BIT_KHR;
+  if (cache & GPU_CACHE_TREE_READ) flags |= VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+  if (cache & GPU_CACHE_TREE_WRITE) flags |= VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
   return flags;
 }
 

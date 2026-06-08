@@ -20,27 +20,22 @@ void luax_pushshape(lua_State* L, Shape* shape) {
 }
 
 static Shape* luax_toshape(lua_State* L, int index) {
-  Proxy* p = lua_touserdata(L, index);
+  Object* object = lua_touserdata(L, index);
 
-  if (p) {
-    const uint64_t hashes[] = {
-      hash64("BoxShape", strlen("BoxShape")),
-      hash64("SphereShape", strlen("SphereShape")),
-      hash64("CapsuleShape", strlen("CapsuleShape")),
-      hash64("CylinderShape", strlen("CylinderShape")),
-      hash64("ConvexShape", strlen("ConvexShape")),
-      hash64("MeshShape", strlen("MeshShape")),
-      hash64("TerrainShape", strlen("TerrainShape"))
-    };
-
-    for (size_t i = 0; i < COUNTOF(hashes); i++) {
-      if (p->hash == hashes[i]) {
-        return p->object;
-      }
-    }
+  if (!object) {
+    return NULL;
   }
 
-  return NULL;
+  switch (object->type) {
+    case T_BoxShape: return object->pointer;
+    case T_SphereShape: return object->pointer;
+    case T_CapsuleShape: return object->pointer;
+    case T_CylinderShape: return object->pointer;
+    case T_ConvexShape: return object->pointer;
+    case T_MeshShape: return object->pointer;
+    case T_TerrainShape: return object->pointer;
+    default: return NULL;
+  }
 }
 
 Shape* luax_checkshape(lua_State* L, int index) {
@@ -89,17 +84,18 @@ Shape* luax_newconvexshape(lua_State* L, int index) {
   ConvexShape* parent = luax_totype(L, index, ConvexShape);
 
   if (parent) {
-    float scale = luax_optfloat(L, index + 1, 1.f);
+    float scale[3];
+    luax_readscale(L, index + 1, scale, 3, NULL);
     return lovrConvexShapeClone(parent, scale);
   }
 
   float* points;
   uint32_t count;
-  bool shouldFree;
-  index = luax_readmesh(L, index, &points, &count, NULL, NULL, &shouldFree);
-  float scale = luax_optfloat(L, index, 1.f);
+  index = luax_readmesh(L, index, &points, &count, NULL, NULL);
+  float scale[3];
+  luax_readscale(L, index, scale, 3, NULL);
   ConvexShape* shape = lovrConvexShapeCreate(points, count, scale);
-  if (shouldFree) lovrFree(points);
+  lovrFree(points);
   luax_assert(L, shape);
   return shape;
 }
@@ -108,7 +104,8 @@ Shape* luax_newmeshshape(lua_State* L, int index) {
   MeshShape* parent = luax_totype(L, index, MeshShape);
 
   if (parent) {
-    float scale = luax_optfloat(L, index + 1, 1.f);
+    float scale[3];
+    luax_readscale(L, index + 1, scale, 3, NULL);
     return lovrMeshShapeClone(parent, scale);
   }
 
@@ -116,18 +113,15 @@ Shape* luax_newmeshshape(lua_State* L, int index) {
   uint32_t* indices;
   uint32_t vertexCount;
   uint32_t indexCount;
-  bool shouldFree;
 
-  index = luax_readmesh(L, index, &vertices, &vertexCount, &indices, &indexCount, &shouldFree);
+  index = luax_readmesh(L, index, &vertices, &vertexCount, &indices, &indexCount);
 
-  float scale = luax_optfloat(L, index, 1.f);
+  float scale[3];
+  luax_readscale(L, index, scale, 3, NULL);
   Shape* shape = lovrMeshShapeCreate(vertexCount, vertices, indexCount, indices, scale);
 
-  if (shouldFree) {
-    lovrFree(vertices);
-    lovrFree(indices);
-  }
-
+  lovrFree(vertices);
+  lovrFree(indices);
   luax_assert(L, shape);
   return shape;
 }
@@ -150,8 +144,15 @@ Shape* luax_newterrainshape(lua_State* L, int index) {
       lua_pushnumber(L, x);
       lua_pushnumber(L, z);
       lua_call(L, 2, 1);
-      luax_check(L, lua_type(L, -1) == LUA_TNUMBER, "Expected TerrainShape callback to return a number");
-      vertices[i] = luax_tofloat(L, -1);
+      int heightType = lua_type(L, -1);
+      if (heightType == LUA_TNUMBER) {
+        double h = lua_tonumber(L, -1);
+        vertices[i] = (h == -HUGE_VAL || h == HUGE_VAL) ? FLT_MAX : (float) h;
+      } else if (heightType == LUA_TNIL) {
+        vertices[i] = FLT_MAX;
+      } else {
+        luaL_error(L, "Expected TerrainShape callback to return a number or nil");
+      }
       lua_pop(L, 1);
     }
     TerrainShape* shape = lovrTerrainShapeCreate(vertices, n, scaleXZ, 1.f);
@@ -189,7 +190,7 @@ static int l_lovrShapeDestroy(lua_State* L) {
 
 static int l_lovrShapeIsDestroyed(lua_State* L) {
   Shape* shape = luax_toshape(L, 1);
-  if (!shape) luax_typeerror(L, 1, "Shape");
+  if (!shape) return luax_typeerror(L, 1, "Shape");
   bool destroyed = lovrShapeIsDestroyed(shape);
   lua_pushboolean(L, destroyed);
   return 1;
@@ -564,9 +565,12 @@ static int l_lovrConvexShapeGetFace(lua_State* L) {
 
 static int l_lovrConvexShapeGetScale(lua_State* L) {
   ConvexShape* convex = luax_checktype(L, 1, ConvexShape);
-  float scale = lovrConvexShapeGetScale(convex);
-  lua_pushnumber(L, scale);
-  return 1;
+  float scale[3];
+  lovrConvexShapeGetScale(convex, scale);
+  lua_pushnumber(L, scale[0]);
+  lua_pushnumber(L, scale[1]);
+  lua_pushnumber(L, scale[2]);
+  return 3;
 }
 
 const luaL_Reg lovrConvexShape[] = {
@@ -581,9 +585,12 @@ const luaL_Reg lovrConvexShape[] = {
 
 static int l_lovrMeshShapeGetScale(lua_State* L) {
   MeshShape* mesh = luax_checktype(L, 1, MeshShape);
-  float scale = lovrMeshShapeGetScale(mesh);
-  lua_pushnumber(L, scale);
-  return 1;
+  float scale[3];
+  lovrMeshShapeGetScale(mesh, scale);
+  lua_pushnumber(L, scale[0]);
+  lua_pushnumber(L, scale[1]);
+  lua_pushnumber(L, scale[2]);
+  return 3;
 }
 
 const luaL_Reg lovrMeshShape[] = {

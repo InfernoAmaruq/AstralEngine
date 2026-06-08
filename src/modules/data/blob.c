@@ -8,18 +8,29 @@ Blob* lovrBlobCreate(void* data, size_t size, const char* name) {
   blob->ref = 1;
   blob->data = data;
   blob->size = size;
-  if (name) {
-    size_t length = strlen(name);
-    char* string = lovrMalloc(length + 1);
-    memcpy(string, name, length + 1);
-    blob->name = string;
-  }
+  blob->name = lovrStrdup(name);
+  blob->root = blob;
+  return blob;
+}
+
+Blob* lovrBlobCreateView(Blob* parent, size_t offset, size_t size, const char* name) {
+  Blob* blob = lovrCalloc(sizeof(Blob));
+  blob->ref = 1;
+  blob->data = (char*) parent->data + offset;
+  blob->size = size;
+  blob->name = lovrStrdup(name);
+  blob->root = parent->root;
+  lovrRetain(blob->root);
   return blob;
 }
 
 void lovrBlobDestroy(void* ref) {
   Blob* blob = ref;
-  lovrFree(blob->data);
+  if (blob->root != blob) {
+    lovrRelease(blob->root, lovrBlobDestroy);
+  } else {
+    lovrFree(blob->data);
+  }
   lovrFree(blob->name);
   lovrFree(blob);
 }

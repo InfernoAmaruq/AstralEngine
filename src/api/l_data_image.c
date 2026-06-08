@@ -7,6 +7,7 @@ StringEntry lovrTextureFormat[] = {
   [FORMAT_R8] = ENTRY("r8"),
   [FORMAT_RG8] = ENTRY("rg8"),
   [FORMAT_RGBA8] = ENTRY("rgba8"),
+  [FORMAT_BGRA8] = ENTRY("bgra8"),
   [FORMAT_R16] = ENTRY("r16"),
   [FORMAT_RG16] = ENTRY("rg16"),
   [FORMAT_RGBA16] = ENTRY("rgba16"),

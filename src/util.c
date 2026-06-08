@@ -2,7 +2,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <stdatomic.h>
 #include <threads.h>
 #include <stdio.h>
 
@@ -35,20 +34,70 @@ void lovrFree(void* data) {
   free(data);
 }
 
-// Refcounting
+// Module
 
-#if ATOMIC_INT_LOCK_FREE != 2
-#error "Lock-free integer atomics are not supported on this platform, but are required for refcounting"
-#endif
+#define READY (1u << 31)
+#define COUNT (~READY)
+
+bool lovrModuleAcquire(atomic_uint* ref) {
+  for (;;) {
+    // If we're the first one to increment the refcount
+    if ((atomic_fetch_add(ref, 1) & COUNT) == 0) {
+
+      // Wait until any pending destructions complete
+      while (atomic_load(ref) & READY) {
+        thrd_yield();
+      }
+
+      // Ok, caller can init now
+      return true;
+    }
+
+    // Otherwise, spin until either A) refcount is zero (someone else failed) or B) ready is true
+    for (;;) {
+      uint32_t value = atomic_load(ref);
+
+      if ((value & COUNT) == 0) {
+        break;
+      } else if (value & READY) {
+        return false;
+      } else {
+        thrd_yield();
+      }
+    }
+  }
+}
+
+bool lovrModuleRelease(atomic_uint* ref) {
+  // READY can only be false here if release was called before initialization completed, i.e. failed
+  // init.  In that case we can return true to let the caller finish destroying.  But we want to
+  // keep the refcount nonzero so that threads waiting for initialization will keep spinning until
+  // destruction has completed.  Once the caller does lovrModuleReset, the waiters can/will retry.
+  if (!(atomic_load(ref) & READY)) {
+    return true;
+  }
+
+  return (atomic_fetch_sub(ref, 1) & COUNT) == 1;
+}
+
+void lovrModuleReady(atomic_uint* ref) {
+  atomic_fetch_or(ref, READY);
+}
+
+void lovrModuleReset(atomic_uint* ref) {
+  atomic_store(ref, 0);
+}
+
+// Refcounting
 
 void lovrRetain(void* object) {
   if (object) {
-    atomic_fetch_add((atomic_uint*) object, 1);
+    atomic_fetch_add_explicit((atomic_uint*) object, 1, memory_order_relaxed);
   }
 }
 
 void lovrRelease(void* object, void (*destructor)(void*)) {
-  if (object && atomic_fetch_sub((atomic_uint*) object, 1) == 1) {
+  if (object && atomic_fetch_sub_explicit((atomic_uint*) object, 1, memory_order_acq_rel) == 1) {
     destructor(object);
   }
 }
@@ -84,6 +133,13 @@ void lovrLog(int level, const char* tag, const char* format, ...) {
   va_start(args, format);
   lovrLogCallback(lovrLogUserdata, level, tag, format, args);
   va_end(args);
+}
+
+// Hashing
+
+#include "lib/rapidhash/rapidhash.h"
+uint64_t hash64(const void* data, size_t length) {
+  return rapidhash(data, length);
 }
 
 // Hashmap
@@ -312,4 +368,22 @@ float16 float32to16(float32 f) {
 float32 float16to32(float16 f) {
   uint32_t u = mantissa[offset[f >> 10] + (f & 0x3ff)] + exponent[f >> 10];
   return ((union { uint32_t u; float f; }) { u }).f;
+}
+
+// Types
+TypeInfo lovrTypeInfo[T_COUNT];
+
+void lovrVariantDestroy(Variant* variant) {
+  switch (variant->type) {
+    case TYPE_STRING: lovrFree(variant->string.pointer); return;
+    case TYPE_OBJECT: lovrRelease(variant->object.pointer, lovrTypeInfo[variant->object.type].destructor); return;
+    case TYPE_TABLE:
+      for (size_t i = 0; i < variant->table.count; i++) {
+        lovrVariantDestroy(&variant->table.pairs[2 * i + 0]);
+        lovrVariantDestroy(&variant->table.pairs[2 * i + 1]);
+      }
+      lovrFree(variant->table.pairs);
+      return;
+    default: return;
+  }
 }

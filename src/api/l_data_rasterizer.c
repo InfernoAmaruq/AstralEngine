@@ -14,7 +14,7 @@ uint32_t luax_checkcodepoint(lua_State* L, int index) {
       return utf8_decode(str, str + length, &codepoint) ? codepoint : 0;
     case LUA_TNUMBER:
       return luax_checku32(L, index);
-    default: return luax_typeerror(L, index, "string or number"), 0;
+    default: return luax_typeerror(L, index, "string or number");
   }
 }
 

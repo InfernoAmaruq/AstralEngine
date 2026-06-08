@@ -5,6 +5,7 @@
 #pragma once
 
 typedef struct gpu_buffer gpu_buffer;
+typedef struct gpu_tree gpu_tree;
 typedef struct gpu_texture gpu_texture;
 typedef struct gpu_sampler gpu_sampler;
 typedef struct gpu_layout gpu_layout;
@@ -17,6 +18,7 @@ typedef struct gpu_tally gpu_tally;
 typedef struct gpu_stream gpu_stream;
 
 size_t gpu_sizeof_buffer(void);
+size_t gpu_sizeof_tree(void);
 size_t gpu_sizeof_texture(void);
 size_t gpu_sizeof_sampler(void);
 size_t gpu_sizeof_layout(void);
@@ -27,13 +29,16 @@ size_t gpu_sizeof_pass(void);
 size_t gpu_sizeof_pipeline(void);
 size_t gpu_sizeof_tally(void);
 
+typedef uint64_t gpu_address;
+
 // Buffer
 
 typedef enum {
   GPU_BUFFER_STATIC,
   GPU_BUFFER_STREAM,
   GPU_BUFFER_UPLOAD,
-  GPU_BUFFER_DOWNLOAD
+  GPU_BUFFER_DOWNLOAD,
+  GPU_BUFFER_TREE
 } gpu_buffer_type;
 
 typedef struct {
@@ -46,6 +51,113 @@ typedef struct {
 
 bool gpu_buffer_init(gpu_buffer* buffer, gpu_buffer_info* info);
 void gpu_buffer_destroy(gpu_buffer* buffer);
+gpu_address gpu_buffer_get_address(gpu_buffer* buffer, uint32_t offset);
+void gpu_buffer_flush(gpu_buffer* buffer, uint32_t offset, uint32_t extent);
+
+// Tree
+
+typedef enum {
+  GPU_TYPE_I8x4,
+  GPU_TYPE_U8x4,
+  GPU_TYPE_SN8x4,
+  GPU_TYPE_UN8x4,
+  GPU_TYPE_SN10x3,
+  GPU_TYPE_UN10x3,
+  GPU_TYPE_I16,
+  GPU_TYPE_I16x2,
+  GPU_TYPE_I16x4,
+  GPU_TYPE_U16,
+  GPU_TYPE_U16x2,
+  GPU_TYPE_U16x4,
+  GPU_TYPE_SN16x2,
+  GPU_TYPE_SN16x4,
+  GPU_TYPE_UN16x2,
+  GPU_TYPE_UN16x4,
+  GPU_TYPE_I32,
+  GPU_TYPE_I32x2,
+  GPU_TYPE_I32x3,
+  GPU_TYPE_I32x4,
+  GPU_TYPE_U32,
+  GPU_TYPE_U32x2,
+  GPU_TYPE_U32x3,
+  GPU_TYPE_U32x4,
+  GPU_TYPE_F16x2,
+  GPU_TYPE_F16x4,
+  GPU_TYPE_F32,
+  GPU_TYPE_F32x2,
+  GPU_TYPE_F32x3,
+  GPU_TYPE_F32x4,
+} gpu_attribute_type;
+
+typedef enum {
+  GPU_INDEX_U16,
+  GPU_INDEX_U32
+} gpu_index_type;
+
+typedef struct {
+  uint32_t vertexCount;
+  uint32_t triangleCount;
+  gpu_attribute_type vertexType;
+  gpu_index_type indexType;
+  uint32_t vertexStride;
+  uint32_t vertexOffset;
+  uint32_t indexOffset;
+  uint32_t transformOffset;
+  uint32_t baseVertex;
+} gpu_geometry_info;
+
+typedef struct {
+  float transform[3][4];
+  unsigned id : 24;
+  unsigned mask : 8;
+  uint32_t padding;
+  gpu_address tree;
+} gpu_tree_instance;
+
+typedef enum {
+  GPU_TREE_TOP,
+  GPU_TREE_BOTTOM
+} gpu_tree_level;
+
+typedef enum {
+  GPU_TREE_BUILD,
+  GPU_TREE_UPDATE
+} gpu_build_mode;
+
+enum {
+  GPU_TREE_WILL_UPDATE = (1 << 0),
+  GPU_TREE_FAST_TRACE = (1 << 1),
+  GPU_TREE_FAST_BUILD = (1 << 2),
+  GPU_TREE_LOW_MEMORY = (1 << 3)
+};
+
+typedef struct {
+  gpu_tree_level type;
+  gpu_build_mode mode;
+  uint32_t count;
+  union {
+    struct {
+      gpu_address instances;
+    };
+    struct {
+      gpu_address vertices;
+      gpu_address indices;
+      gpu_address transforms;
+    };
+  };
+} gpu_build_info;
+
+typedef struct {
+  gpu_tree_level type;
+  uint32_t flags;
+  uint32_t capacity;
+  gpu_geometry_info* geometries;
+  const char* label;
+} gpu_tree_info;
+
+bool gpu_tree_init(gpu_tree* tree, gpu_tree_info* info);
+void gpu_tree_destroy(gpu_tree* tree);
+gpu_address gpu_tree_get_address(gpu_tree* tree);
 
 // Texture
 
@@ -69,6 +181,7 @@ typedef enum {
   GPU_FORMAT_R8,
   GPU_FORMAT_RG8,
   GPU_FORMAT_RGBA8,
+  GPU_FORMAT_BGRA8,
   GPU_FORMAT_R16,
   GPU_FORMAT_RG16,
   GPU_FORMAT_RGBA16,
@@ -111,8 +224,7 @@ typedef enum {
   GPU_FORMAT_ASTC_10x10,
   GPU_FORMAT_ASTC_12x10,
   GPU_FORMAT_ASTC_12x12,
-  GPU_FORMAT_COUNT,
-  GPU_FORMAT_SURFACE = 0xff
+  GPU_FORMAT_COUNT
 } gpu_texture_format;
 
 enum {
@@ -163,6 +275,7 @@ typedef struct {
   uint32_t width;
   uint32_t height;
   bool vsync;
+  bool hdr;
   union {
     struct {
       uintptr_t window;
@@ -179,8 +292,10 @@ typedef struct {
 } gpu_surface_info;
 
 bool gpu_surface_init(gpu_surface_info* info);
+gpu_texture_format gpu_surface_get_format(void);
+bool gpu_surface_is_hdr(void);
 bool gpu_surface_resize(uint32_t width, uint32_t height);
-bool gpu_surface_acquire(gpu_texture** texture);
+bool gpu_surface_acquire(gpu_texture** texture, uint32_t* width, uint32_t* height);
 bool gpu_surface_present(void);
 
 // Sampler
@@ -230,7 +345,8 @@ typedef enum {
   GPU_SLOT_TEXTURE_WITH_SAMPLER,
   GPU_SLOT_SAMPLED_TEXTURE,
   GPU_SLOT_STORAGE_TEXTURE,
-  GPU_SLOT_SAMPLER
+  GPU_SLOT_SAMPLER,
+  GPU_SLOT_TREE
 } gpu_slot_type;
 
 enum {
@@ -240,10 +356,17 @@ enum {
   GPU_STAGE_GRAPHICS = GPU_STAGE_VERTEX | GPU_STAGE_FRAGMENT
 };
 
+typedef enum {
+  GPU_READ_ONLY,
+  GPU_WRITE_ONLY,
+  GPU_READ_WRITE
+} gpu_storage_access;
+
 typedef struct {
   uint32_t number;
   gpu_slot_type type;
-  uint32_t stages;
+  uint8_t stages;
+  uint8_t access;
 } gpu_slot;
 
 typedef struct {
@@ -295,6 +418,7 @@ typedef struct {
     gpu_texture_binding texture;
     gpu_buffer_binding* buffers;
     gpu_texture_binding* textures;
+    gpu_tree* tree;
   };
 } gpu_binding;
 
@@ -314,47 +438,6 @@ typedef struct {
 bool gpu_bundle_pool_init(gpu_bundle_pool* pool, gpu_bundle_pool_info* info);
 void gpu_bundle_pool_destroy(gpu_bundle_pool* pool);
 void gpu_bundle_write(gpu_bundle** bundles, gpu_bundle_info* info, uint32_t count);
-
-// Canvas
-
-typedef enum {
-  GPU_LOAD_OP_CLEAR,
-  GPU_LOAD_OP_DISCARD,
-  GPU_LOAD_OP_KEEP
-} gpu_load_op;
-
-typedef enum {
-  GPU_SAVE_OP_KEEP,
-  GPU_SAVE_OP_DISCARD
-} gpu_save_op;
-
-typedef struct {
-  gpu_texture_format format;
-  bool srgb;
-  gpu_load_op load;
-  gpu_save_op save;
-  bool resolve;
-} gpu_color_info;
-
-typedef struct {
-  gpu_texture_format format;
-  gpu_load_op load, stencilLoad;
-  gpu_save_op save, stencilSave;
-  bool resolve;
-} gpu_depth_info;
-
-typedef struct {
-  gpu_color_info color[4];
-  gpu_depth_info depth;
-  uint32_t colorCount;
-  uint32_t samples;
-  uint32_t views;
-  bool foveated;
-  bool surface;
-} gpu_pass_info;
-
-bool gpu_pass_init(gpu_pass* pass, gpu_pass_info* info);
-void gpu_pass_destroy(gpu_pass* pass);
 
 // Pipeline
 
@@ -388,39 +471,6 @@ typedef enum {
   GPU_DRAW_LINES,
   GPU_DRAW_TRIANGLES
 } gpu_draw_mode;
-
-typedef enum {
-  GPU_TYPE_I8x4,
-  GPU_TYPE_U8x4,
-  GPU_TYPE_SN8x4,
-  GPU_TYPE_UN8x4,
-  GPU_TYPE_SN10x3,
-  GPU_TYPE_UN10x3,
-  GPU_TYPE_I16,
-  GPU_TYPE_I16x2,
-  GPU_TYPE_I16x4,
-  GPU_TYPE_U16,
-  GPU_TYPE_U16x2,
-  GPU_TYPE_U16x4,
-  GPU_TYPE_SN16x2,
-  GPU_TYPE_SN16x4,
-  GPU_TYPE_UN16x2,
-  GPU_TYPE_UN16x4,
-  GPU_TYPE_I32,
-  GPU_TYPE_I32x2,
-  GPU_TYPE_I32x3,
-  GPU_TYPE_I32x4,
-  GPU_TYPE_U32,
-  GPU_TYPE_U32x2,
-  GPU_TYPE_U32x3,
-  GPU_TYPE_U32x4,
-  GPU_TYPE_F16x2,
-  GPU_TYPE_F16x4,
-  GPU_TYPE_F32,
-  GPU_TYPE_F32x2,
-  GPU_TYPE_F32x3,
-  GPU_TYPE_F32x4,
-} gpu_attribute_type;
 
 typedef struct {
   uint8_t buffer;
@@ -465,6 +515,7 @@ typedef struct {
 } gpu_multisample_state;
 
 typedef struct {
+  gpu_texture_format format;
   gpu_compare_mode test;
   bool write;
 } gpu_depth_state;
@@ -500,7 +551,8 @@ typedef enum {
   GPU_BLEND_DST_COLOR,
   GPU_BLEND_ONE_MINUS_DST_COLOR,
   GPU_BLEND_DST_ALPHA,
-  GPU_BLEND_ONE_MINUS_DST_ALPHA
+  GPU_BLEND_ONE_MINUS_DST_ALPHA,
+  GPU_BLEND_SRC_ALPHA_SATURATED
 } gpu_blend_factor;
 
 typedef enum {
@@ -521,7 +573,13 @@ typedef struct {
 } gpu_blend_state;
 
 typedef struct {
-  gpu_pass* pass;
+  gpu_texture_format format;
+  bool srgb;
+  gpu_blend_state blend;
+  uint8_t mask;
+} gpu_color_state;
+
+typedef struct {
   gpu_shader* shader;
   gpu_shader_flag* flags;
   uint32_t flagCount;
@@ -531,8 +589,10 @@ typedef struct {
   gpu_multisample_state multisample;
   gpu_depth_state depth;
   gpu_stencil_state stencil;
-  gpu_blend_state blend[4];
-  uint8_t colorMask[4];
+  gpu_color_state color[4];
+  uint32_t attachmentCount;
+  uint32_t viewCount;
+  bool foveated;
   const char* label;
 } gpu_pipeline_info;
 
@@ -543,7 +603,7 @@ typedef struct {
   const char* label;
 } gpu_compute_pipeline_info;
 
-bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info);
+bool gpu_pipeline_init_graphics(gpu_pipeline* pipeline, gpu_pipeline_info* info, bool* slow);
 bool gpu_pipeline_init_compute(gpu_pipeline* pipeline, gpu_compute_pipeline_info* info);
 void gpu_pipeline_destroy(gpu_pipeline* pipeline);
 void gpu_pipeline_get_cache(void* data, size_t* size);
@@ -565,15 +625,30 @@ void gpu_tally_destroy(gpu_tally* tally);
 
 // Stream
 
+typedef enum {
+  GPU_LOAD_OP_CLEAR,
+  GPU_LOAD_OP_DISCARD,
+  GPU_LOAD_OP_KEEP
+} gpu_load_op;
+
+typedef enum {
+  GPU_SAVE_OP_KEEP,
+  GPU_SAVE_OP_DISCARD
+} gpu_save_op;
+
 typedef struct {
   gpu_texture* texture;
   gpu_texture* resolve;
+  gpu_load_op load;
+  gpu_save_op save;
   float clear[4];
 } gpu_color_attachment;
 
 typedef struct {
   gpu_texture* texture;
   gpu_texture* resolve;
+  gpu_load_op load, stencilLoad;
+  gpu_save_op save, stencilSave;
   float clear;
   uint8_t stencilClear;
 } gpu_depth_attachment;
@@ -582,16 +657,11 @@ typedef struct {
   gpu_color_attachment color[4];
   gpu_depth_attachment depth;
   gpu_texture* foveation;
-  gpu_pass* pass;
+  gpu_tally* pixelTally;
   uint32_t width;
   uint32_t height;
   uint32_t area[4];
 } gpu_canvas;
-
-typedef enum {
-  GPU_INDEX_U16,
-  GPU_INDEX_U32
-} gpu_index_type;
 
 typedef enum {
   GPU_PHASE_INDIRECT = (1 << 0),
@@ -605,7 +675,8 @@ typedef enum {
   GPU_PHASE_COLOR = (1 << 8),
   GPU_PHASE_COPY = (1 << 9),
   GPU_PHASE_CLEAR = (1 << 10),
-  GPU_PHASE_BLIT = (1 << 11)
+  GPU_PHASE_BLIT = (1 << 11),
+  GPU_PHASE_TREE_BUILD = (1 << 12)
 } gpu_phase;
 
 typedef enum {
@@ -622,7 +693,15 @@ typedef enum {
   GPU_CACHE_COLOR_WRITE = (1 << 10),
   GPU_CACHE_TRANSFER_READ = (1 << 11),
   GPU_CACHE_TRANSFER_WRITE = (1 << 12),
-  GPU_CACHE_WRITE_MASK = GPU_CACHE_STORAGE_WRITE | GPU_CACHE_DEPTH_WRITE | GPU_CACHE_COLOR_WRITE | GPU_CACHE_TRANSFER_WRITE,
+  GPU_CACHE_TREE_INPUT  = (1 << 13),
+  GPU_CACHE_TREE_READ  = (1 << 14),
+  GPU_CACHE_TREE_WRITE  = (1 << 15),
+  GPU_CACHE_WRITE_MASK =
+    GPU_CACHE_STORAGE_WRITE |
+    GPU_CACHE_DEPTH_WRITE |
+    GPU_CACHE_COLOR_WRITE |
+    GPU_CACHE_TRANSFER_WRITE |
+    GPU_CACHE_TREE_WRITE,
   GPU_CACHE_READ_MASK = ~GPU_CACHE_WRITE_MASK
 } gpu_cache;
 
@@ -661,6 +740,7 @@ void gpu_clear_buffer(gpu_stream* stream, gpu_buffer* buffer, uint32_t offset, u
 void gpu_clear_texture(gpu_stream* stream, gpu_texture* texture, float value[4], uint32_t layer, uint32_t layerCount, uint32_t level, uint32_t levelCount);
 void gpu_clear_tally(gpu_stream* stream, gpu_tally* tally, uint32_t index, uint32_t count);
 void gpu_blit(gpu_stream* stream, gpu_texture* src, gpu_texture* dst, uint32_t srcOffset[4], uint32_t dstOffset[4], uint32_t srcExtent[3], uint32_t dstExtent[3], gpu_filter filter);
+void gpu_build_tree(gpu_stream* stream, gpu_tree* tree, gpu_build_info* info);
 void gpu_sync(gpu_stream* stream, gpu_barrier* barriers, uint32_t count);
 void gpu_tally_begin(gpu_stream* stream, gpu_tally* tally, uint32_t index);
 void gpu_tally_finish(gpu_stream* stream, gpu_tally* tally, uint32_t index);
@@ -695,9 +775,17 @@ typedef struct {
   bool depthClamp;
   bool depthResolve;
   bool foveation;
+  bool rayQuery;
   bool indirectDrawFirstInstance;
   bool packedBuffers;
   bool shaderDebug;
+  bool subgroupVote;
+  bool subgroupArithmetic;
+  bool subgroupBallot;
+  bool subgroupShuffle;
+  bool subgroupShuffleRelative;
+  bool subgroupClustered;
+  bool subgroupQuad;
   bool float64;
   bool int64;
   bool int16;
@@ -759,9 +847,9 @@ typedef struct {
 
 bool gpu_init(gpu_config* config);
 void gpu_destroy(void);
-const char* gpu_get_error(void);
-bool gpu_begin(uint32_t* tick);
-bool gpu_submit(gpu_stream** streams, uint32_t count);
+char* gpu_get_error(void);
+bool gpu_get_memory_info(uint64_t* budget, uint64_t* used);
+bool gpu_submit(gpu_stream** streams, uint32_t count, uint32_t tick);
 bool gpu_is_complete(uint32_t tick);
-bool gpu_wait_tick(uint32_t tick, bool* waited);
+bool gpu_wait_tick(uint32_t tick);
 bool gpu_wait_idle(void);

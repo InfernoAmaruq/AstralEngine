@@ -114,6 +114,23 @@ void os_set_clipboard_text(const char* text) {
 }
 #endif
 
+void* os_vm_init(size_t size) {
+  void* pointer = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  return pointer == MAP_FAILED ? NULL : pointer;
+}
+
+bool os_vm_free(void* p, size_t size) {
+  return !munmap(p, size);
+}
+
+bool os_vm_commit(void* p, size_t size) {
+  return !mprotect(p, size, PROT_READ | PROT_WRITE);
+}
+
+bool os_vm_release(void* p, size_t size) {
+  return !madvise(p, size, MADV_DONTNEED);
+}
+
 void os_thread_attach(void) {
   //
 }

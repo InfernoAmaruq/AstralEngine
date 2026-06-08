@@ -171,6 +171,22 @@ void os_set_clipboard_text(const char* text) {
 void* os_set_window_size(uint32_t w, uint32_ h){}
 #endif
 
+void* os_vm_init(size_t size) {
+  return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_NOACCESS);
+}
+
+bool os_vm_free(void* p, size_t size) {
+  return VirtualFree(p, 0, MEM_RELEASE);
+}
+
+bool os_vm_commit(void* p, size_t size) {
+  return VirtualAlloc(p, size, MEM_COMMIT, PAGE_READWRITE);
+}
+
+bool os_vm_release(void* p, size_t size) {
+  return VirtualFree(p, 0, MEM_DECOMMIT);
+}
+
 void os_thread_attach(void) {
   //
 }

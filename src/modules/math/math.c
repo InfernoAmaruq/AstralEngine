@@ -158,6 +158,23 @@ void lovrCurveGetTangent(Curve* curve, float t, vec4 p) {
   vec3_normalize(p);
 }
 
+static void evaluateDerivative(float* restrict P, size_t n, float t, float* dp) {
+  if (n < 2) {
+    dp[0] = dp[1] = dp[2] = dp[3] = 0.f;
+    return;
+  }
+  float* points = lovrMalloc((n - 1) * 4 * sizeof(float));
+  // Difference points for derivative
+  for (size_t i = 0; i < n - 1; i++) {
+    points[i * 4 + 0] = (float)(n - 1) * (P[(i + 1) * 4 + 0] - P[i * 4 + 0]);
+    points[i * 4 + 1] = (float)(n - 1) * (P[(i + 1) * 4 + 1] - P[i * 4 + 1]);
+    points[i * 4 + 2] = (float)(n - 1) * (P[(i + 1) * 4 + 2] - P[i * 4 + 2]);
+    points[i * 4 + 3] = (float)(n - 1) * (P[(i + 1) * 4 + 3] - P[i * 4 + 3]);
+  }
+  evaluate(points, n - 1, t, dp);
+  lovrFree(points);
+}
+
 float lovrCurveGetLength(Curve* curve, float t, int iterations) {
   t = CLAMP(t, 0.f, 1.f);
   if (t == 0.f) return 0.f;

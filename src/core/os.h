@@ -186,6 +186,11 @@ void os_on_mouse_move(fn_mouse_move* callback);
 void os_on_mousewheel_move(fn_mousewheel_move* callback);
 void os_on_permission(fn_permission* callback);
 
+void* os_vm_init(size_t size);
+bool os_vm_free(void* p, size_t size);
+bool os_vm_commit(void* p, size_t size);
+bool os_vm_release(void* p, size_t size);
+
 bool os_window_open(const os_window_config* config);
 bool os_window_is_open(void);
 bool os_window_is_visible(void);

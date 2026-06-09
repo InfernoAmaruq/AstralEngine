@@ -18,7 +18,6 @@ function lovr.errhand(message)
   local panel = 1
   local stackColumnWidth = 0
   local sourceScroll = 0
-  local rendered = false
   local dirty = true
 
   local thumbsticks = {}
@@ -440,7 +439,7 @@ function lovr.errhand(message)
   return function()
     lovr.timer.step()
 
-    local timeout = (not rendered or (lovr.headset and lovr.headset.isActive())) and 0 or math.huge
+    local timeout = lovr.headset and lovr.headset.isActive() and 0 or .25
     lovr.system.pollEvents(timeout)
 
     for name, a, b, c in lovr.event.poll() do
@@ -604,7 +603,6 @@ function lovr.errhand(message)
 
     if window or quad or headset then
       lovr.graphics.submit(window, quad, headset)
-      rendered = true
 
       if headset then
         lovr.headset.submit()

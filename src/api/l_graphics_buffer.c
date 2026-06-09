@@ -44,6 +44,14 @@ static const uint32_t typeComponents[] = {
   [TYPE_INDEX32] = 1
 };
 
+static const uint32_t vectorComponents[] = {
+  [V_VEC2] = 2,
+  [V_VEC3] = 3,
+  [V_VEC4] = 4,
+  [V_QUAT] = 4,
+  [V_MAT4] = 16
+};
+
 typedef union {
   void* raw;
   int8_t* i8;
@@ -162,15 +170,46 @@ static bool luax_checkfieldn(lua_State* L, int index, const DataField* field, vo
   return true;
 }
 
-static bool luax_checkfieldm(lua_State* L, int index, const DataField* field, void* data) {
+static bool luax_checkfieldv(lua_State* L, int index, const DataField* field, void* data) {
   DataPointer p = { .raw = data };
-  VectorType type;
-  float* m = luax_tovector(L, 3, &type);
-  luax_fieldcheck(L, type == V_MAT4 && (field->type >= TYPE_MAT2 && field->type <= TYPE_MAT4), index, field, false);
+  VectorType vectorType;
+  float* v = luax_tovector(L, index, &vectorType);
+  uint32_t n = typeComponents[field->type];
+  luax_fieldcheck(L, v && n > 1, index, field, false);
+  if (field->type >= TYPE_MAT2 && field->type <= TYPE_MAT4) {
+    luax_check(L, vectorType == V_MAT4, "Tried to send a non-matrix to a matrix type");
+  } else {
+    luax_check(L, vectorComponents[vectorType] == n, "Expected %d vector components, got %d", n, vectorComponents[vectorType]);
+  }
   switch (field->type) {
-    case TYPE_MAT2: for (int i = 0; i < 2; i++) memcpy(p.f32 + 2 * i, m + 4 * i, 2 * sizeof(float)); break;
-    case TYPE_MAT3: for (int i = 0; i < 3; i++) memcpy(p.f32 + 4 * i, m + 4 * i, 3 * sizeof(float)); break;
-    case TYPE_MAT4: memcpy(data, m, 16 * sizeof(float)); break;
+    case TYPE_I8x4: for (int i = 0; i < 4; i++) p.i8[i] = (int8_t) v[i]; break;
+    case TYPE_U8x4: for (int i = 0; i < 4; i++) p.u8[i] = (uint8_t) v[i]; break;
+    case TYPE_SN8x4: for (int i = 0; i < 4; i++) p.i8[i] = (int8_t) CLAMP(v[i], -1.f, 1.f) * INT8_MAX; break;
+    case TYPE_UN8x4: for (int i = 0; i < 4; i++) p.u8[i] = (uint8_t) CLAMP(v[i], 0.f, 1.f) * UINT8_MAX; break;
+    case TYPE_SN10x3: for (int i = 0; i < 3; i++) p.u32[0] |= (((uint32_t) (int32_t) (CLAMP(v[i], -1.f, 1.f) * 511.f)) & 0x3ff) << (10 * i); break;
+    case TYPE_UN10x3: for (int i = 0; i < 3; i++) p.u32[0] |= (((uint32_t) (CLAMP(v[i], 0.f, 1.f) * 1023.f)) & 0x3ff) << (10 * i); break;
+    case TYPE_I16x2: for (int i = 0; i < 2; i++) p.i16[i] = (int16_t) v[i]; break;
+    case TYPE_I16x4: for (int i = 0; i < 4; i++) p.i16[i] = (int16_t) v[i]; break;
+    case TYPE_U16x2: for (int i = 0; i < 2; i++) p.u16[i] = (uint16_t) v[i]; break;
+    case TYPE_U16x4: for (int i = 0; i < 4; i++) p.u16[i] = (uint16_t) v[i]; break;
+    case TYPE_SN16x2: for (int i = 0; i < 2; i++) p.i16[i] = (int16_t) CLAMP(v[i], -1.f, 1.f) * INT16_MAX; break;
+    case TYPE_SN16x4: for (int i = 0; i < 4; i++) p.i16[i] = (int16_t) CLAMP(v[i], -1.f, 1.f) * INT16_MAX; break;
+    case TYPE_UN16x2: for (int i = 0; i < 2; i++) p.u16[i] = (uint16_t) CLAMP(v[i], 0.f, 1.f) * UINT16_MAX; break;
+    case TYPE_UN16x4: for (int i = 0; i < 4; i++) p.u16[i] = (uint16_t) CLAMP(v[i], 0.f, 1.f) * UINT16_MAX; break;
+    case TYPE_I32x2: for (int i = 0; i < 2; i++) p.i32[i] = (int32_t) v[i]; break;
+    case TYPE_I32x3: for (int i = 0; i < 3; i++) p.i32[i] = (int32_t) v[i]; break;
+    case TYPE_I32x4: for (int i = 0; i < 4; i++) p.i32[i] = (int32_t) v[i]; break;
+    case TYPE_U32x2: for (int i = 0; i < 2; i++) p.u32[i] = (uint32_t) v[i]; break;
+    case TYPE_U32x3: for (int i = 0; i < 3; i++) p.u32[i] = (uint32_t) v[i]; break;
+    case TYPE_U32x4: for (int i = 0; i < 4; i++) p.u32[i] = (uint32_t) v[i]; break;
+    case TYPE_F16x2: for (int i = 0; i < 2; i++) p.u16[i] = float32to16(v[i]); break;
+    case TYPE_F16x4: for (int i = 0; i < 4; i++) p.u16[i] = float32to16(v[i]); break;
+    case TYPE_F32x2: memcpy(data, v, 2 * sizeof(float)); break;
+    case TYPE_F32x3: memcpy(data, v, 3 * sizeof(float)); break;
+    case TYPE_F32x4: memcpy(data, v, 4 * sizeof(float)); break;
+    case TYPE_MAT2: for (int i = 0; i < 2; i++) memcpy(p.f32 + 2 * i, v + 4 * i, 2 * sizeof(float)); break;
+    case TYPE_MAT3: for (int i = 0; i < 3; i++) memcpy(p.f32 + 4 * i, v + 4 * i, 3 * sizeof(float)); break;
+    case TYPE_MAT4: memcpy(data, v, 16 * sizeof(float)); break;
     default: lovrUnreachable();
   }
   return true;
@@ -286,7 +325,7 @@ static bool luax_checkarray(lua_State* L, int index, int start, int count, const
     } else if (type == LUA_TUSERDATA) {
       for (int i = 0; i < count; i++, data += array->stride) {
         lua_rawgeti(L, index, start + i);
-        if (!luax_checkfieldm(L, -1, array, data)) {
+        if (!luax_checkfieldv(L, -1, array, data)) {
           return false;
         }
         lua_pop(L, 1);
@@ -319,8 +358,8 @@ bool luax_checkbufferdata(lua_State* L, int index, const DataField* field, char*
     return luax_checkstruct(L, index, field, data);
   } else if (type == LUA_TNUMBER) {
     return luax_checkfieldn(L, index, field, data);
-  } else if (type == LUA_TUSERDATA) {
-    return luax_checkfieldm(L, index, field, data);
+  } else if (type == LUA_TUSERDATA || type == LUA_TLIGHTUSERDATA) {
+    return luax_checkfieldv(L, index, field, data);
   } else if (type == LUA_TTABLE) {
     return luax_checkfieldt(L, index, field, data);
   }

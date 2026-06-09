@@ -633,7 +633,19 @@ int luax_pushvariant(lua_State* L, Variant* variant) {
 void luax_readcolor(lua_State* L, int index, float color[4]) {
   color[0] = color[1] = color[2] = color[3] = 1.f;
 
-  if (lua_istable(L, index)) {
+    if (lua_isuserdata(L, index) || lua_islightuserdata(L, index)) {
+    VectorType type;
+    float* v = luax_tovector(L, index, &type);
+
+      if (type == V_VEC3) {
+        memcpy(color, v, 3 * sizeof(float));
+        color[3] = 1.f;
+      } else if (type == V_VEC4) {
+        memcpy(color, v, 4 * sizeof(float));
+      }
+
+    }
+    else if (lua_istable(L, index)) {
     if (luax_len(L, index) > 0) {
       for (int i = 1; i <= 4; i++) {
         lua_rawgeti(L, index, i);

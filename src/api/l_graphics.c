@@ -773,7 +773,7 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
   }
 
   // Length/size
-  if (info.format) {
+if (info.format) {
     lovrGraphicsAlignFields(format, layout);
 
     // Dynamic arrays
@@ -828,8 +828,12 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
             info.size = (uint32_t) blob->size;
             format->length = info.size / format->stride;
             break;
+          } else if (luax_tovector(L, 2, NULL)) {
+            format->length = 0;
+            hasData = true;
+            break;
           }
-          return luax_typeerror(L, 2, "nil, number, table, vector, ot Blob");
+          return luax_typeerror(L, 2, "nil, number, vector, table, or Blob");
       }
     }
   }
@@ -844,7 +848,9 @@ static int l_lovrGraphicsNewBuffer(lua_State* L) {
   } else if (hasData) {
     bool success = luax_checkbufferdata(L, 2, format, data);
     lovrBufferFlush(buffer);
-    if (!success) return lua_error(L);
+    if (!success){
+        return lua_error(L);
+    }
   }
 
   luax_pushtype(L, Buffer, buffer);

@@ -411,7 +411,6 @@ function lovr.boot()
     end
 
     if lovr.graphics then
-        print("RUN GRAPHICS")
         lovr.graphics.initialize()
     end
 

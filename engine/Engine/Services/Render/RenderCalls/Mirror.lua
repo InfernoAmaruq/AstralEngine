@@ -1,7 +1,7 @@
 local Renderer = select(1, ...)
 
 Renderer.Late[#Renderer.Late + 1] = function()
-    if not lovr.headset then
+    if not lovr.headset or (lovr.graphics.getWindowPass() == lovr.headset.getPass()) then
         return
     end
     local RS = GetService("RunService")

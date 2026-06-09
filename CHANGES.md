@@ -4,6 +4,10 @@ Changelog
 dev
 ---
 
+### Change
+
+- Change `Pass:setScissor` to clamp negative x/y values to zero.
+
 ### Fix
 
 - Fix `Pass:drawPart`.

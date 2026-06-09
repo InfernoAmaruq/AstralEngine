@@ -450,12 +450,20 @@ group('graphics', function()
     end)
 
     group(':setScissor', function()
-      test('should fail if width/height are zero', function()
-        pass = lovr.graphics.newPass(lovr.graphics.newTexture(2, 2))
+      local pass = lovr.graphics.newPass(lovr.graphics.newTexture(2, 2))
+
+      test('should fail if width/height are zero/negative', function()
         pass:setScissor()
         expect(function() pass:setScissor(0, 0, 0, 0) end).to.fail()
         expect(function() pass:setScissor(1, 1, 1, 0) end).to.fail()
+        expect(function() pass:setScissor(1, 2, 3, -4) end).to.fail()
         expect(function() pass:setScissor(1, 1, 1, 1) end).to_not.fail()
+      end)
+
+      test('should not fail if x/y are zero', function()
+        pass:setScissor()
+        expect(function() pass:setScissor(-1, -200, 5, 5) end).to_not.fail()
+        expect(function() pass:setScissor(-1, -200, 0, 0) end).to.fail()
       end)
     end)
 

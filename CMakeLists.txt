@@ -599,18 +599,6 @@ foreach(path ${LOVR_RESOURCES})
   file(WRITE ${output} "const unsigned char ${identifier}[] = {${data}};\nconst unsigned int ${identifier}_len = sizeof(${identifier});\n")
 endforeach()
 
-if(NOT ANDROID)
-  add_custom_command(TARGET ${ASTRAL_TARGET} POST_BUILD
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/etc/nogame"
-    COMMAND ${CMAKE_COMMAND} -E tar c "${PROJECT_BINARY_DIR}/nogame.lovr" --format=zip .
-  )
-  if(APPLE AND LOVR_BUILD_BUNDLE)
-    add_custom_command(TARGET ${ASTRAL_TARGET} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy nogame.lovr lovr.app/Contents/Resources)
-  elseif(NOT EMSCRIPTEN)
-    add_custom_command(TARGET ${ASTRAL_TARGET} POST_BUILD COMMAND ${CMAKE_COMMAND} -E cat nogame.lovr >> "$<TARGET_FILE:${ASTRAL_TARGET}>")
-  endif()
-endif()
-
 if(LOVR_VERSION_HASH)
   target_compile_definitions(${ASTRAL_TARGET} PRIVATE LOVR_VERSION_HASH=${LOVR_VERSION_HASH})
 endif()

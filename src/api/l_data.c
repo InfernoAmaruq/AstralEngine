@@ -280,6 +280,7 @@ static const luaL_Reg lovrData[] = {
   { "newRasterizer", l_lovrDataNewRasterizer },
   { "newSound", l_lovrDataNewSound },
   { "newCStruct", l_lovrDataNewCStruct },
+  { NULL, NULL }
 };
 
 extern const luaL_Reg lovrAudioStream[];

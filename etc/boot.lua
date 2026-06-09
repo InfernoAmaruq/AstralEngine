@@ -350,14 +350,6 @@ function lovr.boot()
 
     lovr.filesystem.setIdentity(conf.identity, conf.saveprecedence)
 
-    if lovr.identitySet then
-        lovr.identitySet()
-        lovr.identitySet = nil
-    end
-    if lovr.conf then
-        lovr.conf = nil
-    end
-
     -- CLI gets a chance to use/modify conf and handle arguments
 
     if ok and cli then
@@ -375,6 +367,14 @@ function lovr.boot()
                 lovr[module] = result
             end
         end
+    end
+
+    if lovr.identitySet then
+        lovr.identitySet()
+        lovr.identitySet = nil
+    end
+    if lovr.conf then
+        lovr.conf = nil
     end
 
     if lovr.headset and conf.headset.connect then

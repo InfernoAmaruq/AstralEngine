@@ -131,8 +131,8 @@ static int PhysNative_IterateBufferStart(lua_State *L){
         luax_pushtype(L, Collider, c->ColliderA);
         luax_pushtype(L, Collider, c->ColliderB);
 
-        luax_pushtype(L, Shape, c->ShapeA);
-        luax_pushtype(L, Shape, c->ShapeB);
+        luax_pushshape(L, c->ShapeA);
+        luax_pushshape(L, c->ShapeB);
 
         lua_pushnumber(L, c->normal[0]);
         lua_pushnumber(L, c->normal[1]);

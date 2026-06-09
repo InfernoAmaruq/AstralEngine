@@ -1,8 +1,8 @@
 #include "api.h"
 #include "math/math.h"
+#include "l_math.lua.h"
 #include "util.h"
 #include <threads.h>
-#include <stdlib.h>
 #include <string.h>
 
 int l_lovrRandomGeneratorRandom(lua_State* L);
@@ -132,6 +132,8 @@ static int l_lovrMathNewCurve(lua_State* L) {
   lovrRelease(curve, lovrCurveDestroy);
   return 1;
 }
+
+int l_lovrMat4Set(lua_State* L);
 
 static int l_lovrMathNewRandomGenerator(lua_State* L) {
   RandomGenerator* generator = lovrRandomGeneratorCreate();

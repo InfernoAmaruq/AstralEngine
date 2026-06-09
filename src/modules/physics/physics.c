@@ -3,13 +3,13 @@
 #include "core/job.h"
 #include "core/maf.h"
 #include "util.h"
-#include <stdlib.h>
+#include <joltc.h>
 #include <stdatomic.h>
 #include <threads.h>
-#include <joltc.h>
+#include <stdlib.h>
 
 struct Contact {
-  uint32_t ref;
+  atomic_uint ref;
   Collider* colliderA;
   Collider* colliderB;
   const JPH_ContactManifold* manifold;
@@ -17,7 +17,7 @@ struct Contact {
 };
 
 struct World {
-  uint32_t ref;
+  atomic_uint ref;
   JPH_PhysicsSystem* system;
   JPH_BodyInterface* bodyInterfaceLocked;
   JPH_BodyInterface* bodyInterfaceNoLock;
@@ -41,14 +41,12 @@ struct World {
   uint32_t tagLookup[MAX_TAGS];
   char* tags[MAX_TAGS];
   JPH_JobSystem* jobSystem;
-  uint32_t jobCount;
-  job* jobs[1024];
   mtx_t lock;
   uintptr_t userdata;
 };
 
 struct Collider {
-  uint32_t ref;
+  atomic_uint ref;
   JPH_BodyID id;
   JPH_Body* body;
   Collider* prev;
@@ -66,7 +64,7 @@ struct Collider {
 };
 
 struct Shape {
-  uint32_t ref;
+  atomic_uint ref;
   ShapeType type;
   JPH_Shape* handle;
   Collider* collider;
@@ -83,7 +81,7 @@ typedef struct {
 } JointNode;
 
 struct Joint {
-  uint32_t ref;
+  atomic_uint ref;
   JointType type;
   JPH_Constraint* constraint;
   uintptr_t userdata;
@@ -98,8 +96,9 @@ static thread_local struct {
   bool locked;
 } thread;
 
+static atomic_uint ref;
+
 static struct {
-  bool initialized;
   JPH_Shape* emptyShape;
   void (*freeUserData)(void* object, uintptr_t userdata);
 } state;
@@ -171,9 +170,7 @@ static bool broadPhaseLayerFilter(void* userdata, JPH_BroadPhaseLayer layer) {
 
 static JPH_BroadPhaseLayerFilter* getBroadPhaseLayerFilter(World* world, uint32_t filter) {
   if (!thread.broadPhaseLayerFilter) {
-    thread.broadPhaseLayerFilter = JPH_BroadPhaseLayerFilter_Create((JPH_BroadPhaseLayerFilter_Procs) {
-      .ShouldCollide = broadPhaseLayerFilter
-    }, NULL);
+    thread.broadPhaseLayerFilter = JPH_BroadPhaseLayerFilter_Create(NULL);
   }
 
   thread.broadPhaseLayerMask = 0;
@@ -189,9 +186,7 @@ static bool objectLayerFilter(void* userdata, JPH_ObjectLayer layer) {
 
 static JPH_ObjectLayerFilter* getObjectLayerFilter(World* world, uint32_t filter) {
   if (!thread.objectLayerFilter) {
-    thread.objectLayerFilter = JPH_ObjectLayerFilter_Create((JPH_ObjectLayerFilter_Procs) {
-      .ShouldCollide = objectLayerFilter
-    }, NULL);
+    thread.objectLayerFilter = JPH_ObjectLayerFilter_Create(NULL);
   }
 
   // Never include objects on the last layer, reserved for colliders without shapes
@@ -224,6 +219,7 @@ static void onSleep(void* arg, JPH_BodyID id, uint64_t userData) {
 
 static JPH_ValidateResult onContactValidate(void* userdata, const JPH_Body* body1, const JPH_Body* body2, const JPH_RVec3* offset, const JPH_CollideShapeResult* result) {
   World* world = userdata;
+  if (!world->callbacks.filter) return JPH_ValidateResult_AcceptAllContactsForThisBodyPair;
   Collider* a = (Collider*) (uintptr_t) JPH_Body_GetUserData((JPH_Body*) body1);
   Collider* b = (Collider*) (uintptr_t) JPH_Body_GetUserData((JPH_Body*) body2);
   mtx_lock(&world->lock);
@@ -238,6 +234,7 @@ static JPH_ValidateResult onContactValidate(void* userdata, const JPH_Body* body
 
 static void onContactPersisted(void* userdata, const JPH_Body* body1, const JPH_Body* body2, const JPH_ContactManifold* manifold, JPH_ContactSettings* settings) {
   World* world = userdata;
+  if (!world->callbacks.contact) return;
   JPH_BodyID id1 = JPH_Body_GetID(body1);
   JPH_BodyID id2 = JPH_Body_GetID(body2);
   if (world->callbacks.contact) {
@@ -257,6 +254,8 @@ static void onContactPersisted(void* userdata, const JPH_Body* body1, const JPH_
 
 static void onContactAdded(void* userdata, const JPH_Body* body1, const JPH_Body* body2, const JPH_ContactManifold* manifold, JPH_ContactSettings* settings) {
   World* world = userdata;
+  if (!world->callbacks.enter && !world->callbacks.contact) return;
+
   JPH_BodyID id1 = JPH_Body_GetID(body1);
   JPH_BodyID id2 = JPH_Body_GetID(body2);
 
@@ -279,6 +278,7 @@ static void onContactAdded(void* userdata, const JPH_Body* body1, const JPH_Body
 
 static void onContactRemoved(void* userdata, const JPH_SubShapeIDPair* pair) {
   World* world = userdata;
+  if (!world->callbacks.exit) return;
   if (!JPH_PhysicsSystem_WereBodiesInContact(world->system, pair->Body1ID, pair->Body2ID)) {
     JPH_BodyInterface* interface = world->bodyInterfaceNoLock;
     Collider* a = (Collider*) (uintptr_t) JPH_BodyInterface_GetUserData(interface, pair->Body1ID);
@@ -296,17 +296,13 @@ static void onContactRemoved(void* userdata, const JPH_SubShapeIDPair* pair) {
 static void queueJob(void* context, JPH_JobFunction* function, void* arg) {
   World* world = context;
 
-  // If there are too many jobs, fall back to single threaded
-  if (atomic_load(&world->jobCount) >= COUNTOF(world->jobs)) {
+#ifdef LOVR_DISABLE_THREAD
+  function(arg);
+#else
+  if (!job_start(function, arg)) {
     function(arg);
-  } else {
-    job* job = job_start(function, arg);
-
-    if (job) {
-      uint32_t index = atomic_fetch_add(&world->jobCount, 1);
-      world->jobs[index] = job;
-    }
   }
+#endif
 }
 
 static void queueJobs(void* context, JPH_JobFunction* function, void** args, uint32_t count) {
@@ -316,21 +312,50 @@ static void queueJobs(void* context, JPH_JobFunction* function, void** args, uin
 }
 
 bool lovrPhysicsInit(void (*freeUserData)(void* object, uintptr_t userdata)) {
-  if (state.initialized) return true;
+  if (!lovrModuleAcquire(&ref)) return true;
+
   JPH_Init();
   float center[3] = { 0.f, 0.f, 0.f };
   JPH_EmptyShapeSettings* settings = JPH_EmptyShapeSettings_Create(vec3_toJolt(center));
   state.emptyShape = (JPH_Shape*) JPH_EmptyShapeSettings_CreateShape(settings);
   JPH_ShapeSettings_Destroy((JPH_ShapeSettings*) settings);
+
+  // The memory for the callbacks has to remain valid...
+  static const JPH_BroadPhaseLayerFilter_Procs broadPhaseLayerFilterProcs = {
+    .ShouldCollide = broadPhaseLayerFilter
+  };
+
+  static const JPH_ObjectLayerFilter_Procs objectLayerFilterProcs = {
+    .ShouldCollide = objectLayerFilter
+  };
+
+  static const JPH_BodyActivationListener_Procs bodyActivationListenerProcs = {
+    .OnBodyActivated = onAwake,
+    .OnBodyDeactivated = onSleep
+  };
+
+  static const JPH_ContactListener_Procs contactListenerProcs = {
+    .OnContactValidate = onContactValidate,
+    .OnContactAdded = onContactAdded,
+    .OnContactPersisted = onContactPersisted,
+    .OnContactRemoved = onContactRemoved
+  };
+
+  JPH_BroadPhaseLayerFilter_SetProcs(&broadPhaseLayerFilterProcs);
+  JPH_ObjectLayerFilter_SetProcs(&objectLayerFilterProcs);
+  JPH_BodyActivationListener_SetProcs(&bodyActivationListenerProcs);
+  JPH_ContactListener_SetProcs(&contactListenerProcs);
+
   state.freeUserData = freeUserData;
-  return state.initialized = true;
+  lovrModuleReady(&ref);
+  return true;
 }
 
 void lovrPhysicsDestroy(void) {
-  if (!state.initialized) return;
+  if (!lovrModuleRelease(&ref)) return;
   JPH_Shape_Destroy(state.emptyShape);
   JPH_Shutdown();
-  state.initialized = false;
+  lovrModuleReset(&ref);
 }
 
 World* lovrWorldCreate(WorldInfo* info) {
@@ -345,10 +370,8 @@ World* lovrWorldCreate(WorldInfo* info) {
   world->tagCount = info->tagCount;
   world->staticTagMask = info->staticTagMask;
   for (uint32_t i = 0; i < world->tagCount; i++) {
-    size_t length = strlen(info->tags[i]);
-    world->tags[i] = lovrMalloc(length + 1);
-    memcpy(world->tags[i], info->tags[i], length + 1);
-    world->tagLookup[i] = (uint32_t) hash64(info->tags[i], length);
+    world->tags[i] = lovrStrdup(info->tags[i]);
+    world->tagLookup[i] = (uint32_t) hash64(info->tags[i], strlen(info->tags[i]));
   }
 
   uint32_t broadPhaseLayerCount = world->staticTagMask ? 2 : 1;
@@ -390,7 +413,11 @@ World* lovrWorldCreate(WorldInfo* info) {
     .context = world,
     .queueJob = queueJob,
     .queueJobs = queueJobs,
+#ifdef LOVR_DISABLE_THREAD
+    .maxConcurrency = 1,
+#else
     .maxConcurrency = lovrThreadGetWorkerCount(),
+#endif
     .maxBarriers = 1
   });
 
@@ -410,10 +437,7 @@ World* lovrWorldCreate(WorldInfo* info) {
     world->bodyInterfaceNoLock;
 
   world->activeColliders = lovrMalloc(info->maxColliders * sizeof(Collider*));
-  world->activationListener = JPH_BodyActivationListener_Create((JPH_BodyActivationListener_Procs) {
-    .OnBodyActivated = onAwake,
-    .OnBodyDeactivated = onSleep
-  }, world);
+  world->activationListener = JPH_BodyActivationListener_Create(world);
 
   JPH_PhysicsSystem_SetBodyActivationListener(world->system, world->activationListener);
 
@@ -455,16 +479,7 @@ bool lovrWorldIsDestroyed(World* world) {
   return !world->system;
 }
 
-void lovrWorldSetUserData(World* world, uintptr_t ud){
-    world->userdata = ud;
-}
-
-uintptr_t lovrWorldGetUserData(World* world){
-    return world->userdata;
-}
-
 char** lovrWorldGetTags(World* world, uint32_t* count) {
-  *count = world->tagCount;
   return world->tags;
 }
 
@@ -536,13 +551,8 @@ void lovrWorldUpdate(World* world, float dt) {
 
   JPH_PhysicsSystem_Update(world->system, dt, 1, world->jobSystem);
 
-  for (uint32_t i = 0; i < world->jobCount; i++) {
-    job_wait(world->jobs[i]);
-  }
-
   world->inverseDelta = 1.f / dt;
   world->interpolation = 0.f;
-  world->jobCount = 0;
 }
 
 void lovrWorldInterpolate(World* world, float alpha) {
@@ -775,13 +785,7 @@ void lovrWorldSetCallbacks(World* world, WorldCallbacks* callbacks) {
     JPH_PhysicsSystem_SetContactListener(world->system, NULL);
   } else {
     world->callbacks = *callbacks;
-    world->listener = JPH_ContactListener_Create((JPH_ContactListener_Procs) {
-      .OnContactValidate = callbacks->filter ? onContactValidate : NULL,
-      .OnContactAdded = (callbacks->enter || callbacks->contact) ? onContactAdded : NULL,
-      .OnContactPersisted = callbacks->contact ? onContactPersisted : NULL,
-      .OnContactRemoved = callbacks->exit ? onContactRemoved : NULL
-    }, world);
-
+    world->listener = JPH_ContactListener_Create(world);
     JPH_PhysicsSystem_SetContactListener(world->system, world->listener);
   }
 }
@@ -936,6 +940,14 @@ bool lovrColliderIsDestroyed(Collider* collider) {
   return !collider->body;
 }
 
+void lovrWorldSetUserData(World* world, uintptr_t ud){
+    world->userdata = ud;
+}
+
+uintptr_t lovrWorldGetUserData(World* world){
+    return world->userdata;
+}
+
 uintptr_t lovrColliderGetUserData(Collider* collider) {
   return collider->userdata;
 }
@@ -1003,8 +1015,8 @@ bool lovrColliderAddShape(Collider* collider, Shape* shape) {
 
   // Create or modify the MutableCompoundShape
   if (alreadyCompound) {
-    JPH_MutableCompoundShape_AddShape((JPH_MutableCompoundShape*) handle, position, rotation, shape->handle, 0);
-    shape->index = JPH_CompoundShape_GetNumSubShapes((JPH_CompoundShape*) handle) - 1;
+    shape->index = JPH_CompoundShape_GetNumSubShapes((JPH_CompoundShape*) handle);
+    JPH_MutableCompoundShape_AddShape((JPH_MutableCompoundShape*) handle, position, rotation, shape->handle, 0, shape->index);
   } else if (handle == state.emptyShape) {
     // If the shape is at the origin, use it directly, otherwise wrap in a compound shape with an offset
     if (vec3_length(shape->translation) < 1e-6 && shape->rotation[3] > .999f) {
@@ -1584,6 +1596,16 @@ bool lovrColliderResetMassData(Collider* collider) {
 }
 
 void lovrColliderGetDegreesOfFreedom(Collider* collider, bool translation[3], bool rotation[3]) {
+  if (lovrColliderIsKinematic(collider)) {
+    translation[0] = false;
+    translation[1] = false;
+    translation[2] = false;
+    rotation[0] = false;
+    rotation[1] = false;
+    rotation[2] = false;
+    return;
+  }
+
   JPH_MotionProperties* motion = JPH_Body_GetMotionProperties(collider->body);
   JPH_AllowedDOFs dofs = JPH_MotionProperties_GetAllowedDOFs(motion);
   translation[0] = dofs & JPH_AllowedDOFs_TranslationX;
@@ -1595,6 +1617,10 @@ void lovrColliderGetDegreesOfFreedom(Collider* collider, bool translation[3], bo
 }
 
 void lovrColliderSetDegreesOfFreedom(Collider* collider, bool translation[3], bool rotation[3]) {
+  if (lovrColliderIsKinematic(collider)) {
+    return;
+  }
+
   JPH_AllowedDOFs dofs = 0;
 
   if (translation[0]) dofs |= JPH_AllowedDOFs_TranslationX;
@@ -1605,10 +1631,21 @@ void lovrColliderSetDegreesOfFreedom(Collider* collider, bool translation[3], bo
   if (rotation[2]) dofs |= JPH_AllowedDOFs_RotationZ;
 
   JPH_MotionProperties* motion = JPH_Body_GetMotionProperties(collider->body);
+
+  float inverseMass = JPH_MotionProperties_GetInverseMassUnchecked(motion);
+
+  JPH_Vec3 inertiaDiagonal;
+  JPH_MotionProperties_GetInverseInertiaDiagonal(motion, &inertiaDiagonal);
+
+  JPH_Quat inertiaRotation;
+  JPH_MotionProperties_GetInertiaRotation(motion, &inertiaRotation);
+
   JPH_MassProperties mass;
   const JPH_Shape* shape = JPH_BodyInterface_GetShape(getBodyInterface(collider, READ), collider->id);
   JPH_Shape_GetMassProperties(shape, &mass);
   JPH_MotionProperties_SetMassProperties(motion, dofs, &mass);
+  JPH_MotionProperties_SetInverseMass(motion, inverseMass);
+  JPH_MotionProperties_SetInverseInertia(motion, &inertiaDiagonal, &inertiaRotation);
 }
 
 void lovrColliderGetPosition(Collider* collider, float position[3]) {
@@ -1676,6 +1713,10 @@ bool lovrColliderSetPose(Collider* collider, float position[3], float orientatio
 }
 
 bool lovrColliderMoveKinematic(Collider* collider, float position[3], float orientation[4], float dt) {
+  if (JPH_BodyInterface_GetMotionType(getBodyInterface(collider, READ), collider->id) == JPH_MotionType_Static) {
+    return true;
+  }
+
   lovrCheck(dt > 0.f, "dt must > 0");
   lovrCheck(collider->enabled, "Collider must be enabled");
   JPH_BodyInterface* interface = getBodyInterface(collider, WRITE);
@@ -1710,21 +1751,37 @@ bool lovrColliderSetAngularVelocity(Collider* collider, float velocity[3]) {
 }
 
 float lovrColliderGetLinearDamping(Collider* collider) {
-  JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
-  return JPH_MotionProperties_GetLinearDamping(properties);
+  if (JPH_BodyInterface_GetMotionType(getBodyInterface(collider, READ), collider->id) == JPH_MotionType_Static) {
+    return 0.f;
+  } else {
+    JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
+    return JPH_MotionProperties_GetLinearDamping(properties);
+  }
 }
 
 void lovrColliderSetLinearDamping(Collider* collider, float damping) {
+  if (JPH_BodyInterface_GetMotionType(getBodyInterface(collider, READ), collider->id) == JPH_MotionType_Static) {
+    return;
+  }
+
   JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
   JPH_MotionProperties_SetLinearDamping(properties, MAX(damping, 0.f));
 }
 
 float lovrColliderGetAngularDamping(Collider* collider) {
-  JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
-  return JPH_MotionProperties_GetAngularDamping(properties);
+  if (JPH_BodyInterface_GetMotionType(getBodyInterface(collider, READ), collider->id) == JPH_MotionType_Static) {
+    return 0.f;
+  } else {
+    JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
+    return JPH_MotionProperties_GetAngularDamping(properties);
+  }
 }
 
 void lovrColliderSetAngularDamping(Collider* collider, float damping) {
+  if (JPH_BodyInterface_GetMotionType(getBodyInterface(collider, READ), collider->id) == JPH_MotionType_Static) {
+    return;
+  }
+
   JPH_MotionProperties* properties = JPH_Body_GetMotionProperties(collider->body);
   JPH_MotionProperties_SetAngularDamping(properties, MAX(damping, 0.f));
 }
@@ -1871,37 +1928,35 @@ void lovrContactGetPoint(Contact* contact, uint32_t index, float point[3]) {
 }
 
 float lovrContactGetFriction(Contact* contact) {
-  return JPH_ContactSettings_GetFriction(contact->settings);
+  return contact->settings->combinedFriction;
 }
 
 void lovrContactSetFriction(Contact* contact, float friction) {
-  JPH_ContactSettings_SetFriction(contact->settings, MAX(friction, 0.f));
+  contact->settings->combinedFriction = MAX(friction, 0.f);
 }
 
 float lovrContactGetRestitution(Contact* contact) {
-  return JPH_ContactSettings_GetRestitution(contact->settings);
+  return contact->settings->combinedRestitution;
 }
 
 void lovrContactSetRestitution(Contact* contact, float restitution) {
-  JPH_ContactSettings_SetRestitution(contact->settings, MAX(restitution, 0.f));
+  contact->settings->combinedRestitution = MAX(restitution, 0.f);
 }
 
 bool lovrContactIsEnabled(Contact* contact) {
-  return JPH_ContactSettings_GetIsSensor(contact->settings);
+  return contact->settings->isSensor;
 }
 
 void lovrContactSetEnabled(Contact* contact, bool enable) {
-  JPH_ContactSettings_SetIsSensor(contact->settings, !enable);
+  contact->settings->isSensor = !enable;
 }
 
 void lovrContactGetSurfaceVelocity(Contact* contact, float velocity[3]) {
-  JPH_Vec3 v;
-  JPH_ContactSettings_GetRelativeLinearSurfaceVelocity(contact->settings, &v);
-  vec3_fromJolt(velocity, &v);
+  vec3_fromJolt(velocity, &contact->settings->relativeLinearSurfaceVelocity);
 }
 
 void lovrContactSetSurfaceVelocity(Contact* contact, float velocity[3]) {
-  JPH_ContactSettings_SetRelativeLinearSurfaceVelocity(contact->settings, vec3_toJolt(velocity));
+  contact->settings->relativeLinearSurfaceVelocity = *vec3_toJolt(velocity);
 }
 
 // Shapes
@@ -2060,8 +2115,8 @@ void lovrShapeGetAABB(Shape* shape, float aabb[6]) {
 static void inverseTransformPoint(float* point, float* position, float* orientation) {
   float inverse[4];
   quat_conjugate(quat_init(inverse, orientation));
-  quat_rotate(inverse, point);
   vec3_sub(point, position);
+  quat_rotate(inverse, point);
 }
 
 static void inverseTransformRay(float* origin, float* direction, float* position, float* orientation) {
@@ -2073,8 +2128,6 @@ static void inverseTransformRay(float* origin, float* direction, float* position
 }
 
 bool lovrShapeContainsPoint(Shape* shape, float point[3]) {
-  float inverseRotation[4];
-
   if (shape->collider) {
     float position[3], orientation[4];
     lovrColliderGetPose(shape->collider, position, orientation);
@@ -2096,7 +2149,7 @@ bool lovrShapeRaycast(Shape* shape, float start[3], float end[3], CastResult* hi
   vec3_init(direction, end);
   vec3_sub(direction, start);
 
-  float position[3], orientation[4], inverseRotation[4];
+  float position[3], orientation[4];
 
   if (shape->collider) {
     lovrColliderGetPose(shape->collider, position, orientation);
@@ -2226,6 +2279,7 @@ float lovrCapsuleShapeGetRadius(CapsuleShape* shape) {
 }
 
 bool lovrCapsuleShapeSetRadius(CapsuleShape* shape, float radius) {
+  lovrCheck(radius > 0.f, "CapsuleShape radius must be positive");
   float length = lovrCapsuleShapeGetLength(shape);
   return lovrShapeReplace(shape, makeCapsule(length / 2.f, radius));
 }
@@ -2235,6 +2289,7 @@ float lovrCapsuleShapeGetLength(CapsuleShape* shape) {
 }
 
 bool lovrCapsuleShapeSetLength(CapsuleShape* shape, float length) {
+  lovrCheck(length > 0.f, "CapsuleShape length must be positive");
   float radius = lovrCapsuleShapeGetRadius(shape);
   return lovrShapeReplace(shape, makeCapsule(radius, length));
 }
@@ -2266,6 +2321,7 @@ float lovrCylinderShapeGetRadius(CylinderShape* shape) {
 }
 
 bool lovrCylinderShapeSetRadius(CylinderShape* shape, float radius) {
+  lovrCheck(radius > 0.f, "CylinderShape radius must be positive");
   float length = lovrCylinderShapeGetLength(shape);
   return lovrShapeReplace(shape, makeCylinder(radius, length));
 }
@@ -2275,31 +2331,32 @@ float lovrCylinderShapeGetLength(CylinderShape* shape) {
 }
 
 bool lovrCylinderShapeSetLength(CylinderShape* shape, float length) {
+  lovrCheck(length > 0.f, "CylinderShape length must be positive");
   float radius = lovrCylinderShapeGetRadius(shape);
   return lovrShapeReplace(shape, makeCylinder(radius, length));
 }
 
-ConvexShape* lovrConvexShapeCreate(float points[], uint32_t count, float scale) {
+ConvexShape* lovrConvexShapeCreate(float points[], uint32_t count, float* scale) {
   ConvexShape* shape = lovrCalloc(sizeof(ConvexShape));
   shape->ref = 1;
   shape->type = SHAPE_CONVEX;
   JPH_ConvexHullShapeSettings* settings = JPH_ConvexHullShapeSettings_Create((const JPH_Vec3*) points, count, .05f);
   JPH_Shape* hull = (JPH_Shape*) JPH_ConvexHullShapeSettings_CreateShape(settings);
+  lovrCheck(hull, "Invalid convex hull!");
   JPH_ShapeSettings_Destroy((JPH_ShapeSettings*) settings);
-  float scale3[3] = { scale, scale, scale };
-  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(hull, vec3_toJolt(scale3));
+  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(hull, vec3_toJolt(scale));
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
   quat_identity(shape->rotation);
+  JPH_Shape_Destroy(hull);
   return shape;
 }
 
-ConvexShape* lovrConvexShapeClone(ConvexShape* parent, float scale) {
+ConvexShape* lovrConvexShapeClone(ConvexShape* parent, float* scale) {
   ConvexShape* shape = lovrCalloc(sizeof(ConvexShape));
   shape->ref = 1;
   shape->type = SHAPE_CONVEX;
-  float scale3[3] = { scale, scale, scale };
   const JPH_Shape* hull = JPH_DecoratedShape_GetInnerShape((const JPH_DecoratedShape*) parent->handle);
-  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(hull, vec3_toJolt(scale3));
+  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(hull, vec3_toJolt(scale));
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
   quat_identity(shape->rotation);
   return shape;
@@ -2313,9 +2370,15 @@ uint32_t lovrConvexShapeGetPointCount(ConvexShape* shape) {
 bool lovrConvexShapeGetPoint(ConvexShape* shape, uint32_t index, float point[3]) {
   lovrCheck(index < lovrConvexShapeGetPointCount(shape), "Invalid point index '%d'", index + 1);
   const JPH_ConvexHullShape* hull = (const JPH_ConvexHullShape*) JPH_DecoratedShape_GetInnerShape((const JPH_DecoratedShape*) shape->handle);
+  JPH_Vec3 scale;
+  JPH_ScaledShape_GetScale((JPH_ScaledShape*) shape->handle, &scale);
+  JPH_Vec3 center;
+  JPH_Shape_GetCenterOfMass((JPH_Shape*) hull, &center);
   JPH_Vec3 v;
   JPH_ConvexHullShape_GetPoint(hull, index, &v);
   vec3_fromJolt(point, &v);
+  vec3_add(point, &center.x);
+  vec3_scale(point, scale.x);
   return true;
 }
 
@@ -2330,13 +2393,13 @@ uint32_t lovrConvexShapeGetFace(ConvexShape* shape, uint32_t index, uint32_t* po
   return JPH_ConvexHullShape_GetFaceVertices(hull, index, capacity, pointIndices);
 }
 
-float lovrConvexShapeGetScale(ConvexShape* shape) {
+void lovrConvexShapeGetScale(ConvexShape* shape, float* scale) {
   JPH_Vec3 v;
   JPH_ScaledShape_GetScale((JPH_ScaledShape*) shape->handle, &v);
-  return v.x;
+  vec3_fromJolt(scale, &v);
 }
 
-MeshShape* lovrMeshShapeCreate(uint32_t vertexCount, float* vertices, uint32_t indexCount, uint32_t* indices, float scale) {
+MeshShape* lovrMeshShapeCreate(uint32_t vertexCount, float* vertices, uint32_t indexCount, uint32_t* indices, float* scale) {
   MeshShape* shape = lovrCalloc(sizeof(MeshShape));
   shape->ref = 1;
   shape->type = SHAPE_MESH;
@@ -2353,34 +2416,34 @@ MeshShape* lovrMeshShapeCreate(uint32_t vertexCount, float* vertices, uint32_t i
 
   JPH_MeshShapeSettings* settings = JPH_MeshShapeSettings_Create2((const JPH_Vec3*) vertices, vertexCount, triangles, triangleCount);
   JPH_MeshShapeSettings_SetPerTriangleUserData(settings, true);
-  JPH_MeshShape* mesh = JPH_MeshShapeSettings_CreateShape(settings);
+  JPH_Shape* mesh = (JPH_Shape*) JPH_MeshShapeSettings_CreateShape(settings);
   JPH_ShapeSettings_Destroy((JPH_ShapeSettings*) settings);
   lovrFree(triangles);
 
   // We wrap MeshShapes in ScaledShapes so that clones can have unique userdata
-  float scale3[3] = { scale, scale, scale };
-  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create((JPH_Shape*) mesh, vec3_toJolt(scale3));
+  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(mesh, vec3_toJolt(scale));
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
   quat_identity(shape->rotation);
+  JPH_Shape_Destroy(mesh);
   return shape;
 }
 
-MeshShape* lovrMeshShapeClone(MeshShape* parent, float scale) {
+MeshShape* lovrMeshShapeClone(MeshShape* parent, float* scale) {
   MeshShape* shape = lovrCalloc(sizeof(MeshShape));
   shape->ref = 1;
   shape->type = SHAPE_MESH;
-  float scale3[3] = { scale, scale, scale };
   const JPH_Shape* mesh = JPH_DecoratedShape_GetInnerShape((const JPH_DecoratedShape*) parent->handle);
-  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(mesh, vec3_toJolt(scale3));
+  shape->handle = (JPH_Shape*) JPH_ScaledShape_Create(mesh, vec3_toJolt(scale));
+  lovrCheck(shape->handle, "Invalid mesh data!");
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
   quat_identity(shape->rotation);
   return shape;
 }
 
-float lovrMeshShapeGetScale(MeshShape* shape) {
+void lovrMeshShapeGetScale(MeshShape* shape, float* scale) {
   JPH_Vec3 v;
   JPH_ScaledShape_GetScale((JPH_ScaledShape*) shape->handle, &v);
-  return v.x;
+  vec3_fromJolt(scale, &v);
 }
 
 TerrainShape* lovrTerrainShapeCreate(float* vertices, uint32_t n, float scaleXZ, float scaleY) {
@@ -2403,6 +2466,7 @@ TerrainShape* lovrTerrainShapeCreate(float* vertices, uint32_t n, float scaleXZ,
 
   JPH_HeightFieldShapeSettings* shape_settings = JPH_HeightFieldShapeSettings_Create(vertices, &offset, &scale, n);
   shape->handle = (JPH_Shape*) JPH_HeightFieldShapeSettings_CreateShape(shape_settings);
+  lovrCheck(shape->handle, "Invalid terrain data!");
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
   JPH_ShapeSettings_Destroy((JPH_ShapeSettings*) shape_settings);
   return shape;
@@ -2563,7 +2627,7 @@ float lovrJointGetForce(Joint* joint) {
   World* world = b->world;
 
   JPH_Vec3 v;
-  float force[3], x, y;
+  float force[3];
   switch (joint->type) {
     case JOINT_WELD:
       JPH_FixedConstraint_GetTotalLambdaPosition((JPH_FixedConstraint*) joint->constraint, &v);
@@ -2580,8 +2644,8 @@ float lovrJointGetForce(Joint* joint) {
       JPH_HingeConstraint_GetTotalLambdaPosition((JPH_HingeConstraint*) joint->constraint, &v);
       return vec3_length(vec3_fromJolt(force, &v)) * world->inverseDelta;
     case JOINT_SLIDER:
-      JPH_SliderConstraint_GetTotalLambdaPosition((JPH_SliderConstraint*) joint->constraint, &x, &y);
-      return sqrtf((x * x) + (y * y)) * world->inverseDelta;
+      JPH_SliderConstraint_GetTotalLambdaPosition((JPH_SliderConstraint*) joint->constraint, force);
+      return sqrtf((force[0] * force[0]) + (force[1] * force[1])) * world->inverseDelta;
     default: lovrUnreachable();
   }
 }
@@ -2593,7 +2657,7 @@ float lovrJointGetTorque(Joint* joint) {
   World* world = b->world;
 
   JPH_Vec3 v;
-  float torque[3], x, y;
+  float torque[3];
   switch (joint->type) {
     case JOINT_WELD:
       JPH_FixedConstraint_GetTotalLambdaRotation((JPH_FixedConstraint*) joint->constraint, &v);
@@ -2605,8 +2669,8 @@ float lovrJointGetTorque(Joint* joint) {
     case JOINT_DISTANCE:
       return 0.f;
     case JOINT_HINGE:
-      JPH_HingeConstraint_GetTotalLambdaRotation((JPH_HingeConstraint*) joint->constraint, &x, &y);
-      return sqrtf((x * x) + (y * y)) * world->inverseDelta;
+      JPH_HingeConstraint_GetTotalLambdaRotation((JPH_HingeConstraint*) joint->constraint, torque);
+      return sqrtf((torque[0] * torque[0]) + (torque[1] * torque[1])) * world->inverseDelta;
     case JOINT_SLIDER:
       JPH_SliderConstraint_GetTotalLambdaRotation((JPH_SliderConstraint*) joint->constraint, &v);
       return vec3_length(vec3_fromJolt(torque, &v)) * world->inverseDelta;
@@ -2624,10 +2688,10 @@ WeldJoint* lovrWeldJointCreate(Collider* a, Collider* b) {
   joint->ref = 1;
   joint->type = JOINT_WELD;
 
-  JPH_FixedConstraintSettings* settings = JPH_FixedConstraintSettings_Create();
-  JPH_FixedConstraintSettings_SetAutoDetectPoint(settings, true);
-  joint->constraint = (JPH_Constraint*) JPH_FixedConstraintSettings_CreateConstraint(settings, parent, b->body);
-  JPH_ConstraintSettings_Destroy((JPH_ConstraintSettings*) settings);
+  JPH_FixedConstraintSettings settings;
+  JPH_FixedConstraintSettings_Init(&settings);
+  settings.autoDetectPoint = true;
+  joint->constraint = (JPH_Constraint*) JPH_FixedConstraint_Create(&settings, parent, b->body);
   JPH_PhysicsSystem_AddConstraint(b->world->system, joint->constraint);
   lovrJointInit(joint, a, b);
   lovrRetain(joint);
@@ -2644,11 +2708,11 @@ BallJoint* lovrBallJointCreate(Collider* a, Collider* b, float anchor[3]) {
   joint->ref = 1;
   joint->type = JOINT_BALL;
 
-  JPH_PointConstraintSettings* settings = JPH_PointConstraintSettings_Create();
-  JPH_PointConstraintSettings_SetPoint1(settings, vec3_toJolt(anchor));
-  JPH_PointConstraintSettings_SetPoint2(settings, vec3_toJolt(anchor));
-  joint->constraint = (JPH_Constraint*) JPH_PointConstraintSettings_CreateConstraint(settings, parent, b->body);
-  JPH_ConstraintSettings_Destroy((JPH_ConstraintSettings*) settings);
+  JPH_PointConstraintSettings settings;
+  JPH_PointConstraintSettings_Init(&settings);
+  settings.point1 = (JPH_RVec3) { anchor[0], anchor[1], anchor[2] };
+  settings.point2 = (JPH_RVec3) { anchor[0], anchor[1], anchor[2] };
+  joint->constraint = (JPH_Constraint*) JPH_PointConstraint_Create(&settings, parent, b->body);
   JPH_PhysicsSystem_AddConstraint(b->world->system, joint->constraint);
   lovrJointInit(joint, a, b);
   lovrRetain(joint);
@@ -2668,13 +2732,14 @@ ConeJoint* lovrConeJointCreate(Collider* a, Collider* b, float anchor[3], float 
   joint->ref = 1;
   joint->type = JOINT_CONE;
 
-  JPH_ConeConstraintSettings* settings = JPH_ConeConstraintSettings_Create();
-  JPH_ConeConstraintSettings_SetPoint1(settings, vec3_toJolt(anchor));
-  JPH_ConeConstraintSettings_SetPoint2(settings, vec3_toJolt(anchor));
-  JPH_ConeConstraintSettings_SetTwistAxis1(settings, vec3_toJolt(axis));
-  JPH_ConeConstraintSettings_SetTwistAxis2(settings, vec3_toJolt(axis));
-  JPH_ConeConstraintSettings_SetHalfConeAngle(settings, (float) M_PI / 4.f);
-  joint->constraint = (JPH_Constraint*) JPH_ConeConstraintSettings_CreateConstraint(settings, parent, b->body);
+  JPH_ConeConstraintSettings settings;
+  JPH_ConeConstraintSettings_Init(&settings);
+  settings.point1 = (JPH_RVec3) { anchor[0], anchor[1], anchor[2] };
+  settings.point2 = (JPH_RVec3) { anchor[0], anchor[1], anchor[2] };
+  settings.twistAxis1 = (JPH_Vec3) { axis[0], axis[1], axis[2] };
+  settings.twistAxis2 = (JPH_Vec3) { axis[0], axis[1], axis[2] };
+  settings.halfConeAngle = (float) M_PI / 4.f;
+  joint->constraint = (JPH_Constraint*) JPH_ConeConstraint_Create(&settings, parent, b->body);
   JPH_PhysicsSystem_AddConstraint(b->world->system, joint->constraint);
   lovrJointInit(joint, a, b);
   lovrRetain(joint);
@@ -2682,18 +2747,17 @@ ConeJoint* lovrConeJointCreate(Collider* a, Collider* b, float anchor[3], float 
 }
 
 void lovrConeJointGetAxis(ConeJoint* joint, float axis[3]) {
-  JPH_Vec3 resultAxis;
-  JPH_ConeConstraintSettings* settings = (JPH_ConeConstraintSettings*) JPH_Constraint_GetConstraintSettings((JPH_Constraint*) joint->constraint);
-  JPH_ConeConstraintSettings_GetTwistAxis1(settings, &resultAxis);
+  JPH_ConeConstraintSettings settings;
+  JPH_ConeConstraint_GetSettings((JPH_ConeConstraint*) joint->constraint, &settings);
   JPH_Body* body1 = JPH_TwoBodyConstraint_GetBody1((JPH_TwoBodyConstraint*) joint->constraint);
   JPH_RMatrix4x4 centerOfMassTransform;
   JPH_Body_GetCenterOfMassTransform(body1, &centerOfMassTransform);
   JPH_Matrix4x4 constraintToBody;
   JPH_TwoBodyConstraint_GetConstraintToBody1Matrix((JPH_TwoBodyConstraint*) joint->constraint, &constraintToBody);
   float translation[4] = {
-    resultAxis.x,
-    resultAxis.y,
-    resultAxis.z,
+    settings.twistAxis1.x,
+    settings.twistAxis1.y,
+    settings.twistAxis1.z,
     0.f
   };
   mat4_mulVec4(&centerOfMassTransform.m11, translation);
@@ -2720,11 +2784,11 @@ DistanceJoint* lovrDistanceJointCreate(Collider* a, Collider* b, float anchor1[3
   joint->ref = 1;
   joint->type = JOINT_DISTANCE;
 
-  JPH_DistanceConstraintSettings* settings = JPH_DistanceConstraintSettings_Create();
-  JPH_DistanceConstraintSettings_SetPoint1(settings, vec3_toJolt(anchor1));
-  JPH_DistanceConstraintSettings_SetPoint2(settings, vec3_toJolt(anchor2));
-  joint->constraint = (JPH_Constraint*) JPH_DistanceConstraintSettings_CreateConstraint(settings, parent, b->body);
-  JPH_ConstraintSettings_Destroy((JPH_ConstraintSettings*) settings);
+  JPH_DistanceConstraintSettings settings;
+  JPH_DistanceConstraintSettings_Init(&settings);
+  settings.point1 = (JPH_RVec3) { anchor1[0], anchor1[1], anchor1[2] };
+  settings.point2 = (JPH_RVec3) { anchor2[0], anchor2[1], anchor2[2] };
+  joint->constraint = (JPH_Constraint*) JPH_DistanceConstraint_Create(&settings, parent, b->body);
   JPH_PhysicsSystem_AddConstraint(b->world->system, joint->constraint);
   lovrJointInit(joint, a, b);
   lovrRetain(joint);
@@ -2770,13 +2834,13 @@ HingeJoint* lovrHingeJointCreate(Collider* a, Collider* b, float anchor[3], floa
   joint->ref = 1;
   joint->type = JOINT_HINGE;
 
-  JPH_HingeConstraintSettings* settings = JPH_HingeConstraintSettings_Create();
-  JPH_HingeConstraintSettings_SetPoint1(settings, vec3_toJolt(anchor));
-  JPH_HingeConstraintSettings_SetPoint2(settings, vec3_toJolt(anchor));
-  JPH_HingeConstraintSettings_SetHingeAxis1(settings, vec3_toJolt(axis));
-  JPH_HingeConstraintSettings_SetHingeAxis2(settings, vec3_toJolt(axis));
-  joint->constraint = (JPH_Constraint*) JPH_HingeConstraintSettings_CreateConstraint(settings, parent, b->body);
-  JPH_ConstraintSettings_Destroy((JPH_ConstraintSettings*) settings);
+  JPH_HingeConstraintSettings settings;
+  JPH_HingeConstraintSettings_Init(&settings);
+  settings.point1 = (JPH_RVec3) { anchor[0], anchor[1], anchor[2] };
+  settings.point2 = (JPH_RVec3) { anchor[0], anchor[1], anchor[2] };
+  settings.hingeAxis1 = (JPH_Vec3) { axis[0], axis[1], axis[2] };
+  settings.hingeAxis2 = (JPH_Vec3) { axis[0], axis[1], axis[2] };
+  joint->constraint = (JPH_Constraint*) JPH_HingeConstraint_Create(&settings, parent, b->body);
   JPH_PhysicsSystem_AddConstraint(b->world->system, joint->constraint);
   lovrJointInit(joint, a, b);
   lovrRetain(joint);
@@ -2784,18 +2848,17 @@ HingeJoint* lovrHingeJointCreate(Collider* a, Collider* b, float anchor[3], floa
 }
 
 void lovrHingeJointGetAxis(HingeJoint* joint, float axis[3]) {
-  JPH_Vec3 resultAxis;
-  JPH_HingeConstraintSettings* settings = (JPH_HingeConstraintSettings*) JPH_Constraint_GetConstraintSettings((JPH_Constraint*) joint->constraint);
-  JPH_HingeConstraintSettings_GetHingeAxis1(settings, &resultAxis);
+  JPH_HingeConstraintSettings settings;
+  JPH_HingeConstraint_GetSettings((JPH_HingeConstraint*) joint->constraint, &settings);
   JPH_Body* body1 = JPH_TwoBodyConstraint_GetBody1((JPH_TwoBodyConstraint*) joint->constraint);
   JPH_RMatrix4x4 centerOfMassTransform;
   JPH_Body_GetCenterOfMassTransform(body1, &centerOfMassTransform);
   JPH_Matrix4x4 constraintToBody;
   JPH_TwoBodyConstraint_GetConstraintToBody1Matrix((JPH_TwoBodyConstraint*) joint->constraint, &constraintToBody);
   float translation[4] = {
-    resultAxis.x,
-    resultAxis.y,
-    resultAxis.z,
+    settings.hingeAxis1.x,
+    settings.hingeAxis1.y,
+    settings.hingeAxis1.z,
     0.f
   };
   mat4_mulVec4(&centerOfMassTransform.m11, translation);
@@ -2910,10 +2973,11 @@ SliderJoint* lovrSliderJointCreate(Collider* a, Collider* b, float axis[3]) {
   joint->ref = 1;
   joint->type = JOINT_SLIDER;
 
-  JPH_SliderConstraintSettings* settings = JPH_SliderConstraintSettings_Create();
-  JPH_SliderConstraintSettings_SetSliderAxis(settings, vec3_toJolt(axis));
-  joint->constraint = (JPH_Constraint*) JPH_SliderConstraintSettings_CreateConstraint(settings, parent, b->body);
-  JPH_ConstraintSettings_Destroy((JPH_ConstraintSettings*) settings);
+  JPH_SliderConstraintSettings settings;
+  JPH_SliderConstraintSettings_Init(&settings);
+  JPH_SliderConstraintSettings_SetSliderAxis(&settings, vec3_toJolt(axis));
+  settings.autoDetectPoint = true;
+  joint->constraint = (JPH_Constraint*) JPH_SliderConstraint_Create(&settings, parent, b->body);
   JPH_PhysicsSystem_AddConstraint(b->world->system, joint->constraint);
   lovrJointInit(joint, a, b);
   lovrRetain(joint);
@@ -2921,18 +2985,17 @@ SliderJoint* lovrSliderJointCreate(Collider* a, Collider* b, float axis[3]) {
 }
 
 void lovrSliderJointGetAxis(SliderJoint* joint, float axis[3]) {
-  JPH_Vec3 resultAxis;
-  JPH_SliderConstraintSettings* settings = (JPH_SliderConstraintSettings*) JPH_Constraint_GetConstraintSettings((JPH_Constraint*) joint->constraint);
-  JPH_SliderConstraintSettings_GetSliderAxis1(settings, &resultAxis);
+  JPH_SliderConstraintSettings settings;
+  JPH_SliderConstraint_GetSettings((JPH_SliderConstraint*) joint->constraint, &settings);
   JPH_Body* body1 = JPH_TwoBodyConstraint_GetBody1((JPH_TwoBodyConstraint*) joint->constraint);
   JPH_RMatrix4x4 centerOfMassTransform;
   JPH_Body_GetCenterOfMassTransform(body1, &centerOfMassTransform);
   JPH_Matrix4x4 constraintToBody;
   JPH_TwoBodyConstraint_GetConstraintToBody1Matrix((JPH_TwoBodyConstraint*) joint->constraint, &constraintToBody);
   float translation[4] = {
-    resultAxis.x,
-    resultAxis.y,
-    resultAxis.z,
+    settings.sliderAxis1.x,
+    settings.sliderAxis1.y,
+    settings.sliderAxis1.z,
     0.f
   };
   mat4_mulVec4(&centerOfMassTransform.m11, translation);

@@ -1,0 +1,2 @@
+- lovr audio now needs audio.update(dt)
+- fuck the vector update vro

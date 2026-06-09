@@ -129,12 +129,20 @@ local conf = {
         math = true,
         physics = true,
         system = true,
+        task = true,
         thread = true,
         timer = true,
     },
     audio = {
+        debug = false,
         start = true,
-        spatializer = nil,
+        reverb = {
+            type = "none",
+            rays = 4096,
+            bounces = 16,
+            duration = 2,
+            rate = 0.1,
+        },
     },
     graphics = {
         debug = false,
@@ -156,6 +164,7 @@ local conf = {
         submitdepth = true,
         overlay = false,
         controllerskeleton = "controller",
+        extensions = nil,
     },
     math = {
         globals = true,
@@ -341,14 +350,6 @@ function lovr.boot()
 
     lovr.filesystem.setIdentity(conf.identity, conf.saveprecedence)
 
-    if lovr.identitySet then
-        lovr.identitySet()
-        lovr.identitySet = nil
-    end
-    if lovr.conf then
-        lovr.conf = nil
-    end
-
     -- CLI gets a chance to use/modify conf and handle arguments
 
     if ok and cli then
@@ -366,6 +367,14 @@ function lovr.boot()
                 lovr[module] = result
             end
         end
+    end
+
+    if lovr.identitySet then
+        lovr.identitySet()
+        lovr.identitySet = nil
+    end
+    if lovr.conf then
+        lovr.conf = nil
     end
 
     if lovr.headset and conf.headset.connect then
@@ -705,10 +714,16 @@ lovr.handlers = setmetatable({}, { __index = lovr })
 return coroutine.create(function()
     local function onerror(...)
         onerror = function(...)
-            print("Error:\n\n" .. tostring(...) .. formatTraceback(debug and debug.traceback("", 1) or ""))
+            local traceback = debug and debug.traceback("", 1) or ""
+            traceback = traceback:gsub("\n[^\n]+$", ""):gsub("\t", ""):gsub("stack traceback:", "\nStack:\n")
+            print("Error:\n\n" .. tostring(...) .. traceback)
             return function()
                 return 1
             end
+        end
+
+        if not lovr.errhand and lovr.filesystem.isFile("errhand.lua") then
+            pcall(require, "errhand")
         end
 
         local ok, result = pcall(lovr.errhand or onerror, ...)

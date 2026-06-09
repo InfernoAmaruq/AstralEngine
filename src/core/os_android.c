@@ -183,7 +183,7 @@ void os_destroy(void) {
     state.onPermissionEvent = NULL;
     ANativeActivity_finish(state.app->activity);
     while (!state.app->destroyRequested) {
-      os_poll_events();
+      os_poll_events(0.);
     }
   }
   memset(&state, 0, sizeof(state));
@@ -302,11 +302,15 @@ void os_thread_detach(void) {
   (*state.app->activity->vm)->DetachCurrentThread(state.app->activity->vm);
 }
 
-void os_poll_events(void) {
+void os_thread_set_name(const char* name) {
+  //
+}
+
+void os_poll_events(double timeout) {
   if (!state.app->destroyRequested) {
     struct android_poll_source* source;
-    int timeout = (state.app->window && state.app->activityState == APP_CMD_RESUME) ? 0 : -1;
-    ALooper_pollOnce(timeout, NULL, NULL, (void**) &source);
+    int timeoutMS = (state.app->window && state.app->activityState == APP_CMD_RESUME) ? (int) (timeout * 1000.) : -1;
+    ALooper_pollOnce(timeoutMS, NULL, NULL, (void**) &source);
 
     if (source) {
       source->process(state.app, source);
@@ -370,6 +374,14 @@ bool os_window_is_visible(void) {
 
 bool os_window_is_focused(void) {
   return false;
+}
+
+bool os_window_is_fullscreen(void) {
+  return false;
+}
+
+void os_window_set_fullscreen(bool fullscreen) {
+  //
 }
 
 void os_window_get_size(uint32_t* width, uint32_t* height) {
@@ -438,13 +450,11 @@ void os_get_mouse_position(double* x, double* y) {
   *x = *y = 0.;
 }
 
-void os_set_mouse_mode(os_mouse_mode mode) {
-  //
-}
-
 os_mouse_mode os_get_mouse_mode(void){
     return MOUSE_MODE_NORMAL;
 }
+
+void os_set_mouse_mode(os_mouse_mode m){}
 
 bool os_is_mouse_down(os_mouse_button button) {
   return false;

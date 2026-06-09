@@ -4,21 +4,12 @@
 
 #pragma once
 
-#define BUFFER_SIZE 256
-#define MAX_SOURCES 64
-
+struct AudioStream;
+struct Blob;
 struct Sound;
 
 typedef struct Source Source;
-
-typedef enum {
-  EFFECT_ABSORPTION,
-  EFFECT_ATTENUATION,
-  EFFECT_OCCLUSION,
-  EFFECT_REVERB,
-  EFFECT_SPATIALIZATION,
-  EFFECT_TRANSMISSION
-} Effect;
+typedef struct AudioMesh AudioMesh;
 
 typedef enum {
   MATERIAL_GENERIC,
@@ -61,29 +52,52 @@ typedef enum {
   UNIT_DECIBELS
 } VolumeUnit;
 
+typedef enum {
+  REVERB_LISTENER,
+  REVERB_SOURCE
+} ReverbMode;
+
+typedef enum {
+  REVERB_NONE,
+  REVERB_CONVOLUTION,
+  REVERB_PARAMETRIC
+} ReverbType;
+
+typedef struct {
+  bool debug;
+  bool autostart;
+  uint32_t sampleRate;
+  struct {
+    ReverbType type;
+    uint32_t rays;
+    uint32_t bounces;
+    float duration;
+    float rate;
+  } reverb;
+} AudioConfig;
+
 typedef void AudioDeviceCallback(AudioDevice* device, void* userdata);
 
-bool lovrAudioInit(const char* spatializer, uint32_t sampleRate);
+bool lovrAudioInit(AudioConfig* config);
 void lovrAudioDestroy(void);
+uint32_t lovrAudioGetSampleRate(void);
 void lovrAudioEnumerateDevices(AudioType type, AudioDeviceCallback* callback, void* userdata);
 bool lovrAudioGetDevice(AudioType type, AudioDevice* device);
-bool lovrAudioSetDevice(AudioType type, void* id, size_t size, struct Sound* sink, AudioShareMode shareMode);
+bool lovrAudioSetDevice(AudioType type, void* id, size_t size, bool read, struct AudioStream* stream, AudioShareMode shareMode);
+struct AudioStream* lovrAudioGetStream(AudioType type);
 bool lovrAudioStart(AudioType type);
 bool lovrAudioStop(AudioType type);
 bool lovrAudioIsStarted(AudioType type);
+void lovrAudioUpdate(float dt);
 float lovrAudioGetVolume(VolumeUnit units);
 void lovrAudioSetVolume(float volume, VolumeUnit units);
 void lovrAudioGetPose(float position[3], float orientation[4]);
 void lovrAudioSetPose(float position[3], float orientation[4]);
-bool lovrAudioSetGeometry(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial material);
-const char* lovrAudioGetSpatializer(void);
-uint32_t lovrAudioGetSampleRate(void);
-void lovrAudioGetAbsorption(float absorption[3]);
-void lovrAudioSetAbsorption(float absorption[3]);
+bool lovrAudioSetHRTF(struct Blob* hrtf);
 
 // Source
 
-Source* lovrSourceCreate(struct Sound* sound, bool pitch, bool spatial, uint32_t effects);
+Source* lovrSourceCreate(struct Sound* sound, bool pitch, bool spatial);
 Source* lovrSourceClone(Source* source);
 void lovrSourceDestroy(void* ref);
 struct Sound* lovrSourceGetSound(Source* source);
@@ -100,13 +114,30 @@ void lovrSourceSetVolume(Source* source, float volume, VolumeUnit units);
 void lovrSourceSeek(Source* source, double time, TimeUnit units);
 double lovrSourceTell(Source* source, TimeUnit units);
 double lovrSourceGetDuration(Source* source, TimeUnit units);
-bool lovrSourceIsPitchable(Source* source);
-bool lovrSourceIsSpatial(Source* source);
 void lovrSourceGetPose(Source* source, float position[3], float orientation[4]);
 void lovrSourceSetPose(Source* source, float position[3], float orientation[4]);
 float lovrSourceGetRadius(Source* source);
 void lovrSourceSetRadius(Source* source, float radius);
-void lovrSourceGetDirectivity(Source* source, float* weight, float* power);
-void lovrSourceSetDirectivity(Source* source, float weight, float power);
-bool lovrSourceIsEffectEnabled(Source* source, Effect effect);
-bool lovrSourceSetEffectEnabled(Source* Source, Effect effect, bool enabled);
+bool lovrSourceIsSpatial(Source* source);
+void lovrSourceGetAbsorption(Source* source, float absorption[3]);
+void lovrSourceSetAbsorption(Source* source, float absorption[3]);
+void lovrSourceGetCone(Source* source, float* innerAngle, float* outerAngle, float* outerVolume);
+void lovrSourceSetCone(Source* source, float innerAngle, float outerAngle, float outerVolume);
+void lovrSourceGetFalloff(Source* source, float* innerDistance, float* minVolume);
+void lovrSourceSetFalloff(Source* source, float innerDistance, float minVolume);
+void lovrSourceGetOcclusion(Source* source, uint32_t* occlusionRays, uint32_t* transmissionRays);
+void lovrSourceSetOcclusion(Source* source, uint32_t occlusionRays, uint32_t transmissionRays);
+void lovrSourceGetReverb(Source* source, float* reverb, ReverbMode* mode);
+void lovrSourceSetReverb(Source* source, float volume, ReverbMode mode);
+float lovrSourceGetSpatialization(Source* source);
+void lovrSourceSetSpatialization(Source* source, float spatialization);
+
+// AudioMesh
+
+AudioMesh* lovrAudioMeshCreate(float* vertices, uint32_t* indices, uint32_t vertexCount, uint32_t indexCount, AudioMaterial* materials, AudioMaterial material);
+AudioMesh* lovrAudioMeshClone(AudioMesh* parent);
+void lovrAudioMeshDestroy(void* ref);
+bool lovrAudioMeshIsEnabled(AudioMesh* mesh);
+void lovrAudioMeshSetEnabled(AudioMesh* mesh, bool enable);
+void lovrAudioMeshGetTransform(AudioMesh* mesh, float* transform);
+void lovrAudioMeshSetTransform(AudioMesh* mesh, float* transform);

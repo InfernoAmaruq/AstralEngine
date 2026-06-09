@@ -8,6 +8,7 @@ struct Blob;
 struct Image;
 struct Rasterizer;
 struct ModelData;
+struct ModelMetadata;
 
 typedef struct Buffer Buffer;
 typedef struct Texture Texture;
@@ -17,6 +18,7 @@ typedef struct Material Material;
 typedef struct Font Font;
 typedef struct Mesh Mesh;
 typedef struct Model Model;
+typedef struct Raytracer Raytracer;
 typedef struct Readback Readback;
 typedef struct Pass Pass;
 
@@ -25,6 +27,7 @@ typedef struct {
   bool vsync;
   bool stencil;
   bool antialias;
+  bool hdr;
   void* cacheData;
   size_t cacheSize;
 } GraphicsConfig;
@@ -44,6 +47,7 @@ typedef struct {
   bool wireframe;
   bool depthClamp;
   bool depthResolve;
+  bool raytracing;
   bool indirectDrawFirstInstance;
   bool packedBuffers;
   bool float64;
@@ -84,6 +88,13 @@ typedef struct {
   float pointSize;
 } GraphicsLimits;
 
+typedef struct {
+  uint64_t bufferMemory;
+  uint64_t textureMemory;
+  uint64_t memoryBudget;
+  uint64_t memoryUsage;
+} GraphicsStats;
+
 enum {
   TEXTURE_FEATURE_SAMPLE  = (1 << 0),
   TEXTURE_FEATURE_RENDER  = (1 << 1),
@@ -98,8 +109,11 @@ bool lovrGraphicsIsInitialized(void);
 void lovrGraphicsGetDevice(GraphicsDevice* device);
 void lovrGraphicsGetFeatures(GraphicsFeatures* features);
 void lovrGraphicsGetLimits(GraphicsLimits* limits);
+void lovrGraphicsGetStats(GraphicsStats* stats);
 uint32_t lovrGraphicsGetFormatSupport(uint32_t format, uint32_t features);
 void lovrGraphicsGetShaderCache(void* data, size_t* size);
+
+bool lovrGraphicsIsHDR(void);
 
 void lovrGraphicsGetBackgroundColor(float background[4]);
 void lovrGraphicsSetBackgroundColor(float background[4]);
@@ -180,8 +194,8 @@ typedef struct {
 Buffer* lovrBufferCreate(const BufferInfo* info, void** data);
 void lovrBufferDestroy(void* ref);
 const BufferInfo* lovrBufferGetInfo(Buffer* buffer);
-void* lovrBufferGetData(Buffer* buffer, uint32_t offset, uint32_t extent);
 void* lovrBufferSetData(Buffer* buffer, uint32_t offset, uint32_t extent);
+void lovrBufferFlush(Buffer* buffer);
 bool lovrBufferCopy(Buffer* src, Buffer* dst, uint32_t srcOffset, uint32_t dstOffset, uint32_t extent);
 bool lovrBufferClear(Buffer* buffer, uint32_t offset, uint32_t extent, uint32_t value);
 
@@ -215,7 +229,7 @@ typedef struct {
   bool xr;
   uint32_t imageCount;
   struct Image** images;
-  const char* label;
+  char* label;
   uintptr_t handle;
 } TextureInfo;
 
@@ -238,7 +252,6 @@ Texture* lovrTextureCreate(const TextureInfo* info);
 Texture* lovrTextureCreateView(Texture* parent, const TextureViewInfo* info);
 void lovrTextureDestroy(void* ref);
 const TextureInfo* lovrTextureGetInfo(Texture* texture);
-struct Image* lovrTextureGetPixels(Texture* texture, uint32_t offset[4], uint32_t extent[3]);
 bool lovrTextureSetPixels(Texture* texture, struct Image* image, uint32_t texOffset[4], uint32_t imgOffset[4], uint32_t extent[3]);
 bool lovrTextureCopy(Texture* src, Texture* dst, uint32_t srcOffset[4], uint32_t dstOffset[4], uint32_t extent[3]);
 bool lovrTextureBlit(Texture* src, Texture* dst, uint32_t srcOffset[4], uint32_t dstOffset[4], uint32_t srcExtent[3], uint32_t dstExtent[3], FilterMode filter);
@@ -310,6 +323,7 @@ typedef enum {
 
 typedef struct {
   ShaderStage stage;
+  struct Blob* blob;
   const void* code;
   size_t size;
 } ShaderSource;
@@ -326,7 +340,7 @@ typedef struct {
   uint32_t stageCount;
   ShaderFlag* flags;
   uint32_t flagCount;
-  const char* label;
+  char* label;
   bool isDefault;
   bool raw;
 } ShaderInfo;
@@ -424,6 +438,13 @@ bool lovrFontGetVertices(Font* font, ColoredString* strings, uint32_t count, flo
 
 // Mesh
 
+enum {
+  RAYTRACER_DYNAMIC = (1 << 0),
+  RAYTRACER_FAST_TRACE = (1 << 1),
+  RAYTRACER_FAST_BUILD = (1 << 2),
+  RAYTRACER_COMPRESS = (1 << 3)
+};
+
 typedef enum {
   MESH_CPU,
   MESH_GPU
@@ -439,10 +460,12 @@ typedef struct {
   Buffer* vertexBuffer;
   DataField* vertexFormat;
   MeshStorage storage;
+  uint32_t raytracerFlags;
 } MeshInfo;
 
 Mesh* lovrMeshCreate(const MeshInfo* info, void** data);
 void lovrMeshDestroy(void* ref);
+MeshStorage lovrMeshGetStorage(Mesh* mesh);
 const DataField* lovrMeshGetVertexFormat(Mesh* mesh);
 Buffer* lovrMeshGetVertexBuffer(Mesh* mesh);
 Buffer* lovrMeshGetIndexBuffer(Mesh* mesh);
@@ -455,10 +478,13 @@ bool lovrMeshGetTriangles(Mesh* mesh, float** vertices, uint32_t** indices, uint
 bool lovrMeshGetBoundingBox(Mesh* mesh, float box[6]);
 void lovrMeshSetBoundingBox(Mesh* mesh, float box[6]);
 bool lovrMeshComputeBoundingBox(Mesh* mesh);
+bool lovrMeshBuildRaytracer(Mesh* mesh);
 DrawMode lovrMeshGetDrawMode(Mesh* mesh);
 void lovrMeshSetDrawMode(Mesh* mesh, DrawMode mode);
-void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count, uint32_t* offset);
-bool lovrMeshSetDrawRange(Mesh* mesh, uint32_t start, uint32_t count, uint32_t offset);
+void lovrMeshGetDrawRange(Mesh* mesh, uint32_t* start, uint32_t* count);
+bool lovrMeshSetDrawRange(Mesh* mesh, uint32_t start, uint32_t count);
+uint32_t lovrMeshGetBaseVertex(Mesh* mesh);
+void lovrMeshSetBaseVertex(Mesh* mesh, uint32_t base);
 Material* lovrMeshGetMaterial(Mesh* mesh);
 void lovrMeshSetMaterial(Mesh* mesh, Material* material);
 
@@ -468,6 +494,7 @@ typedef struct {
   struct ModelData* data;
   bool materials;
   bool mipmaps;
+  uint32_t raytracerFlags;
 } ModelInfo;
 
 typedef enum {
@@ -478,28 +505,48 @@ typedef enum {
 Model* lovrModelCreate(const ModelInfo* info);
 Model* lovrModelClone(Model* model);
 void lovrModelDestroy(void* ref);
-const ModelInfo* lovrModelGetInfo(Model* model);
+bool lovrModelAnimationCollapse(Model* model);
+struct ModelMetadata* lovrModelGetMetadata(Model* model);
 void lovrModelResetNodeTransforms(Model* model);
 void lovrModelResetBlendShapes(Model* model);
-bool lovrModelAnimationCollapse(Model* model);
 bool lovrModelAnimate(Model* model, uint32_t animationIndex, float time, float alpha);
 float lovrModelGetBlendShapeWeight(Model* model, uint32_t index);
 void lovrModelSetBlendShapeWeight(Model* model, uint32_t index, float weight);
 void lovrModelGetNodeTransform(Model* model, uint32_t node, float* position, float* scale, float* rotation, OriginType origin);
 void lovrModelSetNodeTransform(Model* model, uint32_t node, float* position, float* scale, float* rotation, float alpha);
+bool lovrModelIsNodeVisible(Model* model, uint32_t node);
+void lovrModelSetNodeVisible(Model* model, uint32_t node, bool visible);
 Buffer* lovrModelGetVertexBuffer(Model* model);
 Buffer* lovrModelGetIndexBuffer(Model* model);
 Mesh* lovrModelGetMesh(Model* model, uint32_t index);
 Texture* lovrModelGetTexture(Model* model, uint32_t index);
 Material* lovrModelGetMaterial(Model* model, uint32_t index);
+bool lovrModelBuildRaytracer(Model* model);
+
+// Raytracer
+
+typedef struct {
+  uint32_t capacity;
+  uint32_t flags;
+} RaytracerInfo;
+
+Raytracer* lovrRaytracerCreate(const RaytracerInfo* info);
+void lovrRaytracerDestroy(void* ref);
+uint32_t lovrRaytracerGetCapacity(Raytracer* raytracer);
+uint32_t lovrRaytracerGetCount(Raytracer* raytracer);
+void lovrRaytracerClear(Raytracer* raytracer);
+bool lovrRaytracerAddMesh(Raytracer* raytracer, Mesh* mesh, float transform[16], uint32_t layers, uint32_t tag, uint32_t* id);
+bool lovrRaytracerAddModel(Raytracer* raytracer, Model* model, float transform[16], uint32_t layers, uint32_t tag, uint32_t* id);
+bool lovrRaytracerSet(Raytracer* raytracer, uint32_t id, float transform[16], uint32_t layers, uint32_t tag);
+bool lovrRaytracerBuild(Raytracer* raytracer);
 
 // Readback
 
 Readback* lovrReadbackCreateBuffer(Buffer* buffer, uint32_t offset, uint32_t extent);
 Readback* lovrReadbackCreateTexture(Texture* texture, uint32_t offset[4], uint32_t extent[3]);
 void lovrReadbackDestroy(void* ref);
-bool lovrReadbackIsComplete(Readback* readback);
-bool lovrReadbackWait(Readback* readback, bool* waited);
+bool lovrReadbackPoll(Readback* readback);
+bool lovrReadbackWait(Readback* readback);
 void* lovrReadbackGetData(Readback* readback, DataField** format, uint32_t* count);
 struct Blob* lovrReadbackGetBlob(Readback* readback);
 struct Image* lovrReadbackGetImage(Readback* readback);
@@ -525,7 +572,22 @@ typedef enum {
 typedef struct {
   Texture* texture;
   Texture* resolve;
-} CanvasTexture;
+} Attachment;
+
+typedef struct {
+  Attachment color[4];
+  Attachment depth;
+  Texture* foveation;
+  uint32_t depthFormat;
+  uint32_t samples;
+} Canvas;
+
+typedef enum {
+  PROJECTION_MATRIX,
+  PROJECTION_ORTHOGRAPHIC,
+  PROJECTION_PERSPECTIVE,
+  PROJECTION_ASYMMETRIC
+} ProjectionType;
 
 typedef enum {
   STACK_TRANSFORM,
@@ -547,6 +609,34 @@ typedef enum {
   BLEND_SCREEN,
   BLEND_NONE
 } BlendMode;
+
+typedef enum {
+  BLEND_OP_ADD,
+  BLEND_OP_SUBTRACT,
+  BLEND_OP_REVERSE_SUBTRACT,
+  BLEND_OP_MIN,
+  BLEND_OP_MAX
+} BlendOp;
+
+typedef enum {
+  BLEND_FACTOR_ZERO,
+  BLEND_FACTOR_ONE,
+  BLEND_FACTOR_SRC_COLOR,
+  BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+  BLEND_FACTOR_SRC_ALPHA,
+  BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+  BLEND_FACTOR_DST_COLOR,
+  BLEND_FACTOR_ONE_MINUS_DST_COLOR,
+  BLEND_FACTOR_DST_ALPHA,
+  BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
+  BLEND_FACTOR_SRC_ALPHA_SATURATED
+} BlendFactor;
+
+typedef struct {
+  BlendOp op;
+  BlendFactor src;
+  BlendFactor dst;
+} BlendState;
 
 typedef enum {
   CULL_NONE,
@@ -582,8 +672,8 @@ void lovrPassReset(Pass* pass);
 const PassStats* lovrPassGetStats(Pass* pass);
 const char* lovrPassGetLabel(Pass* pass);
 
-void lovrPassGetCanvas(Pass* pass, CanvasTexture color[4], CanvasTexture* depth, uint32_t* depthFormat, Texture** foveation, uint32_t* samples);
-bool lovrPassSetCanvas(Pass* pass, CanvasTexture color[4], CanvasTexture* depth, uint32_t depthFormat, Texture* foveation, uint32_t samples);
+void lovrPassGetCanvas(Pass* pass, Canvas* canvas);
+bool lovrPassSetCanvas(Pass* pass, Canvas* canvas);
 void lovrPassGetClear(Pass* pass, LoadAction loads[4], float clears[4][4], LoadAction* depthLoad, float* depthClear);
 bool lovrPassSetClear(Pass* pass, LoadAction loads[4], float clears[4][4], LoadAction depthLoad, float depthClear);
 uint32_t lovrPassGetAttachmentCount(Pass* pass, bool* depth);
@@ -595,6 +685,7 @@ bool lovrPassGetViewMatrix(Pass* pass, uint32_t index, float viewMatrix[16]);
 bool lovrPassSetViewMatrix(Pass* pass, uint32_t index, float viewMatrix[16]);
 bool lovrPassGetProjection(Pass* pass, uint32_t index, float projection[16]);
 bool lovrPassSetProjection(Pass* pass, uint32_t index, float projection[16]);
+bool lovrPassGetViewRay(Pass* pass, uint32_t view, uint32_t x, uint32_t y, float position[3], float direction[3]);
 
 bool lovrPassPush(Pass* pass, StackType stack);
 bool lovrPassPop(Pass* pass, StackType stack);
@@ -606,6 +697,7 @@ void lovrPassTransform(Pass* pass, float* transform);
 
 void lovrPassSetAlphaToCoverage(Pass* pass, bool enabled);
 void lovrPassSetBlendMode(Pass* pass, uint32_t index, BlendMode mode, BlendAlphaMode alphaMode);
+void lovrPassSetBlendState(Pass* pass, uint32_t index, bool enable, BlendState color, BlendState alpha);
 void lovrPassSetColor(Pass* pass, float color[4]);
 void lovrPassSetColorWrite(Pass* pass, uint32_t index, bool r, bool g, bool b, bool a);
 void lovrPassSetDepthTest(Pass* pass, CompareMode test);
@@ -617,7 +709,7 @@ void lovrPassSetFont(Pass* pass, Font* font);
 void lovrPassSetMaterial(Pass* pass, Material* material);
 void lovrPassSetMeshMode(Pass* pass, DrawMode mode);
 void lovrPassSetSampler(Pass* pass, Sampler* sampler);
-void lovrPassSetScissor(Pass* pass, uint32_t scissor[4]);
+bool lovrPassSetScissor(Pass* pass, uint32_t scissor[4]);
 void lovrPassSetShader(Pass* pass, Shader* shader);
 bool lovrPassSetStencilTest(Pass* pass, CompareMode test, uint8_t value, uint8_t mask);
 bool lovrPassSetStencilWrite(Pass* pass, StencilAction actions[3], uint8_t value, uint8_t mask);
@@ -629,6 +721,7 @@ void lovrPassSetWireframe(Pass* pass, bool wireframe);
 bool lovrPassSendBuffer(Pass* pass, const char* name, size_t length, Buffer* buffer, uint32_t offset, uint32_t extent);
 bool lovrPassSendTexture(Pass* pass, const char* name, size_t length, Texture* texture);
 bool lovrPassSendSampler(Pass* pass, const char* name, size_t length, Sampler* sampler);
+bool lovrPassSendRaytracer(Pass* pass, const char* name, size_t length, Raytracer* raytracer);
 bool lovrPassSendData(Pass* pass, const char* name, size_t length, void** data, DataField** format);
 
 bool lovrPassPoints(Pass* pass, uint32_t count, float** vertices);
@@ -648,6 +741,7 @@ bool lovrPassSkybox(Pass* pass, Texture* texture);
 bool lovrPassFill(Pass* pass, Texture* texture);
 bool lovrPassMonkey(Pass* pass, float* transform);
 bool lovrPassDrawModel(Pass* pass, Model* model, float* transform, uint32_t instances);
+bool lovrPassDrawPart(Pass* pass, Model* model, uint32_t mesh, uint32_t part, float* transform, uint32_t instances);
 bool lovrPassDrawMesh(Pass* pass, Mesh* mesh, float* transform, uint32_t instances);
 bool lovrPassDrawTexture(Pass* pass, Texture* texture, float* transform);
 bool lovrPassMesh(Pass* pass, Buffer* vertices, Buffer* indices, float* transform, uint32_t start, uint32_t count, uint32_t instances, uint32_t baseVertex);

@@ -1,10 +1,14 @@
 #include <stdbool.h>
 #include <stdint.h>
-#include <sys/types.h>
 
 #pragma once
 
 struct os_window_config;
+
+typedef enum {
+  MOUSE_NORMAL,
+  MOUSE_RELATIVE
+} MouseMode;
 
 typedef enum {
   PERMISSION_AUDIO_CAPTURE
@@ -20,9 +24,11 @@ bool lovrSystemOpenWindow(struct os_window_config* config);
 bool lovrSystemIsWindowOpen(void);
 bool lovrSystemIsWindowVisible(void);
 bool lovrSystemIsWindowFocused(void);
+bool lovrSystemIsWindowFullscreen(void);
+void lovrSystemSetWindowFullscreen(bool fullscreen);
 void lovrSystemGetWindowSize(uint32_t* width, uint32_t* height);
 float lovrSystemGetWindowDensity(void);
-void lovrSystemPollEvents(void);
+void lovrSystemPollEvents(double timeout);
 bool lovrSystemIsKeyDown(int keycode);
 bool lovrSystemWasKeyPressed(int keycode);
 bool lovrSystemWasKeyReleased(int keycode);

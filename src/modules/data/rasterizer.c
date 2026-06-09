@@ -5,6 +5,7 @@
 #include "VarelaRound.ttf.h"
 #include "lib/stb/stb_truetype.h"
 #include <msdfgen-c.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -21,7 +22,7 @@ typedef struct {
 } Glyph;
 
 struct Rasterizer {
-  uint32_t ref;
+  atomic_uint ref;
   RasterizerType type;
   float size;
   float scale;

@@ -161,6 +161,10 @@ static int l_lovrSystemOpenWindow(lua_State* L) {
   window.height = luaL_optinteger(L, -1, 800);
   lua_pop(L, 1);
 
+  lua_getfield(L, 1, "centered");
+  window.centered = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+
   lua_getfield(L, 1, "fullscreen");
   window.fullscreen = lua_toboolean(L, -1);
   lua_pop(L, 1);
@@ -182,6 +186,13 @@ static int l_lovrSystemOpenWindow(lua_State* L) {
     window.icon.height = lovrImageGetHeight(image, 0);
   }
   lua_pop(L, 1);
+
+  // Deprecated method for setting fullscreen
+  if (window.width == 0 || window.height == 0) {
+    window.fullscreen = true;
+    window.width = 720;
+    window.height = 800;
+  }
 
   bool success = lovrSystemOpenWindow(&window);
   lovrRelease(image, lovrImageDestroy);
@@ -205,6 +216,18 @@ static int l_lovrSystemIsWindowFocused(lua_State* L) {
   bool focused = lovrSystemIsWindowFocused();
   lua_pushboolean(L, focused);
   return 1;
+}
+
+static int l_lovrSystemIsWindowFullscreen(lua_State* L) {
+  bool fullscreen = lovrSystemIsWindowFullscreen();
+  lua_pushboolean(L, fullscreen);
+  return 1;
+}
+
+static int l_lovrSystemSetWindowFullscreen(lua_State* L) {
+  bool fullscreen = lua_toboolean(L, 1);
+  lovrSystemSetWindowFullscreen(fullscreen);
+  return 0;
 }
 
 static int l_lovrSystemGetWindowWidth(lua_State* L) {
@@ -235,7 +258,8 @@ static int l_lovrSystemGetWindowDensity(lua_State* L) {
 }
 
 static int l_lovrSystemPollEvents(lua_State* L) {
-  lovrSystemPollEvents();
+  double timeout = luaL_optnumber(L, 1, 0.);
+  lovrSystemPollEvents(timeout);
   return 0;
 }
 
@@ -312,21 +336,21 @@ static int l_lovrSystemGetMousePosition(lua_State* L) {
 }
 
 static int l_lovrSystemIsMouseDown(lua_State* L) {
-  int button = luaL_checkint(L, 1) - 1;
+  int button = luaL_checkinteger(L, 1) - 1;
   bool down = lovrSystemIsMouseDown(button);
   lua_pushboolean(L, down);
   return 1;
 }
 
 static int l_lovrSystemWasMousePressed(lua_State* L) {
-  int button = luaL_checkint(L, 1) - 1;
+  int button = luaL_checkinteger(L, 1) - 1;
   bool pressed = lovrSystemWasMousePressed(button);
   lua_pushboolean(L, pressed);
   return 1;
 }
 
 static int l_lovrSystemWasMouseReleased(lua_State* L) {
-  int button = luaL_checkint(L, 1) - 1;
+  int button = luaL_checkinteger(L, 1) - 1;
   bool released = lovrSystemWasMouseReleased(button);
   lua_pushboolean(L, released);
   return 1;
@@ -396,6 +420,8 @@ static const luaL_Reg lovrSystem[] = {
   { "isWindowOpen", l_lovrSystemIsWindowOpen },
   { "isWindowVisible", l_lovrSystemIsWindowVisible },
   { "isWindowFocused", l_lovrSystemIsWindowFocused },
+  { "isWindowFullscreen", l_lovrSystemIsWindowFullscreen },
+  { "setWindowFullscreen", l_lovrSystemSetWindowFullscreen },
   { "getWindowWidth", l_lovrSystemGetWindowWidth },
   { "getWindowHeight", l_lovrSystemGetWindowHeight },
   { "getWindowDimensions", l_lovrSystemGetWindowDimensions },

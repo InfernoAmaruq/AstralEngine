@@ -580,6 +580,7 @@ static int l_lovrWorldSetCallbacks(lua_State* L) {
     .exit = exit ? newExitCallback : NULL,
     .contact = contact ? contactCallback : NULL,
     .userdata = mainThread ? mainThread : L
+
   });
 
   return 0;

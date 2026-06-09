@@ -19,7 +19,7 @@ static int l_lovrShaderClone(lua_State* L) {
       case LUA_TNUMBER: flag.id = lua_tointeger(L, -2); break;
       default:
         arr_free(&flags);
-        luaL_error(L, "Unexpected ShaderFlag key type (%s)", lua_typename(L, lua_type(L, -2)));
+        return luaL_error(L, "Unexpected ShaderFlag key type (%s)", lua_typename(L, lua_type(L, -2)));
     }
     arr_push(&flags, flag);
     lua_pop(L, 1);
@@ -27,7 +27,7 @@ static int l_lovrShaderClone(lua_State* L) {
 
   if (flags.length >= 1000) {
     arr_free(&flags);
-    luaL_error(L, "Too many Shader flags");
+    return luaL_error(L, "Too many Shader flags");
   }
 
   Shader* clone = lovrShaderClone(shader, flags.data, (uint32_t) flags.length);

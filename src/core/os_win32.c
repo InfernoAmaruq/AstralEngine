@@ -8,6 +8,7 @@
 #include <knownfolders.h>
 #include <dwmapi.h>
 #include <shlobj.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -38,8 +39,6 @@ static struct {
   fn_mouse_move* onMouseMove;
   fn_mouse_move* onWheelMove;
   WCHAR surrogate;
-  bool keyDown[OS_KEY_COUNT];
-  bool mouseDown[3];
   uint8_t captureMask;
   double mouseX;
   double mouseY;
@@ -98,7 +97,11 @@ bool os_init(void) {
 }
 
 void os_destroy(void) {
+#ifdef LOVR_USE_GLFW
+  glfwTerminate();
+#else
   if (state.window) DestroyWindow(state.window);
+#endif
   os_thread_detach();
   memset(&state, 0, sizeof(state));
 }
@@ -193,6 +196,14 @@ void os_thread_detach(void) {
     CloseHandle(timer);
     createdTimer = false;
   }
+}
+
+void os_thread_set_name(const char* name) {
+  WCHAR wname[256];
+  if (!MultiByteToWideChar(CP_UTF8, 0, name, -1, wname, sizeof(wname) / sizeof(wname[0]))) {
+    return;
+  }
+  SetThreadDescription(GetCurrentThread(), wname);
 }
 
 #ifndef LOVR_USE_GLFW
@@ -308,8 +319,6 @@ static void mousePressed(uint8_t button) {
   if (state.captureMask == 0) SetCapture(state.window);
   state.captureMask |= (1 << button);
 
-  state.mouseDown[button] = true;
-
   if (state.onMouseButton) {
     state.onMouseButton(button, true);
   }
@@ -318,8 +327,6 @@ static void mousePressed(uint8_t button) {
 static void mouseReleased(uint8_t button) {
   state.captureMask &= ~(1 << button);
   if (state.captureMask == 0) ReleaseCapture();
-
-  state.mouseDown[button] = false;
 
   if (state.onMouseButton) {
     state.onMouseButton(button, false);
@@ -336,7 +343,6 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM param, LPAR
       state.focused = true;
       break;
     case WM_KILLFOCUS:
-      memset(state.mouseDown, false, sizeof(state.mouseDown));
       os_set_mouse_mode(MOUSE_MODE_NORMAL);
       if (state.onFocus) state.onFocus(false);
       state.focused = false;
@@ -377,9 +383,8 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM param, LPAR
       if (key != OS_KEY_COUNT) {
         bool pressed = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
         os_button_action action = pressed ? BUTTON_PRESSED : BUTTON_RELEASED;
-        bool repeat = !!(HIWORD(lparam) & KF_REPEAT);
+        bool repeat = pressed && !!(HIWORD(lparam) & KF_REPEAT);
 
-        state.keyDown[key] = pressed;
         if (state.onKey) state.onKey(action, key, scancode, repeat);
       }
       break;
@@ -452,7 +457,13 @@ static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM param, LPAR
   return DefWindowProcW(window, message, param, lparam);
 }
 
-void os_poll_events() {
+void os_poll_events(double timeout) {
+  if (timeout < 0. || isinf(timeout)) {
+    WaitMessage();
+  } else if (timeout > 0.) {
+    MsgWaitForMultipleObjects(0, NULL, false, (DWORD) (timeout * 1e3), QS_ALLINPUT);
+  }
+
   MSG message;
   while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
     TranslateMessage(&message);
@@ -520,34 +531,48 @@ bool os_window_open(const os_window_config* config) {
   }
 
   DWORD style = WS_VISIBLE;
-  uint32_t width, height;
+  int x, y, w, h;
 
-  if (config->width == 0 && config->height == 0) {
+  if ((config->width == 0 && config->height == 0) || config->fullscreen) {
     style |= WS_POPUP;
-    width = GetSystemMetrics(SM_CXSCREEN);
-    height = GetSystemMetrics(SM_CYSCREEN);
+    x = CW_USEDEFAULT;
+    y = CW_USEDEFAULT;
+    w = state.width = GetSystemMetrics(SM_CXSCREEN);
+    h = state.height = GetSystemMetrics(SM_CYSCREEN);
   } else {
     style |= WS_OVERLAPPEDWINDOW;
-    width = config->width;
-    height = config->height;
 
     if (!config->resizable) {
       style &= ~WS_THICKFRAME;
     }
+
+    state.width = config->width;
+    state.height = config->height;
+
+    RECT rect = { 0, 0, config->width, config->height };
+    AdjustWindowRect(&rect, style, FALSE);
+
+    w = rect.right - rect.left;
+    h = rect.bottom - rect.top;
+
+    if (config->centered) {
+      POINT zero = { 0, 0 };
+      HMONITOR monitor = MonitorFromPoint(zero, MONITOR_DEFAULTTOPRIMARY);
+      MONITORINFO info = { .cbSize = sizeof(MONITORINFO) };
+      GetMonitorInfo(monitor, &info);
+      x = info.rcWork.left + (info.rcWork.right - info.rcWork.left - w) / 2;
+      y = info.rcWork.top + (info.rcWork.bottom - info.rcWork.top - h) / 2;
+    } else {
+      x = CW_USEDEFAULT;
+      y = CW_USEDEFAULT;
+    }
   }
 
-  RECT rect = { 0, 0, width, height };
-  AdjustWindowRect(&rect, style, FALSE);
-
-  state.window = CreateWindowW(wc.lpszClassName, wtitle, style,
-      CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top,
-      NULL, NULL, state.instance, NULL);
+  state.window = CreateWindowW(wc.lpszClassName, wtitle, style, x, y, w, h, NULL, NULL, state.instance, NULL);
 
   BOOL darkMode = true;
   DwmSetWindowAttribute(state.window, 20, &darkMode, sizeof(darkMode));
 
-  state.width = width;
-  state.height = height;
   state.cursor = LoadCursor(NULL, IDC_ARROW);
 
   return !!state.window;
@@ -606,14 +631,6 @@ void os_set_mouse_mode(os_mouse_mode mode) {
   }
 
   state.mouseMode = mode;
-}
-
-bool os_is_mouse_down(os_mouse_button button) {
-  return state.mouseDown[button];
-}
-
-bool os_is_key_down(os_key key) {
-  return state.keyDown[key];
 }
 
 uintptr_t os_get_win32_instance(void) {

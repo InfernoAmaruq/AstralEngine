@@ -47,7 +47,7 @@ typedef struct {
 } Handle;
 
 struct Archive {
-  uint32_t ref;
+  atomic_uint ref;
   struct Archive* next;
   bool (*open)(Archive* archive, const char* path, Handle* handle);
   bool (*close)(Archive* archive, Handle* handle);
@@ -67,15 +67,16 @@ struct Archive {
 };
 
 struct File {
-  uint32_t ref;
+  atomic_uint ref;
   OpenMode mode;
   Handle handle;
   Archive* archive;
   char* path;
 };
 
+static atomic_uint ref;
+
 static struct {
-  uint32_t ref;
   Archive* archives;
   size_t savePathLength;
   char savePath[1024];
@@ -159,9 +160,13 @@ static bool sanitize(const char* path, char* buffer, size_t* length) {
 }
 
 bool lovrFilesystemInit(void) {
-  if (atomic_fetch_add(&state.ref, 1)) return true;
+  if (!lovrModuleAcquire(&ref)) return true;
 
+#ifdef LOVR_USE_LUAU
+  lovrFilesystemSetRequirePath("?.luau;?/init.luau;?.lua;?/init.lua");
+#else
   lovrFilesystemSetRequirePath("?.lua;?/init.lua");
+#endif
 
   // On Android, the save directory is mounted early, because the identity is fixed to the package
   // name and it is convenient to be able to load main.lua and conf.lua from the save directory,
@@ -185,11 +190,12 @@ bool lovrFilesystemInit(void) {
   }
 #endif
 
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrFilesystemDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) return;
+  if (!lovrModuleRelease(&ref)) return;
   Archive* archive = state.archives;
   while (archive) {
     Archive* next = archive->next;
@@ -199,6 +205,7 @@ void lovrFilesystemDestroy(void) {
   lovrFilesystemUnwatch();
   lovrFree(state.requirePath);
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
 
 bool lovrFilesystemSetSource(const char* source) {
@@ -474,15 +481,15 @@ bool lovrFilesystemSetIdentity(const char* identity, bool precedence) {
 
   bool fused = lovrFilesystemIsFused();
 
-  // Make sure there is enough room to tack on /ASTR/<identity>
-  if (cursor + (fused ? 0 : 1 + strlen("ASTR")) + 1 + length >= sizeof(state.savePath)) {
+  // Make sure there is enough room to tack on /LOVR/<identity>
+  if (cursor + (fused ? 0 : 1 + strlen("LOVR")) + 1 + length >= sizeof(state.savePath)) {
     return lovrSetError("Identity path is too long");
   }
 
   if (!fused) {
     state.savePath[cursor++] = SLASH;
-    memcpy(state.savePath + cursor, "ASTR", strlen("ASTR"));
-    cursor += strlen("ASTR");
+    memcpy(state.savePath + cursor, "LOVR", strlen("LOVR"));
+    cursor += strlen("LOVR");
   }
 
   // Append /<identity>
@@ -602,10 +609,8 @@ const char* lovrFilesystemGetRequirePath(void) {
 }
 
 void lovrFilesystemSetRequirePath(const char* requirePath) {
-  size_t length = strlen(requirePath);
   lovrFree(state.requirePath);
-  state.requirePath = lovrMalloc(length + 1);
-  memcpy(state.requirePath, requirePath, length + 1);
+  state.requirePath = lovrStrdup(requirePath);
 }
 
 // Archive: dir
@@ -817,11 +822,13 @@ static bool zip_init(Archive* archive, const char* filename, const char* root) {
         arr_push(&archive->nodes, node);
         node.firstChild = index;
       } else {
-        uint32_t childIndex = node.firstChild;
-        zip_node* parent = &archive->nodes.data[index];
-        zip_node* child = &archive->nodes.data[childIndex];
-        child->nextSibling = parent->firstChild;
-        parent->firstChild = childIndex;
+        if (node.firstChild != ~0u) {
+          uint32_t childIndex = node.firstChild;
+          zip_node* parent = &archive->nodes.data[index];
+          zip_node* child = &archive->nodes.data[childIndex];
+          child->nextSibling = parent->firstChild;
+          parent->firstChild = childIndex;
+        }
         break;
       }
 
@@ -1100,10 +1107,7 @@ File* lovrFileCreate(const char* p, OpenMode mode) {
 
   if (mode == OPEN_READ) {
     FOREACH_ARCHIVE(a) {
-      if (archiveContains(a, path, length)) {
-        if (!a->open(a, path, &handle)) {
-          return NULL;
-        }
+      if (archiveContains(a, path, length) && a->open(a, path, &handle)) {
         archive = a;
         break;
       }
@@ -1126,8 +1130,7 @@ File* lovrFileCreate(const char* p, OpenMode mode) {
   file->mode = mode;
   file->handle = handle;
   file->archive = archive;
-  file->path = lovrMalloc(length + 1);
-  memcpy(file->path, path, length + 1);
+  file->path = lovrStrdup(path);
   lovrRetain(archive);
   return file;
 }

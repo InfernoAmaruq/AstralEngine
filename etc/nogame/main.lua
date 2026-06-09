@@ -1,6 +1,6 @@
 function lovr.load()
     if not lovr.graphics then
-        print(string.format("Astral Engine %d.%d.%d\nNo game", lovr.getVersion()))
+        print(string.format("LÖVR %d.%d.%d\nNo game", lovr.getVersion()))
         lovr.event.quit()
         return
     end
@@ -9,7 +9,7 @@ function lovr.load()
         lovr.graphics.setBackgroundColor(0x20232c)
     end
 
-    logo = lovr.graphics.newTexture("AstralIcon.png")
+    logo = lovr.graphics.newShader("unlit", "logo.spv")
 end
 
 function lovr.draw(pass)
@@ -19,25 +19,15 @@ function lovr.draw(pass)
     local titlePosition = 1.5 - padding
     local subtitlePosition = titlePosition - font:getHeight() * 0.25 - padding
 
-    pass:draw(logo,0,2,-3)
+    pass:setFaceCull(true)
+    pass:setShader(logo)
+    pass:plane(0, 2, -3)
+    pass:setShader()
 
-    pass:text("ASTRAL", -0.012, titlePosition, -3, 0.25, quat(0, 0, 1, 0), nil, "center", "top")
+    pass:text("LÖVR", -0.012, titlePosition, -3, 0.25, nil, nil, "center", "top")
 
     pass:setColor(0.9, 0.9, 0.9, fade)
-    pass:text(
-        "In the beginning... there was nothing",
-        -0.005,
-        subtitlePosition,
-        -3,
-        0.15,
-        0,
-        0,
-        1,
-        0,
-        nil,
-        "center",
-        "top"
-    )
+    pass:text("No game :(", -0.005, subtitlePosition, -3, 0.15, 0, 0, 1, 0, nil, "center", "top")
 end
 
 function lovr.keypressed(key)

@@ -1,9 +1,9 @@
 #include "data/modelData.h"
 #include "data/blob.h"
 #include "data/image.h"
-#include "core/maf.h"
 #include "util.h"
 #include <stdlib.h>
+#include <string.h>
 #include <float.h>
 
 typedef struct {
@@ -23,6 +23,13 @@ static uint32_t nomu32(char* s, char** end) {
   while (*s >= '0' && *s <= '9') { n = 10 * n + (*s++ - '0'); }
   *end = s;
   return n;
+}
+
+uint32_t packNormal(float* v) {
+  return
+    ((((uint32_t) (int32_t) (v[0] * 511.f)) & 0x3ff) <<  0) |
+    ((((uint32_t) (int32_t) (v[1] * 511.f)) & 0x3ff) << 10) |
+    ((((uint32_t) (int32_t) (v[2] * 511.f)) & 0x3ff) << 20);
 }
 
 static bool parseMtl(char* path, char* base, ModelDataIO* io, arr_image_t* images, arr_material_t* materials, map_t* names) {
@@ -54,7 +61,7 @@ static bool parseMtl(char* path, char* base, ModelDataIO* io, arr_image_t* image
         .color = { 1.f, 1.f, 1.f, 1.f },
         .glow = { 0.f, 0.f, 0.f, 1.f },
         .uvShift = { 0.f, 1.f },
-        .uvScale = { 1.f, -1.f },
+        .uvScale = { 1.f, 1.f },
         .metalness = 1.f,
         .roughness = 1.f,
         .clearcoat = 0.f,
@@ -155,8 +162,8 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
   arr_group_t groups;
   arr_image_t images;
   arr_material_t materials;
-  arr_t(float) vertexBlob;
-  arr_t(int) indexBlob;
+  arr_t(ModelVertex) vertices;
+  arr_t(int) indices;
   map_t materialMap;
   map_t vertexMap;
   arr_t(float) positions;
@@ -167,8 +174,8 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
   arr_init(&images);
   arr_init(&materials);
   map_init(&materialMap, 0);
-  arr_init(&vertexBlob);
-  arr_init(&indexBlob);
+  arr_init(&vertices);
+  arr_init(&indices);
   map_init(&vertexMap, 0);
   arr_init(&positions);
   arr_init(&normals);
@@ -207,7 +214,7 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
       float vt[2];
       char* s = line + 3;
       vt[0] = strtof(s, &s);
-      vt[1] = strtof(s, &s);
+      vt[1] = 1.0f - strtof(s, &s);
       arr_append(&uvs, vt, 2);
     } else if (line[0] == 'f' && line[1] == ' ') {
       char* s = line + 2;
@@ -228,8 +235,8 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
 
         // Triangulate faces (triangle fan)
         if (i >= 3) {
-          arr_push(&indexBlob, indexBlob.data[indexBlob.length - (3 * (i - 2))]);
-          arr_push(&indexBlob, indexBlob.data[indexBlob.length - 2]);
+          arr_push(&indices, indices.data[indices.length - (3 * (i - 2))]);
+          arr_push(&indices, indices.data[indices.length - 2]);
           group->count += 2;
         }
 
@@ -237,7 +244,7 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
         uint64_t hash = hash64(s, t - s);
         uint64_t index = map_get(&vertexMap, hash);
         if (index != MAP_NIL) {
-          arr_push(&indexBlob, index);
+          arr_push(&indices, index);
           group->count++;
           s = t;
           continue;
@@ -262,11 +269,25 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
         }
 
         float empty[3] = { 0.f };
-        arr_push(&indexBlob, (int) vertexBlob.length / 8);
-        map_set(&vertexMap, hash, vertexBlob.length / 8);
-        arr_append(&vertexBlob, positions.data + 3 * (v - 1), 3);
-        arr_append(&vertexBlob, vn > 0 ? (normals.data + 3 * (vn - 1)) : empty, 3);
-        arr_append(&vertexBlob, vt > 0 ? (uvs.data + 2 * (vt - 1)) : empty, 2);
+        arr_push(&indices, (int) vertices.length);
+        map_set(&vertexMap, hash, vertices.length);
+
+        float* position = &positions.data[3 * (v - 1)];
+        float* normal = vn > 0 ? &normals.data[3 * (vn - 1)] : empty;
+        float* uv = vt > 0 ? &uvs.data[2 * (vt - 1)] : empty;
+
+        ModelVertex vertex = {
+          .position = { position[0], position[1], position[2] },
+#ifdef LOVR_WEBPU
+          .normal = { normal[0], normal[1], normal[2] },
+#else
+          .normal = packNormal(normal),
+#endif
+          .uv = { uv[0], uv[1] },
+          .color = { 0xff, 0xff, 0xff, 0xff }
+        };
+
+        arr_push(&vertices, vertex);
         group->count++;
 
         s = t;
@@ -301,120 +322,66 @@ bool lovrModelDataInitObj(ModelData** result, Blob* source, ModelDataIO* io) {
     data = newline + 1;
   }
 
-  if (vertexBlob.length == 0 || indexBlob.length == 0) {
+  if (vertices.length == 0 || indices.length == 0) {
     goto finish;
   }
 
   model = lovrCalloc(sizeof(ModelData));
   model->ref = 1;
-  model->blobCount = 2;
-  model->bufferCount = 2;
-  model->attributeCount = 3 + (uint32_t) groups.length;
-  model->primitiveCount = (uint32_t) groups.length;
-  model->nodeCount = 1;
-  model->imageCount = (uint32_t) images.length;
-  model->materialCount = (uint32_t) materials.length;
+
+  ModelMetadata* meta = &model->meta;
+  meta->meshCount = 1;
+  meta->vertexCount = (uint32_t) vertices.length;
+  meta->indexCount = (uint32_t) indices.length;
+  meta->indexSize = 4;
+  meta->partCount = (uint32_t) groups.length;
+  meta->nodeCount = 1;
+  meta->imageCount = (uint32_t) images.length;
+  meta->materialCount = (uint32_t) materials.length;
+
   lovrModelDataAllocate(model);
 
-  model->blobs[0] = lovrBlobCreate(vertexBlob.data, vertexBlob.length * sizeof(float), "obj vertex data");
-  model->blobs[1] = lovrBlobCreate(indexBlob.data, indexBlob.length * sizeof(int), "obj index data");
+  memcpy(model->vertices, vertices.data, meta->vertexCount * sizeof(ModelVertex));
+  memcpy(model->indices, indices.data, meta->indexCount * sizeof(uint32_t));
 
-  model->buffers[0] = (ModelBuffer) {
-    .blob = 0,
-    .data = model->blobs[0]->data,
-    .size = model->blobs[0]->size,
-    .stride = 8 * sizeof(float)
-  };
-
-  model->buffers[1] = (ModelBuffer) {
-    .blob = 1,
-    .data = model->blobs[1]->data,
-    .size = model->blobs[1]->size,
-    .stride = sizeof(int)
-  };
-
-  memcpy(model->images, images.data, model->imageCount * sizeof(Image*));
-  memcpy(model->materials, materials.data, model->materialCount * sizeof(ModelMaterial));
-  memcpy(((map_t*) model->materialMap)->hashes, materialMap.hashes, materialMap.size * sizeof(uint64_t));
-  memcpy(((map_t*) model->materialMap)->values, materialMap.values, materialMap.size * sizeof(uint64_t));
-
-  float min[4] = { FLT_MAX };
-  float max[4] = { FLT_MIN };
-
-  for (size_t i = 0; i < vertexBlob.length; i += 8) {
-    float* v = vertexBlob.data + i;
-    min[0] = MIN(min[0], v[0]);
-    max[0] = MAX(max[0], v[0]);
-    min[1] = MIN(min[1], v[1]);
-    max[1] = MAX(max[1], v[1]);
-    min[2] = MIN(min[2], v[2]);
-    max[2] = MAX(max[2], v[2]);
+  if (meta->imageCount > 0) {
+    memcpy(model->images, images.data, meta->imageCount * sizeof(Image*));
+    memcpy(meta->materials, materials.data, meta->materialCount * sizeof(ModelMaterial));
   }
-
-  model->attributes[0] = (ModelAttribute) {
-    .buffer = 0,
-    .offset = 0,
-    .count = (uint32_t) vertexBlob.length / 8,
-    .type = F32,
-    .components = 3,
-    .hasMin = true,
-    .hasMax = true,
-    .min[0] = min[0],
-    .min[1] = min[1],
-    .min[2] = min[2],
-    .max[0] = max[0],
-    .max[1] = max[1],
-    .max[2] = max[2]
-  };
-
-  model->attributes[1] = (ModelAttribute) {
-    .buffer = 0,
-    .offset = 3 * sizeof(float),
-    .count = (uint32_t) vertexBlob.length / 8,
-    .type = F32,
-    .components = 3
-  };
-
-  model->attributes[2] = (ModelAttribute) {
-    .buffer = 0,
-    .offset = 6 * sizeof(float),
-    .count = (uint32_t) vertexBlob.length / 8,
-    .type = F32,
-    .components = 2
-  };
 
   for (size_t i = 0; i < groups.length; i++) {
     objGroup* group = &groups.data[i];
-    model->attributes[3 + i] = (ModelAttribute) {
-      .buffer = 1,
-      .offset = group->start * sizeof(int),
+
+    meta->parts[i] = (ModelPart) {
+      .start = group->start,
       .count = group->count,
-      .type = U32,
-      .components = 1
+      .material = group->material,
+      .mode = DRAW_TRIANGLE_LIST
     };
+
+    float* bounds = meta->parts[i].bounds;
+
+    for (size_t j = group->start; j < group->start + group->count; j++) {
+      ModelVertex* vertex = &vertices.data[indices.data[j]];
+      bounds[0] = MIN(bounds[0], vertex->position.x);
+      bounds[1] = MAX(bounds[1], vertex->position.x);
+      bounds[2] = MIN(bounds[2], vertex->position.y);
+      bounds[3] = MAX(bounds[3], vertex->position.y);
+      bounds[4] = MIN(bounds[4], vertex->position.z);
+      bounds[5] = MAX(bounds[5], vertex->position.z);
+    }
   }
 
-  for (size_t i = 0; i < groups.length; i++) {
-    objGroup* group = &groups.data[i];
-    model->primitives[i] = (ModelPrimitive) {
-      .mode = DRAW_TRIANGLE_LIST,
-      .attributes = {
-        [ATTR_POSITION] = &model->attributes[0],
-        [ATTR_NORMAL] = &model->attributes[1],
-        [ATTR_UV] = &model->attributes[2]
-      },
-      .indices = &model->attributes[3 + i],
-      .material = group->material
-    };
-  }
-
-  model->nodes[0] = (ModelNode) {
-    .transform.matrix = MAT4_IDENTITY,
-    .primitiveIndex = 0,
-    .primitiveCount = (uint32_t) groups.length,
-    .skin = ~0u,
-    .hasMatrix = true
+  meta->meshes[0] = (ModelMesh) {
+    .parts = meta->parts,
+    .partCount = (uint32_t) groups.length,
+    .vertexCount = meta->vertexCount,
+    .indexCount = meta->indexCount,
+    .skinDataOffset = ~0u,
+    .blendDataOffset = ~0u
   };
+
+  meta->nodes[0].mesh = 0;
 
 finish:
   arr_free(&groups);
@@ -422,6 +389,8 @@ finish:
   arr_free(&materials);
   map_free(&materialMap);
   map_free(&vertexMap);
+  arr_free(&vertices);
+  arr_free(&indices);
   arr_free(&positions);
   arr_free(&normals);
   arr_free(&uvs);
@@ -434,6 +403,8 @@ fail:
   arr_free(&materials);
   map_free(&materialMap);
   map_free(&vertexMap);
+  arr_free(&vertices);
+  arr_free(&indices);
   arr_free(&positions);
   arr_free(&normals);
   arr_free(&uvs);

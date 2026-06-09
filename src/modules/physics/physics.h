@@ -72,9 +72,9 @@ typedef void QueryCallback(void* userdata, Collider* collider);
 World* lovrWorldCreate(WorldInfo* info);
 void lovrWorldDestroy(void* ref);
 void lovrWorldDestruct(World* world);
+bool lovrWorldIsDestroyed(World* world);
 void lovrWorldSetUserData(World* world, uintptr_t ud);
 uintptr_t lovrWorldGetUserData(World* world);
-bool lovrWorldIsDestroyed(World* world);
 char** lovrWorldGetTags(World* world, uint32_t* count);
 uint32_t lovrWorldGetTagMask(World* world, const char* string, size_t length);
 uint32_t lovrWorldGetColliderCount(World* world);
@@ -256,17 +256,17 @@ bool lovrCylinderShapeSetRadius(CylinderShape* shape, float radius);
 float lovrCylinderShapeGetLength(CylinderShape* shape);
 bool lovrCylinderShapeSetLength(CylinderShape* shape, float length);
 
-ConvexShape* lovrConvexShapeCreate(float points[], uint32_t count, float scale);
-ConvexShape* lovrConvexShapeClone(ConvexShape* parent, float scale);
+ConvexShape* lovrConvexShapeCreate(float points[], uint32_t count, float* scale);
+ConvexShape* lovrConvexShapeClone(ConvexShape* parent, float* scale);
 uint32_t lovrConvexShapeGetPointCount(ConvexShape* shape);
 bool lovrConvexShapeGetPoint(ConvexShape* shape, uint32_t index, float point[3]);
 uint32_t lovrConvexShapeGetFaceCount(ConvexShape* shape);
 uint32_t lovrConvexShapeGetFace(ConvexShape* shape, uint32_t index, uint32_t* pointIndices, uint32_t capacity);
-float lovrConvexShapeGetScale(ConvexShape* shape);
+void lovrConvexShapeGetScale(ConvexShape* shape, float* scale);
 
-MeshShape* lovrMeshShapeCreate(uint32_t vertexCount, float vertices[], uint32_t indexCount, uint32_t indices[], float scale);
-MeshShape* lovrMeshShapeClone(MeshShape* parent, float scale);
-float lovrMeshShapeGetScale(MeshShape* shape);
+MeshShape* lovrMeshShapeCreate(uint32_t vertexCount, float vertices[], uint32_t indexCount, uint32_t indices[], float* scale);
+MeshShape* lovrMeshShapeClone(MeshShape* parent, float* scale);
+void lovrMeshShapeGetScale(MeshShape* shape, float* scale);
 
 TerrainShape* lovrTerrainShapeCreate(float* vertices, uint32_t n, float scaleXZ, float scaleY);
 

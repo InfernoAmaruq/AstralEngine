@@ -29,6 +29,8 @@ size_t lovrCurveGetPointCount(Curve* curve);
 void lovrCurveGetPoint(Curve* curve, size_t index, float* point);
 void lovrCurveSetPoint(Curve* curve, size_t index, float* point);
 void lovrCurveAddPoint(Curve* curve, float* point, size_t index);
+float lovrCurveGetLength(Curve* curve, float t, int iterations);
+float lovrCurveStep(Curve* curve, float distance, int iterations);
 void lovrCurveRemovePoint(Curve* curve, size_t index);
 
 // Pool

@@ -1,4 +1,3 @@
-#include <sys/types.h>
 #ifndef LOVR_USE_GLFW
 
 const char* os_get_clipboard_text(void) {
@@ -9,7 +8,7 @@ void os_set_clipboard_text(const char* text) {
   //
 }
 
-void os_poll_events(void) {
+void os_poll_events(double timeout) {
   //
 }
 
@@ -82,14 +81,6 @@ void os_set_mouse_mode(os_mouse_mode mode) {
   //
 }
 
-bool os_is_mouse_down(os_mouse_button button) {
-  return false;
-}
-
-bool os_is_key_down(os_key key) {
-  return false;
-}
-
 uintptr_t os_get_win32_window(void) {
   return 0;
 }
@@ -118,7 +109,9 @@ int os_set_precise_mouse(int Bool){return 0;}
 
 #else
 
+
 #include <stdio.h>
+#include <math.h>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -154,6 +147,7 @@ static struct {
   uint32_t height;
   GLFWcursor* cursors[OS_CURSOR_COUNT];
   os_cursor_icon current_cursor;
+  bool fullscreen;
 } glfwState;
 
 static void onError(int code, const char* description) {
@@ -336,14 +330,6 @@ static void onMouseWheelMove(GLFWwindow* window, double deltaX, double deltaY) {
   }
 }
 
-static int convertMouseButton(os_mouse_button button) {
-  switch (button) {
-    case MOUSE_LEFT: return GLFW_MOUSE_BUTTON_LEFT;
-    case MOUSE_RIGHT: return GLFW_MOUSE_BUTTON_RIGHT;
-    default: return (int) button;
-  }
-}
-
 static int convertKey(os_key key) {
   switch (key) {
     case OS_KEY_W: return GLFW_KEY_W;
@@ -374,9 +360,15 @@ void os_set_clipboard_text(const char* text) {
   glfwSetClipboardString(NULL, text);
 }
 
-void os_poll_events(void) {
+void os_poll_events(double timeout) {
   if (glfwState.window) {
-    glfwPollEvents();
+    if (timeout == 0.) {
+      glfwPollEvents();
+    } else if (timeout < 0. || isinf(timeout)) {
+      glfwWaitEvents();
+    } else {
+      glfwWaitEventsTimeout(timeout);
+    }
   }
 }
 
@@ -389,6 +381,9 @@ bool os_window_open(const os_window_config* config) {
 #ifdef __APPLE__
   glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
 #endif
+#ifdef __linux__
+  glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+#endif
   if (!glfwInit()) {
     return false;
   }
@@ -396,22 +391,36 @@ bool os_window_open(const os_window_config* config) {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, config->resizable);
 
+  bool center = config->centered && !config->fullscreen;
+
+  if (center) {
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+  }
+
   GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-  const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-  uint32_t width = config->width ? config->width : (uint32_t) mode->width;
-  uint32_t height = config->height ? config->height : (uint32_t) mode->height;
 
   if (config->fullscreen) {
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+
     glfwWindowHint(GLFW_RED_BITS, mode->redBits);
     glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
-  }
 
-  glfwState.window = glfwCreateWindow(width, height, config->title, config->fullscreen ? monitor : NULL, NULL);
+    glfwState.window = glfwCreateWindow(mode->width, mode->height, config->title, monitor, NULL);
+  } else {
+    glfwState.window = glfwCreateWindow(config->width, config->height, config->title, NULL, NULL);
+  }
 
   if (!glfwState.window) {
     return false;
+  }
+
+  if (center && !config->fullscreen) {
+    int x, y, w, h;
+    glfwGetMonitorWorkarea(monitor, &x, &y, &w, &h);
+    glfwSetWindowPos(glfwState.window, x + (w - config->width) / 2, y + (h - config->height) / 2);
+    glfwShowWindow(glfwState.window);
   }
 
   if (config->icon.data) {
@@ -443,8 +452,9 @@ bool os_window_open(const os_window_config* config) {
   glfwSetMouseButtonCallback(glfwState.window, onMouseButton);
   glfwSetCursorPosCallback(glfwState.window, onMouseMove);
   glfwSetScrollCallback(glfwState.window, onMouseWheelMove);
-  glfwState.width = width;
-  glfwState.height = height;
+  glfwState.width = config->width;
+  glfwState.height = config->height;
+  glfwState.fullscreen = config->fullscreen;
   return true;
 }
 
@@ -460,9 +470,37 @@ bool os_window_is_focused(void) {
   return glfwState.window && glfwGetWindowAttrib(glfwState.window, GLFW_FOCUSED);
 }
 
+bool os_window_is_fullscreen(void) {
+  return glfwState.fullscreen;
+}
+
+void os_window_set_fullscreen(bool fullscreen) {
+  if (!glfwState.window) {
+    return;
+  }
+
+  glfwState.fullscreen = fullscreen;
+
+  if (fullscreen) {
+    os_window_get_size(&glfwState.width, &glfwState.height);
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+    glfwSetWindowMonitor(glfwState.window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+  } else {
+    int x, y, w, h;
+    int width = (int) glfwState.width;
+    int height = (int) glfwState.height;
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    glfwGetMonitorWorkarea(monitor, &x, &y, &w, &h);
+    glfwSetWindowMonitor(glfwState.window, NULL, x + (w - width) / 2, y + (h - height) / 2, width, height, 0);
+  }
+}
+
 void os_window_get_size(uint32_t* width, uint32_t* height) {
-  *width = glfwState.width;
-  *height = glfwState.height;
+  int w, h;
+  glfwGetWindowSize(glfwState.window, &w, &h);
+  *width = w;
+  *height = h;
 }
 
 float os_window_get_pixel_density(void) {
@@ -524,12 +562,12 @@ void os_get_mouse_position(double* x, double* y) {
   }
 }
 
-os_mouse_mode os_get_mouse_mode(void){
-    if (glfwState.window){
-        int STATE = glfwGetInputMode(glfwState.window, GLFW_CURSOR);
-        return (STATE == GLFW_CURSOR_DISABLED) ? MOUSE_MODE_GRABBED : MOUSE_MODE_NORMAL;
-    }
+os_mouse_mode os_get_mouse_mode(void) {
+  if (glfwGetInputMode(glfwState.window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
+    return MOUSE_MODE_GRABBED;
+  } else {
     return MOUSE_MODE_NORMAL;
+  }
 }
 
 void os_set_mouse_mode(os_mouse_mode mode) {
@@ -537,14 +575,6 @@ void os_set_mouse_mode(os_mouse_mode mode) {
     int m = (mode == MOUSE_MODE_GRABBED) ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL;
     glfwSetInputMode(glfwState.window, GLFW_CURSOR, m);
   }
-}
-
-bool os_is_mouse_down(os_mouse_button button) {
-  return glfwState.window ? glfwGetMouseButton(glfwState.window, convertMouseButton(button)) == GLFW_PRESS : false;
-}
-
-bool os_is_key_down(os_key key) {
-  return glfwState.window ? glfwGetKey(glfwState.window, convertKey(key)) == GLFW_PRESS : false;
 }
 
 void os_set_cursor_icon(os_cursor_icon Cursor){

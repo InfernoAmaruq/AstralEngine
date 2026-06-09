@@ -5,8 +5,9 @@
 #include <stdatomic.h>
 #include <string.h>
 
+static atomic_uint ref;
+
 static struct {
-  uint32_t ref;
   bool keyRepeat;
   bool prevKeyState[OS_KEY_COUNT];
   bool keyState[OS_KEY_COUNT];
@@ -101,7 +102,7 @@ static void onFocus(bool focused) {
 }
 
 bool lovrSystemInit(void) {
-  if (atomic_fetch_add(&state.ref, 1)) return false;
+  if (!lovrModuleAcquire(&ref)) return true;
   os_on_key(onKey);
   os_on_text(onText);
   os_on_mouse_button(onMouseButton);
@@ -109,15 +110,17 @@ bool lovrSystemInit(void) {
   os_on_mousewheel_move(onWheelMove);
   os_on_permission(onPermission);
   os_get_mouse_position(&state.mouseX, &state.mouseY);
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrSystemDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) return;
+  if (!lovrModuleRelease(&ref)) return;
   os_on_key(NULL);
   os_on_text(NULL);
   os_on_permission(NULL);
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
 
 const char* lovrSystemGetOS(void) {
@@ -156,6 +159,14 @@ bool lovrSystemIsWindowFocused(void) {
   return os_window_is_focused();
 }
 
+bool lovrSystemIsWindowFullscreen(void) {
+  return os_window_is_fullscreen();
+}
+
+void lovrSystemSetWindowFullscreen(bool fullscreen) {
+  os_window_set_fullscreen(fullscreen);
+}
+
 void lovrSystemGetWindowSize(uint32_t* width, uint32_t* height) {
   os_window_get_size(width, height);
 }
@@ -164,11 +175,11 @@ float lovrSystemGetWindowDensity(void) {
   return os_window_get_pixel_density();
 }
 
-void lovrSystemPollEvents(void) {
+void lovrSystemPollEvents(double timeout) {
   memcpy(state.prevKeyState, state.keyState, sizeof(state.keyState));
   memcpy(state.prevMouseState, state.mouseState, sizeof(state.mouseState));
   state.scrollDelta = 0.;
-  os_poll_events();
+  os_poll_events(timeout);
 }
 
 bool lovrSystemIsKeyDown(int keycode) {
@@ -211,16 +222,14 @@ bool lovrSystemWasMouseReleased(int button) {
   return state.prevMouseState[button] && !state.mouseState[button];
 }
 
-bool lovrSystemIsMouseGrabbed(void) {
-  return os_get_mouse_mode() == MOUSE_MODE_GRABBED;
+bool lovrSystemIsMouseGrabbed(void){
+    return os_get_mouse_mode() == MOUSE_MODE_GRABBED;
 }
 
-void lovrSystemSetMouseGrabbed(bool grabbed) {
-  os_set_mouse_mode(grabbed ? MOUSE_MODE_GRABBED : MOUSE_MODE_NORMAL);
-
-  if (!grabbed) {
-    os_get_mouse_position(&state.mouseX, &state.mouseY);
-  }
+void lovrSystemSetMouseGrabbed(bool grabbed){
+    os_set_mouse_mode(grabbed ? MOUSE_MODE_GRABBED : MOUSE_MODE_NORMAL);
+    if (!grabbed)
+        os_get_mouse_position(&state.mouseX, &state.mouseY);
 }
 
 // This is kind of a hacky thing for the simulator, since we're kinda bad at event dispatch

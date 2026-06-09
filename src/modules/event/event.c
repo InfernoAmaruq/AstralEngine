@@ -6,39 +6,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+static atomic_uint ref;
+
 static struct {
-  uint32_t ref;
   arr_t(Event) events;
   size_t head;
   mtx_t lock;
 } state;
 
-void lovrVariantDestroy(Variant* variant) {
-  switch (variant->type) {
-    case TYPE_STRING: lovrFree(variant->value.string.pointer); return;
-    case TYPE_OBJECT: lovrRelease(variant->value.object.pointer, variant->value.object.destructor); return;
-    case TYPE_MATRIX: lovrFree(variant->value.matrix.data); return;
-    case TYPE_TABLE:
-      for (size_t i = 0; i < variant->value.table.length; i++) {
-        lovrVariantDestroy(&variant->value.table.keys[i]);
-        lovrVariantDestroy(&variant->value.table.vals[i]);
-      }
-      lovrFree(variant->value.table.keys);
-      lovrFree(variant->value.table.vals);
-      return;
-    default: return;
-  }
-}
-
 bool lovrEventInit(void) {
-  if (atomic_fetch_add(&state.ref, 1)) return true;
+  if (!lovrModuleAcquire(&ref)) return true;
   arr_init(&state.events);
   mtx_init(&state.lock, mtx_plain);
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrEventDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) return;
+  if (!lovrModuleRelease(&ref)) return;
   mtx_lock(&state.lock);
   for (size_t i = state.head; i < state.events.length; i++) {
     Event* event = &state.events.data[i];
@@ -50,6 +35,7 @@ void lovrEventDestroy(void) {
         for (uint32_t j = 0; j < event->data.custom.count; j++) {
           lovrVariantDestroy(&event->data.custom.data[j]);
         }
+        lovrFree(event->data.custom.data);
         break;
       default: break;
     }
@@ -58,33 +44,20 @@ void lovrEventDestroy(void) {
   mtx_unlock(&state.lock);
   mtx_destroy(&state.lock);
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
 
 void lovrEventPush(Event event) {
-  if (state.ref == 0) return;
-
 #ifndef LOVR_DISABLE_THREAD
   if (event.type == EVENT_THREAD_ERROR) {
     lovrRetain(event.data.thread.thread);
-    size_t length = strlen(event.data.thread.error);
-    char* copy = lovrMalloc(length + 1);
-    memcpy(copy, event.data.thread.error, length + 1);
-    event.data.thread.error = copy;
+    event.data.thread.error = lovrStrdup(event.data.thread.error);
   }
 #endif
 
   if (event.type == EVENT_FILECHANGED) {
-    size_t length = strlen(event.data.file.path);
-    char* copy = lovrMalloc(length + 1);
-    memcpy(copy, event.data.file.path, length + 1);
-    event.data.file.path = copy;
-
-    if (event.data.file.oldpath) {
-      length = strlen(event.data.file.oldpath);
-      copy = lovrMalloc(length + 1);
-      memcpy(copy, event.data.file.oldpath, length + 1);
-      event.data.file.oldpath = copy;
-    }
+    event.data.file.path = lovrStrdup(event.data.file.path);
+    event.data.file.oldpath = lovrStrdup(event.data.file.oldpath);
   }
 
   mtx_lock(&state.lock);

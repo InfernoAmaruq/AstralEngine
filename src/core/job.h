@@ -1,13 +1,12 @@
-#include <stdarg.h>
 #include <stdint.h>
 #include <stdbool.h>
 
 #pragma once
 
-typedef struct job job;
 typedef void fn_job(void* arg);
+typedef void fn_hook(uint32_t worker);
 
-bool job_init(uint32_t workerCount);
+bool job_init(uint32_t workerCount, fn_hook* init, fn_hook* quit);
 void job_destroy(void);
-job* job_start(fn_job* fn, void* arg);
-void job_wait(job* job);
+bool job_start(fn_job* fn, void* arg);
+void job_spin(void);

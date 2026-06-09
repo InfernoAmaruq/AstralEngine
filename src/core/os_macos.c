@@ -103,6 +103,10 @@ void os_request_permission(os_permission permission) {
   }
 }
 
+void os_on_permission(fn_permission* callback) {
+  state.onPermissionEvent = callback;
+}
+
 void* os_vm_init(size_t size) {
   return mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 }
@@ -124,6 +128,10 @@ void os_thread_attach(void) {
 }
 
 void os_thread_detach(void) {
+  //
+}
+
+void os_thread_set_name(const char* name) {
   //
 }
 

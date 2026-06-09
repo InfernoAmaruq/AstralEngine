@@ -1,5 +1,4 @@
 #include <stdbool.h>
-#include "util.h"
 
 #pragma once
 
@@ -8,7 +7,7 @@
 bool lovrTimerInit(void);
 void lovrTimerDestroy(void);
 double lovrTimerGetDelta(void);
-LOVR_EXPORT double lovrTimerGetTime(void);
+double lovrTimerGetTime(void);
 double lovrTimerStep(void);
 double lovrTimerGetAverageDelta(void);
 int lovrTimerGetFPS(void);

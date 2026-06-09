@@ -25,3 +25,6 @@
 [submodule "deps/joltc"]
 	path = deps/joltc
 	url = https://github.com/amerkoleci/joltc
+[submodule "deps/phonon"]
+	path = deps/phonon
+	url = https://github.com/bjornbytes/steam-audio

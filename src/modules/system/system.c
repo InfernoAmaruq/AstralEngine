@@ -226,7 +226,7 @@ bool lovrSystemIsMouseGrabbed(void){
     return os_get_mouse_mode() == MOUSE_MODE_GRABBED;
 }
 
-void lovrSystemSetMouseGravved(bool grabbed){
+void lovrSystemSetMouseGrabbed(bool grabbed){
     os_set_mouse_mode(grabbed ? MOUSE_MODE_GRABBED : MOUSE_MODE_NORMAL);
     if (!grabbed)
         os_get_mouse_position(&state.mouseX, &state.mouseY);

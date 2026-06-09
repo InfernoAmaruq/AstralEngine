@@ -73,6 +73,8 @@ World* lovrWorldCreate(WorldInfo* info);
 void lovrWorldDestroy(void* ref);
 void lovrWorldDestruct(World* world);
 bool lovrWorldIsDestroyed(World* world);
+void lovrWorldSetUserData(World* world, uintptr_t ud);
+uintptr_t lovrWorldGetUserData(World* world);
 char** lovrWorldGetTags(World* world, uint32_t* count);
 uint32_t lovrWorldGetTagMask(World* world, const char* string, size_t length);
 uint32_t lovrWorldGetColliderCount(World* world);

@@ -42,6 +42,7 @@ struct World {
   char* tags[MAX_TAGS];
   JPH_JobSystem* jobSystem;
   mtx_t lock;
+  uintptr_t userdata;
 };
 
 struct Collider {
@@ -937,6 +938,14 @@ void lovrColliderDestruct(Collider* collider) {
 
 bool lovrColliderIsDestroyed(Collider* collider) {
   return !collider->body;
+}
+
+void lovrWorldSetUserData(World* world, uintptr_t ud){
+    world->userdata = ud;
+}
+
+uintptr_t lovrWorldGetUserData(World* world){
+    return world->userdata;
 }
 
 uintptr_t lovrColliderGetUserData(Collider* collider) {

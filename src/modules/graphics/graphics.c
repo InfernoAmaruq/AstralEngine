@@ -682,7 +682,7 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
     .fnLog = onMessage,
     .fnAlloc = lovrMalloc,
     .fnFree = lovrFree,
-    .engineName = "ASTRAL",
+    .engineName = "LOVR",
     .engineVersion = { LOVR_VERSION_MAJOR, LOVR_VERSION_MINOR, LOVR_VERSION_PATCH },
     .device = &state.device,
     .features = &state.features,

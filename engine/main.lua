@@ -152,6 +152,15 @@ function lovr.run()
 
     Timer.TimeScale = 1
 
+    @ifdef<Audio.Active>
+    {
+        local Audio = lovr.audio
+        local Upd = Audio.update
+        @macro<L,!USEBRACK>{DO_AUDIO(&DELTA) = 
+            Upd(&DELTA);
+        }
+    }
+
     @ifdef<Physics.BindMainWorld>
     {
         local Phys = GetService"Physics"
@@ -291,6 +300,11 @@ function lovr.run()
         }
         MainScheduler:Update()
         RunService.__TICK(0,500,&DT * TimeScale)
+
+        @ifdef<Audio.Active>{
+            DO_AUDIO(&DT * TimeScale)
+        }
+
         Drain()
     }
 

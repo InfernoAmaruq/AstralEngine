@@ -43,7 +43,6 @@ local SRMT = {
 }
 
 SpriteRenderer.Name = "SpriteRenderer"
-SpriteRenderer.Pattern = {}
 SpriteRenderer.Metadata = {}
 SpriteRenderer.Metadata.__create = function(DATA, Entity, ShouldSink)
     AstralEngine.Assert(

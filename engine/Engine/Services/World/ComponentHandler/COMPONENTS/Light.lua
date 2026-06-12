@@ -1,7 +1,7 @@
 local Light = {}
 
 local LightService
-local World = GetService("World", "World")
+local World = GetService("Entity")
 
 local LightEnum = ENUM.LightType
 
@@ -17,11 +17,7 @@ local KeyMap = {
     Enabled = 7,
 }
 
-local Methods = {
-    __OnTransformChanged = function(self)
-        LightService.AddLight(self[6])
-    end,
-}
+local Methods = {}
 
 local MetaTable = {
     __index = function(self, k)
@@ -58,8 +54,6 @@ Light.Metadata.__create = function(Input, Ent)
     local EntRef = World.GetEntityFromId(Ent)
     local _ = EntRef.Transform or EntRef:AddComponent("Transform")
 
-    LightService = LightService or GetService("Renderer").Lighting
-
     local Type = Input.Type or LightEnum.Point
 
     local r, g, b, a = (Input.Color or vec4(255, 255, 255, 255)):unpack()
@@ -82,6 +76,11 @@ end
 
 Light.Metadata.__remove = function(self)
     LightService.RemoveLight(self[6])
+end
+
+Light.FinalProcessing = function()
+    LightService = LightService or GetService("Renderer").Lighting
+    World.OnTransformChanged:Connect(LightService.UpdateLight)
 end
 
 return Light

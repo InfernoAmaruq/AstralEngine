@@ -11,16 +11,6 @@ function Code.AttachDirective(d)
     Sorted[d.Tag] = Priority
 end
 
-local SharedMemory
-function Code.LoadMemory(m)
-    SharedMemory = m
-end
-
-local SplitSymbol = "NOSPLIT"
-function Code.SetSplitSymbol(s)
-    SplitSymbol = s
-end
-
 function Code.Translate(Src, Dirs, N)
     table.sort(Dirs, function(a, b)
         local pa = Sorted[a.Type] or 1

@@ -15,8 +15,6 @@ local Code = require("Code")
 
 local SPLITSYMBOL = "<SP>"
 Lexer.SetSplitSymbol(SPLITSYMBOL)
-Code.SetSplitSymbol(SPLITSYMBOL)
-Code.LoadMemory(SharedMemory)
 
 Recompiler.MaxPasses = 5
 
@@ -29,7 +27,9 @@ end
 
 function meta.LoadfileAppendStack.Pop()
     local Stack = meta.LoadfileAppendStack
+    local Obj = Stack[#Stack]
     Stack[#Stack] = nil
+    return Obj
 end
 
 function meta.LoadfileAppendStack.Clear()

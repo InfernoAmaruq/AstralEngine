@@ -1,8 +1,10 @@
 local Component = GetService("Component", "Component")
 local Physics = GetService("Physics", "Physics")
+local World = GetService("Entity")
 local Transform = {}
 
 Transform.Name = "Transform"
+
 Transform.FastFetch = {
     "Position",
     "Orientation",
@@ -10,6 +12,7 @@ Transform.FastFetch = {
     "Matrix",
     "Scale",
 }
+
 Transform.Pattern = {
     Position = Vec3,
     Orientation = Quat,
@@ -17,6 +20,7 @@ Transform.Pattern = {
     Scale = Vec3,
     Matrix = Mat4,
 }
+
 Transform.Metadata = {}
 
 local RadToDeg = 180 / math.pi
@@ -31,12 +35,14 @@ local function GetOrientation(Comp)
 end
 
 local function GetMatrix(Comp)
-    Comp[3]:set(Comp[1], Comp[5], Comp[2])
-    return Comp[3]
+    local m = Comp[3]
+    m:set(Comp[1], Comp[5], Comp[2])
+    World.OnTransformChanged:Fire(World.GetEntityFromId(Comp[6]), m)
+    return m
 end
 
 local function SetMatrix(Comp, Matrix, IsTransform)
-    Comp[3]:set(Matrix)
+    m:set(Matrix)
     Comp[1]:set(Matrix:getPosition())
     Comp[2]:set(Matrix:getOrientation())
     Comp[4]:set(vec3(Comp[2]:getEuler()):mul(RadToDeg))
@@ -44,20 +50,22 @@ local function SetMatrix(Comp, Matrix, IsTransform)
     if not IsTransform then
         Comp[5]:set(Matrix:getScale())
     end
+    World.OnTransformChanged:Fire(World.GetEntityFromId(Comp[6]), m)
 end
 
 local function FromPose(T, x, y, z, a, ax, ay, az)
     local P, O, M, R, S = T[1], T[2], T[3], T[4], T[5]
     P:set(x, y, z)
     O:set(a, ax, ay, az)
-    M:set(P, S, O)
+    local M2 = mat4(P, S, O)
+    if M:equals(M2) then
+        return
+    end
+    M:set(M2)
     local ex, ey, ez = O:getEuler()
     R:set(ex, ey, ez)
 
-    local l = Component.HasComponent(T[7], "Light")
-    if l then
-        l:__OnTransformChanged()
-    end
+    World.OnTransformChanged:Fire(World.GetEntityFromId(Comp[6]), M)
 end
 
 local function GetVector(self, Type)
@@ -138,16 +146,6 @@ local function MTNewIndex(Ret, k, v)
             GetMatrix(Ret)
         end
     end
-
-    local Col = Component.HasComponent(Ret[6], "Collider")
-    local Light = Component.HasComponent(Ret[6], "Light")
-    if Col then
-        Col:__TransformMoved(Ret[1], Ret[2])
-        Physics.__QueueToSyncLTJ(Col.World, Col.ColRef, Ret)
-    end
-    if Light then
-        Light:__OnTransformChanged()
-    end
 end
 
 local MT = { __index = MTIndex, __newindex = MTNewIndex }
@@ -189,6 +187,12 @@ Transform.Metadata.__create = function(DATA, Entity)
 
     GetOrientation(Ret)
     GetMatrix(Ret)
+
+    local Col = Component.HasComponent(Ret[6], "Collider")
+    if Col then
+        Col:__TransformMoved(Ret[1], Ret[2])
+        Physics.__QueueToSyncLTJ(Col.World, Col.ColRef, Ret)
+    end
 
     return setmetatable(Ret, MT)
 end

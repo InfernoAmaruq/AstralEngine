@@ -74,6 +74,8 @@ Lighting.AddLight = function(LightEntity, EarlyLightComponent)
     LightBuffer:setData(CacheTable)
 end
 
+Lighting.UpdateLight = function() end
+
 Lighting.RemoveLight = function(LightEntity)
     local Id = LightRegistry[LightEntity]
 

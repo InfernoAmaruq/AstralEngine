@@ -1,3 +1,7 @@
+if not meta.getdefined("Audio", "Active") then
+    return nil
+end
+
 local AudioSource = { Name = "AudioSource", Metadata = {} }
 
 local Methods = {
@@ -17,7 +21,7 @@ local Mt = {
 AudioSource.Metadata.__create = function(Data, Ent)
     local t = {}
 
-    t.__effectRegistar = {}
+    t.__sourceRegister = {}
 
     setmetatable(t, Mt)
 

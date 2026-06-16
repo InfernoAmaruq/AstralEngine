@@ -1,0 +1,9 @@
+@TYPE:FRAGMENT;
+@IDENTIFIER:LIGHTING_HEADER;
+@PRIORITY:0;
+
+#ifndef MAX_LIGHTS
+#define MAX_LIGHTS 256
+#endif
+
+vec4 astral_main(){}

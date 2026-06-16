@@ -21,6 +21,8 @@ do
     P_Cylinder = TMPPASS.cylinder
 end
 
+local Norm = Vec3(1):normalize()
+
 local Processors = {
     [E.Box.Value] = function(p, _, c)
         local t = c.Transform
@@ -28,7 +30,7 @@ local Processors = {
     end,
     [E.Sphere.Value] = function(p, _, c)
         local t = c.Transform
-        P_Sphere(p, t[3])
+        P_Sphere(p, t[1], t[5] * Norm, t[2])
     end,
     [E.Capsule.Value] = function(p, _, c)
         local t = c.Transform
@@ -40,6 +42,7 @@ local Processors = {
     end,
     [E.Cylinder.Value] = function(p, _, c)
         local t = c.Transform
+
         P_Cylinder(p, t[3])
     end,
 }

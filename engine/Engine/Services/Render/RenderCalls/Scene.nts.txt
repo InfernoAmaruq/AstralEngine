@@ -1,0 +1,68 @@
+Thinking about how Imma do instancing
+
+Thinking... GPU instances buffers of 256 objects per? Configurable ofc
+For format I think...
+
+Not a specific format, but {} means table, [] means type, and no decoration means string key
+
+type LuaBuffer = { -- these material-like properties are individual per Material component, and are DIFFERENT from Texture materials LOVR uses at the core
+    Transform = {[Matrix]}
+    UVOffset = {[VEC2]}
+    UVScale = {[VEC2]}
+    Color = {[VEC2]}
+    Sampler = {[SAMPLER_NEAREST | SAMPLER_LINEAR]}
+    FitMode = {[FIT_MODE_ENUM]}
+    ShadowCasting = {[BOOLEAN]} -- we likely would use same buffers for rendering shadowmaps, so
+}
+
+type GEOMETRY_STORAGE = {
+    GPUBuffer = [GPUBuffer?]
+    LuaBuffer = [LuaBuffer?]
+    [Number] = [Entity]
+}
+
+type Stack = {
+    Solid = {
+        [MaterialPointer | false] = { -- where false means default material (used for basic models that all own their own materials)
+            [GEOMETRY_TYPE] = [GEOMETRY_STORAGE]
+        }
+    }
+    Transparent = {
+        [MaterialPointer | false] = {
+            [GEOMETRY_TYPE] = [GEOMETRY_STORAGE]
+        }
+    }
+}
+
+If we have over (N) Entities in a specific [GEOMETRY_STORAGE], then we shall actually allocate the GPUBuffer and LuaBuffer and send them to there and force instancing
+We shall still keep Entity references
+
+Then the code would be
+
+for Material, GeometryTable in pairs(SpecificStack) do
+    Pass:push('state')
+    Pass:setMaterial(Material or nil)
+    for GeometryType, GeometryStorage in pairs(GeometryTable) do
+        Pass:push('state')
+        local Ret
+        if #GeometryStorage > N and FunctionLookup.Batch[GeometryType] then
+            Ret = FunctionLookup.Batch[GeometryType](Pass, GeometryTable.GPUBuffer, GeometryStorage, GraphicsResetFunction)
+        else
+            Ret = FunctionLookup.Single[GeometryType](Pass, GeometryTable, GraphicsResetFunction)
+        end
+        pass:pop('state')
+
+        if Ret & Reset != 0 then
+            RESET_PIPELINE()
+        end
+    end
+    Pass:pop('state')
+end
+
+I think it'd be more correct for the renderer to decide WHEN to start batching. And it would just tell the specific graphics how many of what to draw
+Obv, some things cannot be instanced at all, which is fine, this is why we have the Single functions
+This would also be a lot faster than the current system due to this being a single function call ONCE per material-geometry combo
+More branching up there when deciding what to draw, but way less function calls. Which should, on paper, be faster
+
+GraphicsResetFunction is a MAYBE. Depends on if any shaders could fuck up shader variables. Though, that should not happen
+Albeit some MAY reset shaders

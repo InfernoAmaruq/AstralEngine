@@ -7937,7 +7937,7 @@ bool lovrPassPolygon(Pass* pass, uint32_t count, float** vertices) {
   return true;
 }
 
-bool lovrPassPlane(Pass* pass, float* transform, DrawStyle style, uint32_t cols, uint32_t rows) {
+bool lovrPassPlane(Pass* pass, float* transform, DrawStyle style, uint32_t cols, uint32_t rows, uint32_t inst) {
   uint32_t key[] = { SHAPE_PLANE, style, cols, rows };
   uint32_t vertexCount = (cols + 1) * (rows + 1);
   uint32_t indexCount = style == STYLE_LINE ? (2 * (rows + 1) + 2 * (cols + 1)) : (cols * rows) * 6;
@@ -7948,6 +7948,7 @@ bool lovrPassPlane(Pass* pass, float* transform, DrawStyle style, uint32_t cols,
     .hash = hash64(key, sizeof(key)),
     .mode = style == STYLE_LINE ? DRAW_LINES : DRAW_TRIANGLES,
     .transform = transform,
+    .instances = inst,
     .bounds = (float[6]) { 0.f, 0.f, 0.f, .5f, .5f, 0.f },
     .vertex.pointer = (void**) &vertices,
     .vertex.count = vertexCount,
@@ -8016,7 +8017,7 @@ bool lovrPassRoundrect(Pass* pass, float* transform, float r, uint32_t segments)
   uint32_t n = segments + 1;
 
   if (!thicc && (r <= 0.f || w == 0.f || h == 0.f)) {
-    return lovrPassPlane(pass, transform, STYLE_FILL, 1, 1);
+    return lovrPassPlane(pass, transform, STYLE_FILL, 1, 1, 1);
   }
 
   uint32_t vertexCount;

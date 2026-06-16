@@ -21,6 +21,10 @@ local function Add(a, b)
     return (TYPE(a) == "table" and a.RawValue or a) + (TYPE(b) == "table" and b.RawValue or b)
 end
 
+local function Eq(a, b)
+    return (TYPE(a) == "table" and a.RawValue or a) == (TYPE(b) == "table" and b.RawValue or b)
+end
+
 local Funcs = {
     GetTop = function(self)
         local n = 0
@@ -54,6 +58,7 @@ local function ProcessMember(K, V, EnumName, Header)
         __tostring = EnumToString,
         __add = Add,
         __sub = Sub,
+        __eq = Eq,
     })
 
     return t

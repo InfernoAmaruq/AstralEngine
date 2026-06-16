@@ -71,5 +71,4 @@ return function(Str)
         local Out = table.concat(OutputT, "")
 
         return Out, Pragmas
-
 end

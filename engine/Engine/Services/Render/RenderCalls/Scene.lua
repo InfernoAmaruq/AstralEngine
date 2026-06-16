@@ -140,7 +140,11 @@ local VecZero,VecOne = Vec2(0,0),Vec2(1,1)
     &PASS:setShader(MAINSHADER)
     &PASS:send("Lighting_Ambience",CAMERA[9])
     &PASS:send("Transparent",&TRANSPARENT)
-    &PASS:send("Lighting_Data",Renderer.Lighting.LightBuffer)
+    local _L = Renderer.Lighting
+    &PASS:send("Lighting_Data",_L.LightBuffer)
+    &PASS:send("Lighting_LTC",_L.LTCTexture)
+    &PASS:send("Lighting_LTC_Amp",_L.LTCAmp)
+    &PASS:send("CamTransform",MATRIX)
 
     &PASS:send("PBR_SphericalHarmonics",&SH)
 
@@ -250,6 +254,7 @@ function Renderer.DrawTransparent()
         local e = Cams[cind]
         local CAMERA = CamStorage[e]
 
+        local MATRIX = TransStorage[e][3]
         local CMASK = CAMERA[&Cam.Mask] -- cameramask
 
         local TransPass = CAMERA[21][1]
@@ -277,7 +282,6 @@ function Renderer.DrawTransparent()
 end
 
 local SSAO_Noise_Image = lovr.data.newImage(4,4,"rgba8")
-math.randomseed(os.clock() * tonumber(debug.getaddress({})))
 SSAO_Noise_Image:mapPixel(function()
     local x = math.random()
     local y = math.random()

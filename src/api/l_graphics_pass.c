@@ -894,8 +894,9 @@ static int l_lovrPassPlane(lua_State* L) {
   int index = luax_readmat4(L, 2, transform, 2);
   DrawStyle style = luax_checkenum(L, index++, DrawStyle, "fill");
   uint32_t cols = luax_optu32(L, index++, 1);
-  uint32_t rows = luax_optu32(L, index, cols);
-  luax_assert(L, lovrPassPlane(pass, transform, style, cols, rows));
+  uint32_t rows = luax_optu32(L, index++, cols);
+  uint32_t inst = luax_optu32(L, index, 1);
+  luax_assert(L, lovrPassPlane(pass, transform, style, cols, rows, inst));
   return 0;
 }
 

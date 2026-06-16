@@ -727,7 +727,7 @@ bool lovrPassSendData(Pass* pass, const char* name, size_t length, void** data, 
 bool lovrPassPoints(Pass* pass, uint32_t count, float** vertices);
 bool lovrPassLine(Pass* pass, uint32_t count, float** vertices);
 bool lovrPassPolygon(Pass* pass, uint32_t count, float** vertices);
-bool lovrPassPlane(Pass* pass, float* transform, DrawStyle style, uint32_t cols, uint32_t rows);
+bool lovrPassPlane(Pass* pass, float* transform, DrawStyle style, uint32_t cols, uint32_t rows, uint32_t inst);
 bool lovrPassRoundrect(Pass* pass, float* transform, float radius, uint32_t segments);
 bool lovrPassBox(Pass* pass, float* transform, DrawStyle style);
 bool lovrPassCircle(Pass* pass, float* transform, DrawStyle style, float angle1, float angle2, uint32_t segments);

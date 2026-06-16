@@ -24,6 +24,8 @@ function lovr.load()
     -- INITIALISE SERVICES
     require("Engine")
 
+    require("Engine/Services/AssetManager")
+
     -- QUEUE PLUGINS
     local PluginHandler = require("Engine/PluginManager")
 
@@ -62,7 +64,6 @@ function lovr.load()
 
     -- LOAD COMPONENTS AND SCRIPT SYSTEM
 
-    require("Engine/Services/AssetManager")
     SS = require("Engine/Services/ScriptSystem")
 
     World.Component.LoadComponents()
@@ -250,14 +251,9 @@ function lovr.run()
     @macro<L,!USEBRACK>{GETTICK(&DT,&CT,&Time,&Tickrate,&CALL,&CV1)=
         &Time = &Time + &DT
 
-        if &Tickrate <= 0 then
-            &CALL(&CV1)
-        else
-            while &Time >= &Tickrate do
+        if &Time >= &Tickrate then
             &Time = &Time - &Tickrate
-            -- MACRO CALL
             &CALL(&CV1)
-            end
         end
 
     }

@@ -124,10 +124,13 @@ local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"OIT/Write",{
     Include = {"Material","Lighting","PBR"},
     Define = {
         Fragment = {
-            "MATERIAL_BASEUV_TO_COLOR"
+            "MATERIAL_BASEUV_TO_COLOR",
+            MAX_LIGHTS = 256
         }
     }
 })
+
+print(F)
 
 Renderer.SetMainShader(lovr.graphics.newShader(V,F,{flags = {normalMap = true, vertexTangents = false}}))
 

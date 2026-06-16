@@ -1006,7 +1006,7 @@ static int l_lovrGraphicsNewTexture(lua_State* L) {
     if (!lua_isnil(L, -1)) {
       context->hasType = true;
       info->type = (uint32_t) luax_checkenum(L, -1, TextureType, NULL);
-      if (info->type == TEXTURE_CUBE && info->imageCount == 0) info->layers = 6;
+      if (info->type == TEXTURE_CUBE && info->imageCount / 6 != 0) luaL_error(L,"When using a cube texture, layer count must be a multiple of 6");
     }
     lua_pop(L, 1);
 

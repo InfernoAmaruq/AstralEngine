@@ -8145,7 +8145,7 @@ bool lovrPassRoundrect(Pass* pass, float* transform, float r, uint32_t segments)
   return true;
 }
 
-bool lovrPassBox(Pass* pass, float* transform, DrawStyle style) {
+bool lovrPassBox(Pass* pass, float* transform, DrawStyle style, uint32_t inst) {
   uint32_t key[] = { SHAPE_BOX, style };
   ShapeVertex* vertices;
   uint16_t* indices;
@@ -8176,7 +8176,8 @@ bool lovrPassBox(Pass* pass, float* transform, DrawStyle style) {
       .vertex.pointer = (void**) &vertices,
       .vertex.count = COUNTOF(vertexData),
       .index.pointer = (void**) &indices,
-      .index.count = COUNTOF(indexData)
+      .index.count = COUNTOF(indexData),
+      .instances = inst
     };
 
     if (!lovrPassDraw(pass, &draw)) {
@@ -8313,7 +8314,7 @@ bool lovrPassCircle(Pass* pass, float* transform, DrawStyle style, float angle1,
   return true;
 }
 
-bool lovrPassSphere(Pass* pass, float* transform, uint32_t segmentsH, uint32_t segmentsV) {
+bool lovrPassSphere(Pass* pass, float* transform, uint32_t segmentsH, uint32_t segmentsV, uint32_t inst) {
   lovrCheck(segmentsH >= 2 && segmentsV >= 2, "Sphere segment count must be >= 2");
 
   uint32_t vertexCount = 2 + (segmentsH + 1) * (segmentsV - 1);
@@ -8332,6 +8333,7 @@ bool lovrPassSphere(Pass* pass, float* transform, uint32_t segmentsH, uint32_t s
     .vertex.count = vertexCount,
     .index.pointer = (void**) &indices,
     .index.count = indexCount,
+    .instances = inst
   };
 
   if (!lovrPassDraw(pass, &draw)) {
@@ -8396,7 +8398,7 @@ bool lovrPassSphere(Pass* pass, float* transform, uint32_t segmentsH, uint32_t s
   return true;
 }
 
-bool lovrPassCylinder(Pass* pass, float* transform, bool capped, float angle1, float angle2, uint32_t segments) {
+bool lovrPassCylinder(Pass* pass, float* transform, bool capped, float angle1, float angle2, uint32_t segments, uint32_t inst) {
   if (fabsf(angle1 - angle2) >= 2.f * (float) M_PI) {
     angle1 = 0.f;
     angle2 = 2.f * (float) M_PI;
@@ -8423,7 +8425,8 @@ bool lovrPassCylinder(Pass* pass, float* transform, bool capped, float angle1, f
     .vertex.pointer = (void**) &vertices,
     .vertex.count = vertexCount,
     .index.pointer = (void**) &indices,
-    .index.count = indexCount
+    .index.count = indexCount,
+    .instances = inst
   };
 
   if (!lovrPassDraw(pass, &draw)) {
@@ -8547,7 +8550,7 @@ bool lovrPassCone(Pass* pass, float* transform, uint32_t segments) {
   return true;
 }
 
-bool lovrPassCapsule(Pass* pass, float* transform, uint32_t segments) {
+bool lovrPassCapsule(Pass* pass, float* transform, uint32_t segments, uint32_t inst) {
   lovrCheck(segments >= 2, "Capsule segment count must be >= 2");
   float sx = vec3_length(transform + 0);
   float sy = vec3_length(transform + 4);
@@ -8560,7 +8563,7 @@ bool lovrPassCapsule(Pass* pass, float* transform, uint32_t segments) {
     vec3_cross(vec3_init(transform + 8, transform + 0), transform + 4);
     vec3_scale(transform + 8, 1.f / radius);
     mat4_rotateQuat(transform, quat_fromAngleAxis(rotation, (float) M_PI / 2.f, 1.f, 0.f, 0.f));
-    return lovrPassSphere(pass, transform, segments, segments);
+    return lovrPassSphere(pass, transform, segments, segments, inst);
   }
 
   vec3_scale(transform + 0, 1.f / sx);
@@ -8583,7 +8586,8 @@ bool lovrPassCapsule(Pass* pass, float* transform, uint32_t segments) {
     .vertex.pointer = (void**) &vertices,
     .vertex.count = vertexCount,
     .index.pointer = (void**) &indices,
-    .index.count = indexCount
+    .index.count = indexCount,
+    .instances = inst
   };
 
   if (!lovrPassDraw(pass, &draw)) {

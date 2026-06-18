@@ -20,33 +20,6 @@ function Flags.PRE(_, Id)
     Cache[Id] = {}
 end
 
-local function MaskStrings(Src)
-    local Store = {}
-    local i = 0
-    Src = Src:gsub("([\"'])(.-)%1", function(q, s)
-        i = i + 1
-        local Key = "<STR" .. i .. ">"
-        Store[Key] = q .. s .. q
-        return Key
-    end)
-    Src = Src:gsub("%[%[(.-)%]%]", function(s)
-        i = i + 1
-        local Key = "<LSTR" .. i .. ">"
-        Store[Key] = "[[" .. s .. "]]"
-        return Key
-    end)
-    return Src, Store
-end
-
-local function UnmaskStrings(Src, Store)
-    local Masked, Store = MaskStrings(Src)
-    for k, v in pairs(Store) do
-        Masked = Masked:gsub(k, v)
-    end
-    Src = UnmaskStrings(Masked, Store)
-    return Src
-end
-
 function Flags.POST(Src, Id)
     local C = Cache[Id]
 

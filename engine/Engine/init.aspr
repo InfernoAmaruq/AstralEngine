@@ -8,6 +8,7 @@ local Index = {
     AddService = function(Name, Val)
         WaitList[Name] = nil
         Services[Name] = Val
+        AstralEngine.Log("Registered service: " .. Name .. "; WITH TIME: " .. os.clock(), "SUCCESS", "SERVICE MANAGER")
     end,
     Disable = function()
         Active = false
@@ -15,11 +16,11 @@ local Index = {
         local Obj = 0
         for i in pairs(WaitList) do
             Obj = Obj + 1
-            AstralEngine.Log("GetService wait list still has: " .. i, "info", "INTERNAL")
+            AstralEngine.Log("GetService wait list still has: " .. i, "info", "SERVICE MANAGER")
         end
 
         if Obj > 0 then
-            AstralEngine.Error("GetService fatal error! Service wait list not fulfilled!", "INTERNAL", 2)
+            AstralEngine.Error("GetService fatal error! Service wait list not fulfilled!", "SERVICE MANAGER", 2)
         end
 
         WaitList = nil
@@ -61,7 +62,7 @@ local function ProcessNonexistantService(n, repair)
                         if not k or k == repair then
                             if k == repair then
                                 debug.setupvalue(f, j, Services[n])
-                                AstralEngine.Log("REQUIRE REPAIR SUCCESSFUL FOR: " .. k, "info", "INTERNAL")
+                                AstralEngine.Log("REQUIRE REPAIR SUCCESSFUL FOR: " .. k, "info", "SERVICE MANAGER")
                             end
                             break
                         end
@@ -84,7 +85,7 @@ local f = setmetatable({}, {
             s = ProcessNonexistantService(n, repair)
             WaitList[n] = nil
         elseif not s and not Active then
-            AstralEngine.Error("Attempt to index non-existant service: " .. n, "INTERNAL", 1)
+            AstralEngine.Error("Attempt to index non-existant service: " .. n, "SERVICE MANAGER", 1)
         end
         return s
     end,

@@ -6,4 +6,6 @@
 #define MAX_LIGHTS 256
 #endif
 
-vec4 astral_main(){}
+vec4 astral_main(){
+
+}

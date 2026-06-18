@@ -9,30 +9,38 @@ type LuaBuffer = { -- these material-like properties are individual per Material
     Transform = {[Matrix]}
     UVOffset = {[VEC2]}
     UVScale = {[VEC2]}
-    Color = {[VEC2]}
+    Color = {[VEC4]}
     Sampler = {[SAMPLER_NEAREST | SAMPLER_LINEAR]}
     FitMode = {[FIT_MODE_ENUM]}
     ShadowCasting = {[BOOLEAN]} -- we likely would use same buffers for rendering shadowmaps, so
 }
 
+enum Validity = NEEDS_ALLOC, NEEDS_UPLOAD, CLEAN
+
 type GEOMETRY_STORAGE = {
     GPUBuffer = [GPUBuffer?]
     LuaBuffer = [LuaBuffer?]
+    Type = [GEOMETRY_TYPE]
+    Top = [NUMBER]
+    State = [Validity]
     [Number] = [Entity]
 }
 
 type Stack = {
     Solid = {
         [MaterialPointer | false] = { -- where false means default material (used for basic models that all own their own materials)
-            [GEOMETRY_TYPE] = [GEOMETRY_STORAGE]
+            [GEOMETRY_HASH] = [GEOMETRY_STORAGE]
         }
     }
     Transparent = {
         [MaterialPointer | false] = {
-            [GEOMETRY_TYPE] = [GEOMETRY_STORAGE]
+            [GEOMETRY_HASH] = [GEOMETRY_STORAGE]
         }
     }
 }
+
+Here GEOMETRY_TYPE is an enum for specific renderable (mesh, model, box, etc)
+Whereas GEOMETRY_HASH is its hash (for primitives same as type, but for things like models its a hash of its data blob or mem address idk yet)
 
 If we have over (N) Entities in a specific [GEOMETRY_STORAGE], then we shall actually allocate the GPUBuffer and LuaBuffer and send them to there and force instancing
 We shall still keep Entity references

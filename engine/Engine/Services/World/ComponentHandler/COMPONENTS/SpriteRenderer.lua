@@ -24,10 +24,12 @@ local ProcessorFunc = function(p, _, c)
     p:pop("state")
 end
 
+--[[
 local REnum = ENUM.RenderType
 local Top = REnum:GetTop()
 REnum.__Append("SpriteRenderer", Top + 1)
 REND.AppendRenderTTP(REnum["SpriteRenderer"], ProcessorFunc)
+]]
 
 local SRMT = {
     __index = function(self, k)

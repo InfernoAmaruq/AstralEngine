@@ -432,7 +432,7 @@ function Renderer.Composite()
         pass:send("Bloom",CAMERA[31][1])
 
         -- set gamma and exposure
-        pass:send("gamma",.9)
+        pass:send("gamma",1)
         pass:send("exposure",1)
 
         pass:fill()

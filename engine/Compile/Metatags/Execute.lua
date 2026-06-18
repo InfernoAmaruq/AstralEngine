@@ -54,7 +54,6 @@ function Execute.PARSE(Blk, _, N)
     else
         Code = PREFIX .. "\n" .. Code
     end
-    print("EXE EMIT:", Code)
     local Body, Err = LoadstringToUse(Code, "COMPILETIME EXE " .. N)
     if Body then
         setfenv(Body, ENV)

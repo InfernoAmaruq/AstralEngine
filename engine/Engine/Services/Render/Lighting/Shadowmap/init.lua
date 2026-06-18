@@ -190,15 +190,17 @@ function Shadowmap.Add(E, L)
         Entry.IsCube = Cube
     end
 
+    --[[
     print("REGISTER SHADOWCASTING LIGHT:")
     print("ID = ", Entry.Id)
     print("SHADOWMAP ID = ", Entry.MapId)
     print("ISCUBE = ", Entry.IsCube)
     print("ENTITY = ", E)
+    ]]
 end
 
 function Shadowmap.Remove(E)
-    print("DEREGISTER")
+    --print("DEREGISTER")
 end
 
 return Shadowmap

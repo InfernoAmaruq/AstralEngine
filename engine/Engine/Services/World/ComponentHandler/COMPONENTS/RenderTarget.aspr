@@ -1,5 +1,6 @@
 local RendTarget = {}
 
+local Component = GetService("Component", "Component")
 local Renderer = GetService("Renderer")
 
 RendTarget.Name = "RenderTarget"
@@ -23,18 +24,14 @@ local RenderFlags = {
     Stack_Both = 3,
 }
 
-local OutdatedApi = function()
-    print("OUTDATED API CALL!")
-end
-
 local Methods = {
     GetMaterial = function(Entity)
+        local Mat = Component.HasComponent(Entity, "Material")
+        if Mat then
+            return Mat[1] or false
+        end
         return false
     end,
-    SwapStacks = OutdatedApi,
-    AddToStack = OutdatedApi,
-    RemoveFromStack = OutdatedApi,
-    SetMaterial = OutdatedApi,
     Update = function(self, Material, Solid, GeometryHash, DrawType)
         local OldSolid, OldMaterial, OldGeometryHash, OldDrawType = unpack(self, 2, 5)
 
@@ -60,7 +57,7 @@ local Methods = {
         local DrawTable = Renderer.DrawTable
 
         if HadTransparent and not DoTransparent then
-            DrawTable.RemoveFromStack(Entity, false, Material, GeometryHash)
+            DrawTable.RemoveFromStack(Entity, false, OldMaterial, GeometryHash)
         elseif not HadTransparent and DoTransparent then
             DrawTable.AddToStack(Entity, false, Material, GeometryHash, DrawType)
         elseif
@@ -71,7 +68,7 @@ local Methods = {
         end
 
         if HadSolid and not DoSolid then
-            DrawTable.RemoveFromStack(Entity, true, Material, GeometryHash)
+            DrawTable.RemoveFromStack(Entity, true, OldMaterial, GeometryHash)
         elseif not HadSolid and DoSolid then
             DrawTable.AddToStack(Entity, true, Material, GeometryHash, DrawType)
         elseif (OldMaterial ~= Material or DrawType ~= OldDrawType or OldGeometryHash ~= GeometryHash) and DoSolid then
@@ -120,6 +117,10 @@ RendTarget.Metadata.__remove = function(self, Entity)
     if HadSolid then
         DrawTable.RemoveFromStack(Entity, true, Mat, Hash)
     end
+end
+
+RendTarget.FinalProcessing = function()
+    RendTarget.__OnRenderTargetReady()
 end
 
 return RendTarget

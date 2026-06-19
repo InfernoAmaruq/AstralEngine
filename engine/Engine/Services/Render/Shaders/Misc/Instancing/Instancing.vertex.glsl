@@ -2,7 +2,7 @@
 @IDENTIFIER:INSTANCING_VERTEX;
 @PRIORITY:-1000;
 
-layout(location = 101) flat out int InstIndex;
+layout(location = 50) flat out int InstIndex;
 
 #ifndef INSTANCES
 #define INSTANCES 256

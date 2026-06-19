@@ -324,8 +324,15 @@ function ShaderService.ComposeShader(Type,Search,Params)
             local ShaderName = NAME_TO_ENUM(Pragmas.TYPE)
             local Key = ShaderName and SHADERTYPE[ShaderName].RawValue or SHADERTYPE.Compute.RawValue
 
-            Buckets[Key][#Buckets[Key]+1] = TEXT
-            Buckets[Key][#Buckets[Key]+1] = Pragmas
+            if Key == &ST_Graphics then
+                Buckets[&ST_Vertex][#Buckets[&ST_Vertex]+1] = TEXT
+                Buckets[&ST_Vertex][#Buckets[&ST_Vertex]+1] = Pragmas
+                Buckets[&ST_Fragment][#Buckets[&ST_Fragment]+1] = TEXT
+                Buckets[&ST_Fragment][#Buckets[&ST_Fragment]+1] = Pragmas
+            else
+                Buckets[Key][#Buckets[Key]+1] = TEXT
+                Buckets[Key][#Buckets[Key]+1] = Pragmas
+            end
 
         end
     end

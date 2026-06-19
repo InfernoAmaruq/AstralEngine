@@ -193,12 +193,10 @@ function DrawTable.RemoveFromStack(Entity, IsSolid, Material, GeometryHash)
     GeometryTable.Top = Top - 1
 end
 
-local RR_CONTINUE = 1 -- carry on as normal
-local RR_FREED = 2    -- freed fully, skip loop
 local function DrawTableFix(Table)
     -- this will be called if the table needs repairs or changes to be made
     -- nts: do not forget to check if the Type of geometry has a bulk function before allocating
-    return RR_CONTINUE -- whether a table was freed or not
+    return false -- whether a table was freed or not
 end
 
 -- > DRAWING
@@ -232,7 +230,12 @@ local function GetDrawFunc(IsSolid)
 
             -- ASSIGN PASS VARIABLES
 
-            Pass:reset()
+            if IsSolid then
+                Camera[11][1]:reset()
+                Pass:reset()
+                Camera[21][1]:reset()
+            end
+
             Pass:setViewPose(1, TransformMatrix)
             Pass:setProjection(1, Projection)
             Pass:setFaceCull(Culling)
@@ -265,15 +268,16 @@ local function GetDrawFunc(IsSolid)
                 Pass:send("PBR_EnvMap", Skybox)
             end
 
-            for _, GeometryList in pairs(Stack) do
+            for Material, GeometryList in pairs(Stack) do
                 Pass:setMaterial(Material or nil)
 
                 for DrawHash, GeometryTable in pairs(GeometryList) do
                     Pass:push("state")
 
-                    local ShouldDrop = (GeometryTable.State == GTS_READY) and RR_CONTINUE or DrawTableFix(GeometryTable)
+                    --local ShouldDrop = (GeometryTable.State == GTS_READY) and false or DrawTableFix(GeometryTable)
+                    local ShouldContinue = true
 
-                    if ShouldDrop ~= RR_FREED then
+                    if ShouldContinue then
                         local Functions = FunctionRegistry[GeometryTable.Type]
                         if GeometryTable.IsInstanced then
                             Pass:send("IsInstanced", true)
@@ -281,10 +285,10 @@ local function GetDrawFunc(IsSolid)
                             Pass:send("InstMaterialData", GeometryTable.GPUMaterialBuffer)
                             Pass:send("InstTransformData", GeometryTable.GPUTransformBuffer)
 
-                            Functions.Bulk(Pass, GeometryTable, Camera, DrawHash, IsTransparent)
+                            Functions.Bulk(Pass, GeometryTable, DrawHash)
                         else
                             Pass:send("IsInstanced", false)
-                            Functions.Single(Pass, GeometryTable, Camera, DrawHash, IsTransparent)
+                            Functions.Single(Pass, GeometryTable, DrawHash)
                         end
                     end
 
@@ -318,7 +322,7 @@ function Renderer.Composite()
         local SolidTexture = Camera[20][1]
         local TransparentTexture = Camera[13][1]
         local RevealTexture = Camera[23][1]
-        local DepthTexture = Camera[23][1]
+        local DepthTexture = Camera[24][1]
 
         local Projection = Camera[26]
         local InvProjection = mat4(Projection):invert()
@@ -340,9 +344,8 @@ function Renderer.Composite()
         -- COMPOSITION
         CompositePass:reset()
         CompositePass:setShader(OITExtractShader)
+        CompositePass:setFaceCull()
         CompositePass:setBlendMode("none")
-        CompositePass:setDepthWrite(false)
-        CompositePass:setSampler("nearest")
 
         -- extract config
         CompositePass:send("OIT_TexSolid", SolidTexture)
@@ -370,6 +373,8 @@ function Renderer.Composite()
         CompositePass:send("ViewMatrix", ViewMatrix)
         CompositePass:send("SSAO_Noise", SSAO_Noise_Texture)
 
+        CompositePass:setDepthWrite(false)
+        CompositePass:setSampler("nearest")
         CompositePass:fill()
 
         -- BLUR PASS
@@ -388,6 +393,7 @@ function Renderer.Composite()
         BlurPassH:send("AO_Tex", Camera[34][1])
         BlurPassH:send("DoBloom", DoBloom)
         BlurPassH:send("Color_Tex", Camera[33][1])
+
         BlurPassH:send("CamNear", Near)
         BlurPassH:send("Depth_Tex", DepthTexture)
 
@@ -402,9 +408,9 @@ function Renderer.Composite()
             local DataDist = DOFData.FadeDistance
 
             BlurPassH:send("DOFData", DOFBuffer)
-            BlurPassH:send("DOFDadeDist", DataDist)
+            BlurPassH:send("DOFFadeDist", DataDist)
             BlurPassV:send("DOFData", DOFBuffer)
-            BlurPassV:send("DOFDadeDist", DataDist)
+            BlurPassV:send("DOFFadeDist", DataDist)
         end
 
         if DoBloom then
@@ -456,3 +462,5 @@ Renderer.Late[#Renderer.Late + 1] = function()
     )
     RS.BindToStep("_REND_SCENE_COMPOSITE", ENUM.StepPriority.RenderSceneComposite.RawValue, Renderer.Composite, Flag)
 end
+
+function Renderer.__OnRenderTargetReady() end

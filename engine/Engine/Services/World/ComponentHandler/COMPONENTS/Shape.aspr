@@ -36,11 +36,16 @@ local function GenerateProcessors(f)
 
     local function Single(Pass, Geometry)
         local TransformStorage = Comp.Transform.Storage
-        local MatStorage = Comp.Material.Storage
+        local M = Comp.Material
+        local MatStorage = M.Storage
+        local EmptyMatrix = M.Metadata.EmptyMatrix
 
         local P_Send = P_Send
         local P_Color = P_Color
         local P_Sampler = P_Sampler
+
+        local VecOne = VecOne
+        local VecZero = VecZero
 
         local f = f
 
@@ -50,23 +55,19 @@ local function GenerateProcessors(f)
             local Transform = TransformStorage[Ent]
 
             if Mat then
-                P_Send(Pass, "Material_UVScale", Mat[2])
-                P_Send(Pass, "Material_UVOffset", Mat[3])
-                P_Color(Pass, Mat[4])
-                P_Send(Pass, "Material_FillMode", Mat[5])
-                P_Sampler(Pass, Mat[6] and "nearest" or "linear")
+                P_Send(Pass, "Material_Matrix", Mat[9])
                 P_Send(Pass, "Material_ObjectScale", Transform[5])
             else
-                P_Send(Pass, "Material_UVScale", VecOne)
-                P_Send(Pass, "Material_UVOffset", VecZero)
-                P_Send(Pass, "Material_FillMode", 0)
+                P_Send(Pass, "Material_Matrix", EmptyMatrix)
             end
 
             f(Pass, Transform[3])
         end
     end
 
-    local function Bulk() end
+    local function Bulk()
+        f(Pass, nil)
+    end
 
     return Single, Bulk
 end

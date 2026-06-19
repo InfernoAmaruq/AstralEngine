@@ -1,5 +1,7 @@
 local floor, ceil, abs, type = math.floor, math.ceil, math.abs, type
 
+_G.bit = require(lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath()) .. "bit")
+
 math.mathtype = function(x)
     if type(x) ~= "number" then
         return nil

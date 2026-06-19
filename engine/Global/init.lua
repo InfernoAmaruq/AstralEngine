@@ -1,13 +1,14 @@
 local Path = lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath())
 
 for _, FileName in ipairs(lovr.filesystem.getDirectoryItems(Path)) do
-    if lovr.filesystem.isFile(Path .. "/" .. FileName) and not FileName:find(".lua") then
-        continue
+    if
+        (
+            (lovr.filesystem.isFile(Path .. "/" .. FileName) and FileName:find(".lua"))
+            or lovr.filesystem.isDirectory(Path .. "/" .. FileName)
+        )
+        and not FileName:match("%init.lua$")
+    then
+        print("LOAD:", Path .. "/" .. FileName)
+        require(FileName)
     end
-
-    if FileName:match("%init.lua$") then
-        continue
-    end
-
-    require(FileName)
 end

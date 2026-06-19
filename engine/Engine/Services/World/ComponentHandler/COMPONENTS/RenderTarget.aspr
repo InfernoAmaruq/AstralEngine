@@ -33,6 +33,7 @@ local Methods = {
         return false
     end,
     Update = function(self, Material, Solid, GeometryHash, DrawType)
+        local bit = bit
         local OldSolid, OldMaterial, OldGeometryHash, OldDrawType = unpack(self, 2, 5)
 
         Solid = Solid == RenderFlags.Param_Old and OldSolid or Solid or RenderFlags.Stack_None
@@ -50,8 +51,9 @@ local Methods = {
         end
 
         local HadTransparent, HadSolid =
-            OldSolid & RenderFlags.Stack_Transparent ~= 0, OldSolid & RenderFlags.Stack_Solid ~= 0
-        local DoTransparent, DoSolid = Solid & RenderFlags.Stack_Transparent ~= 0, Solid & RenderFlags.Stack_Solid ~= 0
+            bit.band(OldSolid, RenderFlags.Stack_Transparent) ~= 0, bit.band(OldSolid, RenderFlags.Stack_Solid) ~= 0
+        local DoTransparent, DoSolid =
+            bit.band(Solid, RenderFlags.Stack_Transparent) ~= 0, bit.band(Solid, RenderFlags.Stack_Solid) ~= 0
 
         local Entity = self.__E
         local DrawTable = Renderer.DrawTable
@@ -108,7 +110,8 @@ end
 RendTarget.Metadata.__remove = function(self, Entity)
     local Solid, Mat, Hash = unpack(self, 2, 4)
 
-    local HadTransparent, HadSolid = Solid & RenderFlags.Stack_Transparent ~= 0, Solid & RenderFlags.Stack_Solid ~= 0
+    local HadTransparent, HadSolid =
+        bit.band(Solid, RenderFlags.Stack_Transparent) ~= 0, bit.band(Solid, RenderFlags.Stack_Solid) ~= 0
     local DrawTable = Renderer.DrawTable
 
     if HadTransparent then
@@ -120,7 +123,7 @@ RendTarget.Metadata.__remove = function(self, Entity)
 end
 
 RendTarget.FinalProcessing = function()
-    RendTarget.__OnRenderTargetReady()
+    Renderer.__OnRenderTargetReady()
 end
 
 return RendTarget

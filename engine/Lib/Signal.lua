@@ -6,22 +6,23 @@ Signal.Clock = os.clock
 
 Signal.Type = {
     Default = 0,
-    RTC = 1 << 0,
-    Yield = 1 << 1,
-    NoCtx = 1 << 2,
+    RTC = 1,
+    Yield = 2,
+    NoCtx = 4,
 }
 
 function Signal.new(Type, timeout)
     Type = Type or Signal.Type.Default
+
     local Tab = {
         _connections = {},
         _waiting = {},
-        _RTC = Type & Signal.Type.RTC ~= 0,
-        _yielding = Type & Signal.Type.Yield ~= 0,
+        _RTC = bit.band(Type, Signal.Type.RTC) ~= 0,
+        _yielding = bit.band(Type, Signal.Type.Yield) ~= 0,
         _type = Type,
         _timeout = timeout or 0.05,
     }
-    if _G.CONTEXT and Type & Signal.Type.NoCtx == 0 then
+    if _G.CONTEXT and bit.band(Type, Signal.Type.NoCtx) == 0 then
         _G.CONTEXT:BindToContext("Signal", Tab)
     end
 

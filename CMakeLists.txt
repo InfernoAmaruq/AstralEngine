@@ -33,6 +33,7 @@ option(LOVR_USE_GLSLANG "Use glslang to compile GLSL shaders" ON)
 option(LOVR_USE_VULKAN "Use the Vulkan renderer" ON)
 option(LOVR_USE_WEBGPU "Use the WebGPU renderer" OFF)
 option(LOVR_USE_STEAM_AUDIO "Enable the Steam Audio spatializer (be sure to also set LOVR_STEAM_AUDIO_PATH)" OFF)
+option(LOVR_USE_LUAJIT "Use LuaJIT or Aspera" OFF)
 
 option(LOVR_SANITIZE "Enable Address Sanitizer" OFF)
 option(LOVR_PROFILE "Enable Tracy integration" OFF)
@@ -110,6 +111,17 @@ if(LOVR_USE_GLFW AND NOT (EMSCRIPTEN OR ANDROID))
 endif()
 
 # Lua
+if(LOVR_USE_LUAJIT AND NOT EMSCRIPTEN)
+	set(BUILD_SHARED_LIBS ON)
+	add_subdirectory(deps/luajit luajit EXCLUDE_FROM_ALL)
+	if(MSVC)
+		target_compile_definitions(libluajit PRIVATE _CRT_SECURE_NO_WARNINGS)
+		target_compile_definitions(minilua PRIVATE _CRT_SECURE_NO_WARNINGS)
+		target_compile_definitions(buildvm PRIVATE _CRT_SECURE_NO_WARNINGS)
+	endif()
+	set(LOVR_LUA_INCLUDE deps/luajit/src &{CMAKE_BINARY_DIR}/luajit)
+	set(LOVR_LUA libluajit)
+else()
     set(LUA_SRC
       lapi.c lauxlib.c lbaselib.c lcode.c ldblib.c ldebug.c ldo.c ldump.c lfunc.c lgc.c linit.c
       liolib.c llex.c lmathlib.c lmem.c loadlib.c lobject.c lopcodes.c loslib.c lparser.c lstate.c
@@ -128,6 +140,7 @@ endif()
     endif()
     set(LOVR_LUA_INCLUDE ${CMAKE_SOURCE_DIR}deps/lua)
     set(LOVR_LUA lua)
+endif()
 
 # MSDF
 if(LOVR_ENABLE_DATA)

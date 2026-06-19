@@ -14,8 +14,8 @@ local DEADMT = {
 local MTCACHE = setmetatable({},{__mode = "v"})
 local CBaseMT = {__type = "ComponentPrefab"}
 
-Component.ComponentAdded = SignalLib.new(SignalLib.Type.RTC | SignalLib.Type.NoCtx)
-Component.ComponentRemoved = SignalLib.new(SignalLib.Type.RTC | SignalLib.Type.NoCtx)
+Component.ComponentAdded = SignalLib.new(bit.bor(SignalLib.Type.RTC, SignalLib.Type.NoCtx))
+Component.ComponentRemoved = SignalLib.new(bit.bor(SignalLib.Type.RTC, SignalLib.Type.NoCtx))
 
 function Component.NewComponent(Name, Pattern, Metadata, FastFetch)
     assert(not Component.Components[Name], "Component already exists: " .. Name)
@@ -111,10 +111,9 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
     elseif DATA then
         D = {}
         for i, v in pairs(DATA) do
-            if not t.Pattern[i] then
-                continue
+            if t.Pattern[i] then
+                D[i] = v
             end
-            D[i] = v
         end
 
         if t.Metadata and t.Metadata.__mt then
@@ -175,11 +174,12 @@ local function KillComponent(e,id,Force)
 
     if not Force then
         for Name, UserComp in pairs(Component.SetComponents[e]) do
-            if v == UserComp then continue end
+            if v ~= UserComp then
 
-            local UCMeta = Component.Components[Name].Metadata
-            if UCMeta and UCMeta.HardDependency and UCMeta.HardDependency[id] then
-                AstralEngine.Error("CANNOT REMOVE COMPONENT "..id.." BECAUSE COMPONENT "..Name.." DEPENDS ON IT!","COMPONENT",2)
+                local UCMeta = Component.Components[Name].Metadata
+                if UCMeta and UCMeta.HardDependency and UCMeta.HardDependency[id] then
+                    AstralEngine.Error("CANNOT REMOVE COMPONENT "..id.." BECAUSE COMPONENT "..Name.." DEPENDS ON IT!","COMPONENT",2)
+                end
             end
         end
     end
@@ -278,7 +278,7 @@ function Component.LoadComponents()
             if File then
                 local S, Res = pcall(File)
 
-                if not S or not Res then AstralEngine.Log("FAILED TO LOAD COMPONENT: "..f.." - "..(Res or "COMPONENT RETURNED NIL"),"warn","COMPONENT") continue else File = Res end
+                if not S or not Res then AstralEngine.Log("FAILED TO LOAD COMPONENT: "..f.." - "..(Res or "COMPONENT RETURNED NIL"),"warn","COMPONENT") goto continue else File = Res end
 
                 Component.NewComponent(File.Name, File.Pattern, File.Metadata, File.FastFetch)
                 table.insert(FinalProcessing, File.FinalProcessing)
@@ -286,6 +286,8 @@ function Component.LoadComponents()
                 AstralEngine.Log("FAILED TO LOAD COMPONENT: "..f,"warn","COMPONENT")
             end
         end
+
+        ::continue::
     end
 
     local ANSI = AstralEngine.Plugins.ANSIColor or {}

@@ -7,6 +7,7 @@ uniform sampler Material_PixelSampler;
 
 #define HAS_MATERIAL_HEADER
 
+uniform vec3 Material_ObjectScale;
 
 #ifdef INSTANCES
 uniform vec3 Material_ObjectScaleInstanced[INSTANCES];

@@ -110,7 +110,7 @@ end
 Renderer.Late[#Renderer.Late + 1] = function()
     -- bind the shadowmap draw call
     local RS = GetService("RunService")
-    local Flag = RS.Flags.Raw | RS.Flags.Contextless
+    local Flag = bit.bor(RS.Flags.Raw, RS.Flags.Contextless)
 
     ENUM.StepPriority.__Append("RenderShadowmap", 550)
 

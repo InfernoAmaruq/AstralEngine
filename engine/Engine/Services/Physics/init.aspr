@@ -1,5 +1,8 @@
 local Entity = GetService("Entity", "Entity")
 local Component = GetService("Component","Component")
+
+local bit = bit
+
 local NewWorld = lovr.physics.newWorld
 
 local Physics = {}
@@ -37,16 +40,14 @@ for i,v in pairs(Meta.Methods) do
 end
 
 -- PHYS CONFIG
-local WorldColliders = table.alloc(1, 0)
-local LuaToJoltToSync = table.alloc(1, 0)
+local WorldColliders = table.new(1, 0)
+local LuaToJoltToSync = table.new(1, 0)
 
 @flag:F_Col = 1;
 @flag:F_Trans = 2;
 @flag:F_Flags = 3;
 
-@flag:S_Static = 0b101100000001;
-
-@flag:SHOULD_MOVE = 0b101100000011;
+local SHOULD_MOVE = tonumber("101100000011",2)
 
 local CALLBACKS = {
     Enter = function(a,b,sa,sb,nx,ny,nz,overlap)
@@ -147,8 +148,8 @@ function Physics.NewWorld(Parameters)
 
     Physics.Worlds[N] = T
 
-    WorldColliders[N] = { [&F_Col] = table.alloc(250,0), [&F_Trans] = table.alloc(250,0), [&F_Flags] = table.alloc(250,0) }
-    LuaToJoltToSync[N] = { [&F_Col] = table.alloc(70,0), [&F_Trans] = table.alloc(70,0) }
+    WorldColliders[N] = { [&F_Col] = table.new(250,0), [&F_Trans] = table.new(250,0), [&F_Flags] = table.new(250,0) }
+    LuaToJoltToSync[N] = { [&F_Col] = table.new(70,0), [&F_Trans] = table.new(70,0) }
 
     N = N + 1
     return T
@@ -157,7 +158,7 @@ end
 local FF_GetPose, FF_FromPose, CC_SetPose, CC_SetVel, CC_SetAngVel
 
 local FieldToFlag = {
-    Static = &S_Static
+    Static = tonumber("101100000001",2)
 }
 
 local function ProcessFlags(ColRef)
@@ -165,7 +166,7 @@ local function ProcessFlags(ColRef)
     for i,v in pairs(FieldToFlag) do
         local FIELD = ColRef[i]
         if FIELD then
-            Flags |= v
+            Flags = bit.bor(Flags, v)
         end
     end
     return Flags
@@ -204,9 +205,9 @@ function Physics.__UpdateSyncField(World, ColliderRef, Field, Value)
     local t = WorldColliders[WId][&F_Flags]
 
     if Value then
-        t[Id] |= FlagVal
+        t[Id] = bit.bor(t[Id], FlagVal)
     else
-        t[Id] &= ~FlagVal
+        t[Id] = bit.band(t[Id],bit.bnot(FlagVal))
     end
 end
 
@@ -237,13 +238,15 @@ function Physics.GetMainWorld()
 end
 
 function Physics.UpdateTransforms(World)
+    local band = bit.band
     local Entry = WorldColliders[World.WorldId]
     local Colls, Trans, Flags = Entry[&F_Col], Entry[&F_Trans], Entry[&F_Flags]
     local n = #Colls
     local FromPose, GetPose = FF_FromPose, FF_GetPose
     for i = 1, n do
-        if (Flags[i] & &SHOULD_MOVE) ~= 0 then continue end
-        FromPose(Trans[i],GetPose(Colls[i]))
+        if band(Flags[i], SHOULD_MOVE) == 0 then
+            FromPose(Trans[i],GetPose(Colls[i]))
+        end
     end
 end
 

@@ -1,7 +1,7 @@
 local Light = {}
 
 local LightService
-local World = GetService("World", "World")
+local World = GetService("Entity")
 
 local LightEnum = ENUM.LightType
 
@@ -15,19 +15,19 @@ local KeyMap = {
     Angle = 4,
     Type = 5,
     Enabled = 7,
+    SurfaceSize = 8,
+    ShadowCasting = 9,
 }
 
-local Methods = {
-    __OnTransformChanged = function(self)
-        LightService.AddLight(self[6])
-    end,
-}
+local Methods = {}
 
 local MetaTable = {
     __index = function(self, k)
         local Key = KeyMap[k]
         if Key == KeyMap.Color then
             return vec4(self[1])
+        elseif Key == KeyMap.SurfaceSize then
+            return vec2(self[8])
         end
         return Key and self[Key] or Methods[k]
     end,
@@ -37,6 +37,8 @@ local MetaTable = {
             if Key == KeyMap.Color then
                 local R, G, B, A = (v / 255):unpack()
                 self[1]:set(R, G, B, A or 1)
+            elseif Key == KeyMap.SurfaceSize then
+                self[8]:set(v)
             elseif Key == KeyMap.Enabled then
                 self[Key] = v
                 if not v then
@@ -58,8 +60,6 @@ Light.Metadata.__create = function(Input, Ent)
     local EntRef = World.GetEntityFromId(Ent)
     local _ = EntRef.Transform or EntRef:AddComponent("Transform")
 
-    LightService = LightService or GetService("Renderer").Lighting
-
     local Type = Input.Type or LightEnum.Point
 
     local r, g, b, a = (Input.Color or vec4(255, 255, 255, 255)):unpack()
@@ -70,6 +70,8 @@ Light.Metadata.__create = function(Input, Ent)
     L[5] = Type
     L[6] = EntRef
     L[7] = Input.Enabled == nil and true or Input.Enabled
+    L[8] = Vec2(Input.SurfaceSize)
+    L[9] = Input.ShadowCasting or false
 
     setmetatable(L, MetaTable)
 
@@ -82,6 +84,11 @@ end
 
 Light.Metadata.__remove = function(self)
     LightService.RemoveLight(self[6])
+end
+
+Light.FinalProcessing = function()
+    LightService = LightService or GetService("Renderer").Lighting
+    World.OnTransformChanged:Connect(LightService.UpdateLight)
 end
 
 return Light

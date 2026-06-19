@@ -71,23 +71,17 @@ Data.__RawUnbind = function(Name)
 end
 
 local ENUMName = "StepPriority"
-local E
-local Processor
-if _G["ENUM"] then
-    E = _G["ENUM"]({
-        CPUUpdate = 250,
-        RenderSceneSolid = 600,
-        RenderSceneTransparent = 700,
-        RenderSceneComposite = 750,
-        RenderPost = 800,
-        RenderSubmit = 950,
-        RenderMirror = 970,
-        Physics = 1250,
-    }, ENUMName, { CanAppend = true })
-    Processor = _G["ENUM"].__GETPROCESSOR(ENUMName, "RawValue")
-else
-    Processor = function(_) end
-end
+local E = _G["ENUM"]({
+    CPUUpdate = 250,
+    RenderSceneSolid = 600,
+    RenderSceneTransparent = 700,
+    RenderSceneComposite = 750,
+    RenderPost = 800,
+    RenderSubmit = 950,
+    RenderMirror = 970,
+    Physics = 1250,
+}, ENUMName, { CanAppend = true })
+local Processor = _G["ENUM"].__GETPROCESSOR(ENUMName, "RawValue")
 
 Data.__TEMPBIND = function(n, Priority, F)
     Priority = Processor(Priority) or Priority

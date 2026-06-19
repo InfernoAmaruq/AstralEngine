@@ -7,6 +7,12 @@ return {
             -- For tiny games with very few routines, UseLua may be fastest. UseNative is fastest for large lists
             -- UseAuto is fast but less predicable
         },
+        Audio = {
+            "Active",
+        },
+        Lighting = {
+            "DoShadowmap",
+        },
         GC = {
             --"UseAstr", -- or nil for Lua GC
 

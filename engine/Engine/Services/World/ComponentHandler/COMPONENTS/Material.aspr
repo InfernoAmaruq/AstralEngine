@@ -19,6 +19,63 @@ end)
 
 local MaterialFitMode = ENUM({ Stretch = 0, Tile = 1, Crop = 2 }, "MaterialFitMode")
 
+Material.Metadata.EmptyMatrix = Mat4(
+    0,
+    0, -- uv offset
+    1,
+    1, -- uv scale
+    --
+    1,
+    1,
+    1,
+    1, -- color
+    --
+    0, -- fit mode
+    0, -- sampler
+    0,
+    0,
+    --
+    0,
+    0,
+    0,
+    0
+)
+
+local function RebuildMatrix(self)
+    local RT = Comp.HasComponent(self[8], "RenderTarget")
+
+    local Offset, Scale, Color = self[3], self[2], self[4]
+    self[9]:set(
+        Offset.x,
+        Offset.y,
+        Scale.x,
+        Scale.y,
+        --
+        Color.r,
+        Color.g,
+        Color.b,
+        Color.a,
+        --
+        self[5],
+        self[6] and 1 or 0,
+        0,
+        0,
+        --
+        0,
+        0,
+        0,
+        0
+    )
+
+    if RT then
+        local F = RT.Flags
+
+        local Flag = (Color.a >= 0.99 and (self[1] and F.Stack_Both or F.Stack_Solid) or F.Stack_Transparent)
+
+        RT:Update(self[1], Flag, F.Param_Old, F.Param_Old)
+    end
+end
+
 local Mt = {
     __index = function(self, k)
         if k == "Color" then
@@ -37,23 +94,12 @@ local Mt = {
     end,
     __newindex = function(self, k, v)
         if k == "Material" then
-            local RT = Comp.HasComponent(self[8], "RenderTarget")
             self[7] = v
             self[1] = v and v.__lmat or v[1] or v
-
-            if RT then
-                RT:SetMaterial(self[1])
-            end
         elseif k == "Color" then
-            local RT = Comp.HasComponent(self[10], "RenderTarget")
             v = v or vec4(255, 255, 255, 255)
-            local OldAlpha = self[4].w
             local r, g, b, a = v:div(255):unpack()
             self[4]:set(r, g, b, a or 1)
-
-            if RT and OldAlpha ~= v.w and not self[1] then
-                RT:SwapStacks(v.w == 1)
-            end
         elseif k == "UVOffset" then
             self[3]:set(v)
         elseif k == "UVScale" then
@@ -64,6 +110,7 @@ local Mt = {
         elseif k == "UseNearest" then
             self[6] = v
         end
+        RebuildMatrix(self)
     end,
 }
 
@@ -83,6 +130,7 @@ Material.Metadata.__create = function(Data, Ent)
     Storage[4] = Color
     Storage[7] = Mat
     Storage[8] = Ent
+    Storage[9] = Mat4() -- allocate matrix for it
 
     local FitMode = Data.FitMode or MaterialFitMode.Stretch
     Storage.__FitEnum = FitMode
@@ -95,12 +143,7 @@ Material.Metadata.__create = function(Data, Ent)
         Storage[3]:set(Storage[3], Storage[7][1] or Storage[7])
     end
 
-    if RT and Storage[1] then
-        RT:SetMaterial(Storage[1])
-    elseif RT then
-        local a = Color.w
-        RT:SwapStacks(a == 1)
-    end
+    RebuildMatrix(Storage)
 
     setmetatable(Storage, Mt)
 

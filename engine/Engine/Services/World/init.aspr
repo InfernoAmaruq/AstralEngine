@@ -31,6 +31,7 @@ local Entity = {}
 Entity.OnAncestryChanged = SignalLib.new(SignalLib.Type.RTC)
 Entity.EntityAdded = SignalLib.new(SignalLib.Type.RTC)
 Entity.EntityRemoving = SignalLib.new(SignalLib.Type.RTC)
+Entity.OnTransformChanged = SignalLib.new(SignalLib.Type.RTC)
 
 Entity.GetEntityFromId = World.GetEntityFromId
 

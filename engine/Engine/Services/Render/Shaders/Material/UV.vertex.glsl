@@ -2,15 +2,14 @@
 @IDENTIFIER:MATERIAL_BASE_UV_SHADER;
 @PRIORITY:-10000;
 
-#define MATERIAL_FILL_MODE_STRETCH 0
-#define MATERIAL_FILL_MODE_TILE 1
-#define MATERIAL_FILL_MODE_CROP 2
-
-uniform int Material_FillMode;
-uniform vec3 Material_ObjectScale;
+#define MATERIAL_FIT_MODE_STRETCH 0
+#define MATERIAL_FIT_MODE_TILE 1
+#define MATERIAL_FIT_MODE_CROP 2
 
 vec4 astral_main(){
-    if (Material_FillMode == MATERIAL_FILL_MODE_TILE){
+    int FitMode = Material_FitMode;
+
+    if (FitMode == MATERIAL_FIT_MODE_TILE){
         vec2 ImageSize = textureSize(ColorTexture,0);
 
         float ImageAspect = ImageSize.x / ImageSize.y;
@@ -29,12 +28,17 @@ vec4 astral_main(){
 
         UV = UV * AbsScale;
     }
-    else if (Material_FillMode == MATERIAL_FILL_MODE_CROP){
+    else if (FitMode == MATERIAL_FIT_MODE_CROP){
         vec2 ImageSize = textureSize(ColorTexture,0);
 
         float ImageAspect = ImageSize.x / ImageSize.y;
 
         UV.x = UV.x / ImageAspect + 0.25;
     }
-    // else fall through, default logic
+
+    vec4 MatUV = Material_UV;
+    vec2 Material_UVOffset = MatUV.xy;
+    vec2 Material_UVScale = MatUV.zw;
+
+    UV = UV * Material_UVScale + Material_UVOffset;
 }

@@ -19,43 +19,76 @@ do
     P_Capsule = TMPPASS.capsule
     P_Plane = TMPPASS.plane
     P_Cylinder = TMPPASS.cylinder
+    P_Send = TMPPASS.send
+    P_Color = TMPPASS.setColor
+    P_Sampler = TMPPASS.setSampler
 end
 
-local Processors = {
-    [E.Box.Value] = function(p, _, c)
-        local t = c.Transform
-        P_Box(p, t[3])
-    end,
-    [E.Sphere.Value] = function(p, _, c)
-        local t = c.Transform
-        P_Sphere(p, t[3])
-    end,
-    [E.Capsule.Value] = function(p, _, c)
-        local t = c.Transform
-        P_Capsule(p, t[3])
-    end,
-    [E.Plane.Value] = function(p, _, c)
-        local t = c.Transform
-        P_Plane(p, t[3])
-    end,
-    [E.Cylinder.Value] = function(p, _, c)
-        local t = c.Transform
-        P_Cylinder(p, t[3])
-    end,
+local VecOne = Vec2(1, 1)
+local VecZero = Vec2(0, 0)
+
+local function GenerateProcessors(f)
+    local Comp = Component.Components
+
+    local P_Send = P_Send
+    local P_Color = P_Color
+    local P_Sampler = P_Sampler
+
+    local function Single(Pass, Geometry)
+        local TransformStorage = Comp.Transform.Storage
+        local M = Comp.Material
+        local MatStorage = M.Storage
+        local EmptyMatrix = M.Metadata.EmptyMatrix
+
+        local P_Send = P_Send
+        local P_Color = P_Color
+        local P_Sampler = P_Sampler
+
+        local VecOne = VecOne
+        local VecZero = VecZero
+
+        local f = f
+
+        for i = 1, Geometry.Top do
+            local Ent = Geometry[i]
+            local Mat = MatStorage[Ent]
+            local Transform = TransformStorage[Ent]
+
+            if Mat then
+                P_Send(Pass, "Material_Matrix", Mat[9])
+                P_Send(Pass, "Material_ObjectScale", Transform[5])
+            else
+                P_Send(Pass, "Material_Matrix", EmptyMatrix)
+            end
+
+            f(Pass, Transform[3])
+        end
+    end
+
+    local function Bulk()
+        f(Pass, nil)
+    end
+
+    return Single, Bulk
+end
+
+local BoxId, SphereId, CapsuleId, PlaneId, CylinderId
+BoxId = Render.NewGeometryType(GenerateProcessors(P_Box))
+SphereId = Render.NewGeometryType(GenerateProcessors(P_Sphere))
+CapsuleId = Render.NewGeometryType(GenerateProcessors(P_Capsule))
+PlaneId = Render.NewGeometryType(GenerateProcessors(P_Plane))
+CylinderId = Render.NewGeometryType(GenerateProcessors(P_Cylinder))
+
+local LookupTable = {
+    [E.Box] = BoxId,
+    [E.Capsule] = CapsuleId,
+    [E.Plane] = PlaneId,
+    [E.Cylinder] = CylinderId,
+    [E.Sphere] = SphereId,
 }
 
 Shape.Name = "Shape"
 Shape.Pattern = { Shape = 0 }
-
-local OFFSET = 1
-
-local REnum = ENUM.RenderType
-for i, v in pairs(E) do
-    local V = ENUM.GetValue(v.Value)
-    local Val = V + OFFSET
-    REnum.__Append(i, Val)
-    Render.AppendRenderTTP(REnum[i], Processors[v.Value])
-end
 
 local IdxFields = {
     Shape = 1,
@@ -76,8 +109,12 @@ local MT = {
                 .. debug.getaddress(Comp)
                 .. " to non-enum"
             )
+
+            local Conversion = LookupTable[v]
+
             Comp[IdxFields.Shape] = v
-            RT.__RenderType = v.RawValue
+            local Flags = RT.Flags
+            RT:Update(Flags.Param_Old, Flags.Param_Old, Conversion, Conversion)
         end
     end,
 }
@@ -86,24 +123,28 @@ Shape.Metadata = {}
 Shape.Metadata.__create = function(DATA, e, ShouldSink)
     AstralEngine.Assert(
         not Component.HasComponent(e, "RenderTarget"),
-        "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!"
+        "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!",
+        "Shape"
     )
     local ShapeEnum = (DATA.Shape or E.Box)
-    local S = ShapeEnum.RawValue
 
-    FRESHV = S + OFFSET
+    local Val = LookupTable[ShapeEnum]
+    AstralEngine.Assert(Val, "No valid shape type provided!", "Shape")
 
-    local RT = Component.AddComponent(e, "RenderTarget", { Value = FRESHV, Solid = true })
     if not Component.HasComponent(e, "Transform") and not ShouldSink then
         Component.AddComponent(e, "Transform")
     end
 
+    local RT = Component.AddComponent(e, "RenderTarget")
+
     local Comp = {
-        [IdxFields.Shape] = Shape,
+        [IdxFields.Shape] = ShapeEnum,
     }
 
     Comp.__RenderTypePtr = RT
     Comp.__Ent = e
+
+    RT:Update(RT:GetMaterial(), RT.Flags.Stack_Solid, Val, Val) -- SUBMIT MATERIAL HERE AS WELL
 
     return setmetatable(Comp, MT)
 end

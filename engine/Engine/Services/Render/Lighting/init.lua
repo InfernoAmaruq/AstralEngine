@@ -16,6 +16,9 @@ CacheTable.Light_ExtrasTwo = table.alloc(256, 0)
 local LightBuffer = lovr.graphics.newBuffer(MainBufferFormat)
 Lighting.LightBuffer = LightBuffer
 
+Lighting.LTCTexture = GetService("AssetService").NewTexture("ltc_mat.dds", { linear = true })[1]
+Lighting.LTCAmp = GetService("AssetService").NewTexture("ltc_amp.dds", { linear = true })[1]
+
 LightBuffer:setData(CacheTable)
 
 local LightRegistry = {} -- we use this to hold LightEntity = IdInBuffer registry
@@ -71,7 +74,29 @@ Lighting.AddLight = function(LightEntity, EarlyLightComponent)
     CacheTable.Light_Extras[Id] = CacheTable.Light_Extras[Id] or Vec4()
     CacheTable.Light_Extras[Id]:set(ExtrasVector)
 
+    local Extras2Vec = vec4()
+    Extras2Vec.xyz = LightEntity.Transform.UpVector
+    Extras2Vec.w = LC.ShadowCasting and 1 or 0
+
+    if Lighting.Shadowmap then
+        if Extras2Vec.w == 1 then
+            Lighting.Shadowmap.Add(LightEntity, LC)
+        else
+            Lighting.Shadowmap.Remove(LightEntity)
+        end
+    end
+
+    CacheTable.Light_ExtrasTwo[Id] = CacheTable.Light_ExtrasTwo[Id] or Vec4()
+    CacheTable.Light_ExtrasTwo[Id]:set(Extras2Vec)
+
     LightBuffer:setData(CacheTable)
+end
+
+Lighting.UpdateLight = function(E)
+    if not E.Light then
+        return
+    end
+    Lighting.AddLight(E)
 end
 
 Lighting.RemoveLight = function(LightEntity)
@@ -98,6 +123,14 @@ Lighting.RemoveLight = function(LightEntity)
     LightCount = LightCount - 1
     CacheTable.Light_LightCount = LightCount
     LightBuffer:setData(CacheTable)
+
+    if Lighting.Shadowmap then
+        Lighting.Shadowmap.Remove(LightEntity)
+    end
+end
+
+if meta.getdefined("Lighting", "DoShadowmap") then
+    Lighting.Shadowmap = require("Shadowmap", Renderer)
 end
 
 return Lighting

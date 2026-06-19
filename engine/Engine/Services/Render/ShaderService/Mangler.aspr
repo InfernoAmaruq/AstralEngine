@@ -13,7 +13,7 @@ local SkipModifiers = {
 
 local Compare = {}
 
-for i, v in pairs(Def.SYMBOLS.DECLARATOR) do
+for _, v in pairs(Def.SYMBOLS.DECLARATOR) do
     Compare[v] = true
 end
 

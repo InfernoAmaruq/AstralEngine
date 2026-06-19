@@ -15,8 +15,6 @@ local Code = require("Code")
 
 local SPLITSYMBOL = "<SP>"
 Lexer.SetSplitSymbol(SPLITSYMBOL)
-Code.SetSplitSymbol(SPLITSYMBOL)
-Code.LoadMemory(SharedMemory)
 
 Recompiler.MaxPasses = 5
 
@@ -29,7 +27,9 @@ end
 
 function meta.LoadfileAppendStack.Pop()
     local Stack = meta.LoadfileAppendStack
+    local Obj = Stack[#Stack]
     Stack[#Stack] = nil
+    return Obj
 end
 
 function meta.LoadfileAppendStack.Clear()
@@ -97,12 +97,7 @@ local function COMPILE_LOADSTRING(c, NAME)
             Passes = Passes + 1
             c = POSTPROCESS(c, N)
         until not Dirs or #Dirs == 0 or Passes > Recompiler.MaxPasses
-        local n = 0
         Free(N)
-        local t = c:gsub("\n", function(a)
-            n = n + 1
-            return "-- LINE: " .. n .. "\n"
-        end)
         COUNTER = COUNTER - 1
     end
     local f, err = loadstring(c, NAME)

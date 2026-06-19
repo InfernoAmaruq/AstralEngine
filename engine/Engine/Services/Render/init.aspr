@@ -2,13 +2,10 @@ local ShaderService = require("ShaderService")
 
 local Renderer = {}
 Renderer.CamMask = ~0
-local Stack = {}
-local Cams = {}
 local PassTable = {}
 
 -- PASS STORAGE
-@execute<UNSAFE>{if lovr.headset then return "local CONSTOFFSET = 2" else return "local CONSTOFFSET = 1" end}
-
+local CONSTOFFSET = lovr.headset and 2 or 1
 -- Allocate an AO texture
 Renderer.PassStorage = {
     __CORE = {},
@@ -21,16 +18,16 @@ function Renderer.PassStorage.AddPass(P, Pass, Id)
     local T = Renderer.PassStorage[P and "PostTable" or "PreTable"]
 
     T[Id] = T[Id] or {}
-    table.insert(T[Id],Pass)
+    table.insert(T[Id], Pass)
 
     Renderer.PassStorage.RebuildPassTable()
 end
 
 function Renderer.PassStorage.RemovePass(Pass)
-    for i = 1,2 do
+    for i = 1, 2 do
         local Search = i == 1 and "PreTable" or "PostTable"
-        for _,T in pairs(Renderer.PassStorage[Search]) do
-            for j,P in pairs(T) do
+        for _, T in pairs(Renderer.PassStorage[Search]) do
+            for j, P in pairs(T) do
                 if P == Pass then
                     Renderer.PassStorage[Search][j] = nil
                     break
@@ -52,12 +49,12 @@ function Renderer.PassStorage.RebuildPassTable()
     local Top = 0
 
     for id in pairs(Renderer.PassStorage.PreTable) do
-        Keys[#Keys+1] = id
+        Keys[#Keys + 1] = id
     end
 
     table.sort(Keys)
 
-    for _,Id in ipairs(Keys) do
+    for _, Id in ipairs(Keys) do
         local v = Renderer.PassStorage.PreTable[Id]
         for _, Pass in ipairs(v) do
             Top = Top + 1
@@ -73,21 +70,22 @@ function Renderer.PassStorage.RebuildPassTable()
     Keys = {}
 
     for id in pairs(Renderer.PassStorage.PostTable) do
-        Keys[#Keys+1] = id
+        Keys[#Keys + 1] = id
     end
     table.sort(Keys)
 
-    for _,Id in ipairs(Keys) do
+    for _, Id in ipairs(Keys) do
         local v = Renderer.PassStorage.PostTable[Id]
         for _, Pass in ipairs(v) do
             Top = Top + 1
             PassTable[Top] = Pass[1] or Pass
         end
     end
-
 end
 
-function Renderer.GetPassTable() return PassTable end
+function Renderer.GetPassTable()
+    return PassTable
+end
 
 -- ASSET HANDLING
 
@@ -100,7 +98,7 @@ Renderer.Assets.Shaders = {}
 
 Renderer.Late = {}
 function Renderer.LateCall()
-    for i,v in pairs(Renderer.Late) do
+    for i, v in pairs(Renderer.Late) do
         v()
     end
     Renderer.Late = nil
@@ -108,28 +106,27 @@ end
 
 -- RENDERING DATA
 
-local RT = ENUM({}, "RenderType", { CanAppend = true, Strict = true })
-
 for _, File in ipairs(lovr.filesystem.getAliasedFiles("RenderCalls")) do
     local f = loadfile(File)(Renderer)
     if f then
-        Renderer.Late[#Renderer.Late+1] = f
+        Renderer.Late[#Renderer.Late + 1] = f
     end
 end
 
 local SignalLib = require("Lib/Signal")
 AstralEngine.Signals.OnMainShaderChanged = SignalLib.new(SignalLib.Type.RTC)
 
-local V,F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics,"OIT/Write",{
-    Include = {"Material","Lighting","PBR"},
+local V, F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics, "OIT/Write", {
+    Include = { "Material", "Lighting", "PBR", "Misc/Instancing" },
     Define = {
         Fragment = {
-            "MATERIAL_BASEUV_TO_COLOR"
-        }
-    }
+            "MATERIAL_BASEUV_TO_COLOR",
+            MAX_LIGHTS = 256,
+        },
+    },
 })
 
-Renderer.SetMainShader(lovr.graphics.newShader(V,F,{flags = {normalMap = true, vertexTangents = false}}))
+Renderer.SetMainShader(lovr.graphics.newShader(V, F, { flags = { normalMap = true, vertexTangents = false } }))
 
 Renderer.Lighting = loadfile("Lighting")(Renderer)
 

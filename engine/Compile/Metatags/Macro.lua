@@ -124,14 +124,6 @@ function Macro.PARSE(Blk, _, Id)
         local ParsedMacro = SaveTo and CreateMacro(Blk.Raw)
         ParsedMacro.DropBrackets = DropBrackets
         if ParsedMacro then
-            print("MACRO")
-            for i, v in pairs(ParsedMacro) do
-                if type(v) == "table" then
-                    print(i, unpack(v))
-                else
-                    print(i, v)
-                end
-            end
             SaveTo[ParsedMacro.Type .. ":" .. ParsedMacro.Name] = ParsedMacro
         end
     end

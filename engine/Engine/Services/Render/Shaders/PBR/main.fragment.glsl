@@ -6,7 +6,9 @@ uniform textureCube PBR_EnvMap;
 uniform PBR_SphericalHarmonics { vec3 PBR_SH[9]; };
 
 vec4 astral_main(){
-    Surface s = getDefaultSurface();
+    Surface s = getMaterialSurface();
+
+    CurrentColor = s.baseColor * Lighting_Ambience;
 
     CurrentColor.rgb += lighting_getLights(s);
 

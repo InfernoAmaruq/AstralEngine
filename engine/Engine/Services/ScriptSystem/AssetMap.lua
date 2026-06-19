@@ -3,17 +3,19 @@ local AssetMapLoader = {}
 local EntityService = GetService("Entity", "EntityService")
 local ComponentService = GetService("Component", "ComponentService")
 
-local TAG_OFFSET = 40
-local TAG_UNSET = 0b00 << TAG_OFFSET
-local TAG_FORCE = 0b01 << TAG_OFFSET
-local TAG_RES = 0b10 << TAG_OFFSET
+local bit = bit
 
-local TAG_MASK = 0b11 << TAG_OFFSET
-local ID_MASK = ~TAG_MASK
+local TAG_OFFSET = 40
+local TAG_UNSET = bit.lshift(0, TAG_OFFSET)
+local TAG_FORCE = bit.lshift(tonumber("01", 2), TAG_OFFSET)
+local TAG_RES = bit.lshift(tonumber("10", 2), TAG_OFFSET)
+
+local TAG_MASK = bit.lshift(tonumber("11", 2), TAG_OFFSET)
+local ID_MASK = bit.bnot(TAG_MASK)
 
 local BYTE = 8
 local FENVFLAGS = {
-    F_ENT_NOCTX = 0b0100 << BYTE,
+    F_ENT_NOCTX = bit.lshift(tonumber("0100", 2), BYTE),
 }
 
 local FLAG_RESOLVE = {
@@ -54,7 +56,7 @@ local CURSHARED
 local FENV = setmetatable({
     GID = setmetatable({}, {
         __index = function(_, n)
-            return n | TAG_FORCE
+            return bit.bor(n, TAG_FORCE)
         end,
         __newindex = SinkNidx,
     }),
@@ -64,7 +66,7 @@ local FENV = setmetatable({
                 return RES_HASH[s]
             end
             RES_PTR = RES_PTR + 1
-            local RET = RES_PTR | TAG_RES
+            local RET = bit.bor(RES_PTR, TAG_RES)
             RES_HASH[s] = RET
             INV_RES_HASH[RES_PTR] = s
             return RET
@@ -129,8 +131,8 @@ function AssetMapLoader.AssetMapFromPath(Path)
                 "SCENEMANAGER"
             )
             local RawId = i
-            i = i & ID_MASK
-            local Tag = RawId & TAG_MASK
+            i = bit.band(i, ID_MASK)
+            local Tag = bit.band(RawId, TAG_MASK)
 
             if Tag == TAG_RES then
                 AstralEngine.Assert(not RESERVE[i], "Slot " .. i .. " already reserved!", 1)
@@ -193,8 +195,8 @@ function AssetMapLoader.GetAssetMap(AssetMapFS, Folder)
             else
                 for i, Val in pairs(err) do
                     local RawId = i
-                    i = i & ID_MASK
-                    local Tag = RawId & TAG_MASK
+                    i = bit.band(i, ID_MASK)
+                    local Tag = bit.band(RawId, TAG_MASK)
 
                     if Tag == TAG_RES then
                         AstralEngine.Assert(not RESERVE[i], "Slot " .. i .. " already reserved!", 1)
@@ -250,19 +252,19 @@ function AssetMapLoader.LoadAssetMap(Map)
                 "Warning",
                 "SCENEMANAGER"
             )
-            continue
+            goto continue
         end
 
         local Ent
-        local Tag = Val.Ptr & TAG_MASK
-        local NewId = Val.Ptr & ID_MASK
+        local Tag = bit.band(Val.Ptr, TAG_MASK)
+        local NewId = bit.band(Val.Ptr, ID_MASK)
 
         local Flags = Val.Flags and Val.Flags or 0
 
         -- summon the entity
-        if Tag & TAG_FORCE ~= 0 then
+        if bit.band(Tag, TAG_FORCE) ~= 0 then
             Ent = EntityService.CreateAtId(NewId, Val.Name)
-        elseif Tag & TAG_RES ~= 0 then
+        elseif bi.band(Tag, TAG_RES) ~= 0 then
             if RESERVED[NewId] then
                 AstralEngine.Log(
                     "RESERVED ID COLLISION, WITH ID " .. NewId .. " ON ENTITY " .. Val.Name,
@@ -272,10 +274,14 @@ function AssetMapLoader.LoadAssetMap(Map)
             end
             Ent = EntityService.New(Val.Name)
             RESERVED[NewId] = Ent
-        elseif Tag & TAG_UNSET == 0 then
+        elseif bit.band(Tag, TAG_UNSET) == 0 then
             Ent = EntityService.New(Val.Name)
         else
-            AstralEngine.Log("INVALID TAG FOUND: " .. tostring(i >> TAG_OFFSET & 0b11), "Fatal", "SCENEMANAGER")
+            AstralEngine.Log(
+                "INVALID TAG FOUND: " .. tostring(bit.band(bit.rshift(i, TAG_OFFSET), tonumber("0b11", 2))),
+                "Fatal",
+                "SCENEMANAGER"
+            )
         end
 
         ENTITIES[Val.Map] = ENTITIES[Val.Map] or {}
@@ -292,7 +298,7 @@ function AssetMapLoader.LoadAssetMap(Map)
         -- RESOLVE FLAGS
         local FLAG_I = 0
         while FLAG_I < 53 do -- double int precision is up to 53 bits
-            local FlagVal = Flags & (1 << FLAG_I)
+            local FlagVal = bit.band(Flags, bit.lshift(1, FLAG_I))
 
             if FLAG_RESOLVE[FlagVal] then
                 FLAG_RESOLVE[FlagVal](Ent)
@@ -304,7 +310,7 @@ function AssetMapLoader.LoadAssetMap(Map)
         -- ASSIGNING FIELDS
 
         if not Val.Components then
-            continue
+            goto continue
         end
 
         local Cache = {}
@@ -375,6 +381,7 @@ function AssetMapLoader.LoadAssetMap(Map)
                 )
             end
         end
+        ::continue::
     end
 
     -- RESOLVE ANCESTRY
@@ -384,10 +391,10 @@ function AssetMapLoader.LoadAssetMap(Map)
             local Core = Obj.VAL
             local ResolveTo = Core.Parent
             if not ResolveTo then
-                continue
+                goto continue
             end
             local Ent = Obj.ENT
-            local Tag, Val = ResolveTo & TAG_MASK, ResolveTo & ID_MASK
+            local Tag, Val = bit.band(ResolveTo, TAG_MASK), bit.band(ResolveTo, ID_MASK)
 
             if Tag == TAG_RES then
                 local EntityTarget =
@@ -410,6 +417,8 @@ function AssetMapLoader.LoadAssetMap(Map)
                     ).ENT
                 )
             end
+
+            ::continue::
         end
     end
 

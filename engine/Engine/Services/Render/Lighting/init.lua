@@ -7,11 +7,11 @@ local MainBufferFormat = MainShader:getBufferFormat("Lighting_Data")
 local CacheTable = {}
 local LightCount = 0
 CacheTable.Light_LightCount = 0 -- amount of lights set
-CacheTable.Light_Positions = table.alloc(256, 0)
-CacheTable.Light_Colors = table.alloc(256, 0)
-CacheTable.Light_Directions = table.alloc(256, 0)
-CacheTable.Light_Extras = table.alloc(256, 0)
-CacheTable.Light_ExtrasTwo = table.alloc(256, 0)
+CacheTable.Light_Positions = table.new(256, 0)
+CacheTable.Light_Colors = table.new(256, 0)
+CacheTable.Light_Directions = table.new(256, 0)
+CacheTable.Light_Extras = table.new(256, 0)
+CacheTable.Light_ExtrasTwo = table.new(256, 0)
 
 local LightBuffer = lovr.graphics.newBuffer(MainBufferFormat)
 Lighting.LightBuffer = LightBuffer

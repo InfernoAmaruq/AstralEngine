@@ -38,10 +38,10 @@ function meta.LoadfileAppendStack.Clear()
     end
 end
 
-local function PREPROCESS(Src, n)
+local function PREPROCESS(Src, n, File)
     for _, v in ipairs(Recompiler.Dirs) do
         if v.PRE then
-            Src = v.PRE(Src, n) or Src
+            Src = v.PRE(Src, n, File) or Src
         end
     end
     return Src
@@ -87,7 +87,7 @@ local function COMPILE_LOADSTRING(c, NAME)
     if Lexer.FSearch(c) or Verify(c) then
         COUNTER = COUNTER + 1
         local N = COUNTER
-        c = PREPROCESS(c, N)
+        c = PREPROCESS(c, N, NAME)
         local Passes = 1
         repeat
             Dirs, c = Lexer.ExtractDirectives(c)
@@ -141,6 +141,10 @@ do -- GETTING ALL THE META FILES
         local PB = b.Priority or 1
         return PA < PB
     end)
+end
+
+if not jit then
+    require("NOJIT.lua")
 end
 
 return Recompiler

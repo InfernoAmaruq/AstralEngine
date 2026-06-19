@@ -1,5 +1,5 @@
 local RESUME, STATUS, CREATE = coroutine.resume, coroutine.status, coroutine.create
-local ALLOCATE = table.alloc
+local ALLOCATE = table.new
 
 coroutine.isyieldable = function(CO)
     CO = CO or coroutine.running()
@@ -165,7 +165,7 @@ end
 Scheduler.Update = NativeUpdate.Update
 Scheduler.Clock = NativeUpdate.Clock
 }
-@ifdef<!Sched.UseNative & Sched.UseLua|Sched.UseAuto>{
+@ifdef<!Sched.UseNative & Sched.UseLua | Sched.UseAuto>{
 function Scheduler:Update()
     local C = self.Clock
     local Now = C()
@@ -192,9 +192,9 @@ function Scheduler:Update()
         local t = C()
 
         if t - Now > Budget then return end
-        if EQ[Routine] then continue end
+        if EQ[Routine] then goto continue end
         local Wake = ResAt[Routine]
-        if Wake and Wake > Now then continue end
+        if Wake and Wake > Now then goto continue end
 
         local Ok, Err = RESUME(Routine)
 
@@ -211,8 +211,9 @@ function Scheduler:Update()
                 r[Top] = nil
             end
             EQ[Routine] = nil; ResAt[Routine] = nil
-            continue
         end
+
+        ::continue::
     end
 
     local Queue = self.Queue
@@ -229,22 +230,23 @@ function Scheduler:Update()
         Upd = true
         if not ok then
             print("[Scheduler] Error: ", debug.traceback(co,err))
-            continue
+            goto continue
         end
         local Status = STATUS(co)
-        if Status == "dead" then continue end
+        if Status == "dead" then goto continue end
 
         if q.CTX and _G.CONTEXT then
             _G.CONTEXT:BindToContext("Tasks",co)
         end
 
-        if self.Routines[#self.Routines] == co then continue end
+        if self.Routines[#self.Routines] == co then goto continue end
         local Found = false
         for _,MiscCo in ipairs(self.Routines) do
             if MiscCo == co then Found = true break end
         end
-        if Found then continue end
+        if Found then goto continue end
         self.Routines[#self.Routines + 1] = co
+        ::continue::
     end
 end
 }

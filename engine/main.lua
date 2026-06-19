@@ -288,7 +288,7 @@ function lovr.run()
         @ifdef<Physics.Interpolate & Physics.InterpolAtCPU>{
             PHYSICS_INTERPOLATE()
         }
-        CURRENT_CPUTICK++;
+        CURRENT_CPUTICK = CURRENT_CPUTICK + 1;
         @execute<UNSAFE>{
             if lovr.headset then
                 return "if lovr.headset.isActive() then XRDT = lovr.headset.update() end"
@@ -322,7 +322,7 @@ function lovr.run()
 
     @macro<L,!USEBRACK>{M_GPUTick(&_SINK) = 
         @execute<UNSAFE,COMP>{
-            local RETURNFIELD = "CURRENT_FRAME++;\n"
+            local RETURNFIELD = "CURRENT_FRAME = CURRENT_FRAME + 1;\n"
             local HASHEADSET = lovr.headset
             if lovr.graphics then
                 local CONCAT
@@ -389,7 +389,7 @@ function lovr.run()
 
         -- EVENT
         @execute<UNSAFE>{
-            return lovr.system and "GETTICK(DT,TIME,EventTime,EventTickrate,M_EventTick,nil)" or "-\-\NO SYS, NO EVENT"
+            return lovr.system and "GETTICK(DT,TIME,EventTime,EventTickrate,M_EventTick,nil)" or "--NO SYS, NO EVENT"
         }
 
         -- CPU TICK

@@ -2,6 +2,8 @@ local SignalLib = AstralEngine.Plugins.SignalLib
 local Component = require("ComponentHandler")
 local InstMeta, Methods = require("Instance")(Component)
 local TagService, TagService_ClearTags = require("TagService")
+local bit = bit
+
 local World = {}
 
 World.Component = Component
@@ -40,16 +42,18 @@ local function ALLOC(Use)
     local ID = World.Capacity
     local Gen = Use and 1 or 0
 
+    local Flag = bit.bor(SignalLib.Type.NoCtx, SignalLib.Type.RTC)
+
     local t = setmetatable({
         __id = ID,
         Id = ID,
         __gen = Gen,
-        UniqueId = Gen << SHIFT | ID,
+        UniqueId = bit.band(bit.lshift(Gen, SHIFT), ID),
         IsNull = true,
         __context = _G.CONTEXT and _G.CONTEXT.Gen or 0,
-        Destroying = SignalLib.new(SignalLib.Type.NoCtx | SignalLib.Type.RTC),
-        ComponentAdded = SignalLib.new(SignalLib.Type.NoCtx | SignalLib.Type.RTC),
-        ComponentRemoving = SignalLib.new(SignalLib.Type.NoCtx | SignalLib.Type.RTC),
+        Destroying = SignalLib.new(Flag),
+        ComponentAdded = SignalLib.new(Flag),
+        ComponentRemoving = SignalLib.new(Flag),
     }, InstMeta)
 
     World.Alive[World.Capacity] = t
@@ -71,7 +75,7 @@ end
 
 local function Alive(Ent)
     Ent.__gen = Ent.__gen + 1
-    local k = Ent.__gen << SHIFT | Ent.__id
+    local k = bit.band(bit.lshift(Ent.__gen, SHIFT), Ent.__id)
     Ent.UniqueId = k
 end
 

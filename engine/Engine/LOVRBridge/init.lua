@@ -130,7 +130,7 @@ LVRB.ConnectDevices = function()
     local function GetEmptyPoolObj()
         if Top > 0 then
             local Obj = DATAPOOL[Top]
-            Top -= 1
+            Top = Top - 1
             return Obj
         end
         return MakeT(-1)
@@ -138,7 +138,7 @@ LVRB.ConnectDevices = function()
 
     local function ReleasePoolObj(t)
         if t.__index == -1 then return end
-        Top += 1
+        Top = Top + 1
         DATAPOOL[Top] = t
         t.__INUSE = false
     end
@@ -315,11 +315,11 @@ LVRB.LoadRandom = function()
     local pid = lovr.system.getCoreCount()
     local addr = debug.getaddress({})
 
-    local SEED = math.floor(t * 1e9)
-    ^^ (#os * 0x9e3779b9)
-    ^^ (pid << 16)
-    ^^ tonumber(addr, 16)
-    math.randomseed(SEED, SEED ^^ tonumber(debug.getaddress({}),16))
+    local SEED = bit.bxor(math.floor(t * 1e9),
+     (#os * 0x9e3779b9),
+     bit.lshift(pid, 16),
+     tonumber(addr, 16))
+    math.randomseed(SEED, bit.bxor(SEED, tonumber(debug.getaddress({}),16)))
 
     math.newrandom = function(...)
         local RanGen = lovr.math.newRandomGenerator(...)

@@ -1,4 +1,5 @@
 local SignalLib = require("/Lib/Signal")
+local bit = bit
 
 -- define FENV for our coroutines
 local FENV = setmetatable({
@@ -102,8 +103,8 @@ Data.__UNBIND_TEMP = function(F, P)
 end
 
 Data.Flags = {
-    Raw = 1 << 0,
-    Contextless = 1 << 1,
+    Raw = 1,
+    Contextless = 2,
 }
 
 Data.BindToStep = function(Name, Priority, F, Flag)
@@ -111,8 +112,8 @@ Data.BindToStep = function(Name, Priority, F, Flag)
     Priority = Processor(Priority) or Priority
     assert(math.mathtype(Priority) == "Integer", Priority .. " NOT AN INT")
 
-    local BindRaw = Flag & Data.Flags.Raw ~= 0
-    local Contextless = Flag & Data.Flags.Contextless ~= 0
+    local BindRaw = bit.band(Flag, Data.Flags.Raw) ~= 0
+    local Contextless = bit.band(Flag, Data.Flags.Contextless) ~= 0
 
     if rtype(F) == "function" and not BindRaw then
         F = AllocRoutine(F)

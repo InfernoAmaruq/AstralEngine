@@ -7,20 +7,20 @@ local function GetPath(Path, Stack)
     return NormalizePath(lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath(3 + (Stack or 0))) .. Path)
 end
 
-local function GetPaths(Default,Check,Stack)
+local function GetPaths(Default, Check, Stack)
     Stack = Stack or 0
 
     for i = 1, Default and 4 or 3 do
         local ToSearch
 
         if i == 4 then
-            ToSearch = NormalizePath(Default.."/"..Check)
+            ToSearch = NormalizePath(Default .. "/" .. Check)
         elseif i == 3 then
-            ToSearch = NormalizePath("GAMEFILE/"..Check)
+            ToSearch = NormalizePath("GAMEFILE/" .. Check)
         elseif i == 2 then
             ToSearch = Check
         else
-            ToSearch = GetPath(Check,Stack + 1)
+            ToSearch = GetPath(Check, Stack + 1)
         end
 
         if lovr.filesystem.isFile(ToSearch) then
@@ -32,8 +32,8 @@ end
 local function FNV1A32(Str)
     local Hash = 0x811c9dc5
     for i = 1, #Str do
-        Hash = (Hash ^^ string.byte(Str, i)) * 0x01000193
-        Hash = Hash & 0xFFFFFFFF
+        Hash = bit.bxor(Hash, string.byte(Str, i)) * 0x01000193
+        Hash = bit.band(Hash, 0xFFFFFFFF)
     end
     return string.format("%08x", Hash)
 end
@@ -77,7 +77,7 @@ function AssetManager.NewBlob(Path, Type, Name)
 
     if InputType == "string" then
         -- if string, it means its hashable
-        local ConstPath = GetPaths(nil,Path) --GetPath(Path)
+        local ConstPath = GetPaths(nil, Path)          --GetPath(Path)
         local Success, Res = pcall(GetBlob, ConstPath, Type) -- pcall because Type hint may be missing. We don't want an error here
         Blob = Success and Res or l_NewBlobFile(ConstPath)
 
@@ -144,7 +144,7 @@ local function GetRawImageData(ImagePath)
 end
 
 function AssetManager.NewImage(ImagePath)
-    local CanonPath = GetPaths(nil,ImagePath)
+    local CanonPath = GetPaths(nil, ImagePath)
     local Image = GetRawImageData(CanonPath)
 
     local ReturnValue = nil
@@ -163,17 +163,16 @@ function AssetManager.NewModelData() end
 -- gpu
 
 function AssetManager.NewTexture(Path, Options)
-
     local CanonPath
     local ImageData
     if rtype(Path) == "table" then
         ImageData = {}
-        for i,v in pairs(Path) do
-            local RawData = GetRawImageData(GetPaths(nil,v))
+        for i, v in pairs(Path) do
+            local RawData = GetRawImageData(GetPaths(nil, v))
             ImageData[i] = RawData.DATA
         end
     else
-        CanonPath = GetPaths(nil,Path)
+        CanonPath = GetPaths(nil, Path)
         ImageData = GetRawImageData(CanonPath).DATA
     end
 
@@ -256,13 +255,15 @@ local function ProcessMaterialInput(Input)
     end
 
     if not Input.Glow and Input.GlowTexture then
-        InputProcessed.Glow = {1,1,1,1}
+        InputProcessed.Glow = { 1, 1, 1, 1 }
     end
 
     for _, Field in ipairs(MaterialKeyArray) do
         local Lower = Field:sub(1, 2):lower() .. Field:sub(3)
         local Val = InputProcessed[Field]
-        if Field == "UVOffset" then Lower = "uvShift" end
+        if Field == "UVOffset" then
+            Lower = "uvShift"
+        end
 
         InputProcessed[Field] = nil
         InputProcessed[Lower] = Val -- lovr likes camelCase, i like pascalCase
@@ -289,7 +290,12 @@ local function ProcessMaterialInput(Input)
     return Hashed, InputProcessed
 end
 
-local MatMt = {__type = "Material",__newindex = function() AstralEngine.Error("MATERIALS ARE READ-ONLY","MATERIAL",2) end}
+local MatMt = {
+    __type = "Material",
+    __newindex = function()
+        AstralEngine.Error("MATERIALS ARE READ-ONLY", "MATERIAL", 2)
+    end,
+}
 
 function AssetManager.NewMaterial(Input)
     local Hash, InputProcessed = ProcessMaterialInput(Input)
@@ -309,8 +315,8 @@ function AssetManager.NewMaterial(Input)
 
     Material = setmetatable({
         __lmat = LovrMat,
-        Properties = Input
-    },MatMt)
+        Properties = Input,
+    }, MatMt)
 
     Cache[TypeEnum.Material][Hash] = Material
 

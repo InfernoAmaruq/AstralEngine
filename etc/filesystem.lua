@@ -42,14 +42,13 @@ fs.getAliasedFiles = function(alias)
     local check = {}
 
     for _, path in ipairs(cache[alias]) do
-        if check[path] then
-            continue
-        end
-        check[path] = true
-        if fs.isDirectory(path) then
-            table.insert(queue, path)
-        elseif fs.isFile(path) then
-            table.insert(filePaths, path)
+        if not check[path] then
+            check[path] = true
+            if fs.isDirectory(path) then
+                table.insert(queue, path)
+            elseif fs.isFile(path) then
+                table.insert(filePaths, path)
+            end
         end
     end
 
@@ -58,15 +57,14 @@ fs.getAliasedFiles = function(alias)
 
         for _, item in ipairs(fs.getDirectoryItems(curDir)) do
             local path = curDir .. "/" .. item
-            if check[path] then
-                continue
-            end
-            check[path] = true
+            if not check[path] then
+                check[path] = true
 
-            if fs.isDirectory(path) then
-                table.insert(queue, path)
-            elseif fs.isFile(path) then
-                table.insert(filePaths, path)
+                if fs.isDirectory(path) then
+                    table.insert(queue, path)
+                elseif fs.isFile(path) then
+                    table.insert(filePaths, path)
+                end
             end
         end
     end

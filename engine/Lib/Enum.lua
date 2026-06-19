@@ -1,3 +1,5 @@
+local bit = bit
+
 local function NewIndex()
     error("CANNOT WRITE TO ENUM")
 end
@@ -9,7 +11,7 @@ end
 local ENUMS = {}
 
 local function EncodeEnum(Header, Value)
-    return (Header << 16) | (Value & 0xffff)
+    return bit.bor(bit.lshift(Header, 16), bit.band(Value, 0xffff))
 end
 
 local TYPE = rtype or type
@@ -71,7 +73,7 @@ local function MakeHeader(Name)
     local H1 = Byte(Name:sub(1, 1))
     local H2 = Byte(Name:sub(2, 2))
     local H3 = Byte(Name:sub(3, 3))
-    return (H1 << 16) | (H2 << 8) | H3
+    return bit.bor(bit.lshift(H1, 16), bit.lshift(H2, 8), H3)
 end
 
 local function NewEnum(_, t, Name, Options, Header)
@@ -148,14 +150,14 @@ ENUMS.__GETPROCESSOR = function(NAME, GetField)
 end
 
 ENUMS.GetValue = function(V)
-    return V & 0xffff
+    return bit.band(V, 0xffff)
 end
 
 ENUMS.GetHeader = function(V, ToString)
-    local Head = (V >> 16) & 0xffffff
-    local H1 = (Head >> 16) & 0xff
-    local H2 = (Head >> 8) & 0xff
-    local H3 = Head & 0xff
+    local Head = bit.band(bit.rshift(V, 16), 0xffffff)
+    local H1 = bit.band(bit.rshift(Head, 16), 0xff)
+    local H2 = bit.band(bit.rshift(Head, 8), 0xff)
+    local H3 = bit.band(Head, 0xff)
 
     return ToString and string.char(H1, H2, H3) or Head
 end

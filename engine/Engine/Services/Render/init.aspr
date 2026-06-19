@@ -1,7 +1,7 @@
 local ShaderService = require("ShaderService")
 
 local Renderer = {}
-Renderer.CamMask = ~0
+Renderer.CamMask = bit.bnot(0)
 local PassTable = {}
 
 -- PASS STORAGE

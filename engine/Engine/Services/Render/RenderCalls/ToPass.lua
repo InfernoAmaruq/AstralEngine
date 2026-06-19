@@ -2,7 +2,7 @@ local Renderer = select(1, ...)
 
 Renderer.Late[#Renderer.Late + 1] = function()
     local RS = GetService("RunService")
-    local Flag = RS.Flags.Raw | RS.Flags.Contextless
+    local Flag = bit.bor(RS.Flags.Raw, RS.Flags.Contextless)
 
     local CoreCamera = nil
     local Bound = false

@@ -520,7 +520,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     local MainShader = Renderer.GetMainShader()
     local BufferFormat = MainShader:getBufferFormat("PBR_SphericalHarmonics")
 
-    local SHData = table.alloc(9, 0)
+    local SHData = table.new(9, 0)
     for i = 1, 9 do
         SHData[i] = Vec3()
     end
@@ -552,14 +552,13 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
         elseif i == "DrawToScreen" then
             SETTER.DrawToScreen(D, v)
         else
-            if not FIELDS[i] then
-                continue
+            if FIELDS[i] then
+                rawset(D, FIELDS[i], v)
             end
-            rawset(D, FIELDS[i], v)
         end
     end
 
-    D[FIELDS.OnResize] = Signal.new(Signal.Type.NoCtx | Signal.Type.RTC)
+    D[FIELDS.OnResize] = Signal.new(bit.bor(Signal.Type.NoCtx, Signal.Type.RTC))
 
     rawset(D, "__EntityPtr", GetService("World").GetEntityFromId(Entity))
     rawset(D, "__LuaSHBuffer", SHData)

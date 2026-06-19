@@ -59,7 +59,17 @@ local function CreateMacro(Body) -- add(a,b) = a+b
         return M
     end
 
-    error("Invalid macro syntax! " .. Body)
+    -- FORM: ANY = STATEMENT
+    local Left, Right = Body:match("^([%w:]+)%s*=%s*(.-)%s*$")
+    if Left or Right then
+        M.Name = Left
+        M.Body = Right
+        M.Type = "A"
+        M.Parameters = nil
+        return M
+    end
+
+    error("Syntax error in macro!")
 end
 
 local function GetMacroSaveEnv(Memory, Con)
@@ -215,6 +225,12 @@ local function ExpandMacro(Src, Mac)
         end)
         Src = Src:gsub(Sym .. "([%w_%.]+)", function(Arg)
             return AddBrackets(Body:gsub(Param, Arg), Mac)
+        end)
+    elseif Mac.Type == "A" then
+        local Sym = EscapePattern(Mac.Name)
+
+        Src = Src:gsub(Sym, function()
+            return AddBrackets(Mac.Body, Mac)
         end)
     end
 

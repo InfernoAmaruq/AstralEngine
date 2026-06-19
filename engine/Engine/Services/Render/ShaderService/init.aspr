@@ -253,7 +253,7 @@ local function CompileGraphics(GraphicsBucket)
 end
 
 local FileEndings = {"",".glsl"}
-local GETINCLUDE_TEMP = table.alloc(3,0)
+local GETINCLUDE_TEMP = table.new(3,0)
 local ShaderFolder = unpack(lovr.filesystem.getAliased("Shaders"))
 
 local function GetIncluded(Into,IncludeTable)
@@ -337,8 +337,9 @@ function ShaderService.ComposeShader(Type,Search,Params)
         end
     end
 
+    local bit = bit
     for i in pairs(Buckets) do
-        if i & Type ~= Type then Buckets[i] = nil continue end
+        if bit.band(i, Type) ~= Type then Buckets[i] = nil end
     end
 
     if Type == &ST_Graphics then

@@ -95,21 +95,19 @@ local function LoadFile(Path, Env, STACK)
         for _, ext in ipairs(LoadExtensionsToTry) do
             local True = v .. ext
 
-            if not lovr.filesystem.isFile(True) then
-                continue
-            end
+            if lovr.filesystem.isFile(True) then
+                local F
+                if True:sub(-3):lower() == "laf" and LAF then
+                    F = LAF.LoadArchive(True, nil, 3)
+                else
+                    F = OgLoadfile(True, Env)
+                end
 
-            local F
-            if True:sub(-3):lower() == "laf" and LAF then
-                F = LAF.LoadArchive(True, nil, 3)
-            else
-                F = OgLoadfile(True, Env)
-            end
-
-            if F then
-                Data = F
-                TruePath = True
-                break
+                if F then
+                    Data = F
+                    TruePath = True
+                    break
+                end
             end
         end
         if Data then

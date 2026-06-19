@@ -64,13 +64,16 @@ function Execute.PARSE(Blk, _, N)
         return tostring(Body(CURRENTMEM[N], EXEMEM, SMem) or "")
     else
         print("[COMP_EXE]: ERROR PARSING CODE:", "\n" .. Err)
+        print("WHEN PROCESSING: ", CURRENTMEM[N].__FILE)
+        print("CHUNK:", Code)
     end
     return ""
 end
 
-function Execute.PRE(SRC, Id)
+function Execute.PRE(SRC, Id, FilePath)
     local Frame = {
         __SOURCE = SRC,
+        __FILE = FilePath,
         __OUTPUTSRC = nil,
         __DEPTH = Id,
     }

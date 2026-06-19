@@ -16,7 +16,7 @@ end
 
 local Path = lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath())
 local temp = require(Path .. "TableAlloc")
-table.alloc = temp.Alloc
+table.new = table.new or temp.Alloc -- luajit or lua version
 debug.getaddress = temp.GetPtr
 
 local mt = { __mode = "k" }
@@ -108,7 +108,7 @@ function table.array(...)
         error("Invalid value passed to array")
     end
 
-    local Array = table.alloc(Size, 0)
+    local Array = table.new(Size, 0)
     TSizes[Array] = Size
     Types[Array] = Type
     if VT == "table" then

@@ -3615,7 +3615,7 @@ Shader* lovrShaderCreate(const ShaderInfo* info) {
       };
 
       if (storage) {
-        lovrCheck(stage == STAGE_COMPUTE || resource->storageAccess == SPV_ACCESS_READ_ONLY, "Currently, vertex/fragment shaders can not writes to storage buffers or storage textures (check variable %s)", resource->name);
+        lovrCheck(stage == STAGE_COMPUTE || resource->storageAccess == SPV_ACCESS_READ_ONLY, "Currently, vertex/fragment shaders can not write to storage buffers or storage textures (make '%s' readonly?)", resource->name);
         shader->resources[index].storageAccess = resource->storageAccess;
 
         switch (resource->storageAccess) {

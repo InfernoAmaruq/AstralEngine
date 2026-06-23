@@ -7,6 +7,7 @@ dev
 ### Change
 
 - Change `Pass:setScissor` to clamp negative x/y values to zero.
+- Change `lovr.math.gammaToLinear/linearToGamma` to return their 4th argument unchanged.
 
 ### Fix
 

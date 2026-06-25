@@ -567,99 +567,6 @@ static int l_lovrWorldSetCallbacks(lua_State* L) {
   return 0;
 }
 
-// Deprecated
-
-static int l_lovrWorldGetTightness(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  float tightness = lovrWorldGetTightness(world);
-  luax_check(L, tightness >= 0, "Negative tightness factor causes simulation instability");
-  lua_pushnumber(L, tightness);
-  return 1;
-}
-
-static int l_lovrWorldSetTightness(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  float tightness = luax_checkfloat(L, 2);
-  lovrWorldSetTightness(world, tightness);
-  return 0;
-}
-
-static int l_lovrWorldGetResponseTime(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  float responseTime = lovrWorldGetResponseTime(world);
-  lua_pushnumber(L, responseTime);
-  return 1;
-}
-
-static int l_lovrWorldSetResponseTime(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  float responseTime = luax_checkfloat(L, 2);
-  luax_check(L, responseTime >= 0, "Negative response time causes simulation instability");
-  lovrWorldSetResponseTime(world, responseTime);
-  return 0;
-}
-
-static int l_lovrWorldGetLinearDamping(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  float damping, threshold;
-  lovrWorldGetLinearDamping(world, &damping, &threshold);
-  lua_pushnumber(L, damping);
-  lua_pushnumber(L, threshold);
-  return 2;
-}
-
-static int l_lovrWorldSetLinearDamping(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  float damping = luax_checkfloat(L, 2);
-  float threshold = luax_optfloat(L, 3, 0.0f);
-  lovrWorldSetLinearDamping(world, damping, threshold);
-  return 0;
-}
-
-static int l_lovrWorldGetAngularDamping(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  float damping, threshold;
-  lovrWorldGetAngularDamping(world, &damping, &threshold);
-  lua_pushnumber(L, damping);
-  lua_pushnumber(L, threshold);
-  return 2;
-}
-
-static int l_lovrWorldSetAngularDamping(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  float damping = luax_checkfloat(L, 2);
-  float threshold = luax_optfloat(L, 3, 0.0f);
-  lovrWorldSetAngularDamping(world, damping, threshold);
-  return 0;
-}
-
-static int l_lovrWorldIsSleepingAllowed(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  lua_pushboolean(L, lovrWorldIsSleepingAllowed(world));
-  return 1;
-}
-
-static int l_lovrWorldSetSleepingAllowed(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  bool allowed = lua_toboolean(L, 2);
-  lovrWorldSetSleepingAllowed(world, allowed);
-  return 0;
-}
-
-static int l_lovrWorldGetStepCount(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  int iterations = lovrWorldGetStepCount(world);
-  lua_pushnumber(L, iterations);
-  return 1;
-}
-
-static int l_lovrWorldSetStepCount(lua_State* L) {
-  World* world = luax_checkworld(L, 1);
-  int iterations = luaL_checkinteger(L, 2);
-  lovrWorldSetStepCount(world, iterations);
-  return 0;
-}
-
 const luaL_Reg lovrWorld[] = {
   { "newCollider", l_lovrWorldNewCollider },
   { "newBoxCollider", l_lovrWorldNewBoxCollider },
@@ -691,20 +598,5 @@ const luaL_Reg lovrWorld[] = {
   { "isCollisionEnabledBetween", l_lovrWorldIsCollisionEnabledBetween },
   { "getCallbacks", l_lovrWorldGetCallbacks },
   { "setCallbacks", l_lovrWorldSetCallbacks },
-
-  // Deprecated
-  { "getTightness", l_lovrWorldGetTightness },
-  { "setTightness", l_lovrWorldSetTightness },
-  { "getResponseTime", l_lovrWorldGetResponseTime },
-  { "setResponseTime", l_lovrWorldSetResponseTime },
-  { "getLinearDamping", l_lovrWorldGetLinearDamping },
-  { "setLinearDamping", l_lovrWorldSetLinearDamping },
-  { "getAngularDamping", l_lovrWorldGetAngularDamping },
-  { "setAngularDamping", l_lovrWorldSetAngularDamping },
-  { "isSleepingAllowed", l_lovrWorldIsSleepingAllowed },
-  { "setSleepingAllowed", l_lovrWorldSetSleepingAllowed },
-  { "getStepCount", l_lovrWorldGetStepCount },
-  { "setStepCount", l_lovrWorldSetStepCount },
-
   { NULL, NULL }
 };

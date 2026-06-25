@@ -789,20 +789,6 @@ void lovrWorldSetCallbacks(World* world, WorldCallbacks* callbacks) {
   }
 }
 
-// Deprecated
-int lovrWorldGetStepCount(World* world) { return 1; }
-void lovrWorldSetStepCount(World* world, int iterations) {}
-float lovrWorldGetResponseTime(World* world) { return 0.f; }
-void lovrWorldSetResponseTime(World* world, float responseTime) {}
-float lovrWorldGetTightness(World* world) { return 0.f; }
-void lovrWorldSetTightness(World* world, float tightness) {}
-bool lovrWorldIsSleepingAllowed(World* world) { return world->defaultIsSleepingAllowed; }
-void lovrWorldSetSleepingAllowed(World* world, bool allowed) { world->defaultIsSleepingAllowed = allowed; }
-void lovrWorldGetLinearDamping(World* world, float* damping, float* threshold) { *damping = world->defaultLinearDamping, *threshold = 0.f; }
-void lovrWorldSetLinearDamping(World* world, float damping, float threshold) { world->defaultLinearDamping = damping; }
-void lovrWorldGetAngularDamping(World* world, float* damping, float* threshold) { *damping = world->defaultAngularDamping, *threshold = 0.f; }
-void lovrWorldSetAngularDamping(World* world, float damping, float threshold) { world->defaultAngularDamping = damping; }
-
 // Collider
 
 static void adjustJoints(Collider* collider, JPH_Vec3* oldCenter, JPH_Vec3* newCenter) {

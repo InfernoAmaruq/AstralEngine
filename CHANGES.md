@@ -13,6 +13,16 @@ dev
 
 - Fix `Pass:drawPart`.
 
+### Remove
+
+- Remove `Collider:is/setGravityIgnored` (previously deprecated).
+- Remove `World:get/setTightness` (previously deprecated).
+- Remove `World:get/setResponseTime` (previously deprecated).
+- Remove `World:get/setLinearDamping` (previously deprecated).
+- Remove `World:get/setAngularDamping` (previously deprecated).
+- Remove `World:is/setSleepingAllowed` (previously deprecated).
+- Remove `World:get/setStepCount` (previously deprecated).
+
 v0.19.0 - 2026-06-07
 ---
 

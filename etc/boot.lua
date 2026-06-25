@@ -70,6 +70,7 @@ local conf = {
 }
 
 function lovr.boot()
+  lovr._setConf(conf)
   lovr.filesystem = require('lovr.filesystem')
 
   -- See if there's a ZIP archive fused to the executable, and set up the fused CLI if it exists
@@ -135,7 +136,6 @@ function lovr.boot()
     end
   end
 
-  lovr._setConf(conf)
   lovr.filesystem.setIdentity(conf.identity, conf.saveprecedence)
 
   -- CLI gets a chance to use/modify conf and handle arguments

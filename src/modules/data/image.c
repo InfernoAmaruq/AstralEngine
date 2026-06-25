@@ -191,6 +191,7 @@ typedef union { void* raw; uint8_t* u8; uint16_t* u16; float* f32; } ImagePointe
 static void getPixelR8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.u8[i] / 255.f; }
 static void getPixelRG8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.u8[i] / 255.f; }
 static void getPixelRGBA8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.u8[i] / 255.f; }
+static void getPixelBGRA8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.u8[(2u - i) & 0x3] / 255.f; }
 static void getPixelR16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.u16[i] / 65535.f; }
 static void getPixelRG16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.u16[i] / 65535.f; }
 static void getPixelRGBA16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.u16[i] / 65535.f; }
@@ -204,6 +205,7 @@ static void getPixelRGBA32F(ImagePointer src, float* dst) { for (uint32_t i = 0;
 static void setPixelR8(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 1; i++) dst.u8[i] = (uint8_t) (src[i] * 255.f + .5f); }
 static void setPixelRG8(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 2; i++) dst.u8[i] = (uint8_t) (src[i] * 255.f + .5f); }
 static void setPixelRGBA8(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 4; i++) dst.u8[i] = (uint8_t) (src[i] * 255.f + .5f); }
+static void setPixelBGRA8(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 4; i++) dst.u8[i] = (uint8_t) (src[(2u - i) & 0x3] * 255.f + .5f); }
 static void setPixelR16(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 1; i++) dst.u16[i] = (uint16_t) (src[i] * 65535.f + .5f); }
 static void setPixelRG16(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 2; i++) dst.u16[i] = (uint16_t) (src[i] * 65535.f + .5f); }
 static void setPixelRGBA16(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 4; i++) dst.u16[i] = (uint16_t) (src[i] * 65535.f + .5f); }
@@ -223,6 +225,7 @@ bool lovrImageGetPixel(Image* image, uint32_t x, uint32_t y, float pixel[4]) {
     case FORMAT_R8: getPixelR8(p, pixel); return true;
     case FORMAT_RG8: getPixelRG8(p, pixel); return true;
     case FORMAT_RGBA8: getPixelRGBA8(p, pixel); return true;
+    case FORMAT_BGRA8: getPixelBGRA8(p, pixel); return true;
     case FORMAT_R16: getPixelR16(p, pixel); return true;
     case FORMAT_RG16: getPixelRG16(p, pixel); return true;
     case FORMAT_RGBA16: getPixelRGBA16(p, pixel); return true;
@@ -245,6 +248,7 @@ bool lovrImageSetPixel(Image* image, uint32_t x, uint32_t y, float pixel[4]) {
     case FORMAT_R8: setPixelR8(pixel, p); return true;
     case FORMAT_RG8: setPixelRG8(pixel, p); return true;
     case FORMAT_RGBA8: setPixelRGBA8(pixel, p); return true;
+    case FORMAT_BGRA8: setPixelBGRA8(pixel, p); return true;
     case FORMAT_R16: setPixelR16(pixel, p); return true;
     case FORMAT_RG16: setPixelRG16(pixel, p); return true;
     case FORMAT_RGBA16: setPixelRGBA16(pixel, p); return true;
@@ -268,6 +272,7 @@ bool lovrImageMapPixel(Image* image, uint32_t x0, uint32_t y0, uint32_t w, uint3
     case FORMAT_R8: getPixel = getPixelR8, setPixel = setPixelR8; break;
     case FORMAT_RG8: getPixel = getPixelRG8, setPixel = setPixelRG8; break;
     case FORMAT_RGBA8: getPixel = getPixelRGBA8, setPixel = setPixelRGBA8; break;
+    case FORMAT_BGRA8: getPixel = getPixelBGRA8, setPixel = setPixelBGRA8; break;
     case FORMAT_R16: getPixel = getPixelR16, setPixel = setPixelR16; break;
     case FORMAT_RG16: getPixel = getPixelRG16, setPixel = setPixelRG16; break;
     case FORMAT_RGBA16: getPixel = getPixelRGBA16, setPixel = setPixelRGBA16; break;

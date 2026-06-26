@@ -188,18 +188,18 @@ void* lovrImageGetLayerData(Image* image, uint32_t level, uint32_t layer) {
 
 typedef union { void* raw; uint8_t* u8; uint16_t* u16; uint32_t* u32; float* f32; } ImagePointer;
 
-static void getPixelR8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.u8[i] / 255.f; }
-static void getPixelRG8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.u8[i] / 255.f; }
+static void getPixelR8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.u8[i] / 255.f; dst[3] = 1.f; }
+static void getPixelRG8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.u8[i] / 255.f; dst[3] = 1.f; }
 static void getPixelRGBA8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.u8[i] / 255.f; }
 static void getPixelBGRA8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.u8[(2u - i) & 0x3] / 255.f; }
-static void getPixelR16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.u16[i] / 65535.f; }
-static void getPixelRG16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.u16[i] / 65535.f; }
+static void getPixelR16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.u16[i] / 65535.f; dst[3] = 1.f; }
+static void getPixelRG16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.u16[i] / 65535.f; dst[3] = 1.f; }
 static void getPixelRGBA16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.u16[i] / 65535.f; }
-static void getPixelR16F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = float16to32(src.u16[i]); }
-static void getPixelRG16F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = float16to32(src.u16[i]); }
+static void getPixelR16F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = float16to32(src.u16[i]); dst[3] = 1.f; }
+static void getPixelRG16F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = float16to32(src.u16[i]); dst[3] = 1.f; }
 static void getPixelRGBA16F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = float16to32(src.u16[i]); }
-static void getPixelR32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.f32[i]; }
-static void getPixelRG32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.f32[i]; }
+static void getPixelR32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.f32[i]; dst[3] = 1.f; }
+static void getPixelRG32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.f32[i]; dst[3] = 1.f; }
 static void getPixelRGBA32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.f32[i]; }
 
 static void getPixelRGB565(ImagePointer src, float* dst) {

@@ -10,6 +10,7 @@ dev
 - Change `lovr.math.gammaToLinear/linearToGamma` to return their 4th argument unchanged.
 - Change `Image:get/set/mapPixel` to support `rgb565`, `rgb5a1`, `rgb10a2` formats.
 - Change `Image:getPixel` to return an alpha of 1 for formats that don't have alpha.
+- Change `Image:encode` to support more formats (all uncompressed non-float color formats).
 
 ### Fix
 

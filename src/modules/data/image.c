@@ -397,11 +397,21 @@ static uint32_t crc32(uint8_t* data, size_t length) {
 }
 
 Blob* lovrImageEncode(Image* image) {
-  lovrCheck(image->format == FORMAT_RGBA8, "Currently, only images with the rgba8 format can be encoded");
-  uint32_t w = image->width;
-  uint32_t h = image->height;
-  uint8_t* pixels = (uint8_t*) image->blob->data;
-  uint32_t stride = (int) (w * 4);
+  uint8_t depth;
+
+  switch (image->format) {
+    case FORMAT_R8: depth = 8; break;
+    case FORMAT_RG8: depth = 8; break;
+    case FORMAT_RGBA8: depth = 8; break;
+    case FORMAT_BGRA8: depth = 8; break;
+    case FORMAT_R16: depth = 16; break;
+    case FORMAT_RG16: depth = 16; break;
+    case FORMAT_RGBA16: depth = 16; break;
+    case FORMAT_RGB565: depth = 8; break;
+    case FORMAT_RGB5A1: depth = 8; break;
+    case FORMAT_RGB10A2: depth = 16; break;
+    default: return lovrSetError("This format is not currently supported by Image:encode"), NULL;
+  }
 
   // The world's worst png encoder
   // Encoding uses one unfiltered IDAT chunk, each row is an uncompressed huffman block
@@ -411,14 +421,17 @@ Blob* lovrImageEncode(Image* image) {
   // - n bytes for the image data itself (width * height * 4)
   // - 4 bytes for the adler32 checksum
 
+  uint32_t w = image->width;
+  uint32_t h = image->height;
+
   uint8_t signature[] = { 137, 80, 78, 71, 13, 10, 26, 10 };
   uint8_t header[13] = {
     w >> 24, w >> 16, w >> 8, w >> 0,
     h >> 24, h >> 16, h >> 8, h >> 0,
-    8, 6, 0, 0, 0
+    depth, 6, 0, 0, 0
   };
 
-  size_t rowSize = w * 4;
+  size_t rowSize = w * 4 * (depth / 8);
   size_t imageSize = rowSize * h;
   size_t blockSize = rowSize + 1;
   size_t idatSize = 2 + (h * (5 + 1)) + imageSize + 4;
@@ -450,7 +463,6 @@ Blob* lovrImageEncode(Image* image) {
 
   {
     uint8_t* p = data + 8;
-    size_t length = imageSize;
 
     // adler32 counters
     uint64_t s1 = 1, s2 = 0;
@@ -459,10 +471,10 @@ Blob* lovrImageEncode(Image* image) {
     *p++ = (7 << 4) + (8 << 0);
     *p++ = 1;
 
-    while (length >= rowSize) {
+    for (uint32_t y = 0; y < h; y++) {
 
       // 1 indicates the final block
-      *p++ = (length == rowSize);
+      *p++ = (y == h - 1);
 
       // Write length and negated length
       memcpy(p + 0, &(uint16_t) {  blockSize & 0xffff }, 2);
@@ -471,22 +483,40 @@ Blob* lovrImageEncode(Image* image) {
 
       // Write the filter method (0) and the row data
       *p++ = 0x00;
-      memcpy(p, pixels, rowSize);
+
+      if (image->format == FORMAT_RGBA8) {
+        memcpy(p, (uint8_t*) image->blob->data + y * rowSize, rowSize);
+      } else if (depth == 8) {
+        for (uint32_t x = 0; x < w; x++) {
+          float pixel[4];
+          lovrImageGetPixel(image, x, y, pixel);
+          for (uint32_t c = 0; c < 4; c++) {
+            p[x * 4 + c] = (uint8_t) (pixel[c] * 255.f + .5f);
+          }
+        }
+      } else {
+        for (uint32_t x = 0; x < w; x++) {
+          float pixel[4];
+          lovrImageGetPixel(image, x, y, pixel);
+          for (uint32_t c = 0; c < 4; c++) {
+            uint16_t v = (uint16_t) (pixel[c] * 65535.f + .5f);
+            p[x * 8 + 2 * c + 0] = v >> 8;
+            p[x * 8 + 2 * c + 1] = v & 0xff;
+          }
+        }
+      }
 
       // Update adler32
       s1 += 0;
       s2 += s1;
       for (size_t i = 0; i < rowSize; i++) {
-        s1 = (s1 + pixels[i]);
+        s1 = (s1 + p[i]);
         s2 = (s2 + s1);
       }
       s1 %= 65521;
       s2 %= 65521;
 
-      // Update cursors
       p += rowSize;
-      pixels += stride;
-      length -= rowSize;
     }
 
     // Write adler32 checksum

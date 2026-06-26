@@ -186,7 +186,7 @@ void* lovrImageGetLayerData(Image* image, uint32_t level, uint32_t layer) {
   return (uint8_t*) image->mipmaps[level].data + layer * image->mipmaps[level].stride;
 }
 
-typedef union { void* raw; uint8_t* u8; uint16_t* u16; float* f32; } ImagePointer;
+typedef union { void* raw; uint8_t* u8; uint16_t* u16; uint32_t* u32; float* f32; } ImagePointer;
 
 static void getPixelR8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.u8[i] / 255.f; }
 static void getPixelRG8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.u8[i] / 255.f; }
@@ -202,6 +202,27 @@ static void getPixelR32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i 
 static void getPixelRG32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.f32[i]; }
 static void getPixelRGBA32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.f32[i]; }
 
+static void getPixelRGB565(ImagePointer src, float* dst) {
+  dst[0] = ((src.u16[0] >> 11) & 0x1f) / 31.f;
+  dst[1] = ((src.u16[0] >> 5) & 0x3f) / 63.f;
+  dst[2] = ((src.u16[0] >> 0) & 0x1f) / 31.f;
+  dst[3] = 1.f;
+}
+
+static void getPixelRGB5A1(ImagePointer src, float* dst) {
+  dst[0] = ((src.u16[0] >> 11) & 0x1f) / 31.f;
+  dst[1] = ((src.u16[0] >> 6) & 0x1f) / 31.f;
+  dst[2] = ((src.u16[0] >> 1) & 0x1f) / 31.f;
+  dst[3] = ((src.u16[0] >> 0) & 0x1) / 1.f;
+}
+
+static void getPixelRGB10A2(ImagePointer src, float* dst) {
+  dst[0] = ((src.u32[0] >> 0) & 0x3ff) / 1023.f;
+  dst[1] = ((src.u32[0] >> 10) & 0x3ff) / 1023.f;
+  dst[2] = ((src.u32[0] >> 20) & 0x3ff) / 1023.f;
+  dst[3] = ((src.u32[0] >> 30) & 0x3) / 3.f;
+}
+
 static void setPixelR8(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 1; i++) dst.u8[i] = (uint8_t) (src[i] * 255.f + .5f); }
 static void setPixelRG8(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 2; i++) dst.u8[i] = (uint8_t) (src[i] * 255.f + .5f); }
 static void setPixelRGBA8(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 4; i++) dst.u8[i] = (uint8_t) (src[i] * 255.f + .5f); }
@@ -215,6 +236,29 @@ static void setPixelRGBA16F(float* src, ImagePointer dst) { for (uint32_t i = 0;
 static void setPixelR32F(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 1; i++) dst.f32[i] = src[i]; }
 static void setPixelRG32F(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 2; i++) dst.f32[i] = src[i]; }
 static void setPixelRGBA32F(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 4; i++) dst.f32[i] = src[i]; }
+
+static void setPixelRGB565(float* src, ImagePointer dst) {
+  dst.u16[0] =
+    ((uint16_t) (CLAMP(src[0], 0.f, 1.f) * 31.f + .5f) << 11) |
+    ((uint16_t) (CLAMP(src[1], 0.f, 1.f) * 63.f + .5f) << 5) |
+    ((uint16_t) (CLAMP(src[2], 0.f, 1.f) * 31.f + .5f) << 0);
+}
+
+static void setPixelRGB5A1(float* src, ImagePointer dst) {
+  dst.u16[0] =
+    ((uint16_t) (CLAMP(src[0], 0.f, 1.f) * 31.f + .5f) << 11) |
+    ((uint16_t) (CLAMP(src[1], 0.f, 1.f) * 31.f + .5f) << 6) |
+    ((uint16_t) (CLAMP(src[2], 0.f, 1.f) * 31.f + .5f) << 1) |
+    (uint16_t) (CLAMP(src[3], 0.f, 1.f) + .5f);
+}
+
+static void setPixelRGB10A2(float* src, ImagePointer dst) {
+  dst.u32[0] =
+    ((uint32_t) (CLAMP(src[0], 0.f, 1.f) * 1023.f + .5f) << 0) |
+    ((uint32_t) (CLAMP(src[1], 0.f, 1.f) * 1023.f + .5f) << 10) |
+    ((uint32_t) (CLAMP(src[2], 0.f, 1.f) * 1023.f + .5f) << 20) |
+    ((uint32_t) (CLAMP(src[3], 0.f, 1.f) * 3.f + .5f) << 30);
+}
 
 bool lovrImageGetPixel(Image* image, uint32_t x, uint32_t y, float pixel[4]) {
   lovrCheck(!lovrImageIsCompressed(image), "Unable to access individual pixels of a compressed image");
@@ -235,6 +279,9 @@ bool lovrImageGetPixel(Image* image, uint32_t x, uint32_t y, float pixel[4]) {
     case FORMAT_R32F: getPixelR32F(p, pixel); return true;
     case FORMAT_RG32F: getPixelRG32F(p, pixel); return true;
     case FORMAT_RGBA32F: getPixelRGBA32F(p, pixel); return true;
+    case FORMAT_RGB565: getPixelRGB565(p, pixel); return true;
+    case FORMAT_RGB5A1: getPixelRGB5A1(p, pixel); return true;
+    case FORMAT_RGB10A2: getPixelRGB10A2(p, pixel); return true;
     default: return lovrSetError("Unsupported format for Image:getPixel");
   }
 }
@@ -258,6 +305,9 @@ bool lovrImageSetPixel(Image* image, uint32_t x, uint32_t y, float pixel[4]) {
     case FORMAT_R32F: setPixelR32F(pixel, p); return true;
     case FORMAT_RG32F: setPixelRG32F(pixel, p); return true;
     case FORMAT_RGBA32F: setPixelRGBA32F(pixel, p); return true;
+    case FORMAT_RGB565: setPixelRGB565(pixel, p); return true;
+    case FORMAT_RGB5A1: setPixelRGB5A1(pixel, p); return true;
+    case FORMAT_RGB10A2: setPixelRGB10A2(pixel, p); return true;
     default: return lovrSetError("Unsupported format for Image:setPixel");
   }
 }
@@ -282,6 +332,9 @@ bool lovrImageMapPixel(Image* image, uint32_t x0, uint32_t y0, uint32_t w, uint3
     case FORMAT_R32F: getPixel = getPixelR32F, setPixel = setPixelR32F; break;
     case FORMAT_RG32F: getPixel = getPixelRG32F, setPixel = setPixelRG32F; break;
     case FORMAT_RGBA32F: getPixel = getPixelRGBA32F, setPixel = setPixelRGBA32F; break;
+    case FORMAT_RGB565: getPixel = getPixelRGB565, setPixel = setPixelRGB565; break;
+    case FORMAT_RGB5A1: getPixel = getPixelRGB5A1, setPixel = setPixelRGB5A1; break;
+    case FORMAT_RGB10A2: getPixel = getPixelRGB10A2, setPixel = setPixelRGB10A2; break;
     default: return lovrSetError("Unsupported format for Image:mapPixel");
   }
   float pixel[4] = { 0.f, 0.f, 0.f, 1.f };

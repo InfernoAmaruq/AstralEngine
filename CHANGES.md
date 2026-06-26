@@ -13,6 +13,7 @@ dev
 ### Fix
 
 - Fix `Pass:drawPart`.
+- Fix invisible window when it was bigger than the size of the monitor.
 
 ### Remove
 

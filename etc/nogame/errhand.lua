@@ -67,6 +67,9 @@ function lovr.errhand(message)
         depth = depth
       }
 
+      row.contents = type(row.value) == 'string' and string.format("'%s'", row.value) or tostring(row.value)
+      row.contents = row.contents:gsub('\n', '\\n')
+
       table.insert(frame.rows, row)
 
       if type(value) == 'table' then
@@ -290,9 +293,7 @@ function lovr.errhand(message)
 
         pass:setColor(i == frame.rowIndex and 0xffffff or 0xc0c0c0)
         pass:text(row.name, x + padding + row.depth * padding, y - frame.scroll + padding, 0, textSize, nil, 0, 'left', 'top')
-
-        local value = type(row.value) == 'string' and string.format("'%s'", row.value) or tostring(row.value)
-        pass:text(value, x + padding + frame.columnWidth + padding, y - frame.scroll + padding, 0, textSize, nil, 0, 'left', 'top')
+        pass:text(row.contents, x + padding + frame.columnWidth + padding, y - frame.scroll + padding, 0, textSize, nil, 0, 'left', 'top')
         y = y + textSize
 
         if y > edge then

@@ -4105,7 +4105,7 @@ Font* lovrGraphicsGetDefaultFont(void) {
   Font* font = state.defaultFont;
 
   if (!font) {
-    Rasterizer* rasterizer = lovrRasterizerCreate(NULL, 32, NULL);
+    Rasterizer* rasterizer = lovrRasterizerCreate(NULL, 32, NULL, NULL);
     if (!rasterizer) return NULL;
 
     font = lovrFontCreate(&(FontInfo) { .rasterizer = rasterizer, .spread = 4 });

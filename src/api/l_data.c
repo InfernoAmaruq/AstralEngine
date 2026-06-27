@@ -185,16 +185,21 @@ static int l_lovrDataNewModelData(lua_State* L) {
 
 static int l_lovrDataNewRasterizer(lua_State* L) {
   Blob* blob = NULL;
-  float size;
+  float size = 32.f;
+  Image* atlas = NULL;
 
   if (lua_type(L, 1) == LUA_TNUMBER || lua_isnoneornil(L, 1)) {
     size = luax_optfloat(L, 1, 32.f);
   } else {
     blob = luax_readblob(L, 1, "Font");
-    size = luax_optfloat(L, 2, 32.f);
+    if (lua_type(L, 2) == LUA_TNUMBER) {
+      size = luax_tofloat(L, 2);
+    } else {
+      atlas = luax_totype(L, 2, Image);
+    }
   }
 
-  Rasterizer* rasterizer = lovrRasterizerCreate(blob, size, luax_readfile);
+  Rasterizer* rasterizer = lovrRasterizerCreate(blob, size, atlas, luax_readfile);
   lovrRelease(blob, lovrBlobDestroy);
   luax_assert(L, rasterizer);
   luax_pushtype(L, Rasterizer, rasterizer);

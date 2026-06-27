@@ -11,6 +11,8 @@ dev
 - Change `Image:get/set/mapPixel` to support `rgb565`, `rgb5a1`, `rgb10a2` formats.
 - Change `Image:getPixel` to return an alpha of 1 for formats that don't have alpha.
 - Change `Image:encode` to support more formats (all uncompressed non-float color formats).
+- Change `lovr.data.newRasterizer` to take an `Image` to use for a BMFont atlas.
+- Change `lovr.graphics.newFont` to take an `Image` to use for a BMFont atlas.
 
 ### Fix
 

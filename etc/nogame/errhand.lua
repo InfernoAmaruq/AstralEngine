@@ -76,8 +76,19 @@ function lovr.errhand(message)
         row.id = id .. string.format('%p:%s', name, value)
 
         if frame.expanded[row.id] then
-          for k, v in pairs(value) do
-            halp(k, v, row, row.id, depth + 1)
+          if next(value) then
+            for k, v in pairs(value) do
+              halp(k, v, row, row.id, depth + 1)
+            end
+          else
+            table.insert(frame.rows, {
+              name = '',
+              value = nil,
+              contents = '<empty>',
+              parent = row,
+              index = #frame.rows + 1,
+              depth = depth + 1
+            })
           end
         end
       end

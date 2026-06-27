@@ -78,7 +78,7 @@ function lovr.errhand(message)
         if frame.expanded[row.id] then
           if next(value) then
             for k, v in pairs(value) do
-              halp(k, v, row, row.id, depth + 1)
+              halp(tostring(k), v, row, row.id, depth + 1)
             end
           else
             table.insert(frame.rows, {

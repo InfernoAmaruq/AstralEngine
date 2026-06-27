@@ -70,6 +70,10 @@ function lovr.errhand(message)
       row.contents = type(row.value) == 'string' and string.format("'%s'", row.value) or tostring(row.value)
       row.contents = row.contents:gsub('\n', '\\n')
 
+      if #row.contents > 10000 then
+        row.contents = row.contents:sub(1, 10000) .. '...'
+      end
+
       table.insert(frame.rows, row)
 
       if type(value) == 'table' then

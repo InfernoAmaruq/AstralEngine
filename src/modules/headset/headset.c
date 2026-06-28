@@ -269,6 +269,8 @@ static struct {
   Simulator simulator;
   XrInstance instance;
   XrSystemId system;
+  XrInstanceProperties instanceProperties;
+  XrSystemProperties systemProperties;
   XrViewConfigurationType viewConfiguration;
   uint32_t viewCount;
   XrSession session;
@@ -609,6 +611,9 @@ bool lovrHeadsetConnect(void) {
     xrCreateDebugUtilsMessengerEXT(state.instance, &messengerInfo, &state.messenger);
   }
 
+  state.instanceProperties.type = XR_TYPE_INSTANCE_PROPERTIES;
+  xrGetInstanceProperties(state.instance, &state.instanceProperties);
+
   // System
 
   XrSystemGetInfo systemInfo = {
@@ -618,45 +623,45 @@ bool lovrHeadsetConnect(void) {
 
   XRG(xrGetSystem(state.instance, &systemInfo, &state.system), "xrGetSystem", fail);
 
+  state.systemProperties.type = XR_TYPE_SYSTEM_PROPERTIES;
   XrSystemEyeGazeInteractionPropertiesEXT eyeGazeProperties = { .type = XR_TYPE_SYSTEM_EYE_GAZE_INTERACTION_PROPERTIES_EXT };
   XrSystemHandTrackingPropertiesEXT handTrackingProperties = { .type = XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT };
   XrSystemBodyTrackingPropertiesBD bodyTrackingProperties = { .type = XR_TYPE_SYSTEM_BODY_TRACKING_PROPERTIES_BD };
   XrSystemKeyboardTrackingPropertiesFB keyboardTrackingProperties = { .type = XR_TYPE_SYSTEM_KEYBOARD_TRACKING_PROPERTIES_FB };
   XrSystemUserPresencePropertiesEXT presenceProperties = { .type = XR_TYPE_SYSTEM_USER_PRESENCE_PROPERTIES_EXT };
   XrSystemPassthroughProperties2FB passthroughProperties = { .type = XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES2_FB };
-  XrSystemProperties properties = { .type = XR_TYPE_SYSTEM_PROPERTIES };
 
   if (state.extensions.gaze) {
-    eyeGazeProperties.next = properties.next;
-    properties.next = &eyeGazeProperties;
+    eyeGazeProperties.next = state.systemProperties.next;
+    state.systemProperties.next = &eyeGazeProperties;
   }
 
   if (state.extensions.handTracking) {
-    handTrackingProperties.next = properties.next;
-    properties.next = &handTrackingProperties;
+    handTrackingProperties.next = state.systemProperties.next;
+    state.systemProperties.next = &handTrackingProperties;
   }
 
   if (state.extensions.bodyTracking) {
-    bodyTrackingProperties.next = properties.next;
-    properties.next = &bodyTrackingProperties;
+    bodyTrackingProperties.next = state.systemProperties.next;
+    state.systemProperties.next = &bodyTrackingProperties;
   }
 
   if (state.extensions.keyboardTracking) {
-    keyboardTrackingProperties.next = properties.next;
-    properties.next = &keyboardTrackingProperties;
+    keyboardTrackingProperties.next = state.systemProperties.next;
+    state.systemProperties.next = &keyboardTrackingProperties;
   }
 
   if (state.extensions.presence) {
-    presenceProperties.next = properties.next;
-    properties.next = &presenceProperties;
+    presenceProperties.next = state.systemProperties.next;
+    state.systemProperties.next = &presenceProperties;
   }
 
   if (state.extensions.questPassthrough) {
-    passthroughProperties.next = properties.next;
-    properties.next = &passthroughProperties;
+    passthroughProperties.next = state.systemProperties.next;
+    state.systemProperties.next = &passthroughProperties;
   }
 
-  XRG(xrGetSystemProperties(state.instance, state.system, &properties), "xrGetSystemProperties", fail);
+  XRG(xrGetSystemProperties(state.instance, state.system, &state.systemProperties), "xrGetSystemProperties", fail);
   state.extensions.gaze = eyeGazeProperties.supportsEyeGazeInteraction;
   state.extensions.handTracking = handTrackingProperties.supportsHandTracking;
   state.extensions.bodyTracking = bodyTrackingProperties.supportsBodyTracking;
@@ -1527,22 +1532,12 @@ bool lovrHeadsetIsConnected(void) {
   return state.system;
 }
 
-bool lovrHeadsetGetName(char* name, size_t length) {
-  if (!state.system) return false;
-  XrSystemProperties properties = { .type = XR_TYPE_SYSTEM_PROPERTIES };
-  if (XR_FAILED(xrGetSystemProperties(state.instance, state.system, &properties))) return false;
-  strncpy(name, properties.systemName, length - 1);
-  name[length - 1] = '\0';
-  return true;
+const char* lovrHeadsetGetName(void) {
+  return state.system ? state.systemProperties.systemName : NULL;
 }
 
-bool lovrHeadsetGetDriver(char* name, size_t length) {
-  if (!state.system) return false;
-  XrInstanceProperties properties = { .type = XR_TYPE_INSTANCE_PROPERTIES };
-  if (XR_FAILED(xrGetInstanceProperties(state.instance, &properties))) return false;
-  strncpy(name, properties.runtimeName, length - 1);
-  name[length - 1] = '\0';
-  return true;
+const char* lovrHeadsetGetDriver(void) {
+  return state.instance ? state.instanceProperties.runtimeName : NULL;
 }
 
 void lovrHeadsetGetFeatures(HeadsetFeatures* features) {

@@ -64,9 +64,14 @@ Renderer.SetMainShader = function(Shader)
 
         -- TODO
     else
-        BFI_Transform, BFL_Transform = Shader:getBufferFormat("INSTANCE_Transform")
-        BFI_Material, BFL_Material = Shader:getBufferFormat("INSTANCE_Material")
-        BFI_Scale, BFL_Scale = Shader:getBufferFormat("INSTANCE_Scale")
+        local _
+        _, BFL_Transform = Shader:getBufferFormat("INSTANCE_Transform")
+        _, BFL_Material = Shader:getBufferFormat("INSTANCE_Material")
+        _, BFL_Scale = Shader:getBufferFormat("INSTANCE_Scale")
+
+        BFI_Transform = "mat4"
+        BFI_Material = "mat4"
+        BFI_Scale = "vec3"
     end
 end
 

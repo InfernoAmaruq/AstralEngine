@@ -20,13 +20,15 @@ Surface linearMaterial(inout Surface surface) {
 Surface getMaterialSurface(){
     Surface s;
 
-    if (Material_UsePixelSampler){
-  	s = newSurface();
-	linearMaterial(s);
-	finalizeSurface(s);
+    if (IsInstanced) {
     }
-    else
-	s = getDefaultSurface();
+
+    if (Material_UsePixelSampler) {
+        s = newSurface();
+        linearMaterial(s);
+        finalizeSurface(s);
+    } else
+	    s = getDefaultSurface();
 
     s.baseColor *= Material_Color;
 

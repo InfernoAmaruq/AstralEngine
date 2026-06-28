@@ -120,7 +120,6 @@ local V, F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics, "OIT/Write", 
     Include = { "Material", "Lighting", "PBR", "Misc/Instancing" },
     Define = {
         Fragment = {
-            "MATERIAL_BASEUV_TO_COLOR",
             MAX_LIGHTS = 256,
         },
     },

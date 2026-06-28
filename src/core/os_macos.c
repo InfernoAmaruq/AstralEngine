@@ -204,3 +204,8 @@ size_t os_get_bundle_path(char* buffer, size_t size, const char** root) {
   *root = NULL;
   return length;
 }
+
+void os_set_window_size(uint32_t width, uint32_t height){}
+void os_set_cursor_icon(os_cursor_icon icon){};
+int os_set_precise_mouse(int Bool){return 0;};
+

@@ -16,7 +16,11 @@ end
 
 local Path = lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath())
 local temp = require(Path .. "TableAlloc")
-table.new = table.new or temp.Alloc -- luajit or lua version
+if jit then
+    require("table.new")
+else
+    table.new = temp.Alloc
+end
 debug.getaddress = temp.GetPtr
 
 local mt = { __mode = "k" }

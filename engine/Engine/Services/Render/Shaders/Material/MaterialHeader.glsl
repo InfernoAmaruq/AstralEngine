@@ -1,6 +1,6 @@
 @TYPE:GRAPHICS;
 @IDENTIFIER:MATERIAL_HEADER;
-@PRIORITY:-1000000;
+@PRIORITY:-1000;
 
 uniform mat4 Material_Matrix;
 uniform sampler Material_PixelSampler;
@@ -9,12 +9,16 @@ uniform sampler Material_PixelSampler;
 
 uniform vec3 Material_ObjectScale;
 
-#ifdef INSTANCES
-uniform vec3 Material_ObjectScaleInstanced[INSTANCES];
-#endif
+#ifdef INSTANCING_ACTIVE
 
-#ifdef INSTANCES
-uniform mat4 Material_MaterialBuffer[INSTANCES];
+uniform INSTANCE_Material {
+    vec3 Material_ObjectScaleInstanced[INSTANCES];
+};
+
+uniform INSTANCE_Scale {
+    mat4 Material_MatrixInstanced[INSTANCES];
+};
+
 #endif
 
 // offset is xy, scale is zw

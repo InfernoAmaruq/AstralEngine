@@ -1,3 +1,5 @@
+local INSTANCING_THRESHOLD = 20
+
 local Renderer = select(1, ...)
 local Component = GetService("Component")
 
@@ -35,12 +37,37 @@ local BlurSampler = lovr.graphics.newSampler({ wrap = "clamp" })
 
 local MainShader
 
+-- lets cache instanced buffer formats here
+local BFI_Transform, BFL_Transform
+local BFI_Material, BFL_Material
+local BFI_Scale, BFL_Scale
+
 Renderer.GetMainShader = function()
     return MainShader
 end
 
 Renderer.SetMainShader = function(Shader)
     MainShader = Shader
+
+    if not Shader:hasVariable("INSTANCE_Transform") then
+        INSTANCING_THRESHOLD = math.huge -- should not instance
+        return
+    end
+
+    -- now to pull formats in case they were updated!
+
+    if BFI_Transform then
+        -- override and potentially rebuild
+        local New_BFI_Transform, New_BFL_Transform
+        local New_BFI_Material, New_BFL_Material
+        local New_BFI_Scale, New_BFL_Scale
+
+        -- TODO
+    else
+        BFI_Transform, BFL_Transform = Shader:getBufferFormat("INSTANCE_Transform")
+        BFI_Material, BFL_Material = Shader:getBufferFormat("INSTANCE_Material")
+        BFI_Scale, BFL_Scale = Shader:getBufferFormat("INSTANCE_Scale")
+    end
 end
 
 -- > HANDLE RENDERING DATA
@@ -92,13 +119,16 @@ function Renderer.NewGeometryType(FunctionSingle, FunctionBulk)
 end
 
 -- enum for Geometry Table State
-local INSTANCING_THRESHOLD = 15
 
 local GTS_NEEDS_UPDATE = 1
 local GTS_NEEDS_ALLOC = 2
 local GTS_READY = 3
-local GTS_TO_FREE_FULL = 4
-local GTS_TO_FREE_GPU = 5
+local GTS_NEEDS_FREE_FULL = 4
+local GTS_NEEDS_FREE_GPU = 5
+
+local ALLOCATOR_STATE_NONE = 0
+local ALLOCATOR_STATE_READY = 1
+local ALLOCATOR_STATE_NEEDS_FILL = 2
 
 local DrawTable = {
     Solid = {},
@@ -136,8 +166,10 @@ function DrawTable.AddToStack(Entity, IsSolid, Material, GeometryHash, DrawType)
     GeometryTable.Top = T
     if T > INSTANCING_THRESHOLD and not GeometryTable.IsInstanced then
         GeometryTable.State = GTS_NEEDS_ALLOC
-    else
+    elseif GeometryTable.IsInstanced then
         GeometryTable.State = GTS_NEEDS_UPDATE
+    else
+        GeometryTable.State = GTS_READY
     end
 end
 
@@ -176,7 +208,7 @@ function DrawTable.RemoveFromStack(Entity, IsSolid, Material, GeometryHash)
 
     if Top == 1 then
         GeometryTable[Top] = nil
-        GeometryTable.State = GTS_TO_FREE_FULL
+        GeometryTable.State = GTS_NEEDS_FREE_FULL
         -- free when drawing. Not now since it COULD be repopulated. Happens often when changing an object from one stack to another
     else
         local TopEnt = GeometryTable[Top]
@@ -184,19 +216,103 @@ function DrawTable.RemoveFromStack(Entity, IsSolid, Material, GeometryHash)
         GeometryTable[Top] = nil
 
         if Top - 1 < INSTANCING_THRESHOLD and GeometryTable.IsInstanced then
-            GeometryTable.State = GTS_TO_FREE_GPU
-        else
+            GeometryTable.State = GTS_NEEDS_FREE_GPU
+        elseif GeometryTable.IsInstanced then
             GeometryTable.State = GTS_NEEDS_UPDATE
+        else
+            GeometryTable.State = GTS_READY
         end
     end
 
     GeometryTable.Top = Top - 1
 end
 
-local function DrawTableFix(Table)
+local function DrawTableFix(Table, Where, Key)
     -- this will be called if the table needs repairs or changes to be made
     -- nts: do not forget to check if the Type of geometry has a bulk function before allocating
-    return false -- whether a table was freed or not
+
+    local State = Table.State
+
+    if
+        State == GTS_NEEDS_FREE_FULL
+        or (State == GTS_NEEDS_FREE_GPU and (Table.IsInstanced or Table.AllocatorState ~= ALLOCATOR_STATE_NONE))
+    then
+        if Table.IsInstanced or Table.AllocatorState ~= ALLOCATOR_STATE_NONE then
+            Table.GPU_Transform:release()
+            Table.GPU_Material:release()
+            Table.GPU_Scale:release()
+            Table.GPU_Transform = nil
+            Table.GPU_Material = nil
+            Table.GPU_Scale = nil
+
+            Table.InstTransformData = nil
+            Table.Material_MatrixInstanced = nil
+            Table.Material_MatrixInstanced = nil
+            Table.AllocatorState = ALLOCATOR_STATE_NONE
+        end
+
+        if State == GTS_NEEDS_FREE_FULL then
+            Where[Key] = nil -- remove table ref
+            return false
+        end
+
+        Table.IsInstanced = false
+    elseif State == GTS_NEEDS_ALLOC then
+        local New = table.new
+        local NewBuffer = lovr.graphics.newBuffer
+
+        Table.InstTransformData = New(BFL_Transform, 0)
+        Table.Material_MatrixInstanced = New(BFL_Material, 0)
+        Table.Material_MatrixInstanced = New(BFL_Scale, 0)
+
+        Table.GPU_Transform = NewBuffer(BFI_Transform)
+        Table.GPU_Material = NewBuffer(BFI_Material)
+        Table.GPU_Scale = NewBuffer(BFI_Scale)
+
+        Table.State = GTS_NEEDS_UPDATE
+        Table.AllocatorState = ALLOCATOR_STATE_NEEDS_FILL
+
+        return true
+        -- we can only update it NEXT frame since more performance friendly
+    elseif State == GTS_NEEDS_UPDATE or Table.AllocatorState then
+        local T_Transform, T_Mat, T_Scale =
+            Table.InstTransformData, Table.Material_MatrixInstanced, Table.Material_MatrixInstanced
+        if Table.AllocatorState == ALLOCATOR_STATE_NEEDS_FILL then
+            local CompReg = Component.Components
+            local C_Transform, C_Material = CompReg.Transform.Storage, CompReg.Material.Storage
+
+            local EmptyMatrix = CompReg.Material.Metadata.EmptyMatrix
+
+            for EntId = 1, Table.Top do
+                local Ent = Table[EntId]
+
+                local Transform, Material = C_Transform[Ent], C_Material[Ent]
+
+                -- Transform always exists if its here. If it doesn't, then we'll crash elsewhere, so fuck it
+
+                T_Transform[EntId] = assert(Transform[3])
+                T_Scale[EntId] = assert(Transform[5])
+
+                if Material then
+                    T_Mat[EntId] = assert(Material[9])
+                else
+                    T_Mat[EntId] = assert(EmptyMatrix)
+                end
+            end
+
+            -- fetch all tables and connect them
+            Table.AllocatorState = ALLOCATOR_STATE_READY
+            Table.IsInstanced = true
+        end
+
+        Table.GPU_Transform:setData(Table)
+        Table.GPU_Material:setData(Table)
+        Table.GPU_Scale:setData(Table)
+    end
+
+    Table.State = GTS_READY
+
+    return true
 end
 
 -- > DRAWING
@@ -275,15 +391,17 @@ local function GetDrawFunc(IsSolid)
                     Pass:push("state")
 
                     --local ShouldDrop = (GeometryTable.State == GTS_READY) and false or DrawTableFix(GeometryTable)
-                    local ShouldContinue = true
+                    local ShouldContinue = GeometryTable.State == GTS_READY
+                        or DrawTableFix(GeometryTable, GeometryList, DrawHash)
 
                     if ShouldContinue then
                         local Functions = FunctionRegistry[GeometryTable.Type]
-                        if GeometryTable.IsInstanced then
+                        if GeometryTable.IsInstanced and Functions.Bulk then
                             Pass:send("IsInstanced", true)
 
-                            Pass:send("InstMaterialData", GeometryTable.GPUMaterialBuffer)
-                            Pass:send("InstTransformData", GeometryTable.GPUTransformBuffer)
+                            Pass:send("INSTANCE_Material", GeometryTable.GPU_Material)
+                            Pass:send("INSTANCE_Transform", GeometryTable.GPU_Transform)
+                            Pass:send("INSTANCE_Scale", GeometryTable.GPU_Scale)
 
                             Functions.Bulk(Pass, GeometryTable, DrawHash)
                         else

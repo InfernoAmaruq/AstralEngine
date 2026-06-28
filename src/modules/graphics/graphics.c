@@ -7852,6 +7852,9 @@ bool lovrPassDraw(Pass* pass, DrawInfo* info) {
   draw->start = info->start;
   draw->count = info->count > 0 ? info->count : (info->index.buffer || info->index.count > 0 ? info->index.count : info->vertex.count);
   draw->instances = MAX(info->instances, 1);
+  if (info->instances > 1){
+        printf("DRAW INSTANCES: %i\n",info->instances);
+  }
   draw->baseVertex = info->baseVertex;
 
   lovrPassResolvePipeline(pass, info, draw, previous);
@@ -8239,7 +8242,8 @@ bool lovrPassBox(Pass* pass, float* transform, DrawStyle style, uint32_t inst) {
       .vertex.pointer = (void**) &vertices,
       .vertex.count = COUNTOF(vertexData),
       .index.pointer = (void**) &indices,
-      .index.count = COUNTOF(indexData)
+      .index.count = COUNTOF(indexData),
+      .instances = inst
     };
 
     if (!lovrPassDraw(pass, &draw)) {

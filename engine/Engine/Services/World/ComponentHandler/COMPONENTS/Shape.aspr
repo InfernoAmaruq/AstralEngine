@@ -20,19 +20,12 @@ do
     P_Plane = TMPPASS.plane
     P_Cylinder = TMPPASS.cylinder
     P_Send = TMPPASS.send
-    P_Color = TMPPASS.setColor
-    P_Sampler = TMPPASS.setSampler
 end
-
-local VecOne = Vec2(1, 1)
-local VecZero = Vec2(0, 0)
 
 local function GenerateProcessors(f)
     local Comp = Component.Components
 
     local P_Send = P_Send
-    local P_Color = P_Color
-    local P_Sampler = P_Sampler
 
     local function Single(Pass, Geometry)
         local TransformStorage = Comp.Transform.Storage
@@ -41,11 +34,6 @@ local function GenerateProcessors(f)
         local EmptyMatrix = M.Metadata.EmptyMatrix
 
         local P_Send = P_Send
-        local P_Color = P_Color
-        local P_Sampler = P_Sampler
-
-        local VecOne = VecOne
-        local VecZero = VecZero
 
         local f = f
 
@@ -65,8 +53,8 @@ local function GenerateProcessors(f)
         end
     end
 
-    local function Bulk()
-        f(Pass, nil)
+    local function Bulk(Pass, Geometry)
+        f(Pass, nil, nil, Geometry.Top)
     end
 
     return Single, Bulk

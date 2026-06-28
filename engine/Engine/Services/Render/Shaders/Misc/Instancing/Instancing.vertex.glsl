@@ -4,13 +4,9 @@
 
 layout(location = 50) flat out int InstIndex;
 
-#ifndef INSTANCES
-#define INSTANCES 256
-#endif
-
-uniform bool IsInstanced;
-
-uniform mat4 InstTransformData[INSTANCES];
+uniform INSTANCE_Transform {
+    mat4 InstTransformData[INSTANCES];
+};
 
 vec4 astral_main(){
     if (IsInstanced){

@@ -907,6 +907,20 @@ function(build_lua_module SRC)
     get_filename_component(REL_DIR "${REL_PATH}" DIRECTORY)
     get_filename_component(MODULE_NAME "${SRC_ABS}" NAME_WE)
 
+    string(FIND "${SRC_ABS}" ".nojit." FINDPOS)
+    if(NOT FINDPOS EQUAL -1)
+	    if(LOVR_USE_LUAJIT)
+		    return()
+	    endif()
+    endif()
+
+    string(FIND "${SRC_ABS}" ".mod." FINDPOS)
+    if(FINDPOS EQUAL -1)
+	return()
+    endif()
+
+    message("COMPILING LUA MODULE: ${MODULE_NAME}")
+
     if (WIN32)
         set(OUT_DIR "${ASTRAL_RUNTIME_DIR}/TEMP_BIN/Engine/${REL_DIR}")
         file(MAKE_DIRECTORY "${OUT_DIR}")
@@ -929,7 +943,7 @@ function(build_lua_module SRC)
 
     target_include_directories(${MODULE_NAME} PRIVATE
         ${LUA_INCLUDE_DIR}
-		${CMAKE_SOURCE_DIR}/src
+	${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/engine
         ${CMAKE_SOURCE_DIR}/src/core
         ${CMAKE_SOURCE_DIR}/src/api

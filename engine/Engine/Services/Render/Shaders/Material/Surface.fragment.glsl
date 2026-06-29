@@ -20,19 +20,19 @@ Surface linearMaterial(inout Surface surface) {
 Surface getMaterialSurface(){
     Surface s;
 
-    if (IsInstanced) {
-    }
+    vec4 sColor = IsInstanced ? Material_MatrixInstanced[InstIndex][1] : Material_Matrix[1];
 
-    if (Material_UsePixelSampler) {
-        s = newSurface();
-        linearMaterial(s);
-        finalizeSurface(s);
-    } else
+	if (Material_UsePixelSampler) {
+	    s = newSurface();
+	    linearMaterial(s);
+	    finalizeSurface(s);
+	} else
 	    s = getDefaultSurface();
 
-    s.baseColor *= Material_Color;
+	s.baseColor *= sColor;
 
     return s;
 }
 
-vec4 astral_main(){}
+vec4 astral_main(){
+}

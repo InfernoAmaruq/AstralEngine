@@ -7852,9 +7852,6 @@ bool lovrPassDraw(Pass* pass, DrawInfo* info) {
   draw->start = info->start;
   draw->count = info->count > 0 ? info->count : (info->index.buffer || info->index.count > 0 ? info->index.count : info->vertex.count);
   draw->instances = MAX(info->instances, 1);
-  if (info->instances > 1){
-        printf("DRAW INSTANCES: %i\n",info->instances);
-  }
   draw->baseVertex = info->baseVertex;
 
   lovrPassResolvePipeline(pass, info, draw, previous);

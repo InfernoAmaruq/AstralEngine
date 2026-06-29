@@ -1,6 +1,6 @@
 @TYPE:VERTEX;
 @IDENTIFIER:MATERIAL_BASE_UV_SHADER;
-@PRIORITY:-10000;
+@PRIORITY:-100;
 
 #define MATERIAL_FIT_MODE_STRETCH 0
 #define MATERIAL_FIT_MODE_TILE 1
@@ -20,11 +20,11 @@ vec4 astral_main(){
         vec2 AbsScale;
 
         if (AbsNormal.z > AbsNormal.x && AbsNormal.z > AbsNormal.y)
-            AbsScale = Material_ObjectScale.xy;
+            AbsScale = Material_Scale.xy;
         else if (AbsNormal.y > AbsNormal.x)
-            AbsScale = Material_ObjectScale.xz;
+            AbsScale = Material_Scale.xz;
         else
-            AbsScale = Material_ObjectScale.zy;
+            AbsScale = Material_Scale.zy;
 
         UV = UV * AbsScale;
     }

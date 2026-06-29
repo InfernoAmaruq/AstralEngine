@@ -533,8 +533,8 @@ vec4 lovrmain();
 void main() {
   PositionWorld = vec3(WorldFromLocal * VertexPosition);
   Normal = NormalMatrix * VertexNormal;
-  UV = vec2(-1) - VertexUV;
-  UV2 = vec2(-1) - VertexUV2;
+  UV = VertexUV;
+  UV2 = VertexUV2;
 
   Color = vec4(1.0);
   if (flag_passColor) Color *= PassColor;

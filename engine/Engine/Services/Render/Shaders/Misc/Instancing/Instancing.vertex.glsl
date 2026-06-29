@@ -2,7 +2,7 @@
 @IDENTIFIER:INSTANCING_VERTEX;
 @PRIORITY:-1000;
 
-layout(location = 50) flat out int InstIndex;
+layout(location = 5) flat out unmangled int InstIndex;
 
 uniform INSTANCE_Transform {
     mat4 InstTransformData[INSTANCES];
@@ -11,6 +11,12 @@ uniform INSTANCE_Transform {
 vec4 astral_main(){
     if (IsInstanced){
         InstIndex = InstanceIndex;
-        return Projection * View * InstTransformData[InstIndex] * VertexPosition;
+
+        mat4 Transform = InstTransformData[InstIndex];
+
+        PositionWorld = vec3(Transform * VertexPosition);
+        Normal = mat3(transpose(inverse(Transform))) * VertexNormal;
+
+        return Projection * View * Transform * VertexPosition;
     }
 }

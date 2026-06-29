@@ -268,11 +268,11 @@ local function DrawTableFix(Table, Where, Key)
 
         Table.InstTransformData = New(BFL_Transform, 0)
         Table.Material_MatrixInstanced = New(BFL_Material, 0)
-        Table.Material_MatrixInstanced = New(BFL_Scale, 0)
+        Table.Material_ObjectScaleInstanced = New(BFL_Scale, 0)
 
-        Table.GPU_Transform = NewBuffer(BFI_Transform)
-        Table.GPU_Material = NewBuffer(BFI_Material)
-        Table.GPU_Scale = NewBuffer(BFI_Scale)
+        Table.GPU_Transform = NewBuffer(BFI_Transform, BFL_Transform)
+        Table.GPU_Material = NewBuffer(BFI_Material, BFL_Material)
+        Table.GPU_Scale = NewBuffer(BFI_Scale, BFL_Scale)
 
         Table.State = GTS_NEEDS_UPDATE
         Table.AllocatorState = ALLOCATOR_STATE_NEEDS_FILL
@@ -281,7 +281,7 @@ local function DrawTableFix(Table, Where, Key)
         -- we can only update it NEXT frame since more performance friendly
     elseif State == GTS_NEEDS_UPDATE or Table.AllocatorState then
         local T_Transform, T_Mat, T_Scale =
-            Table.InstTransformData, Table.Material_MatrixInstanced, Table.Material_MatrixInstanced
+            Table.InstTransformData, Table.Material_MatrixInstanced, Table.Material_ObjectScaleInstanced
         if Table.AllocatorState == ALLOCATOR_STATE_NEEDS_FILL then
             local CompReg = Component.Components
             local C_Transform, C_Material = CompReg.Transform.Storage, CompReg.Material.Storage
@@ -295,14 +295,16 @@ local function DrawTableFix(Table, Where, Key)
 
                 -- Transform always exists if its here. If it doesn't, then we'll crash elsewhere, so fuck it
 
-                T_Transform[EntId] = assert(Transform[3])
-                T_Scale[EntId] = assert(Transform[5])
+                T_Transform[EntId] = Transform[3]
+                T_Scale[EntId] = Transform[5]
 
                 if Material then
-                    T_Mat[EntId] = assert(Material[9])
+                    T_Mat[EntId] = Material[9]
                 else
-                    T_Mat[EntId] = assert(EmptyMatrix)
+                    T_Mat[EntId] = EmptyMatrix
                 end
+
+                T_Mat[EntId] = EmptyMatrix
             end
 
             -- fetch all tables and connect them
@@ -310,9 +312,9 @@ local function DrawTableFix(Table, Where, Key)
             Table.IsInstanced = true
         end
 
-        Table.GPU_Transform:setData(Table)
-        Table.GPU_Material:setData(Table)
-        Table.GPU_Scale:setData(Table)
+        Table.GPU_Transform:setData(T_Transform, 1)
+        Table.GPU_Material:setData(T_Mat, 1)
+        Table.GPU_Scale:setData(T_Scale, 1)
     end
 
     Table.State = GTS_READY
@@ -404,8 +406,8 @@ local function GetDrawFunc(IsSolid)
                         if GeometryTable.IsInstanced and Functions.Bulk then
                             Pass:send("IsInstanced", true)
 
-                            Pass:send("INSTANCE_Material", GeometryTable.GPU_Material)
                             Pass:send("INSTANCE_Transform", GeometryTable.GPU_Transform)
+                            Pass:send("INSTANCE_Material", GeometryTable.GPU_Material)
                             Pass:send("INSTANCE_Scale", GeometryTable.GPU_Scale)
 
                             Functions.Bulk(Pass, GeometryTable, DrawHash)

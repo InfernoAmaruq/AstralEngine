@@ -1,4 +1,4 @@
-local floor, ceil, abs, type = math.floor, math.ceil, math.abs, type
+local floor, ceil, abs = math.floor, math.ceil, math.abs
 
 if _G.jit then
     require("bit")
@@ -7,29 +7,8 @@ else
     _G.bit = lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath()) .. "bit"
 end
 
-math.mathtype = function(x)
-    if type(x) ~= "number" then
-        return nil
-    end
-    if math.isinf(x) then
-        return "Inf"
-    end
-    if math.abs(x - math.floor(x)) < 1e-9 then
-        return "Integer"
-    else
-        return "Double"
-    end
-end
-
-function FastIntPow(a, b)
-    for _ = 1, b do
-        a = a * a
-    end
-    return a
-end
-
 math.round = function(x, n) -- val, dp
-    n = n and FastIntPow(10, n) or 1
+    n = n or 1
     if x >= 0 then
         return floor(x * n + 0.5) / n
     else
@@ -39,6 +18,10 @@ end
 
 math.isinf = function(x)
     return abs(x) == math.huge
+end
+
+math.isnan = function(x)
+    return not (x == x) -- nans fail == checks
 end
 
 math.clamp = function(x, a, b)

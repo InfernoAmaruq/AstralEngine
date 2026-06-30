@@ -86,7 +86,7 @@ local Processor = _G["ENUM"].__GETPROCESSOR(ENUMName, "RawValue")
 
 Data.__TEMPBIND = function(n, Priority, F)
     Priority = Processor(Priority) or Priority
-    assert(math.mathtype(Priority) == "Integer", Priority .. " NOT AN INT")
+    assert(math.floor(Priority) == Priority, Priority .. " NOT AN INT")
     Data.__BoundToStep[Priority] = Data.__BoundToStep[Priority] or {}
     Data.__BoundToStep[Priority][n] = F
     if _G.CONTEXT then
@@ -110,7 +110,7 @@ Data.Flags = {
 Data.BindToStep = function(Name, Priority, F, Flag)
     Flag = Flag or 0
     Priority = Processor(Priority) or Priority
-    assert(math.mathtype(Priority) == "Integer", Priority .. " NOT AN INT")
+    assert(math.floor(Priority) == Priority, Priority .. " NOT AN INT")
 
     local BindRaw = bit.band(Flag, Data.Flags.Raw) ~= 0
     local Contextless = bit.band(Flag, Data.Flags.Contextless) ~= 0

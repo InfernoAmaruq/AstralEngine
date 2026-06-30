@@ -1,6 +1,8 @@
 local OgPairs = pairs
 local OgIpairs = ipairs
 
+local rtype = rtype or type
+
 local GetMt = debug.getmetatable
 
 pairs = function(t)

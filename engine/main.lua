@@ -5,8 +5,8 @@ local AnsiColorLib = require("Lib/ANSIText")
 
 local MainScheduler, World, Renderer, RunService, SS
 
-local CURRENT_FRAME = 0
-local CURRENT_CPUTICK = 0
+AstralEngine.CurrentFrame = 0
+AstralEngine.CurrentTick = 0
 
 AstralEngine.Callbacks = {}
 
@@ -131,6 +131,8 @@ function lovr.run()
     SS.Scene.LoadScene(AstralEngine._CONFIG.Filesystem.EntryScene)
 
     -- RUNTIME DEFINITION
+
+    local AstralEngine = AstralEngine
 
     local Frames = 0
     local t = 0
@@ -288,7 +290,7 @@ function lovr.run()
         @ifdef<Physics.Interpolate & Physics.InterpolAtCPU>{
             PHYSICS_INTERPOLATE()
         }
-        CURRENT_CPUTICK = CURRENT_CPUTICK + 1;
+        AstralEngine.CurrentTick = AstralEngine.CurrentTick + 1;
         @execute<UNSAFE>{
             if lovr.headset then
                 return "if lovr.headset.isActive() then XRDT = lovr.headset.update() end"
@@ -322,7 +324,7 @@ function lovr.run()
 
     @macro<L,!USEBRACK>{M_GPUTick(&_SINK) = 
         @execute<UNSAFE,COMP>{
-            local RETURNFIELD = "CURRENT_FRAME = CURRENT_FRAME + 1;\n"
+            local RETURNFIELD = "AstralEngine.CurrentFrame = AstralEngine.CurrentFrame + 1;\n"
             local HASHEADSET = lovr.headset
             if lovr.graphics then
                 local CONCAT

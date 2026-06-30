@@ -2,6 +2,7 @@ local RendTarget = {}
 
 local Component = GetService("Component", "Component")
 local Renderer = GetService("Renderer")
+local Entity = GetService("Entity")
 
 RendTarget.Name = "RenderTarget"
 RendTarget.Pattern = {}
@@ -47,6 +48,7 @@ local Methods = {
             and GeometryHash == OldGeometryHash
             and DrawType == OldDrawType
         then
+            self:Invalidate()
             return
         end
 
@@ -83,7 +85,17 @@ local Methods = {
         self[4] = GeometryHash
         self[5] = DrawType
     end,
+    Invalidate = function(self)
+        Renderer.DrawTable.Invalidate(self[3], self[4])
+    end,
 }
+
+Entity.OnTransformChanged:Connect(function(Ent)
+    local rt = Component.Components.RenderTarget.Storage[Ent.Id]
+    if rt then
+        Methods.Invalidate(rt)
+    end
+end)
 
 local mt = {
     __index = function(self, k)

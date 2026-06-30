@@ -11,12 +11,12 @@ uniform vec3 Material_ObjectScale;
 
 #ifdef INSTANCING_ACTIVE
 
-uniform INSTANCE_Material {
-    mat4 Material_MatrixInstanced[INSTANCES];
+readonly buffer INSTANCE_Material {
+    mat4 Material_MatrixInstanced[];
 };
 
-uniform INSTANCE_Scale {
-    vec3 Material_ObjectScaleInstanced[INSTANCES];
+readonly buffer INSTANCE_Scale {
+    vec3 Material_ObjectScaleInstanced[];
 };
 
 #define Material_UV (IsInstanced ? Material_MatrixInstanced[InstIndex][0] : Material_Matrix[0])

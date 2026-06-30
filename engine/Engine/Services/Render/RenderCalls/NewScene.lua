@@ -1,4 +1,17 @@
-local INSTANCING_THRESHOLD = 20
+-- > CONST
+local INSTANCING_THRESHOLD = 5
+local FREE_THRESHOLD = math.floor(INSTANCING_THRESHOLD / 2) -- at what point do we free
+-- Why? Because if we have a table that constantly goes between 19 and 20, we'll be freeing and allocating a LOT
+
+-- buffer alloc rules
+local MAX_BYTES = 10 -- should be more than plenty
+local MAX_ALLOC_SIZE = MAX_BYTES * (1024 * 1024)
+local MAX_BUFFER_SIZE = --[[max memory:]]
+    math.floor(MAX_ALLOC_SIZE --[[matrix size:]] / 64)
+
+local ALLOCATION_STEP = 1.2 -- when we want to reallocate, how much more do we allocate
+
+-- > RUNTIME
 
 local Renderer = select(1, ...)
 local Component = GetService("Component")
@@ -38,9 +51,10 @@ local BlurSampler = lovr.graphics.newSampler({ wrap = "clamp" })
 local MainShader
 
 -- lets cache instanced buffer formats here
-local BFI_Transform, BFL_Transform
-local BFI_Material, BFL_Material
-local BFI_Scale, BFL_Scale
+
+local BFI_Transform
+local BFI_Material
+local BFI_Scale
 
 Renderer.GetMainShader = function()
     return MainShader
@@ -58,17 +72,12 @@ Renderer.SetMainShader = function(Shader)
 
     if BFI_Transform then
         -- override and potentially rebuild
-        local New_BFI_Transform, New_BFL_Transform
-        local New_BFI_Material, New_BFL_Material
-        local New_BFI_Scale, New_BFL_Scale
+        local New_BFI_Transform
+        local New_BFI_Material
+        local New_BFI_Scale
 
         -- TODO
     else
-        local _
-        _, BFL_Transform = Shader:getBufferFormat("INSTANCE_Transform")
-        _, BFL_Material = Shader:getBufferFormat("INSTANCE_Material")
-        _, BFL_Scale = Shader:getBufferFormat("INSTANCE_Scale")
-
         BFI_Transform = "mat4"
         BFI_Material = "mat4"
         BFI_Scale = "vec3"
@@ -130,6 +139,7 @@ local GTS_NEEDS_ALLOC = 2
 local GTS_READY = 3
 local GTS_NEEDS_FREE_FULL = 4
 local GTS_NEEDS_FREE_GPU = 5
+local GTS_NEEDS_REALLOC = 6
 
 local ALLOCATOR_STATE_NONE = 0
 local ALLOCATOR_STATE_READY = 1
@@ -141,6 +151,37 @@ local DrawTable = {
 }
 Renderer.DrawTable = DrawTable
 
+local function Enqueue(Table, Entity)
+    if Table.Queue[Entity] then
+        return
+    elseif Table.Queue[Entity] == false then
+        Table.Queue[Entity] = true
+        return
+    end
+
+    for i = 1, Table.Top do
+        if Table[i] == Entity then
+            return
+        end
+    end
+
+    Table.Queue[Entity] = true
+
+    Table.Queue.ToCheck = true
+    Table.State = GTS_NEEDS_UPDATE
+end
+
+local function Dequeue(Table, Entity)
+    if Table.Queue[Entity] then
+        Table.Queue[Entity] = nil   -- means we have yet to add this entity to the render array, meaning we can delete it here
+    else
+        Table.Queue[Entity] = false -- remove and we presume it already exists
+    end
+
+    Table.Queue.ToCheck = true
+    Table.State = GTS_NEEDS_UPDATE
+end
+
 function DrawTable.AddToStack(Entity, IsSolid, Material, GeometryHash, DrawType)
     local SubTable = IsSolid and DrawTable.Solid or DrawTable.Transparent
 
@@ -150,21 +191,13 @@ function DrawTable.AddToStack(Entity, IsSolid, Material, GeometryHash, DrawType)
 
     SubTable[Material] = MatTable
 
-    local GeometryTable = MatTable[GeometryHash] or { Top = 0, Type = DrawType }
+    local GeometryTable = MatTable[GeometryHash] or { Top = 0, Type = DrawType, Queue = table.new(10, 50) }
 
     MatTable[GeometryHash] = GeometryTable
 
-    local Top = GeometryTable.Top
+    Enqueue(GeometryTable, Entity)
 
-    for i = 1, Top do
-        if GeometryTable[i] == Entity then
-            AstralEngine.Warn("DOUBLE ENTRY IN GEOMETRY TABLE FOR ENTITY: " .. Entity, "Renderer")
-            print("EXTRA INFO:\n    SOLID:", IsSolid, "\n    MATERIAL:", Material)
-            break
-        end
-    end
-
-    local T = Top + 1
+    --[[local T = GeometryTable.Top + 1
 
     GeometryTable[T] = Entity
 
@@ -175,6 +208,28 @@ function DrawTable.AddToStack(Entity, IsSolid, Material, GeometryHash, DrawType)
         GeometryTable.State = GTS_NEEDS_UPDATE
     else
         GeometryTable.State = GTS_READY
+    end]]
+end
+
+function DrawTable.Invalidate(Material, GeometryHash)
+    Material = Material or false
+
+    for i = 1, 2 do
+        local t1 = DrawTable[i == 1 and "Solid" or "Transparent"][Material]
+
+        if not t1 then
+            goto continue
+        end
+
+        local t2 = t1[GeometryHash]
+
+        if not t2 then
+            goto continue
+        end
+
+        t2.State = GTS_NEEDS_UPDATE
+
+        ::continue::
     end
 end
 
@@ -200,7 +255,9 @@ function DrawTable.RemoveFromStack(Entity, IsSolid, Material, GeometryHash)
         "Renderer"
     )
 
-    local Top, Id = GeometryTable.Top, -1
+    Dequeue(GeometryTable, Entity)
+
+    --[[local Top, Id = GeometryTable.Top, -1
     for i = 1, Top do
         if GeometryTable[i] == Entity then
             Id = i
@@ -229,7 +286,37 @@ function DrawTable.RemoveFromStack(Entity, IsSolid, Material, GeometryHash)
         end
     end
 
-    GeometryTable.Top = Top - 1
+    GeometryTable.Top = Top - 1]]
+end
+
+local function Populate(Table, From)
+    local T_Transform, T_Mat, T_Scale =
+        Table.InstTransformData, Table.Material_MatrixInstanced, Table.Material_ObjectScaleInstanced
+    local CompReg = Component.Components
+    local C_Transform, C_Material = CompReg.Transform.Storage, CompReg.Material.Storage
+
+    local EmptyMatrix = CompReg.Material.Metadata.EmptyMatrix
+
+    for EntId = From, Table.Top do
+        local Ent = Table[EntId]
+
+        local Transform, Material = C_Transform[Ent], C_Material[Ent]
+
+        -- Transform always exists if its here. If it doesn't, then we'll crash elsewhere, so fuck it
+
+        T_Transform[EntId] = Transform[3]
+        T_Scale[EntId] = Transform[5]
+
+        if Material then
+            T_Mat[EntId] = Material[9]
+        else
+            T_Mat[EntId] = EmptyMatrix
+        end
+    end
+
+    -- fetch all tables and connect them
+    Table.AllocatorState = ALLOCATOR_STATE_READY
+    Table.IsInstanced = true
 end
 
 local function DrawTableFix(Table, Where, Key)
@@ -237,6 +324,80 @@ local function DrawTableFix(Table, Where, Key)
     -- nts: do not forget to check if the Type of geometry has a bulk function before allocating
 
     local State = Table.State
+    local Inst = Table.IsInstanced
+
+    -- resolve queue first
+    local Queue = Table.Queue
+    if Queue.ToCheck then
+        Queue.ToCheck = nil
+
+        local T_Transform, T_Mat, T_Scale =
+            Table.InstTransformData, Table.Material_MatrixInstanced, Table.Material_ObjectScaleInstanced
+
+        -- set nil so we can iterate it correctly
+
+        local Top = Table.Top
+
+        local CompReg = Component.Components
+        local C_Transform, C_Material = CompReg.Transform.Storage, CompReg.Material.Storage
+
+        local EmptyMatrix = CompReg.Material.Metadata.EmptyMatrix
+
+        for i, v in pairs(Queue) do
+            if v then
+                Top = Top + 1
+                Table[Top] = i
+
+                if Inst then
+                    local Transform, Material = C_Transform[i], C_Material[i]
+
+                    T_Transform[Top] = Transform[3]
+                    T_Scale[Top] = Transform[5]
+
+                    if Material then
+                        T_Mat[Top] = Material[9]
+                    else
+                        T_Mat[Top] = EmptyMatrix
+                    end
+                end
+            else
+                for j = 1, Top do
+                    if Table[j] == i then -- remove
+                        local TopEnt = Table[Top]
+                        Table[Top] = nil
+
+                        Table[j] = TopEnt
+
+                        if Inst then
+                            T_Transform[Top], T_Transform[j] = nil, T_Transform[Top]
+                            T_Mat[Top], T_Mat[j] = nil, T_Mat[Top]
+                            T_Scale[Top], T_Scale[j] = nil, T_Scale[Top]
+                        end
+
+                        Top = Top - 1
+                    end
+                end
+            end
+
+            Queue[i] = nil
+        end
+
+        Table.Top = Top
+
+        State = GTS_NEEDS_UPDATE
+
+        if GeometryTypeRegistry[Table.Type].Bulk then
+            if Top >= INSTANCING_THRESHOLD and not Table.IsInstanced then
+                State = GTS_NEEDS_ALLOC
+            elseif Top == 0 then
+                State = GTS_NEEDS_FREE_FULL
+            elseif Table.IsInstanced and Top > Table.AllocSize then
+                State = GTS_NEEDS_REALLOC
+            elseif Table.IsInstanced and Top < FREE_THRESHOLD then
+                State = GTS_NEEDS_FREE_GPU
+            end
+        end
+    end
 
     if
         State == GTS_NEEDS_FREE_FULL
@@ -262,17 +423,61 @@ local function DrawTableFix(Table, Where, Key)
         end
 
         Table.IsInstanced = false
+    elseif State == GTS_NEEDS_REALLOC then
+        -- keep old lua tables
+
+        Table.GPU_Material:release()
+        Table.GPU_Scale:release()
+        Table.GPU_Transform:release()
+
+        local NewBuffer = lovr.graphics.newBuffer
+        local Alloc = Table.Top * ALLOCATION_STEP
+
+        if Alloc > MAX_BUFFER_SIZE then
+            AstralEngine.Error(
+                "OUT OF BUFFER MEMORY. MAX INST BUFFER MEMORY 10MB OR " .. MAX_BUFFER_SIZE .. " INSTANCES",
+                "RENDER"
+            )
+        end
+
+        Table.GPU_Transform = NewBuffer(BFI_Transform, Alloc)
+        Table.GPU_Material = NewBuffer(BFI_Material, Alloc)
+        Table.GPU_Scale = NewBuffer(BFI_Scale, Alloc)
+
+        Table.AllocSize = Alloc
+
+        Table.State = GTS_READY
+
+        local OldSize = #Table.InstTransformData
+        Populate(Table, OldSize)
+
+        if Table.IsInstanced then
+            Table.GPU_Transform:setData(Table.InstTransformData)
+            Table.GPU_Material:setData(Table.Material_MatrixInstanced)
+            Table.GPU_Scale:setData(Table.Material_ObjectScaleInstanced)
+        end
     elseif State == GTS_NEEDS_ALLOC then
         local New = table.new
         local NewBuffer = lovr.graphics.newBuffer
 
-        Table.InstTransformData = New(BFL_Transform, 0)
-        Table.Material_MatrixInstanced = New(BFL_Material, 0)
-        Table.Material_ObjectScaleInstanced = New(BFL_Scale, 0)
+        local Alloc = Table.Top * ALLOCATION_STEP
 
-        Table.GPU_Transform = NewBuffer(BFI_Transform, BFL_Transform)
-        Table.GPU_Material = NewBuffer(BFI_Material, BFL_Material)
-        Table.GPU_Scale = NewBuffer(BFI_Scale, BFL_Scale)
+        if Alloc > MAX_BUFFER_SIZE then
+            AstralEngine.Error(
+                "OUT OF BUFFER MEMORY. MAX INST BUFFER MEMORY 10MB OR " .. MAX_BUFFER_SIZE .. " INSTANCES",
+                "RENDER"
+            )
+        end
+
+        Table.InstTransformData = New(Alloc, 0)
+        Table.Material_MatrixInstanced = New(Alloc, 0)
+        Table.Material_ObjectScaleInstanced = New(Alloc, 0)
+
+        Table.GPU_Transform = NewBuffer(BFI_Transform, Alloc)
+        Table.GPU_Material = NewBuffer(BFI_Material, Alloc)
+        Table.GPU_Scale = NewBuffer(BFI_Scale, Alloc)
+
+        Table.AllocSize = Alloc
 
         Table.State = GTS_NEEDS_UPDATE
         Table.AllocatorState = ALLOCATOR_STATE_NEEDS_FILL
@@ -283,38 +488,14 @@ local function DrawTableFix(Table, Where, Key)
         local T_Transform, T_Mat, T_Scale =
             Table.InstTransformData, Table.Material_MatrixInstanced, Table.Material_ObjectScaleInstanced
         if Table.AllocatorState == ALLOCATOR_STATE_NEEDS_FILL then
-            local CompReg = Component.Components
-            local C_Transform, C_Material = CompReg.Transform.Storage, CompReg.Material.Storage
-
-            local EmptyMatrix = CompReg.Material.Metadata.EmptyMatrix
-
-            for EntId = 1, Table.Top do
-                local Ent = Table[EntId]
-
-                local Transform, Material = C_Transform[Ent], C_Material[Ent]
-
-                -- Transform always exists if its here. If it doesn't, then we'll crash elsewhere, so fuck it
-
-                T_Transform[EntId] = Transform[3]
-                T_Scale[EntId] = Transform[5]
-
-                if Material then
-                    T_Mat[EntId] = Material[9]
-                else
-                    T_Mat[EntId] = EmptyMatrix
-                end
-
-                T_Mat[EntId] = EmptyMatrix
-            end
-
-            -- fetch all tables and connect them
-            Table.AllocatorState = ALLOCATOR_STATE_READY
-            Table.IsInstanced = true
+            Populate(Table, 1)
         end
 
-        Table.GPU_Transform:setData(T_Transform, 1)
-        Table.GPU_Material:setData(T_Mat, 1)
-        Table.GPU_Scale:setData(T_Scale, 1)
+        if Table.IsInstanced then
+            Table.GPU_Transform:setData(T_Transform)
+            Table.GPU_Material:setData(T_Mat)
+            Table.GPU_Scale:setData(T_Scale)
+        end
     end
 
     Table.State = GTS_READY

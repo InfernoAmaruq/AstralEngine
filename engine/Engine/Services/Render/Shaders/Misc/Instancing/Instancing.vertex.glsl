@@ -4,8 +4,8 @@
 
 layout(location = 5) flat out unmangled int InstIndex;
 
-uniform INSTANCE_Transform {
-    mat4 InstTransformData[INSTANCES];
+readonly buffer INSTANCE_Transform {
+    mat4 InstTransformData[];
 };
 
 vec4 astral_main(){

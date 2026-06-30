@@ -3,7 +3,6 @@
 @PRIORITY:-100000;
 
 #ifndef INSTANCES
-#define INSTANCES 256
 #define INSTANCING_ACTIVE
 #endif
 

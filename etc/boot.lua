@@ -239,7 +239,7 @@ function lovr.boot()
     local EXEFOLD = EXE:gsub("[^/\\]+$", "")
 
     _G.package.ENG_PATH = "/"
-    _G.package.GAME_PATH = "GAMEFILE/"
+    _G.package.GAME_PATH = "GAMEFILE"
 
     local ok, Data = pcall(require, "meta")
 

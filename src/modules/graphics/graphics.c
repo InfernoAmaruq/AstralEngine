@@ -959,6 +959,14 @@ bool lovrGraphicsIsInitialized(void) {
   return state.initialized;
 }
 
+void lovrGraphicsInitWorker(void) {
+  initAllocator(&thread.stack);
+}
+
+void lovrGraphicsDestroyWorker(void) {
+  lovrFree(thread.stack.memory);
+}
+
 void lovrGraphicsGetDevice(GraphicsDevice* device) {
   device->deviceId = state.device.deviceId;
   device->vendorId = state.device.vendorId;
@@ -3412,7 +3420,6 @@ Shader* lovrGraphicsGetDefaultShader(DefaultShader type) {
 }
 
 Shader* lovrShaderCreate(const ShaderInfo* info) {
-  initAllocator(&thread.stack);
   size_t stack = stackPush(&thread.stack);
 
   Shader* shader = lovrCalloc(sizeof(Shader) + gpu_sizeof_shader());

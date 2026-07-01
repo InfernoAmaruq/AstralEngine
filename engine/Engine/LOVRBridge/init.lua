@@ -241,6 +241,8 @@ LVRB.LoadWindow = function()
     AstralEngine.Signals.OnFocusChanged = Sig.new(Sig.Type.Default)
 
     AstralEngine.Window.SetSize = lovr.system.setWindowSize
+    AstralEngine.Window.SetFullscreen = lovr.system.setWindowFullscreen
+
     AstralEngine.Window.IsFocused = lovr.system.isWindowFocused
     AstralEngine.Window.IsWindowVisible = lovr.system.IsWindowVisible
 
@@ -253,6 +255,8 @@ LVRB.LoadWindow = function()
     AstralEngine.Window.GetWindowHeight = lovr.system.getWindowHeight
     AstralEngine.Window.GetPass = lovr.graphics.getWindowPass
     AstralEngine.Window.GetWindowDensity = lovr.system.getWindowDensity
+
+    AstralEngine.Window.IsFullscreen = lovr.system.isWindowFullscreen
 
     function lovr.focus(f)
         AstralEngine.Signals.OnFocusChanged:Fire(f)
@@ -273,8 +277,6 @@ LVRB.LoadWindow = function()
 
     local W,H = AstralEngine._CONFIG.Game.Window.Width, AstralEngine._CONFIG.Game.Window.Height
 
-    AstralEngine.Window.W = W
-    AstralEngine.Window.H = H
     lovr.system.openWindow({
         width = W,
         height = H,
@@ -283,6 +285,9 @@ LVRB.LoadWindow = function()
         title = AstralEngine._CONFIG.Game.Window.Name,
         icon = AstralEngine._CONFIG.Game.Window.Icon,
     })
+
+    AstralEngine.Window.W = AstralEngine.Window.GetWindowWidth()
+    AstralEngine.Window.H = AstralEngine.Window.GetWindowHeight()
 
     local SetCursorIcon = lovr.system.setCursorIcon
 

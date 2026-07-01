@@ -15,6 +15,8 @@ local Component = GetService("Component")
 --     STATIC COMPONENT DECLARATION
 --\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
 
+-- I fucking hate this code
+
 local Camera = {}
 
 Camera.Name = "Camera"
@@ -373,7 +375,7 @@ local function OnRebuld(V, _, w, h, d)
         samples = 4,
     })
 
-    Camera.CompositePass[1]:setCanvas({
+    CameraRef.CompositePass[1]:setCanvas({
         CameraRef.CompositedTexture[1],
         CameraRef.AOTexture[1],
         CameraRef.BloomThresholdTexture[1],
@@ -581,7 +583,6 @@ Camera.Metadata.__remove = function(self, Entity)
     OIT:release()
     local Solid = self.SolidPass[1] or self.SolidPass
     Solid:release()
-    local CameraPass = self.CameraPass[1] or self.CameraPass
     local CameraPass = self.CameraPass[1] or self.CameraPass
     CameraPass:release()
 end

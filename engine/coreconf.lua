@@ -2,6 +2,7 @@ return {
     Define = {
         -- table of compile-time defined values
         Sched = {
+            -- BROKEN
             "UseLua", -- "UseLua" | "UseAuto" | "UseNative"
             -- UseNative - C code, UseLua - Lua code, UseAuto - based on size of list
             -- For tiny games with very few routines, UseLua may be fastest. UseNative is fastest for large lists
@@ -35,9 +36,6 @@ return {
         },
         Extra = {
             "PinPass",
-        },
-        Runtime = {
-            --"Sleep" -- sleep 0s after each runtime step
         },
         --[[
         --  You can define your own values with the same logic of KEY = {VALUES}, and it will be read as: @ifdef<KEY.VALUE>
@@ -76,8 +74,8 @@ return {
             -- NOT renderer AA, just output
             Vsync = false,
             Fullscreen = false,
-            Width = 1700, -- or 0 for borderless fullscreen
-            Height = 900,
+            --Width = 1700,
+            -- Height = 900,
             Resizable = false,
             Name = "Astral Engine Demo 0.0.1",
         },

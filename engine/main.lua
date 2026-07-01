@@ -362,8 +362,6 @@ function lovr.run()
     local COUNTER = 0
     local TICK = 0
 
-    local SLEEP = lovr.timer.sleep
-
     local LASTCPUT = 0
 
     -- DEFINE LOOP FUNC
@@ -408,10 +406,6 @@ function lovr.run()
         @ifdef<GC.UseAstr>{
         -- GC TICK
         GETTICK(DT,TIME,GCTime,GCRate,M_GCTick,nil)
-        }
-
-        @ifdef<Runtime.Sleep>{
-            SLEEP(0)
         }
     end
 end

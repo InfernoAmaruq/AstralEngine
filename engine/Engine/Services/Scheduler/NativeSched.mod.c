@@ -12,8 +12,8 @@ int DoRoutines(lua_State* L, double Budget, double Start){
 };
 
 int DoQueue(lua_State* L, double Budget, double Start){
-
-}
+    return 0;
+};
 
 int l_astralSchedUpd(lua_State* L){
     const int base = lua_gettop(L);
@@ -28,8 +28,9 @@ int l_astralSchedUpd(lua_State* L){
 
     //DoRoutines(L, budget, curTime);
 
+/*
 defer:
-    const int top = lua_gettop(L);
+    int top = lua_gettop(L);
     if (top != base)
         lua_pop(L, top-base);
     return 0;
@@ -37,6 +38,7 @@ defer:
     // work
 
     goto defer;
+    */
 }
 
 ASTRAL_API int luaopen_NativeSched(lua_State* L){

@@ -231,7 +231,11 @@ local function ExpandMacro(Src, Mac)
 
         Src = Src:gsub(Sym, function()
             return AddBrackets(Mac.Body, Mac)
-        end)
+        end, nil, true)
+
+        Src = Src:gsub(Mac.Name, function()
+            return AddBrackets(Mac.Body, Mac)
+        end, nil, true)
     end
 
     return Src, true
@@ -243,7 +247,6 @@ function Macro.POST(Src, Id)
         CUR.LIBRARY[i] = v
     end
 
-    local LastMasked
     local Masked, Store = MaskStrings(Src)
     local Changed = true
     while Changed do

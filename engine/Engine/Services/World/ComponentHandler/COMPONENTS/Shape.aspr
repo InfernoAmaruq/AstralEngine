@@ -22,7 +22,7 @@ do
     P_Send = TMPPASS.send
 end
 
-local function GenerateProcessors(f)
+local function GenerateProcessors(f, Offset) -- offset to last arg
     local Comp = Component.Components
 
     local P_Send = P_Send
@@ -53,19 +53,31 @@ local function GenerateProcessors(f)
         end
     end
 
-    local function Bulk(Pass, Geometry)
-        f(Pass, nil, nil, Geometry.Top)
+    local Bulk
+
+    if Offset == 3 then
+        Bulk = function(Pass, Geometry)
+            f(Pass, nil, nil, Geometry.Top)
+        end
+    elseif Offset == 4 then
+        Bulk = function(Pass, Geometry)
+            f(Pass, nil, nil, nil, Geometry.Top)
+        end
+    elseif Offset == 5 then
+        Bulk = function(Pass, Geometry)
+            f(Pass, nil, nil, nil, nil, Geometry.Top)
+        end
     end
 
     return Single, Bulk
 end
 
 local BoxId, SphereId, CapsuleId, PlaneId, CylinderId
-BoxId = Render.NewGeometryType(GenerateProcessors(P_Box))
-SphereId = Render.NewGeometryType(GenerateProcessors(P_Sphere))
-CapsuleId = Render.NewGeometryType(GenerateProcessors(P_Capsule))
-PlaneId = Render.NewGeometryType(GenerateProcessors(P_Plane))
-CylinderId = Render.NewGeometryType(GenerateProcessors(P_Cylinder))
+BoxId = Render.NewGeometryType(GenerateProcessors(P_Box, 3))
+SphereId = Render.NewGeometryType(GenerateProcessors(P_Sphere, 4))
+CapsuleId = Render.NewGeometryType(GenerateProcessors(P_Capsule, 3))
+PlaneId = Render.NewGeometryType(GenerateProcessors(P_Plane, 5))
+CylinderId = Render.NewGeometryType(GenerateProcessors(P_Cylinder, 5))
 
 local LookupTable = {
     [E.Box] = BoxId,

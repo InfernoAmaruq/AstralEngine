@@ -2,6 +2,7 @@
 .obj
 bin
 build*
+build_here*
 *.*.h
 *.so
 *.dll

@@ -1,7 +1,7 @@
 -- > CONST
 local INSTANCING_THRESHOLD = 5
 local FREE_THRESHOLD = math.floor(INSTANCING_THRESHOLD / 2) -- at what point do we free
--- Why? Because if we have a table that constantly goes between 19 and 20, we'll be freeing and allocating a LOT
+-- Why? Because if we have a table that constantly goes between 19 and 20, we will be freeing and allocating a LOT
 
 -- buffer alloc rules
 local MAX_BYTES = 10 -- should be more than plenty
@@ -302,7 +302,7 @@ local function Populate(Table, From)
 
         local Transform, Material = C_Transform[Ent], C_Material[Ent]
 
-        -- Transform always exists if its here. If it doesn't, then we'll crash elsewhere, so fuck it
+        -- Transform always exists if its here. If it doesnt, then we will crash elsewhere, so fuck it
 
         T_Transform[EntId] = Transform[3]
         T_Scale[EntId] = Transform[5]
@@ -404,9 +404,11 @@ local function DrawTableFix(Table, Where, Key)
         or (State == GTS_NEEDS_FREE_GPU and (Table.IsInstanced or Table.AllocatorState ~= ALLOCATOR_STATE_NONE))
     then
         if Table.IsInstanced or Table.AllocatorState ~= ALLOCATOR_STATE_NONE then
-            Table.GPU_Transform:release()
-            Table.GPU_Material:release()
-            Table.GPU_Scale:release()
+            if Table.GPU_Transform then
+                Table.GPU_Transform:release()
+                Table.GPU_Material:release()
+                Table.GPU_Scale:release()
+            end
             Table.GPU_Transform = nil
             Table.GPU_Material = nil
             Table.GPU_Scale = nil

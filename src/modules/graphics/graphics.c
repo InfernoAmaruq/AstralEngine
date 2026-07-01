@@ -8346,7 +8346,7 @@ bool lovrPassSphere(Pass* pass, float* transform, uint32_t segmentsH, uint32_t s
   }
 
   // Top
-  *vertices++ = (ShapeVertex) { { 0.f, 1.f, 0.f }, { 0.f, 1.f, 0.f }, { .5f, 0.f } };
+  *vertices++ = (ShapeVertex) { { 0.f, .5f, 0.f }, { 0.f, 1.f, 0.f }, { .5f, 0.f } };
 
   // Rings
   for (uint32_t i = 1; i < segmentsV; i++) {
@@ -8359,15 +8359,15 @@ bool lovrPassSphere(Pass* pass, float* transform, uint32_t segmentsH, uint32_t s
       float theta = u * 2.f * (float) M_PI;
       float sintheta = sinf(theta);
       float costheta = cosf(theta);
-      float x = sintheta * sinphi;
-      float y = cosphi;
-      float z = -costheta * sinphi;
+      float x = sintheta * sinphi * .5f;
+      float y = cosphi * .5f;
+      float z = -costheta * sinphi * .5f;
       *vertices++ = (ShapeVertex) { { x, y, z }, { x, y, z }, { u, v } };
     }
   }
 
   // Bottom
-  *vertices++ = (ShapeVertex) { { 0.f, -1.f, 0.f }, { 0.f, -1.f, 0.f }, { .5f, 1.f } };
+  *vertices++ = (ShapeVertex) { { 0.f, -.5f, 0.f }, { 0.f, -1.f, 0.f }, { .5f, 1.f } };
 
   // Top
   for (uint32_t i = 0; i < segmentsH; i++) {
@@ -8443,8 +8443,8 @@ bool lovrPassCylinder(Pass* pass, float* transform, bool capped, float angle1, f
   // Tube
   for (uint32_t i = 0; i <= segments; i++) {
     float theta = angle1 + i * angleShift;
-    float x = cosf(theta);
-    float y = sinf(theta);
+    float x = cosf(theta) * .5f;
+    float y = sinf(theta) * .5f;
     *vertices++ = (ShapeVertex) { { x, y, -.5f }, { x, y, 0.f }, { x + .5f, .5f - y } };
     *vertices++ = (ShapeVertex) { { x, y,  .5f }, { x, y, 0.f }, { x + .5f, .5f - y } };
   }
@@ -8468,8 +8468,8 @@ bool lovrPassCylinder(Pass* pass, float* transform, bool capped, float angle1, f
     // Caps
     for (uint32_t i = 0; i <= segments; i++) {
       float theta = angle1 + i * angleShift;
-      float x = cosf(theta);
-      float y = sinf(theta);
+      float x = cosf(theta) * .5f;
+      float y = sinf(theta) * .5f;
       *vertices++ = (ShapeVertex) { { x, y, -.5f }, { 0.f, 0.f, -1.f }, { x + .5f, y - .5f } };
       *vertices++ = (ShapeVertex) { { x, y,  .5f }, { 0.f, 0.f,  1.f }, { x + .5f, y - .5f } };
     }
@@ -8601,8 +8601,8 @@ bool lovrPassCapsule(Pass* pass, float* transform, uint32_t segments, uint32_t i
 
   float tip = length + radius;
   uint32_t h = vertexCount / 2;
-  vertices[0] = (ShapeVertex) { { 0.f, 0.f, -tip }, { 0.f, 0.f, -1.f }, { .5f, 0.f } };
-  vertices[h] = (ShapeVertex) { { 0.f, 0.f,  tip }, { 0.f, 0.f,  1.f }, { .5f, 1.f } };
+  vertices[0] = (ShapeVertex) { { 0.f, 0.f, -tip * .5f }, { 0.f, 0.f, -1.f }, { .5f, 0.f } };
+  vertices[h] = (ShapeVertex) { { 0.f, 0.f,  tip * .5f }, { 0.f, 0.f,  1.f }, { .5f, 1.f } };
   vertices++;
 
   for (uint32_t i = 1; i <= rings; i++) {
@@ -8615,9 +8615,9 @@ bool lovrPassCapsule(Pass* pass, float* transform, uint32_t segments, uint32_t i
       float theta = u * (float) M_PI * 2.f;
       float sintheta = sinf(theta);
       float costheta = cosf(theta);
-      float x = costheta * sinphi;
-      float y = sintheta * sinphi;
-      float z = cosphi;
+      float x = costheta * sinphi * .5f;
+      float y = sintheta * sinphi * .5f;
+      float z = cosphi * .5f;
       vertices[0] = (ShapeVertex) { { x * radius, y * radius, -(length + z * radius) }, { x, y, -z }, { u, v } };
       vertices[h] = (ShapeVertex) { { x * radius, y * radius,  (length + z * radius) }, { x, y,  z }, { u, 1.f - v } };
       vertices++;

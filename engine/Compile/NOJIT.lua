@@ -1,3 +1,3 @@
 print("LOADED JITLESS CONFIG")
-@macro<G,!USEBRACK>{goto = }
-@macro<G,!USEBRACK>{::continue:: = }
+@macro<G,!USEBRACK>{goto=--[[NONE]]}
+@macro<G,!USEBRACK>{::continue::=--[[NONE]]}

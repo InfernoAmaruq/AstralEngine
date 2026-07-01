@@ -7,7 +7,7 @@ local Size = 256
 
 local ReallocationStep = 5
 
-local UPD_RATE = 1 / 30
+local UPD_RATE = 1 / 20
 
 function Shadowmap.SetUpdateRate(n)
     UPD_RATE = 1 / n

@@ -4,7 +4,9 @@ if _G.jit then
     require("bit")
     -- sets a global but doesnt return a table, which is somewhat annoying, but whatevs
 else
-    _G.bit = lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath()) .. "bit"
+    local file = lovr.filesystem.folderFromPath(lovr.filesystem.getCurrentPath()) .. "bit.so"
+    local a = require(file)
+    _G.bit = _G.bit or a
 end
 
 math.round = function(x, n) -- val, dp

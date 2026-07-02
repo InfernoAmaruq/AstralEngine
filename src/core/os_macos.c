@@ -1,4 +1,5 @@
 #include "os.h"
+#include <sched.h>
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <objc/objc-runtime.h>

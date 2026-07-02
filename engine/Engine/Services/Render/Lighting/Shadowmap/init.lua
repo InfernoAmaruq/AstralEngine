@@ -114,7 +114,7 @@ Renderer.Late[#Renderer.Late + 1] = function()
 
     ENUM.StepPriority.__Append("RenderShadowmap", 550)
 
-    RS.BindToStep("DrawShadowmap", ENUM.StepPriority.RenderShadowmap, Shadowmap.Tick, Flag)
+    --RS.BindToStep("DrawShadowmap", ENUM.StepPriority.RenderShadowmap, Shadowmap.Tick, Flag)
 end
 
 local function IsInRegistry(E)

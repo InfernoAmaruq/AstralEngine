@@ -103,10 +103,6 @@ void os_request_permission(os_permission permission) {
   }
 }
 
-void os_on_permission(fn_permission* callback) {
-  state.onPermissionEvent = callback;
-}
-
 void* os_vm_init(size_t size) {
   return mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 }
@@ -204,8 +200,3 @@ size_t os_get_bundle_path(char* buffer, size_t size, const char** root) {
   *root = NULL;
   return length;
 }
-
-void os_set_window_size(uint32_t width, uint32_t height){}
-void os_set_cursor_icon(os_cursor_icon icon){};
-int os_set_precise_mouse(int Bool){return 0;};
-

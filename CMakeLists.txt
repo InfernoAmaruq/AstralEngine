@@ -951,23 +951,14 @@ function(build_lua_module SRC)
         ${CMAKE_SOURCE_DIR}/src/modules
     )
 
-    target_link_libraries(${MODULE_NAME} PRIVATE lua)
+    target_link_libraries(${MODULE_NAME} PRIVATE ${LOVR_LUA})
 
-    if (WIN32)
     set_target_properties(${MODULE_NAME} PROPERTIES
         PREFIX ""
         LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
         RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
         ARCHIVE_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
     )
-    else()
-    set_target_properties(${MODULE_NAME} PROPERTIES
-        PREFIX ""
-        LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
-        RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
-        ARCHIVE_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}
-    )
-    endif()
 endfunction()
 
 foreach(SRC ${ENGINE_C_FILES})

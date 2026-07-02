@@ -5606,13 +5606,14 @@ bool lovrModelAnimationCollapse(Model* model){
       model->transformsDirty = true;
     }
 
+    ModelMesh* mesh;
     float* dst;
     switch (channel->property) {
       case PROP_TRANSLATION: dst = model->localTransforms[node].position; break;
       case PROP_SCALE: dst = model->localTransforms[node].scale; break;
       case PROP_ROTATION: dst = model->localTransforms[node].rotation; break;
-      case PROP_WEIGHTS:
-        ModelMesh* mesh = &data->meshes[data->nodes[node].mesh];
+      case PROP_WEIGHTS: 
+        mesh = &data->meshes[data->nodes[node].mesh];
         dst = &model->blendShapeWeights[mesh->blendShapes - data->blendShapes];
         break;
     }

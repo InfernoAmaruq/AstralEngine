@@ -716,11 +716,13 @@ set_target_properties(${ASTRAL_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CM
       endif()
     endif()
   endfunction()
+
   move_lib(${LOVR_GLFW})
   move_lib(${LOVR_LUA})
-  move_lib(${LOVR_JOLT})
   move_lib(${LOVR_MSDF})
-  move_lib(${LOVR_OCULUS_AUDIO})
+  move_lib(${LOVR_JOLT})
+  move_lib(${LOVR_GLSLANG})
+  move_lib(${LOVR_OPENXR})
   move_lib(${LOVR_PHONON})
   foreach(target ${ALL_PLUGIN_TARGETS})
     move_lib(${target})
@@ -976,4 +978,7 @@ add_custom_command(
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 	${CMAKE_SOURCE_DIR}/engine
 	$<TARGET_FILE_DIR:astral>/Engine
+    COMMAND ${CMAKE_COMMAND}
+        -DCLEANUP_DIR=$<TARGET_FILE_DIR:astral>/Engine
+        -P ${CMAKE_SOURCE_DIR}/cleanup.cmake
 )

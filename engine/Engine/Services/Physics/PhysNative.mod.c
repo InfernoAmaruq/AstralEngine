@@ -2,7 +2,7 @@
 #include "lapi.h"
 #include "util.h"
 #include "stdlib.h"
-#include <threads.h>
+#include "lib/std/threads.h"
 
 #include "api/l_physics_world.c"
 #include "physics/physics.h"

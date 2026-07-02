@@ -135,7 +135,7 @@ AstralEngine._CONFIG = ConfigTable
 
 function lovr.conf(t)
     -- set lovr config from AstralConfig
-    t.graphics.vsync = AstralEngine._CONFIG.Game.Window.Vsync
+    t.graphics.vsync = AstralEngine._CONFIG.Game.Window.Vsync or false
 
     t.modules.headset = true --AstralEngine._CONFIG.Astral.Modules.Headset or false
 

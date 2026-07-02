@@ -322,6 +322,8 @@ function lovr.run()
 
     local PassTable = Renderer.PassStorage.PassTable
 
+    local Graph = AstralEngine.Graphics
+
     @macro<L,!USEBRACK>{M_GPUTick(&_SINK) = 
         @execute<UNSAFE,COMP>{
             local RETURNFIELD = "AstralEngine.CurrentFrame = AstralEngine.CurrentFrame + 1;\n"
@@ -331,18 +333,18 @@ function lovr.run()
                 if HASHEADSET and lovr.draw then
                     RETURNFIELD = RETURNFIELD..[[
                         local Headset = HGetPass()
-                        if Headset and (not lovr.draw or lovr.draw(Headset)) then Headset = nil end]]
-                    CONCAT = "local Idx = #PassTable+1\nPassTable[Idx] = Headset\nPassTable[Idx+1] = Window\nSubmit(PassTable)\nPassTable[Idx] = false\nPassTable[Idx+1] = false\n"
+                        if Headset and (not lovr.draw or lovr.draw(Headset)) then Headset = nil end
+                        ]]
+                    CONCAT = "local PASS_IDX = Graph.__WPASS_EMPTYID or 1\nPassTable[PASS_IDX] = Headset\nPassTable[PASS_IDX+1] = Window\nSubmit(PassTable)\nPassTable[PASS_IDX] = false\nPassTable[PASS_IDX+1] = false\n"
                 else
-                    CONCAT = "local Idx = #PassTable+1\nPassTable[Idx] = Window\nSubmit(PassTable)\nPassTable[Idx] = false\n"
+                    CONCAT = "local PASS_IDX = Graph.__WPASS_EMPTYID or 1\nPassTable[PASS_IDX] = Window\nSubmit(PassTable)\nPassTable[PASS_IDX] = false\n"
                 end
 
                 RETURNFIELD = RETURNFIELD..[[
                     local Window = WGetPass()
                     if Headset or Window then
                         RunService.__TICK(501,1000,Headset or Window)
-                    end
-                   ]]..CONCAT.."Present()"
+                   ]]..CONCAT.."end \n Present()"
 
             end
             @ifdef<Physics.Interpolate & Physics.InterpolAtRender>{

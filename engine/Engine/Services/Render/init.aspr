@@ -63,8 +63,11 @@ function Renderer.PassStorage.RebuildPassTable()
     end
 
     for i = Top + 1, Top + CONSTOFFSET do
-        PassTable[i] = false
+        PassTable[i] = false -- padding
     end
+
+    -- SUBMIT NEW ID
+    AstralEngine.Graphics.__WPASS_EMPTYID = Top + 1
 
     Top = Top + CONSTOFFSET
     Keys = {}

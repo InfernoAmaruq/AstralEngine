@@ -353,8 +353,6 @@ function lovr.run()
                 ]]..RETURNFIELD
             }
 
-            print("SUBMIT GRAPHICS:\n",RETURNFIELD)
-
             return RETURNFIELD
         }
     }

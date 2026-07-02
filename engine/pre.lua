@@ -6,7 +6,7 @@ end
 
 local ExeFold = lovr.filesystem.getWorkingDirectory()
 
-PATH = lovr.filesystem.normalize(lovr.filesystem.toUnix(ExeFold .. "/" .. PATH))
+local REL_PATH = lovr.filesystem.normalize(lovr.filesystem.toUnix(ExeFold .. "/" .. PATH))
 
 _G.__BOOT = {}
 _G.AstralEngine = {
@@ -20,6 +20,9 @@ loadfile, require, package.loadlib = unpack(lovr.filesystem.load(package.ENG_PAT
 
 if not lovr.filesystem.isFused() or not lovr.filesystem.isDirectory(package.GAME_PATH) then
     local mnt, err = lovr.filesystem.mount(PATH, package.GAME_PATH, true)
+    if not mnt then
+        mnt, err = lovr.filesystem.mount(REL_PATH, package.GAME_PATH, true)
+    end
     if not mnt then
         print("FAILED TO MOUNT GAME PATH <" .. PATH .. ">:", err)
         return -1

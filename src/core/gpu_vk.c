@@ -2883,8 +2883,15 @@ bool gpu_init(gpu_config* config) {
   state.library = dlopen("libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
   if (!state.library) state.library = dlopen("libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
   if (!state.library) state.library = dlopen("libMoltenVK.dylib", RTLD_NOW | RTLD_LOCAL);
+
   if (!state.library && !getenv("DYLD_FALLBACK_LIBRARY_PATH")) state.library = dlopen("/usr/local/lib/libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
   if (!state.library && !getenv("DYLD_FALLBACK_LIBRARY_PATH")) state.library = dlopen("/opt/homebrew/lib/libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
+
+  if (!state.library && !getenv("DYLD_FALLBACK_LIBRARY_PATH")) state.library = dlopen("/usr/local/lib/libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
+  if (!state.library && !getenv("DYLD_FALLBACK_LIBRARY_PATH")) state.library = dlopen("/opt/homebrew/lib/libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
+
+  if (!state.library && !getenv("DYLD_FALLBACK_LIBRARY_PATH")) state.library = dlopen("/usr/local/lib/libMoltenVK.dylib", RTLD_NOW | RTLD_LOCAL);
+  if (!state.library && !getenv("DYLD_FALLBACK_LIBRARY_PATH")) state.library = dlopen("/opt/homebrew/lib/libMoltenVK.dylib", RTLD_NOW | RTLD_LOCAL);
   ASSERT(state.library, "Failed to load vulkan library") goto fail;
   vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr) dlsym(state.library, "vkGetInstanceProcAddr");
 #else

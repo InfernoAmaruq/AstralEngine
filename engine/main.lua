@@ -336,22 +336,23 @@ function lovr.run()
                 else
                     CONCAT = "local Idx = #PassTable+1\nPassTable[Idx] = Window\nSubmit(PassTable)\nPassTable[Idx] = false\n"
                 end
+
                 RETURNFIELD = RETURNFIELD..[[
                     local Window = WGetPass()
                     if Headset or Window then
-                        RunService.__TICK(501,1000,Headset or Window)
+                        --RunService.__TICK(501,1000,Headset or Window)
                     end
                    ]]..CONCAT.."Present()"
 
-            end
-            if HASHEADSET then
-                RETURNFIELD = RETURNFIELD.."SubmitHead()"
             end
             @ifdef<Physics.Interpolate & Physics.InterpolAtRender>{
                 RETURNFIELD = [[
                     PHYSICS_INTERPOLATE()
                 ]]..RETURNFIELD
             }
+
+            print("SUBMIT GRAPHICS:\n",RETURNFIELD)
+
             return RETURNFIELD
         }
     }

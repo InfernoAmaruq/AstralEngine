@@ -58,7 +58,7 @@ double os_get_time(void) {
 
 void os_sleep(double seconds) {
 
-    if (seconds <= 0.) {
+    if (seconds <= 0.005) {
         sched_yield();
         return;
     }

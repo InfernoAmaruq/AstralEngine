@@ -327,7 +327,7 @@ function lovr.run()
             local RETURNFIELD = "AstralEngine.CurrentFrame = AstralEngine.CurrentFrame + 1;\n"
             local HASHEADSET = lovr.headset
             if lovr.graphics then
-                local CONCAT
+                local CONCAT = " --[[NONE]] "
                 if HASHEADSET and lovr.draw then
                     RETURNFIELD = RETURNFIELD..[[
                         local Headset = HGetPass()
@@ -340,7 +340,7 @@ function lovr.run()
                 RETURNFIELD = RETURNFIELD..[[
                     local Window = WGetPass()
                     if Headset or Window then
-                        --RunService.__TICK(501,1000,Headset or Window)
+                        RunService.__TICK(501,1000,Headset or Window)
                     end
                    ]]..CONCAT.."Present()"
 

@@ -32,24 +32,26 @@ struct RandomGenerator {
 };
 
 static struct {
-  uint32_t ref;
   RandomGenerator* generator;
 } state;
 
+static atomic_uint ref;
+
 bool lovrMathInit(void) {
-  if (atomic_fetch_add(&state.ref, 1)) return false;
+  if (!lovrModuleAcquire(&ref)) return true;
   state.generator = lovrRandomGeneratorCreate();
   Seed seed = { .b64 = (uint64_t) time(0) };
   lovrRandomGeneratorSetSeed(state.generator, seed);
+  lovrModuleReady(&ref);
   return true;
 }
 
 void lovrMathDestroy(void) {
-  if (atomic_fetch_sub(&state.ref, 1) != 1) return;
+  if (!lovrModuleRelease(&ref)) return;
   lovrRelease(state.generator, lovrRandomGeneratorDestroy);
   memset(&state, 0, sizeof(state));
+  lovrModuleReset(&ref);
 }
-
 float lovrMathGammaToLinear(float x) {
   if (x <= .04045f) {
     return x / 12.92f;

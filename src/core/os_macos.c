@@ -56,6 +56,12 @@ double os_get_time(void) {
 }
 
 void os_sleep(double seconds) {
+
+    if (seconds <= 0.) {
+        sched_yield();
+        return;
+    }
+
   seconds += .5e-9;
   struct timespec t;
   t.tv_sec = seconds;

@@ -1,0 +1,10 @@
+EXPORTS
+    _luax_registertype
+    _luax_totype
+    _luax_checktype
+    _luax_pushtype
+    
+    luax_atexit
+
+    _luax_checku32
+    luax_readvec3

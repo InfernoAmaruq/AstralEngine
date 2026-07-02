@@ -270,7 +270,7 @@ function lovr.boot()
             end
         else
             for _, v in ipairs(PossiblePaths) do
-                local p = "/" .. Normalize(EXEFOLD .. v)
+                local p = (lovr.filesystem.filesystemType == "Unix" and "/" or "") .. Normalize(EXEFOLD .. v)
 
                 Mounted, Failed = lovr.filesystem.mount(p)
 
@@ -348,7 +348,13 @@ function lovr.boot()
         -- lovr is weird, bundled files get saved to share/<identity> not share/astr/<identity>, so im forcing it to be the same here
     end
 
-    lovr.filesystem.setIdentity(conf.identity, conf.saveprecedence)
+    local SetTo = conf.identity
+
+    if conf.identity and lovr.filesystem.filesystemType == "Win" then
+        SetTo = conf.identity:gsub("/","\\")
+    end
+
+    lovr.filesystem.setIdentity(SetTo, conf.saveprecedence)
 
     -- CLI gets a chance to use/modify conf and handle arguments
 
@@ -390,6 +396,9 @@ function lovr.boot()
 
     if lovr.filesystem then
         local Os = lovr.system and lovr.system.getOS() or lovr.getOS()
+
+        local Win = "\\"
+        local Unix = "/"
 
         if Os == "Windows" then
             -- set paths

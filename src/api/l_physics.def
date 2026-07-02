@@ -1,0 +1,10 @@
+EXPORTS
+    luax_newterrainshape
+    luax_newmeshshape
+    luax_newconvexshape
+    luax_newcylindershape
+    luax_newcapsuleshape
+    luax_pushshape
+
+    luax_newboxshape
+    luax_newsphereshape

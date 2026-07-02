@@ -631,8 +631,22 @@ endfunction()
 # Platforms
 if(WIN32)
   target_sources(${ASTRAL_TARGET} PRIVATE src/core/os_win32.c etc/lovr.rc)
+
+  set_target_properties(${ASTRAL_TARGET} PROPERTIES ENABLE_EXPORTS ON)
+
+ file(GLOB_RECURSE DEF_FILES "${CMAKE_SOURCE_DIR}/src/*.def")
+  set(COMBINED_DEF "${CMAKE_BINARY_DIR}/astral_exports.def")
+  file(WRITE ${COMBINED_DEF} "\nEXPORTS\n")
+  foreach(DEF ${DEF_FILES})
+      file(READ ${DEF} DEF_CONTENT)
+      string(REPLACE "EXPORTS" "" DEF_CONTENT ${DEF_CONTENT})
+      file(APPEND ${COMBINED_DEF} "\n${DEF_CONTENT}\n")
+  endforeach()
+  set_target_properties(${ASTRAL_TARGET} PROPERTIES LINK_FLAGS "/DEF:${COMBINED_DEF}")
+
   if(MSVC)
 	  target_compile_options(${ASTRAL_TARGET} PRIVATE /wd4244 /experimental:c11atomics)
+
     # Excuse anonymous union for type punning
     set_source_files_properties(src/util.c src/modules/graphics/graphics.c PROPERTIES COMPILE_FLAGS /wd4116)
     # Excuse unsigned negation for flag-magic bit math
@@ -933,8 +947,13 @@ function(build_lua_module SRC)
     endif()
 
     add_library(${MODULE_NAME} MODULE "${SRC_ABS}")
+
     target_compile_definitions(${MODULE_NAME} PRIVATE ASTRAL_BUILD_DLL)
+
+    set_target_properties(${MODULE_NAME} PROPERTIES C_STANDARD 11)
+    set_target_properties(${MODULE_NAME} PROPERTIES C_STANDARD_REQUIRED ON)
     if (MSVC)
+        target_compile_options(${MODULE_NAME} PRIVATE /wd4244 /experimental:c11atomics)
         target_compile_options(${MODULE_NAME} PRIVATE
           /FI"${CMAKE_SOURCE_DIR}/etc/astral_api.h"
       )
@@ -953,7 +972,12 @@ function(build_lua_module SRC)
         ${CMAKE_SOURCE_DIR}/src/modules
     )
 
-    target_link_libraries(${MODULE_NAME} PRIVATE ${LOVR_LUA})
+    if(WIN32)
+      add_dependencies(${MODULE_NAME} astral)
+      target_link_libraries(${MODULE_NAME} PRIVATE ${LOVR_LUA} $<TARGET_LINKER_FILE:astral>)
+    else()
+      target_link_libraries(${MODULE_NAME} PRIVATE ${LOVR_LUA})
+    endif()
 
     if(APPLE)
         target_link_options(${MODULE_NAME} PRIVATE -undefined dynamic_lookup)

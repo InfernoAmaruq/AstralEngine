@@ -1,15 +1,21 @@
 #include "lua.h"
 #include "lapi.h"
+#include <stdlib.h>
 #include "util.h"
-#include "stdlib.h"
 #include "lib/std/threads.h"
 
-#include "api/l_physics_world.c"
+#include "api/l_physics.c"
 #include "physics/physics.h"
 
 #define MAX_WORLDS 5
 #define BASE_SIZE 64
 #define RESIZE_STEP 1.2
+
+// lazy shim, THIS SKIPS THE WORLD DESTROY CHECK
+// IF THIS EXPLODES THIS IS WHY \/\/\/
+World* luax_checkworld(lua_State* L, int index){
+    return luax_checktype(L,index,World);
+}
 
 typedef struct LightContact {
     Collider* ColliderA; Collider* ColliderB;
@@ -168,7 +174,7 @@ static int PhysNative_IterateBufferEnd(lua_State* L){
     return 0;
 }
 
-int luaopen_PhysNative(lua_State* L){
+ASTRAL_API int luaopen_PhysNative(lua_State* L){
 
     lua_newtable(L);
     lua_pushlightuserdata(L,PhysNative_ExitCallback);

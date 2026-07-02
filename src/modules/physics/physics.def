@@ -1,0 +1,53 @@
+EXPORTS
+
+    lovrPhysicsInit
+    lovrPhysicsDestroy
+    
+    lovrWorldCreate
+    lovrWorldDestroy
+    lovrWorldSetUserData
+    lovrWorldGetUserData
+    lovrWorldGetGravity
+    lovrWorldSetGravity
+    
+    lovrColliderDestroy
+    lovrColliderCreate
+    lovrColliderGetRawPosition
+
+    lovrContactDestroy
+    lovrContactGetShapeA
+    lovrContactGetShapeB
+    lovrContactGetNormal
+    lovrContactGetOverlap
+
+    lovrShapeDestroy
+    lovrJointDestroy
+    lovrJointDestroy
+
+    lovrWeldJointCreate
+    lovrBallJointCreate
+    lovrConeJointCreate
+    lovrDistanceJointCreate
+    lovrHingeJointCreate
+    lovrSliderJointCreate
+
+    lovrSliderJoint
+    lovrHingeJoint
+    lovrDistanceJoint
+    lovrConeJoint
+    lovrBallJoint
+    lovrConeJoint
+    lovrWeldJoint
+
+    lovrTerrainShape
+    lovrMeshShape
+    lovrConvexShape
+    lovrBoxShape
+    lovrSphereShape
+    lovrCapsuleShape
+    lovrCylinderShape
+
+    lovrCollider
+    lovrContact
+
+    lovrWorld

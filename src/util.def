@@ -1,0 +1,10 @@
+EXPORTS
+    lovrMalloc
+    lovrCalloc
+    lovrRealloc
+    lovrFree
+
+    lovrRelease
+    lovrRetain
+    
+    lovrGetError

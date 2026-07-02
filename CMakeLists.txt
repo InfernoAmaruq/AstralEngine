@@ -953,6 +953,10 @@ function(build_lua_module SRC)
 
     target_link_libraries(${MODULE_NAME} PRIVATE ${LOVR_LUA})
 
+    if(APPLE)
+        target_link_options(${MODULE_NAME} PRIVATE -undefined dynamic_lookup)
+    endif()
+
     set_target_properties(${MODULE_NAME} PROPERTIES
         PREFIX ""
         LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:astral>/Engine/${REL_DIR}

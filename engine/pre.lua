@@ -140,6 +140,18 @@ function lovr.conf(t)
     t.modules.headset = true --AstralEngine._CONFIG.Astral.Modules.Headset or false
 
     t.graphics.antialias = AstralEngine._CONFIG.Game.Window.AntiAliasing
+    t.graphics.selectGPU = function(GpuData)
+        local GpuId = 1
+
+        for idx, SubTable in pairs(GpuData) do
+            if SubTable.discrete then
+                GpuId = idx
+                break
+            end
+        end
+
+        return GpuId
+    end
 
     t.window = nil
 

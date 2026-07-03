@@ -670,6 +670,27 @@ static void onMessage(void* context, const char* message);
 
 // Entry
 
+static void lovrGraphicsToGraphicsDevice(GraphicsDevice* target, gpu_device_info* device);
+
+static int selectGPUCallback(gpu_device_info* gd, uint32_t count, void* f, void* ud){
+    selectGPU fn = (selectGPU) f;
+    if (!fn) return -1;
+
+    // convert to GraphicsDevice info
+
+    GraphicsDevice* data = lovrMalloc(count * sizeof(GraphicsDevice));
+    
+    for (uint32_t i = 0; i < count; i++){
+        lovrGraphicsToGraphicsDevice(&data[i], &gd[i]);
+    }
+
+    int idx = fn(ud,data,count);
+
+    lovrFree(data);
+
+    return idx;
+}
+
 bool lovrGraphicsInit(GraphicsConfig* config) {
   initAllocator(&thread.stack);
 
@@ -697,6 +718,12 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
     .vk.createDevice = lovrHeadsetIsConnected() ? lovrHeadsetCreateVulkanDevice : NULL
 #endif
   };
+
+  if (config->selectGPU){
+    gpu.fnSelectGPU = selectGPUCallback;
+    gpu.selectGPUUserData = config->selectGPUUserData;
+    gpu.selectGPUFunction = config->selectGPU;
+  }
 
   if (!gpu_init(&gpu)) {
 #if _WIN32
@@ -973,13 +1000,17 @@ bool lovrGraphicsIsInitialized(void) {
   return state.initialized;
 }
 
+static void lovrGraphicsToGraphicsDevice(GraphicsDevice* target, gpu_device_info* device){
+  target->deviceId = device->deviceId;
+  target->vendorId = device->vendorId;
+  target->name = device->deviceName;
+  target->renderer = device->renderer;
+  target->subgroupSize = device->subgroupSize;
+  target->discrete = device->discrete;
+}
+
 void lovrGraphicsGetDevice(GraphicsDevice* device) {
-  device->deviceId = state.device.deviceId;
-  device->vendorId = state.device.vendorId;
-  device->name = state.device.deviceName;
-  device->renderer = state.device.renderer;
-  device->subgroupSize = state.device.subgroupSize;
-  device->discrete = state.device.discrete;
+    lovrGraphicsToGraphicsDevice(device, &state.device);
 }
 
 void lovrGraphicsGetFeatures(GraphicsFeatures* features) {

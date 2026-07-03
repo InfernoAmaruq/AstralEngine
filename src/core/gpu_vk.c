@@ -3117,6 +3117,8 @@ bool gpu_init(gpu_config* config) {
 
     // Features
 
+    #define CHAIN(s, x) x.pNext = s.pNext; s.pNext = &x
+
     VkPhysicalDeviceFeatures2 supported = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
     VkPhysicalDeviceMultiviewFeatures multiviewFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES };
     VkPhysicalDeviceShaderDrawParameterFeatures shaderDrawParameterFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETER_FEATURES };
@@ -3130,10 +3132,13 @@ bool gpu_init(gpu_config* config) {
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
     VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
 
+    if (state.extensions.foveation) {
+      CHAIN(supported, fragmentDensityMapFeatures);
+    }
+
     vkGetPhysicalDeviceFeatures2(state.adapter, &supported);
 
     VkPhysicalDeviceFeatures2 enabled = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
-    #define CHAIN(x) x.pNext = enabled.pNext; enabled.pNext = &x
 
     enabled.features.fullDrawIndexUint32 = true;
     enabled.features.imageCubeArray = true;
@@ -3154,51 +3159,50 @@ bool gpu_init(gpu_config* config) {
     enabled.features.shaderInt16 = supported.features.shaderInt16;
 
     multiviewFeatures.multiview = true;
-    CHAIN(multiviewFeatures);
+    CHAIN(enabled, multiviewFeatures);
 
     shaderDrawParameterFeatures.shaderDrawParameters = true;
-    CHAIN(shaderDrawParameterFeatures);
+    CHAIN(enabled, shaderDrawParameterFeatures);
 
     synchronization2Features.synchronization2 = true;
-    CHAIN(synchronization2Features);
+    CHAIN(enabled, synchronization2Features);
 
     timelineSemaphoreFeatures.timelineSemaphore = true;
-    CHAIN(timelineSemaphoreFeatures);
+    CHAIN(enabled, timelineSemaphoreFeatures);
 
     if (state.extensions.dynamicRendering) {
       dynamicRenderingFeatures.dynamicRendering = true;
-      CHAIN(dynamicRenderingFeatures);
+      CHAIN(enabled, dynamicRenderingFeatures);
     }
 
     if (state.extensions.scalarBlockLayout) {
       scalarBlockLayoutFeatures.scalarBlockLayout = true;
-      CHAIN(scalarBlockLayoutFeatures);
+      CHAIN(enabled, scalarBlockLayoutFeatures);
     }
 
     if (state.extensions.foveation) {
-      fragmentDensityMapFeatures.fragmentDensityMap = true;
-      fragmentDensityMapFeatures.fragmentDensityMapNonSubsampledImages = true;
-      CHAIN(fragmentDensityMapFeatures);
+      // Note: vkGetPhysicalDeviceFeatures2 writes all supported features to fragmentDensityMapFeatures
+      CHAIN(enabled, fragmentDensityMapFeatures);
     }
 
     if (state.extensions.pipelineCacheControl) {
       pipelineCreationCacheControlFeatures.pipelineCreationCacheControl = true;
-      CHAIN(pipelineCreationCacheControlFeatures);
+      CHAIN(enabled, pipelineCreationCacheControlFeatures);
     }
 
     if (state.extensions.bufferDeviceAddress) {
       bufferDeviceAddressFeatures.bufferDeviceAddress = true;
-      CHAIN(bufferDeviceAddressFeatures);
+      CHAIN(enabled, bufferDeviceAddressFeatures);
     }
 
     if (state.extensions.accelerationStructure) {
       accelerationStructureFeatures.accelerationStructure = true;
-      CHAIN(accelerationStructureFeatures);
+      CHAIN(enabled, accelerationStructureFeatures);
     }
 
     if (state.extensions.rayQuery) {
       rayQueryFeatures.rayQuery = true;
-      CHAIN(rayQueryFeatures);
+      CHAIN(enabled, rayQueryFeatures);
     }
 
     if (config->features) {

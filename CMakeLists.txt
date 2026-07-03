@@ -46,6 +46,10 @@ option(LOVR_BUILD_SHARED "Build a shared library (takes precedence over LOVR_BUI
 option(LOVR_BUILD_BUNDLE "On macOS, build a .app bundle instead of a raw program" OFF)
 option(LOVR_BUILD_WITH_SYMBOLS "Build with C function symbols exposed" ON)
 
+if(MSVC)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" CACHE STRING "" FORCE)
+endif()
+
 # Setup
 if(EMSCRIPTEN)
   string(CONCAT EMSCRIPTEN_LINKER_FLAGS
@@ -646,6 +650,19 @@ if(WIN32)
 
   if(MSVC)
 	  target_compile_options(${ASTRAL_TARGET} PRIVATE /wd4244 /experimental:c11atomics)
+
+    # Copy MSVC runtime DLLs to output directory
+    file(GLOB MSVC_RUNTIME_DLLS
+        "C:/Windows/System32/MSVCP140.dll"
+        "C:/Windows/System32/VCRUNTIME140.dll"
+        "C:/Windows/System32/VCRUNTIME140_1.dll"
+    )
+    foreach(dll ${MSVC_RUNTIME_DLLS})
+        add_custom_command(TARGET astral POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${dll}" $<TARGET_FILE_DIR:astral>
+        )
+    endforeach()
 
     # Excuse anonymous union for type punning
     set_source_files_properties(src/util.c src/modules/graphics/graphics.c PROPERTIES COMPILE_FLAGS /wd4116)

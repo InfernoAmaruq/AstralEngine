@@ -711,6 +711,24 @@ elseif(APPLE)
     INSTALL_RPATH "@executable_path"
     ENABLE_EXPORTS ON
   )
+
+  find_library(LOVR_MOLTENVK MoltenVK PATHS /opt/homebrew/lib /usr/local/lib)
+  find_library(LOVR_VULKAN_LOADER vulkan PATHS /opt/homebrew/lib /usr/local/lib)
+  if(LOVR_MOLTENVK)
+    add_custom_command(TARGET ${ASTRAL_TARGET} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LOVR_MOLTENVK}" "$<TARGET_FILE_DIR:${ASTRAL_TARGET}>"
+    )
+  else()
+    message(WARNING "MoltenVK not found - bundled build will require it installed system-wide")
+  endif()
+  if(LOVR_VULKAN_LOADER)
+    add_custom_command(TARGET ${ASTRAL_TARGET} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LOVR_VULKAN_LOADER}" "$<TARGET_FILE_DIR:${ASTRAL_TARGET}>"
+    )
+  else()
+    message(WARNING "Vulkan loader not found - bundled build will require it installed system-wide")
+  endif()
+
   if(LOVR_BUILD_BUNDLE)
     set(EXE_DIR ${PROJECT_BINARY_DIR}/${ASTRAL_TARGET}.app/Contents/MacOS)
     target_sources(${ASTRAL_TARGET} PRIVATE "${PROJECT_SOURCE_DIR}/etc/lovr.icns")

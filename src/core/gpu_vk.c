@@ -286,7 +286,7 @@ static bool hasLayer(VkLayerProperties* layers, uint32_t count, const char* laye
 static bool hasExtension(VkExtensionProperties* extensions, uint32_t count, const char* extension);
 static VkBufferUsageFlags getBufferUsage(gpu_buffer_type type);
 static bool transitionAttachment(gpu_texture* texture, bool begin, bool resolve, bool discard, VkImageMemoryBarrier2KHR* barrier);
-static VkImageLayout getNaturalLayout(uint32_t usage, VkImageAspectFlags aspect);
+static VkImageLayout getNaturalLayout(uint32_t usage);
 static VkFormat convertFormat(gpu_texture_format format, int colorspace);
 static VkFormat convertAttributeType(gpu_attribute_type type);
 static VkPipelineStageFlags2 convertPhase(gpu_phase phase, bool dst);
@@ -647,7 +647,7 @@ bool gpu_texture_init(gpu_texture* texture, gpu_texture_info* info) {
     default: texture->aspect = VK_IMAGE_ASPECT_COLOR_BIT; break;
   }
 
-  texture->layout = getNaturalLayout(info->usage, texture->aspect);
+  texture->layout = getNaturalLayout(info->usage);
   texture->samples = info->samples;
   texture->layers = info->type == GPU_TEXTURE_3D ? 0 : info->size[2];
   texture->baseLevel = 0;
@@ -4055,7 +4055,7 @@ static bool transitionAttachment(gpu_texture* texture, bool begin, bool resolve,
   return true;
 }
 
-static VkImageLayout getNaturalLayout(uint32_t usage, VkImageAspectFlags aspect) {
+static VkImageLayout getNaturalLayout(uint32_t usage) {
   if (usage & (GPU_TEXTURE_STORAGE | GPU_TEXTURE_COPY_SRC | GPU_TEXTURE_COPY_DST)) {
     return VK_IMAGE_LAYOUT_GENERAL;
   } else if (usage & GPU_TEXTURE_SAMPLE) {

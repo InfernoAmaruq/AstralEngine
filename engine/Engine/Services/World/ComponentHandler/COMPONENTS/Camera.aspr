@@ -92,6 +92,8 @@ local FIELDS = {
     BlurredAOS1 = 42,
 }
 
+local EmptySkybox = AstralEngine.Graphics.NewRawTexture(1, 1, 6)
+
 local function RawViewToRay(self, Vector)
     local EntPtr = self.__EntityPtr
     local Transform = EntPtr.Transform
@@ -234,6 +236,9 @@ local SETTER = {
     Ambience = function(self, Val)
         local R, G, B, A = Val:div(255):unpack()
         self[9]:set(R, G, B, A or 1)
+    end,
+    Skybox = function(self, Val)
+        self[28] = Val or EmptySkybox
     end,
 }
 
@@ -559,6 +564,8 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
             end
         end
     end
+
+    D[FIELDS.Skybox] = D[FIELDS.Skybox] or EmptySkybox
 
     D[FIELDS.OnResize] = Signal.new(bit.bor(Signal.Type.NoCtx, Signal.Type.RTC))
 

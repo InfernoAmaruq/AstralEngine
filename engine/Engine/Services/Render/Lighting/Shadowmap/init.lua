@@ -7,8 +7,6 @@ local MaxRenderSize = AstralEngine.Graphics.GPU.GetLimit("RenderSize")
 local PreallocationSize = math.min(math.floor(MaxRenderSize.z / 6), 5)
 local Size = 256
 
-print("ALLOCATE:", PreallocationSize)
-
 local ReallocationStep = 5
 
 local UPD_RATE = 1 / 20

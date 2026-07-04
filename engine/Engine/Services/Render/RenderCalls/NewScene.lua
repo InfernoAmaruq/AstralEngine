@@ -32,6 +32,8 @@ local BlurShader = lovr.graphics.newShader("fill", BlurShaderRaw)
 local FinalShaderRaw = GetService("ShaderService").ComposeShader(ENUM.ShaderType.Fragment, "Camera/Finalise")
 local FinalShader = lovr.graphics.newShader("fill", FinalShaderRaw)
 
+print(OITExtractRaw)
+
 -- > GET PRECOMPUTED ASSETS
 
 local SSAO_Noise_Image = lovr.data.newImage(4, 4, "rgba8")
@@ -684,6 +686,12 @@ function Renderer.Composite()
         CompositePass:setDepthWrite(false)
         CompositePass:setSampler("nearest")
         CompositePass:fill()
+
+        if true then
+            MainPass:reset()
+            MainPass:fill(Camera[33][1])
+            return
+        end
 
         -- BLUR PASS
 

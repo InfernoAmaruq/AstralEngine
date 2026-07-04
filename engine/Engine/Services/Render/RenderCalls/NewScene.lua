@@ -555,7 +555,7 @@ local function GetDrawFunc(IsSolid)
                 Pass:setDepthTest(">=")
                 Pass:setBlendMode(1, "add", "premultiplied")
                 Pass:setBlendMode(2, "add", "premultiplied")
-            elseif Skybox then
+            else
                 Pass:skybox(Skybox) -- draw skybox only on first solid pass
                 -- uses a unique shader so we draw it first
             end
@@ -572,9 +572,7 @@ local function GetDrawFunc(IsSolid)
             Pass:send("CamTransform", TransformMatrix)
 
             Pass:send("PBR_SphericalHarmonics", Camera[29])
-            if Skybox then
-                Pass:send("PBR_EnvMap", Skybox)
-            end
+            Pass:send("PBR_EnvMap", Skybox)
 
             for Material, GeometryList in pairs(Stack) do
                 Pass:setMaterial(Material or nil)

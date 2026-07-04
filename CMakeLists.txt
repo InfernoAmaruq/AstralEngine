@@ -150,7 +150,7 @@ else()
     )
 
     file(READ deps/lua/luaconf.h LUACONF_CONTENT)
-    string(REPLACE "#define LUA_IDSIZE\t60" "#define LUA_IDSIZE\t150" LUACONF_CONTENT "${LUACONF_CONTENT}")
+    string(REPLACE "#define LUA_IDSIZE\t60" "#define LUA_IDSIZE\t200" LUACONF_CONTENT "${LUACONF_CONTENT}")
     file(WRITE deps/lua/luaconf.h "${LUACONF_CONTENT}")
 
     list(TRANSFORM LUA_SRC PREPEND deps/lua/)

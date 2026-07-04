@@ -2,9 +2,15 @@ local Renderer = select(1, ...)
 
 local Shadowmap = {}
 
-local MaxRenderSize = AstralEngine.Graphics.GPU.GetLimit("RenderSize")
+local MaxRenderSize = AstralEngine.Graphics.GPU.GetLimit("RenderSize").z
 
-local PreallocationSize = math.min(math.floor(MaxRenderSize.z / 6), 5)
+if MaxRenderSize < 6 then
+    AstralEngine.Error(
+        "What GPU are you using that cannot render 6 texture layers? Please get a device made in the last 20 years"
+    )
+end
+
+local PreallocationSize = math.min(math.floor(MaxRenderSize / 6), 5)
 local Size = 256
 
 local ReallocationStep = 5
@@ -34,6 +40,8 @@ local ShadowmapData = {
         Registry = {},
         Count = PreallocationSize,
         LastDrawn = -1,
+        Views = {},
+        Passes = {},
     },
     ["2D"] = {
         Parameters = {
@@ -49,6 +57,8 @@ local ShadowmapData = {
         Registry = {},
         Count = PreallocationSize,
         LastDrawn = -1,
+        Views = {},
+        Passes = {},
     },
 }
 

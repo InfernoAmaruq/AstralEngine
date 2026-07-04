@@ -1,5 +1,2 @@
-.tup
-.obj
-bin
 build*
 *.*.h

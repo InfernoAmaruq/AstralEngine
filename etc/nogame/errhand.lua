@@ -460,6 +460,7 @@ function lovr.errhand(message)
   end
 
   lovr.system.setKeyRepeat(true)
+  lovr.system.setMouseMode('normal')
 
   return function()
     lovr.timer.step()

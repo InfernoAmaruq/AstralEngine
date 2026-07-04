@@ -5,7 +5,7 @@ local FS = lovr.filesystem
 local RefToRebuild = setmetatable({}, { __mode = "v" })
 
 local TOSTRING = function(self)
-    return "Wrapped " .. (self.__IsPass and "Pass" or "Texture") .. ": " .. debug.getaddress(self)
+    return "Wrapped Texture: " .. debug.getaddress(self)
 end
 
 local function CAPTURE(t, ...)
@@ -36,8 +36,8 @@ end
 
 local MT = { __index = IDX, __tostring = TOSTRING }
 
-local function MakeRef(Value, Capture, Pass)
-    return setmetatable({ [1] = Value, __CAPTURE = Capture, __IsPass = Pass }, MT)
+local function MakeRef(Value, Capture)
+    return setmetatable({ [1] = Value, __CAPTURE = Capture }, MT)
 end
 
 lovr.graphics.newTexture = function(...)
@@ -48,19 +48,15 @@ lovr.graphics.newTexture = function(...)
     end
     local CAPTURE
     if ARGS then
-        CAPTURE = MakeRef(OgTex(unpack(ARGS)), ARGS, false)
+        CAPTURE = MakeRef(OgTex(unpack(ARGS)), ARGS)
     else
-        CAPTURE = MakeRef(OgTex(...), { ... }, false)
+        CAPTURE = MakeRef(OgTex(...), { ... })
     end
     table.insert(RefToRebuild, CAPTURE)
     return CAPTURE
 end
 
 AstralEngine.Graphics = {
-    NewRawPass = function()
-        print("DEPRECATED CALL TO NEWRAWPASS AT")
-        print(debug.traceback())
-    end,
     NewRawTexture = function(...)
         local Args = { ... }
 

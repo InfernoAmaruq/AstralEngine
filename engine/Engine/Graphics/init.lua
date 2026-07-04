@@ -84,3 +84,5 @@ function AstralEngine.Window.__WindowResizedPasses(...)
         end
     end
 end
+
+AstralEngine.Graphics.GPU = require("DeviceQuery")

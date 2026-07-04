@@ -2,8 +2,12 @@ local Renderer = select(1, ...)
 
 local Shadowmap = {}
 
-local PreallocationSize = 5
+local MaxRenderSize = AstralEngine.Graphics.GPU.GetLimit("RenderSize")
+
+local PreallocationSize = math.min(math.floor(MaxRenderSize.z / 6), 5)
 local Size = 256
+
+print("ALLOCATE:", PreallocationSize)
 
 local ReallocationStep = 5
 

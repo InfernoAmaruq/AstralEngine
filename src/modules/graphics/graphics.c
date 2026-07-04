@@ -1035,7 +1035,7 @@ void lovrGraphicsGetLimits(GraphicsLimits* limits) {
   limits->textureSamples = (state.features.sampleCounts & 16) ? 16 : (state.features.sampleCounts & 8) ? 8 : 4;
   limits->renderSize[0] = state.limits.renderSize[0];
   limits->renderSize[1] = state.limits.renderSize[1];
-  limits->renderSize[2] = MIN(state.limits.renderSize[2], 6);
+  limits->renderSize[2] = MAX(state.limits.renderSize[2], 6);
   limits->uniformBuffersPerStage = MIN(state.limits.uniformBuffersPerStage - 3, MAX_SHADER_RESOURCES);
   limits->storageBuffersPerStage = MIN(state.limits.storageBuffersPerStage, MAX_SHADER_RESOURCES);
   limits->sampledTexturesPerStage = MIN(state.limits.sampledTexturesPerStage - 7, MAX_SHADER_RESOURCES);

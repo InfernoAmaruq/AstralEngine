@@ -138,6 +138,10 @@ void os_thread_set_name(const char* name) {
   //
 }
 
+void os_window_message_box(const char* message){
+    //
+}
+
 size_t os_get_home_directory(char* buffer, size_t size) {
   const char* path = getenv("HOME");
 

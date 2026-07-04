@@ -247,11 +247,15 @@ void lovrSystemSetClipboardText(const char* text) {
 
 void lovrSystemSetWindowSize(uint32_t width, uint32_t height) {
   os_set_window_size(width,height);
-};
+}
 
 void lovrSystemSetCursorIcon(int Icon){
     os_set_cursor_icon(Icon);
-};
+}
+
+void lovrMessageBox(const char* message){
+    os_window_message_box(message);
+}
 
 int lovrSystemSetPreciseMouse(int Bool){
     return os_set_precise_mouse(Bool);

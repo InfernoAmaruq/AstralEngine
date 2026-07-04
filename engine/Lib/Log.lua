@@ -34,7 +34,7 @@ function AstralEngine.Log(Msg, Flag, Tag, Level)
 
     local Pre, Post = "", ""
 
-    if IsErr or IsFatal then
+    if IsErr or IsFatal or LowerFlag == "fail" then
         Pre = AnsiColorLib.Red
         Post = AnsiColorLib.Clear
     elseif LowerFlag == "warn" then
@@ -80,6 +80,8 @@ function AstralEngine.Error(Msg, Tag, Layer)
     local IsNum = type(Tag) == "number"
     if IsNum then
         Layer = Tag
+    elseif not Tag then
+        IsNum = true
     end
     Layer = Layer or 1
 

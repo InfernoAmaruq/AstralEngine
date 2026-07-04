@@ -45,4 +45,5 @@ const char* lovrSystemGetClipboardText(void);
 void lovrSystemSetClipboardText(const char* text);
 void lovrSystemSetWindowSize(uint32_t w, uint32_t h);
 void lovrSystemSetCursorIcon(int Icon);
+void lovrMessageBox(const char* message);
 int lovrSystemSetPreciseMouse(int Bool);

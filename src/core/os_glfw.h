@@ -620,6 +620,10 @@ uintptr_t os_get_xcb_window(void) {
 }
 #endif
 
+void os_window_message_box(const char* message) {
+  //
+}
+
 #ifdef _WIN32
 #define OS_DLL_EXPORT __declspec(dllexport)
 #else

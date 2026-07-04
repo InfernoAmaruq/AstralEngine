@@ -403,6 +403,14 @@ static int l_lovrSystemSetCursorIcon(lua_State* L){
     return 0;
 }
 
+static int l_lovrSystemMessageBox(lua_State* L){
+    const char* str = lua_tostring(L,1);
+
+    lovrMessageBox(str);
+
+    return 0;
+}
+
 static int l_lovrSystemSetPreciseMouse(lua_State* L){
     int Bool = lua_toboolean(L,1);
 
@@ -446,6 +454,7 @@ static const luaL_Reg lovrSystem[] = {
   { "setWindowSize", l_lovrSystemSetWindowSize },
   { "setCursorIcon", l_lovrSystemSetCursorIcon },
   { "setPreciseMouse", l_lovrSystemSetPreciseMouse },
+  { "messageBox", l_lovrSystemMessageBox },
   { NULL, NULL }
 };
 

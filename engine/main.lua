@@ -97,6 +97,19 @@ function lovr.quit(...)
     return true
 end
 
+function lovr.errhand(message)
+    local v
+    if AstralEngine.Callbacks.ErrorHandler then
+        v = AstralEngine.Callbacks.ErrorHandler(message)
+    end
+
+    AstralEngine.Log("ASTRAL HAS TO QUIT WITH MESSAGE:\n"..message,"fail")
+
+    lovr.system.messageBox("ASTRAL HAS TO QUIT:\n"..message)
+
+    return v
+end
+
 lovr.mirror = nil
 lovr.draw = nil
 

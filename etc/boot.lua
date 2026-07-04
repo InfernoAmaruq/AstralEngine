@@ -13,6 +13,7 @@ function lovr.arg(arg)
         engine = { short = "-e", long = "--engine", help = "Path override to engine folder" },
         game = { short = "-g", long = "--game", help = "Path to game folder/archive" },
         define = { short = "-d", long = "--define", help = "Define a variable with <Name>=<Value>" },
+        gpu = { long = "--gpu", help = "Set target GPU to use for Astral. Must be a number above 0" },
     }
 
     local shift
@@ -28,6 +29,7 @@ function lovr.arg(arg)
 
                 if IsShort or IsLong then
                     local Value = argument:sub((IsShort and ShortLen or LongLen) + 1)
+
                     if name == "define" then
                         arg[name] = arg[name] or {}
 
@@ -42,6 +44,9 @@ function lovr.arg(arg)
                             arg[name][v1] = eq
                         end
                     else
+                        if Value:sub(1, 1) == "=" then
+                            Value = Value:sub(2)
+                        end
                         arg[name] = Value ~= "" and Value or true
                     end
                     break
@@ -49,7 +54,6 @@ function lovr.arg(arg)
             end
         else
             shift = i
-            break
         end
     end
 
@@ -351,7 +355,7 @@ function lovr.boot()
     local SetTo = conf.identity
 
     if conf.identity and lovr.filesystem.filesystemType == "Win" then
-        SetTo = conf.identity:gsub("/","\\")
+        SetTo = conf.identity:gsub("/", "\\")
     end
 
     lovr.filesystem.setIdentity(SetTo, conf.saveprecedence)

@@ -32,7 +32,7 @@ local BlurShader = lovr.graphics.newShader("fill", BlurShaderRaw)
 local FinalShaderRaw = GetService("ShaderService").ComposeShader(ENUM.ShaderType.Fragment, "Camera/Finalise")
 local FinalShader = lovr.graphics.newShader("fill", FinalShaderRaw)
 
-print(OITExtractRaw)
+error("TEST")
 
 -- > GET PRECOMPUTED ASSETS
 

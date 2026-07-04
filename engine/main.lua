@@ -98,6 +98,8 @@ function lovr.quit(...)
 end
 
 function lovr.errhand(message)
+    message = message or "NONE"
+
     local v
     if AstralEngine.Callbacks.ErrorHandler then
         v = AstralEngine.Callbacks.ErrorHandler(message)
@@ -106,6 +108,17 @@ function lovr.errhand(message)
     AstralEngine.Log("ASTRAL HAS TO QUIT WITH MESSAGE:\n"..message,"fail")
 
     lovr.system.messageBox("ASTRAL HAS TO QUIT:\n"..message)
+
+    print("trace:",debug.traceback())
+
+
+    if CONF.LOGCRASH then
+        local ExeDir = lovr.filesystem.getExecutablePath()
+        local file = io.open(ExeDir..".crashlog.txt","w")
+        local Time = os.date()
+
+        file:write("CRASH LOG FOR: ["..Time.."]\nASTRAL HAD TO QUIT WITH MESSAGE:\n"..message)
+    end
 
     return v
 end
@@ -151,17 +164,17 @@ function lovr.run()
     local t = 0
 
     local CPUTime = 0
-    local CpuTickrate = 1/CONFIG.CONFIG.CPURATE
+    local CpuTickrate = 1/CONFIG.CPURATE
     local LastCPUTime
 
     local RenderTime = 0
-    local RenderTickrate = 1/CONFIG.CONFIG.RENDERRATE
+    local RenderTickrate = 1/CONFIG.RENDERRATE
 
     local EventTime = 0
-    local EventTickrate = 1/CONFIG.CONFIG.EVENTRATE
+    local EventTickrate = 1/CONFIG.EVENTRATE
 
     local PhysTime = 0
-    local PhysicsRate = 1/CONFIG.CONFIG.PHYSRATE
+    local PhysicsRate = 1/CONFIG.PHYSRATE
 
     local Timer = {}
     AstralEngine.Timer = Timer
@@ -218,13 +231,13 @@ function lovr.run()
         }
     }
 
-    collectgarbage("setpause",CONFIG.CONFIG.GCPAUSE)
+    collectgarbage("setpause",CONFIG.GCPAUSE)
     -- stepmul affects everything so is unconditional
-    collectgarbage("setstepmul",CONFIG.CONFIG.GCSTEPMUL)
+    collectgarbage("setstepmul",CONFIG.GCSTEPMUL)
     @ifdef<GC.UseAstr>{
-        local GCPause = CONFIG.CONFIG.GCPAUSE
+        local GCPause = CONFIG.GCPAUSE
         local GCTime = -1
-        local GCRate = 1/CONFIG.CONFIG.GCRATE
+        local GCRate = 1/CONFIG.GCRATE
         collectgarbage("stop")
 
         local LastSize = collectgarbage"count"

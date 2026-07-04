@@ -118,6 +118,11 @@ endif()
 if(LOVR_USE_LUAJIT AND NOT EMSCRIPTEN)
 	set(BUILD_SHARED_LIBS ON)
 	add_subdirectory(deps/luajit luajit EXCLUDE_FROM_ALL)
+
+    file(READ deps/luajit/src/luaconf.h LUACONF_CONTENT)
+    string(REPLACE "#define LUA_IDSIZE\t60" "#define LUA_IDSIZE\t150" LUACONF_CONTENT "${LUACONF_CONTENT}")
+    file(WRITE deps/luajit/src/luaconf.h "${LUACONF_CONTENT}")
+
 	if(MSVC)
 		target_compile_definitions(libluajit PRIVATE _CRT_SECURE_NO_WARNINGS)
 		target_compile_definitions(minilua PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -131,6 +136,11 @@ else()
       liolib.c llex.c lmathlib.c lmem.c loadlib.c lobject.c lopcodes.c loslib.c lparser.c lstate.c
       lstring.c lstrlib.c ltable.c ltablib.c ltm.c lundump.c lvm.c lzio.c
     )
+
+    file(READ deps/lua/luaconf.h LUACONF_CONTENT)
+    string(REPLACE "#define LUA_IDSIZE\t60" "#define LUA_IDSIZE\t150" LUACONF_CONTENT "${LUACONF_CONTENT}")
+    file(WRITE deps/lua/luaconf.h "${LUACONF_CONTENT}")
+
     list(TRANSFORM LUA_SRC PREPEND deps/lua/)
     add_library(lua SHARED ${LUA_SRC})
     target_include_directories(lua INTERFACE deps/lua)

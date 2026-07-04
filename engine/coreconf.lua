@@ -44,6 +44,7 @@ return {
     Astral = {
         Debug = true,
         Splash = false,
+        LogCrash = true,
         Modules = {
             Headset = false,
         },

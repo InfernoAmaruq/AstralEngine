@@ -143,10 +143,21 @@ function lovr.conf(t)
     t.graphics.selectGPU = function(GpuData)
         local GpuId = 1
 
-        for idx, SubTable in pairs(GpuData) do
-            if SubTable.discrete then
-                GpuId = idx
-                break
+        if arg.gpu then
+            local id = tonumber(arg.gpu)
+            local Device = GpuData[id]
+
+            assert(Device, "NO VALID GPU DEVICE PROVIDED WITH --gpu PARAMETER. GOT: " .. id .. " raw: " .. arg.gpu)
+
+            print("Launching Astral with GPU: ", Device.name)
+
+            return id
+        else
+            for idx, SubTable in pairs(GpuData) do
+                if SubTable.discrete then
+                    GpuId = idx
+                    break
+                end
             end
         end
 
@@ -165,11 +176,9 @@ function lovr.conf(t)
 end
 
 -- set astral config, not lovr config
-local CONF = {}
-_G.CONF = CONF
-
-CONF.CONFIG = {
+_G.CONF = {
     DEBUG = AstralEngine._CONFIG.Astral.Debug,
+    LOGCRASH = AstralEngine._CONFIG.Astral.LogCrash,
 
     PHYSRATE = AstralEngine._CONFIG.Astral.Tick.PhysicsRate,
     RENDERRATE = AstralEngine._CONFIG.Astral.Tick.FrameRate,

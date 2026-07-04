@@ -3044,11 +3044,12 @@ bool gpu_init(gpu_config* config) {
 
         if (selected == -1) selected = 0;
 
-        state.adapter = devices[selected];
+        VkPhysicalDevice selected_device = devices[selected];
 
         config->fnFree(infos);
         config->fnFree(devices);
 
+        state.adapter = selected_device;
     } else {
       uint32_t deviceCount = 1;
       VK(vkEnumeratePhysicalDevices(state.instance, &deviceCount, &state.adapter), "vkEnumeratePhysicalDevices") goto fail;

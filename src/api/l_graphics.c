@@ -457,8 +457,8 @@ static int l_lovrGraphicsInitialize(lua_State* L) {
           config.selectGPU = callback_selectGPU;
           config.selectGPUUserData = L;
       }
-
-      lua_pop(L, 1);
+      else
+        lua_pop(L, 1);
     }
     lua_pop(L, 1);
 

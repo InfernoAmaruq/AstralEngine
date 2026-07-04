@@ -109,15 +109,15 @@ function lovr.errhand(message)
 
     lovr.system.messageBox("ASTRAL HAS TO QUIT:\n"..message)
 
-    print("trace:",debug.traceback())
-
 
     if CONF.LOGCRASH then
         local ExeDir = lovr.filesystem.getExecutablePath()
         local file = io.open(ExeDir..".crashlog.txt","w")
         local Time = os.date()
 
-        file:write("CRASH LOG FOR: ["..Time.."]\nASTRAL HAD TO QUIT WITH MESSAGE:\n"..message)
+        local Traceback = debug.traceback()
+
+        file:write("CRASH LOG FOR: ["..Time.."]\nASTRAL HAD TO QUIT WITH MESSAGE:\n"..message.."\n\n"..Traceback)
     end
 
     return v

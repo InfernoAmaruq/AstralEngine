@@ -115,13 +115,25 @@ if(LOVR_USE_GLFW AND NOT (EMSCRIPTEN OR ANDROID))
 endif()
 
 # Lua
+function(MOVE_LUACONF PATH)
+    configure_file(
+        ${CMAKE_SOURCE_DIR}${PATH}
+        ${CMAKE_BINARY_DIR}/luaconf_patched/luaconf.h            
+        COPYONLY
+    )
+endfunction()
+
 if(LOVR_USE_LUAJIT AND NOT EMSCRIPTEN)
 	set(BUILD_SHARED_LIBS ON)
 	add_subdirectory(deps/luajit luajit EXCLUDE_FROM_ALL)
 
-    file(READ deps/luajit/src/luaconf.h LUACONF_CONTENT)
-    string(REPLACE "#define LUA_IDSIZE\t60" "#define LUA_IDSIZE\t150" LUACONF_CONTENT "${LUACONF_CONTENT}")
-    file(WRITE deps/luajit/src/luaconf.h "${LUACONF_CONTENT}")
+    MOVE_LUACONF(/deps/luajit/src/luaconf.h)
+
+    file(READ ${CMAKE_BINARY_DIR}/luaconf_patched/luaconf.h LUACONF)
+    string(REPLACE "#define LUA_IDSIZE\t60" "#define LUA_IDSIZE\t200" LUACONF "${LUACONF}")
+    file(WRITE ${CMAKE_BINARY_DIR}/luaconf_patched/luaconf.h "${LUACONF}")
+
+    target_include_directories(luajit BEFORE PRIVATE ${CMAKE_BINARY_DIR}/luaconf_patched)
 
 	if(MSVC)
 		target_compile_definitions(libluajit PRIVATE _CRT_SECURE_NO_WARNINGS)

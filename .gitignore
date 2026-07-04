@@ -7,5 +7,3 @@ build_here*
 *.so
 *.dll
 ignore*
-deps/luajit/src/luaconf.h
-#ignoring this cause CMake increases LUA_IDSIZE for better err handling

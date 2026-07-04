@@ -267,7 +267,7 @@ LVRB.LoadWindow = function()
     function lovr.resize(w,h)
         AstralEngine.Window.W = w
         AstralEngine.Window.H = h
-        AstralEngine.Window.__WindowResizedPasses(w,h)
+        AstralEngine.Window.__WindowResizedTextures(w,h)
         AstralEngine.Signals.OnWindowResize:Fire(w,h)
         GetService"Renderer".PassStorage.RebuildPassTable()
         collectgarbage("collect")

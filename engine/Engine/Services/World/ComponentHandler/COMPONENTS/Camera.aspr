@@ -352,12 +352,10 @@ local Textures = {
     42,
 }
 
-local function OnRebuld(V, _, w, h, d)
+local function OnRebuld(CameraRef, w, h, d)
     d = d or lovr.system.getWindowDensity()
     w = w * d
     h = h * d
-
-    local CameraRef = V.CREF
 
     for _, TextureIDs in ipairs(Textures) do
         local OldV = CameraRef[TextureIDs]
@@ -366,42 +364,42 @@ local function OnRebuld(V, _, w, h, d)
         OldV[1] = NewV
     end
 
-    CameraRef.SolidPass[1]:setCanvas({
+    CameraRef.SolidPass:setCanvas({
         CameraRef.SolidTex[1],
         CameraRef.NormalBuffer[1],
         depth = CameraRef.DepthTexture[1],
         samples = 4,
     })
 
-    CameraRef.OITPass[1]:setCanvas({
+    CameraRef.OITPass:setCanvas({
         CameraRef.OITTex[1],
         CameraRef.OITDepth[1],
         depth = CameraRef.DepthTexture[1],
         samples = 4,
     })
 
-    CameraRef.CompositePass[1]:setCanvas({
+    CameraRef.CompositePass:setCanvas({
         CameraRef.CompositedTexture[1],
         CameraRef.AOTexture[1],
         CameraRef.BloomThresholdTexture[1],
         samples = 1,
     })
 
-    CameraRef.BlurPassH[1]:setCanvas({
+    CameraRef.BlurPassH:setCanvas({
         CameraRef.ColorBlurredS1[1],
         CameraRef.BlurredAOS1[1],
         CameraRef.BloomBlurredS1[1],
         samples = 1,
     })
 
-    CameraRef.BlurPassV[1]:setCanvas({
+    CameraRef.BlurPassV:setCanvas({
         CameraRef.ColorBlurred[1],
         CameraRef.BlurredAO[1],
         CameraRef.BloomBlurred[1],
         samples = 1,
     })
 
-    CameraRef.CameraPass[1]:setCanvas({
+    CameraRef.CameraPass:setCanvas({
         CameraRef.CameraTex[1],
         samples = 1,
     })
@@ -419,7 +417,25 @@ end
 local GeomPriority = 10000
 local CommitPriority = 10050
 
+local CameraResizeEvent
+
 Camera.Metadata.__create = function(Input, Entity, Sink)
+    -- first of all bind the event if its not bound
+
+    if not CameraResizeEvent then
+        CameraResizeEvent = AstralEngine.Signals.OnWindowResize:Connect(function(w, h)
+            d = lovr.system.getWindowDensity()
+
+            for _, v in pairs(Component.Components.Camera.Storage) do
+                if v.OnRebuild then
+                    v.OnRebuild(v, w, h, d)
+                end
+            end
+        end)
+    end
+
+    -- init code
+
     if not Sink and not Component.HasComponent(Entity, "Transform") then
         Component.AddComponent(Entity, "Transform", { Position = vec3(), Orientation = quat() })
     end
@@ -505,7 +521,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     local R, G, B, A = Color:unpack()
     Data.Ambience = Vec4(R, G, B, A or 1):div(255)
 
-    Data.CameraPass.ResizeCallback = REBUILD_CALLBACK
+    --Data.CameraPass.ResizeCallback = REBUILD_CALLBACK
 
     Data.__Resizables = setmetatable({
         OITTex,
@@ -549,8 +565,6 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
 
     local D = setmetatable({}, mt)
 
-    Data.CameraPass.CREF = D
-
     Data.ShouldRebuild = Input.ShouldRebuild == nil and true or Input.ShouldRebuild
 
     for i, v in pairs(Data) do
@@ -568,6 +582,8 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     D[FIELDS.Skybox] = D[FIELDS.Skybox] or EmptySkybox
 
     D[FIELDS.OnResize] = Signal.new(bit.bor(Signal.Type.NoCtx, Signal.Type.RTC))
+
+    rawset(D, "OnRebuild", Input.OnRebuild or OnRebuld)
 
     rawset(D, "__EntityPtr", GetService("World").GetEntityFromId(Entity))
     rawset(D, "__LuaSHBuffer", SHData)

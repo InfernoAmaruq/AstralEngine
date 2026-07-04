@@ -13,7 +13,7 @@ local E = ENUM({
 
 local P_Box, P_Sphere, P_Capsule, P_Plane, P_Cylinder
 do
-    local TMPPASS = AstralEngine.Graphics.NewRawPass()
+    local TMPPASS = AstralEngine.Graphics.NewPass()
     P_Box = TMPPASS.box
     P_Sphere = TMPPASS.sphere
     P_Capsule = TMPPASS.capsule

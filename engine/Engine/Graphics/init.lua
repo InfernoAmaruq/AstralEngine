@@ -40,12 +40,6 @@ local function MakeRef(Value, Capture, Pass)
     return setmetatable({ [1] = Value, __CAPTURE = Capture, __IsPass = Pass }, MT)
 end
 
-lovr.graphics.newPass = function(...)
-    local CAPTURE = MakeRef(OgPass(...), { ... }, true)
-    table.insert(RefToRebuild, CAPTURE)
-    return CAPTURE
-end
-
 lovr.graphics.newTexture = function(...)
     local ARGS
     if type(select(1, ...)) == "string" then
@@ -63,7 +57,10 @@ lovr.graphics.newTexture = function(...)
 end
 
 AstralEngine.Graphics = {
-    NewRawPass = OgPass,
+    NewRawPass = function()
+        print("DEPRECATED CALL TO NEWRAWPASS AT")
+        print(debug.traceback())
+    end,
     NewRawTexture = function(...)
         local Args = { ... }
 
@@ -77,7 +74,7 @@ AstralEngine.Graphics = {
     NewPass = lovr.graphics.newPass,
 }
 
-function AstralEngine.Window.__WindowResizedPasses(...)
+function AstralEngine.Window.__WindowResizedTextures(...)
     for _, v in pairs(RefToRebuild) do
         if v.ResizeCallback then
             v.ResizeCallback(v, v.__IsPass, ...)

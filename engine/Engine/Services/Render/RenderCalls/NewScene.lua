@@ -528,7 +528,7 @@ local function GetDrawFunc(IsSolid)
             local EntId = Cameras[CamId]
             local Camera = CSCamera[EntId]
 
-            local Pass = Camera[IsSolid and 22 or 21][1]
+            local Pass = Camera[IsSolid and 22 or 21]
 
             local Projection = Camera[26]
             local TransformMatrix = CSTransform[EntId][3]
@@ -537,9 +537,9 @@ local function GetDrawFunc(IsSolid)
             -- ASSIGN PASS VARIABLES
 
             if IsSolid then
-                Camera[11][1]:reset()
+                Camera[11]:reset()
                 Pass:reset()
-                Camera[21][1]:reset()
+                Camera[21]:reset()
             end
 
             Pass:setViewPose(1, TransformMatrix)
@@ -620,10 +620,10 @@ function Renderer.Composite()
         local Entity = Cameras[CamId]
         local Camera = CSCamera[Entity]
 
-        local MainPass = Camera[11][1]
-        local CompositePass = Camera[37][1]
-        local BlurPassH = Camera[38][1]
-        local BlurPassV = Camera[39][1]
+        local MainPass = Camera[11]
+        local CompositePass = Camera[37]
+        local BlurPassH = Camera[38]
+        local BlurPassV = Camera[39]
 
         local SolidTexture = Camera[20][1]
         local TransparentTexture = Camera[13][1]

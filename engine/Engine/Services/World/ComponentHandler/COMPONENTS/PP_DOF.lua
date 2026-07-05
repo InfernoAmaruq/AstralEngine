@@ -29,7 +29,7 @@ local MT = {
 }
 
 DOF.Metadata.__create = function(Input, Entity)
-    if not Component.HasComponent(Entity, "Camera") then
+    if not Component.GetComponent(Entity, "Camera") then
         AstralEngine.Log("Camera component missing! DepthOfFieldFX will not work!", "warn", "FX")
     end
 

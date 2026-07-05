@@ -86,7 +86,7 @@ local PublicMethods = {
         local Rebuilt
 
         if self[&PARENT_PTR] then
-            local ParentAnc = Component.HasComponent(self[&PARENT_PTR],Ancestry.Name)
+            local ParentAnc = Component.GetComponent(self[&PARENT_PTR],Ancestry.Name)
             if not ParentAnc then error("FATAL: STALE PARENT POINTER FROM E: "..self[&SELF_PTR].." TO "..self[&PARENT_PTR],2) end
             local Ref = World.GetEntityFromId(self[&PARENT_PTR])
             RemoveChild(ParentAnc[&CHILD_PTR],self[&SELF_PTR])
@@ -106,7 +106,7 @@ local PublicMethods = {
 
             if Val == self[&SELF_PTR] then error("Attempt to set object parent to itself",2) end
 
-            local ParentAnc = Component.HasComponent(Val,Ancestry.Name)
+            local ParentAnc = Component.GetComponent(Val,Ancestry.Name)
             if not ParentAnc then error("Attempt to set object as child of entity with no ancestry component",2) end
 
             self[&PARENT_PTR] = Val
@@ -328,13 +328,13 @@ Ancestry.Metadata.__remove = function(self, EId, Forced)
         Temp[#self + 1] = ParentRef
         Temp[#self + 1] = SelfR
         Temp[#self + 1] = "remove"
-        local ChildArr = Component.HasComponent(PtrParent,"Ancestry")[&CHILD_PTR]
+        local ChildArr = Component.GetComponent(PtrParent,"Ancestry")[&CHILD_PTR]
         RemoveChild(ChildArr,PtrSelf)
     end
 
     for _,Child in pairs(PtrChild) do
         local ChildRef = World.GetEntityFromId(Child)
-        local Anc = Component.HasComponent(Child,"Ancestry")
+        local Anc = Component.GetComponent(Child,"Ancestry")
 
         Anc[&PARENT_PTR] = false
         Temp[#self + 1] = SelfR

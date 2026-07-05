@@ -9,22 +9,10 @@ return function(Components)
 
     local INSTMETHODS = {}
 
-    function INSTMETHODS:GetComponent(s)
-        for i, v in pairs(self:GetComponents()) do
-            if i == s then
-                return v
-            end
-        end
-    end
-
-    function INSTMETHODS:GetComponentProperty(s, p)
-        local Comp = self:GetComponent(s)
-        return Comp and Comp[p]
-    end
-
     INSTMETHODS.GetComponents = Components.GetComponents
     INSTMETHODS.RemoveComponent = Components.RemoveComponent
     INSTMETHODS.AddComponent = Components.AddComponent
+    INSTMETHODS.GetComponent = Components.GetComponent
 
     function Instance.__index(self, k)
         if self.IsNull then

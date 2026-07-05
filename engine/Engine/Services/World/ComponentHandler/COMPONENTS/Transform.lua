@@ -136,7 +136,7 @@ local function MTNewIndex(Ret, k, v)
         if k == "Rotation" then
             GetOrientation(Ret)
         elseif k == "Scale" then
-            local c = Component.HasComponent(Ret[6], "Collider")
+            local c = Component.GetComponent(Ret[6], "Collider")
             if c then
                 c:OnObjectResize(Ret[5])
             end
@@ -188,7 +188,7 @@ Transform.Metadata.__create = function(DATA, Entity)
     GetOrientation(Ret)
     GetMatrix(Ret)
 
-    local Col = Component.HasComponent(Ret[6], "Collider")
+    local Col = Component.GetComponent(Ret[6], "Collider")
     if Col then
         Col:__TransformMoved(Ret[1], Ret[2])
         Physics.__QueueToSyncLTJ(Col.World, Col.ColRef, Ret)

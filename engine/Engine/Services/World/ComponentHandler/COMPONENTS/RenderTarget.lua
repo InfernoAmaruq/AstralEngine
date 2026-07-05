@@ -29,7 +29,7 @@ local RenderFlags = {
 
 local Methods = {
     GetMaterial = function(Entity)
-        local Mat = Component.HasComponent(Entity, "Material")
+        local Mat = Component.GetComponent(Entity, "Material")
         if Mat then
             return Mat[1] or false
         end

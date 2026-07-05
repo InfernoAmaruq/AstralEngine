@@ -439,7 +439,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
 
     -- init code
 
-    if not Sink and not Component.HasComponent(Entity, "Transform") then
+    if not Sink and not Component.GetComponent(Entity, "Transform") then
         Component.AddComponent(Entity, "Transform", { Position = vec3(), Orientation = quat() })
     end
 

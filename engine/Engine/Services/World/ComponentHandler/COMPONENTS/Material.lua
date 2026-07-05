@@ -7,7 +7,7 @@ Material.Name = "Material"
 Material.Metadata = {}
 
 Comp.ComponentAdded:Connect(function(e, id, c)
-    local Mat = Comp.HasComponent(e, "Material")
+    local Mat = Comp.GetComponent(e, "Material")
     if id == "RenderTarget" and Mat then
         if Mat[1] then
             c:SetMaterial(Mat[1])
@@ -45,7 +45,7 @@ Material.Metadata.EmptyMatrix = Mat4(
 )
 
 local function RebuildMatrix(self)
-    local RT = Comp.HasComponent(self[8], "RenderTarget")
+    local RT = Comp.GetComponent(self[8], "RenderTarget")
 
     local Offset, Scale, Color, GlowColor = self[3], self[2], self[4], self[10]
     self[9]:set(
@@ -120,7 +120,7 @@ local Mt = {
 Material.Metadata.__create = function(Data, Ent)
     local Storage = {}
 
-    local RT = Comp.HasComponent(Ent, "RenderTarget")
+    local RT = Comp.GetComponent(Ent, "RenderTarget")
 
     local Mat = Data and Data.Material
     Storage[1] = Mat and (Mat.__lmat or Mat[1] or Mat)

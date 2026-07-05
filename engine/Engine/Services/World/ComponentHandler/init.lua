@@ -54,7 +54,7 @@ end
 ---@param e AnyEntity
 ---@param ... string names
 ---@return (Component|boolean)?
-function Component.HasComponent(e, ...)
+function Component.GetComponent(e, ...)
     local S = select("#", ...)
     local Comp = Component.SetComponents[type(e) == &TYPE and e.Id or e]
     if not Comp then return nil end

@@ -224,7 +224,7 @@ local METATAB = {
 }
 
 function mt.__create(DATA, e)
-    local Transform = assert(Component.HasComponent(e, "Transform"), "NO COMPONENT TYPE OF 'Transform' PRESENT, CANNOT ADD COLLIDER!")
+    local Transform = assert(Component.GetComponent(e, "Transform"), "NO COMPONENT TYPE OF 'Transform' PRESENT, CANNOT ADD COLLIDER!")
 
     local EntPtr = WorldSer.GetEntityFromId(e)
 

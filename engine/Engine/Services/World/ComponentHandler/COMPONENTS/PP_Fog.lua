@@ -16,7 +16,7 @@ local BufferFormat = {
 local MT = {}
 
 Fog.Metadata.__create = function(Input, Entity)
-    if not Component.HasComponent(Entity, "Camera") then
+    if not Component.GetComponent(Entity, "Camera") then
         AstralEngine.Log("Camera component missing! FogFX will not work!", "warn", "FX")
     end
 

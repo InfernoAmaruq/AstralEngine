@@ -124,7 +124,7 @@ local MT = {
 Shape.Metadata = {}
 Shape.Metadata.__create = function(DATA, e, ShouldSink)
     AstralEngine.Assert(
-        not Component.HasComponent(e, "RenderTarget"),
+        not Component.GetComponent(e, "RenderTarget"),
         "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!",
         "Shape"
     )
@@ -133,7 +133,7 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
     local Val = LookupTable[ShapeEnum]
     AstralEngine.Assert(Val, "No valid shape type provided!", "Shape")
 
-    if not Component.HasComponent(e, "Transform") and not ShouldSink then
+    if not Component.GetComponent(e, "Transform") and not ShouldSink then
         Component.AddComponent(e, "Transform")
     end
 
@@ -152,7 +152,7 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
 end
 
 Shape.Metadata.__remove = function(_, e)
-    if Component.HasComponent(e, "RenderTarget") then
+    if Component.GetComponent(e, "RenderTarget") then
         Component.RemoveComponent(e, "RenderTarget", true)
     end
 end

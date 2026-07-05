@@ -66,9 +66,11 @@ function lovr.load()
 
     SS = require("Engine/Services/ScriptSystem")
 
-    World.Component.LoadComponents()
+    local Comp = GetService"Component" --[[@as any]]
 
-    World.Component.__RunPostPass()
+    Comp.LoadComponents()
+
+    Comp.__RunPostPass()
 
     -- now that everything is loaded, bridge it
     Bridge.VirtualiseScheduler(MainScheduler)
@@ -154,7 +156,7 @@ function lovr.run()
         AstralEngine.Log("File 'launch.lua' encountered an error!\n > "..tostring(Err),"FATAL")
     end
 
-    SS.Scene.LoadScene(AstralEngine._CONFIG.Filesystem.EntryScene)
+    SS.Scene.LoadScene(AstralEngine.Config.Filesystem.EntryScene)
 
     -- RUNTIME DEFINITION
 

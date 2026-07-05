@@ -75,7 +75,7 @@ return function(ScriptService)
         end
 
         -- ENTITIES
-        for _, Ent in ipairs(GetService("World").Alive) do
+        for _, Ent in ipairs(GetService("Entity").Alive) do
             if not Ent.IsNull and Ent.__context == CTXGEN then
                 Ent:Destroy()
             end

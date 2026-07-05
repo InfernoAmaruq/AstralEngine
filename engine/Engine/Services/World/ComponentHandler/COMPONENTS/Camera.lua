@@ -588,7 +588,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
 
     rawset(D, "OnRebuild", Input.OnRebuild or OnRebuld)
 
-    rawset(D, "__EntityPtr", GetService("World").GetEntityFromId(Entity))
+    rawset(D, "__EntityPtr", GetService("Entity").GetEntityFromId(Entity))
     rawset(D, "__LuaSHBuffer", SHData)
 
     D:ReconstructProjectionMatrix()

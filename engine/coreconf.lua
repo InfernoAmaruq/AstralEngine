@@ -1,3 +1,5 @@
+---@class ConfigTable
+---@type ConfigTable
 return {
     Define = {
         -- table of compile-time defined values
@@ -43,7 +45,6 @@ return {
     },
     Astral = {
         Debug = true,
-        Splash = false,
         LogCrash = true,
         Modules = {
             Headset = false,

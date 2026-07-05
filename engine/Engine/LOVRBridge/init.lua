@@ -275,15 +275,15 @@ LVRB.LoadWindow = function()
 
     -- FINALLY OPEN THE WINDOW
 
-    local W,H = AstralEngine._CONFIG.Game.Window.Width, AstralEngine._CONFIG.Game.Window.Height
+    local W,H = AstralEngine.Config.Game.Window.Width, AstralEngine.Config.Game.Window.Height
 
     lovr.system.openWindow({
         width = W,
         height = H,
-        fullscreen = AstralEngine._CONFIG.Game.Window.Fullscreen,
-        resizable = AstralEngine._CONFIG.Game.Window.Resizable,
-        title = AstralEngine._CONFIG.Game.Window.Name,
-        icon = AstralEngine._CONFIG.Game.Window.Icon,
+        fullscreen = AstralEngine.Config.Game.Window.Fullscreen,
+        resizable = AstralEngine.Config.Game.Window.Resizable,
+        title = AstralEngine.Config.Game.Window.Name,
+        icon = AstralEngine.Config.Game.Window.Icon,
     })
 
     AstralEngine.Window.W = AstralEngine.Window.GetWindowWidth()

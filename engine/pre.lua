@@ -131,15 +131,15 @@ RecursiveAssign(ConfigTable, CoreConfig)
 
 AstralEngine.Window = {}
 
-AstralEngine._CONFIG = ConfigTable
+AstralEngine.Config = ConfigTable
 
 function lovr.conf(t)
     -- set lovr config from AstralConfig
-    t.graphics.vsync = AstralEngine._CONFIG.Game.Window.Vsync or false
+    t.graphics.vsync = AstralEngine.Config.Game.Window.Vsync or false
 
-    t.modules.headset = true --AstralEngine._CONFIG.Astral.Modules.Headset or false
+    t.modules.headset = true --AstralEngine.Config.Astral.Modules.Headset or false
 
-    t.graphics.antialias = AstralEngine._CONFIG.Game.Window.AntiAliasing
+    t.graphics.antialias = AstralEngine.Config.Game.Window.AntiAliasing
     t.graphics.selectGPU = function(GpuData)
         local GpuId = 1
 
@@ -164,27 +164,27 @@ function lovr.conf(t)
 
     t.window = nil
 
-    t.identity = AstralEngine._CONFIG.Game.Identity
-    t.saveprecedence = AstralEngine._CONFIG.Game.SavePrecedence
+    t.identity = AstralEngine.Config.Game.Identity
+    t.saveprecedence = AstralEngine.Config.Game.SavePrecedence
 
-    t.threads = AstralEngine._CONFIG.Astral.Threads
+    t.threads = AstralEngine.Config.Astral.Threads
     if t.threads then
-        t.threads.workers = AstralEngine._CONFIG.Astral.Threads.Workers
+        t.threads.workers = AstralEngine.Config.Astral.Threads.Workers
     end
 end
 
 -- set astral config, not lovr config
 _G.CONF = {
-    DEBUG = AstralEngine._CONFIG.Astral.Debug,
-    LOGCRASH = AstralEngine._CONFIG.Astral.LogCrash,
+    DEBUG = AstralEngine.Config.Astral.Debug,
+    LOGCRASH = AstralEngine.Config.Astral.LogCrash,
 
-    PHYSRATE = AstralEngine._CONFIG.Astral.Tick.PhysicsRate,
-    RENDERRATE = AstralEngine._CONFIG.Astral.Tick.FrameRate,
-    CPURATE = AstralEngine._CONFIG.Astral.Tick.CPU,
-    EVENTRATE = AstralEngine._CONFIG.Astral.Tick.EventRate,
-    GCRATE = AstralEngine._CONFIG.Astral.Tick.GC,
-    GCPAUSE = AstralEngine._CONFIG.Astral.Tick.GCPause,
-    GCSTEPMUL = AstralEngine._CONFIG.Astral.Tick.GCStepMul,
+    PHYSRATE = AstralEngine.Config.Astral.Tick.PhysicsRate,
+    RENDERRATE = AstralEngine.Config.Astral.Tick.FrameRate,
+    CPURATE = AstralEngine.Config.Astral.Tick.CPU,
+    EVENTRATE = AstralEngine.Config.Astral.Tick.EventRate,
+    GCRATE = AstralEngine.Config.Astral.Tick.GC,
+    GCPAUSE = AstralEngine.Config.Astral.Tick.GCPause,
+    GCSTEPMUL = AstralEngine.Config.Astral.Tick.GCStepMul,
 }
 
 lovr.identitySet = function()

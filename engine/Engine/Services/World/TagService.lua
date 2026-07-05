@@ -1,6 +1,6 @@
 -- A service summoned by World/init.lua for managing tags
 local SignalLib = AstralEngine.Plugins.SignalLib
-local World = GetService("World")
+local World = GetService("Entity")
 
 local TagService = {}
 

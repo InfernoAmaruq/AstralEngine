@@ -1,36 +1,23 @@
----@class Entity
----@field Id integer Id of entity
----@field UniqueId integer Unique Id of entity (generational)
----@field Name string Name
----@field IsNull boolean If its available
-
----@alias IDEntity integer
----@alias AnyEntity IDEntity|Entity
-
 local SignalLib = AstralEngine.Plugins.SignalLib
 local Component = require("ComponentHandler")
 local InstMeta, Methods = require("Instance")(Component)
 local TagService, TagService_ClearTags = require("TagService")
 local bit = bit
 
-local World = {}
-
-World.Component = Component
+local Entity = {}
 
 local PREALLOCSIZE = 50
 local SHIFT = 24
 local RESIZEAT = 2 / 3
 local RESIZESTEP = 1.25
 
-World.Alive = {}
-World.Capacity = 0 -- points to highest id
-World.TopPtr = 0   -- points at highest alive object
+Entity.Alive = {}
+Entity.Capacity = 0 -- points to highest id
+Entity.TopPtr = 0   -- points at highest alive object
 
 -- fires event on ancestry change in parent-child pairs
----@param Id IDEntity
----@return Entity?
-function World.GetEntityFromId(Id)
-    local E = World.Alive[Id]
+function Entity.GetEntityFromId(Id)
+    local E = Entity.Alive[Id]
     if not E then
         return nil
     else
@@ -38,19 +25,15 @@ function World.GetEntityFromId(Id)
     end
 end
 
-local Entity = {}
-
 -- Parent, Child, "add"|"remove"
 Entity.OnAncestryChanged = SignalLib.new(SignalLib.Type.RTC)
 Entity.EntityAdded = SignalLib.new(SignalLib.Type.RTC)
 Entity.EntityRemoving = SignalLib.new(SignalLib.Type.RTC)
 Entity.OnTransformChanged = SignalLib.new(SignalLib.Type.RTC)
 
-Entity.GetEntityFromId = World.GetEntityFromId
-
 local function ALLOC(Use)
-    World.Capacity = World.Capacity + 1
-    local ID = World.Capacity
+    Entity.Capacity = Entity.Capacity + 1
+    local ID = Entity.Capacity
     local Gen = Use and 1 or 0
 
     local Flag = bit.bor(SignalLib.Type.NoCtx, SignalLib.Type.RTC)
@@ -66,15 +49,15 @@ local function ALLOC(Use)
         ComponentRemoving = SignalLib.new(Flag),
     }, InstMeta)
 
-    World.Alive[World.Capacity] = t
+    Entity.Alive[Entity.Capacity] = t
 
     return t
 end
 
 local function ADD(Res)
-    local ResizeTo = Res or (World.Capacity * RESIZESTEP)
+    local ResizeTo = Res or (Entity.Capacity * RESIZESTEP)
 
-    while World.Capacity <= ResizeTo do
+    while Entity.Capacity <= ResizeTo do
         ALLOC()
     end
 end
@@ -90,9 +73,9 @@ local function Alive(Ent)
 end
 
 local function GetEntity()
-    local n = World.Capacity
+    local n = Entity.Capacity
     for i = 1, n do
-        local Ent = World.Alive[i]
+        local Ent = Entity.Alive[i]
         if Ent.IsNull then
             Alive(Ent)
             if i >= RESIZEAT * n then
@@ -111,8 +94,8 @@ function Entity.New(Name, ...)
     local NewEntity = GetEntity()
 
     rawset(NewEntity, "Name", Name)
-    if NewEntity.Id > World.TopPtr then
-        World.TopPtr = NewEntity.Id
+    if NewEntity.Id > Entity.TopPtr then
+        Entity.TopPtr = NewEntity.Id
         -- similar thing on memory freeing to move down ptr
     end
 
@@ -134,7 +117,7 @@ end
 local ToKill = {}
 
 local function DestroyEntity(Ent)
-    Ent = type(Ent) == "astrobj" and Ent or World.Alive[Ent]
+    Ent = type(Ent) == "astrobj" and Ent or Entity.Alive[Ent]
 
     if Ent.IsNull then
         AstralEngine.Log("Attempt to destroy dead entity", "warning", "ENTITY")
@@ -143,16 +126,16 @@ local function DestroyEntity(Ent)
 
     local Id = Ent.Id
 
-    if Id == World.TopPtr then
+    if Id == Entity.TopPtr then
         -- reset top ptr
         local Idx = Id - 1
         while true do
-            local TempEnt = World.Alive[Idx]
+            local TempEnt = Entity.Alive[Idx]
             if not TempEnt then
                 break
             end
             if not TempEnt.IsNull then
-                World.TopPtr = TempEnt.Id
+                Entity.TopPtr = TempEnt.Id
                 break
             end
             Idx = Idx - 1
@@ -172,7 +155,6 @@ local function DestroyEntity(Ent)
     rawset(Ent, "IsNull", true)
 end
 
----@param Ent AnyEntity
 function Entity.Destroy(Ent)
     ToKill[Ent] = true
 end
@@ -180,8 +162,8 @@ end
 Methods.Destroy = Entity.Destroy
 
 -- handle destruction
-World.__ConnectDestructors = function()
-    World.__ConnectDestructors = nil
+Entity.__ConnectDestructors = function()
+    Entity.__ConnectDestructors = nil
 
     local RS = GetService("RunService")
 
@@ -200,7 +182,7 @@ World.__ConnectDestructors = function()
     RS.BindToStep(
         "__DESTRUCTION_FRAME_COMPONENT",
         ENUM.StepPriority.ComponentDestruction,
-        World.Component.__DrainDestructionList
+        Component.__DrainDestructionList
     )
 end
 
@@ -214,6 +196,5 @@ Methods.GetAllTags = TagService.GetAllTags
 GetService.AddService("Component", Component)
 GetService.AddService("Entity", Entity)
 GetService.AddService("TagService", TagService)
-GetService.AddService("World", World)
 
-return World
+return Entity

@@ -2,7 +2,7 @@
 
 local Physics = GetService("Physics", "Physics")
 local Component = GetService("Component", "Component")
-local WorldSer = GetService("World","World")
+local WorldSer = GetService("Entity")
 
 local Signal = require(package.ENG_PATH.."/Lib/Signal.lua")
 local bit = bit

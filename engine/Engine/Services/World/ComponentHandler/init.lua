@@ -151,7 +151,7 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
     Component.Components[id].Storage[e] = D
     Component.SetComponents[e][id] = D
 
-    local Ent = GetService"World".GetEntityFromId(e)
+    local Ent = GetService"Entity".GetEntityFromId(e)
     Component.ComponentAdded:Fire(Ent, id, D)
     Ent.ComponentAdded:Fire(id,D)
 
@@ -198,7 +198,7 @@ local function KillComponent(e,id,Force)
     end
 
     if not Force then
-        local Ent = GetService"World".GetEntityFromId(e)
+        local Ent = GetService"Entity".GetEntityFromId(e)
         Component.ComponentRemoved:Fire(Ent,id,Component.SetComponents[e][id])
         Ent.ComponentRemoving:Fire(id, Component.SetComponents[e][id])
     end
@@ -253,7 +253,7 @@ Component.GetAllWithComponent = function(...)
         local Storage = AstralEngine.Assert(Component.Components[Comp].Storage,"INVALID COMPONENT NAME AT GetAllWithComponent, NAME: "..Comp.." AT INDEX: "..i,"COMPONENT")
 
         for EntId in pairs(Storage) do
-            local EntRef = GetService"World".GetEntityFromId(EntId)
+            local EntRef = GetService"Entity".GetEntityFromId(EntId)
             table.insert(Ret,EntRef)
         end
     end
@@ -284,6 +284,7 @@ function Component.__RunPostPass()
 end
 
 function Component.LoadComponents()
+    Component.LoadComponents = nil
     local Files = lovr.filesystem.getAliasedFiles("Components")
 
     for _, f in pairs(Files) do
@@ -310,7 +311,7 @@ function Component.LoadComponents()
 
     local ANSI = AstralEngine.Plugins.ANSIColor or {}
 
-    if AstralEngine._CONFIG.Astral.Debug then
+    if AstralEngine.Config.Astral.Debug then
         for i in pairs(Component.Components) do
             AstralEngine.Log("LOADED COMP: "..ANSI.Magenta..ANSI.Underscore..i..ANSI.Clear,"success","COMPONENT")
         end

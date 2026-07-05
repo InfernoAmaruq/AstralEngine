@@ -30,9 +30,11 @@ Surface getMaterialSurface(){
 	    s = getDefaultSurface();
 
 	s.baseColor *= sColor;
+    
+    vec4 emissiveColor = IsInstanced ? Material_MatrixInstanced[InstIndex][3] : Material_Matrix[3];
+    s.emissive.rgb += emissiveColor.rgb * emissiveColor.a;
 
     return s;
 }
 
-vec4 astral_main(){
-}
+vec4 astral_main(){}

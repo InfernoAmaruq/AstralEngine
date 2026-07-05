@@ -37,16 +37,17 @@ Material.Metadata.EmptyMatrix = Mat4(
     0,
     0,
     --
-    0,
-    0,
-    0,
-    0
+    1,
+    1,
+    1,
+    1
+-- glow
 )
 
 local function RebuildMatrix(self)
     local RT = Comp.HasComponent(self[8], "RenderTarget")
 
-    local Offset, Scale, Color = self[3], self[2], self[4]
+    local Offset, Scale, Color, GlowColor = self[3], self[2], self[4], self[10]
     self[9]:set(
         Offset.x,
         Offset.y,
@@ -63,11 +64,13 @@ local function RebuildMatrix(self)
         0,
         0,
         --
-        0,
-        0,
-        0,
-        0
+        GlowColor.r,
+        GlowColor.g,
+        GlowColor.b,
+        GlowColor.a
     )
+
+    print("USE MATRIX:", self[9])
 
     if RT then
         local F = RT.Flags
@@ -80,8 +83,8 @@ end
 
 local Mt = {
     __index = function(self, k)
-        if k == "Color" then
-            return self[4] * 255
+        if k == "Color" or k == "GlowColor" then
+            return self[k == "Color" and 4 or 10] * 255
         elseif k == "Material" then
             return self[7]
         elseif k == "UVOffset" then
@@ -98,10 +101,10 @@ local Mt = {
         if k == "Material" then
             self[7] = v
             self[1] = v and v.__lmat or v[1] or v
-        elseif k == "Color" then
+        elseif k == "Color" or k == "GlowColor" then
             v = v or vec4(255, 255, 255, 255)
             local r, g, b, a = v:div(255):unpack()
-            self[4]:set(r, g, b, a or 1)
+            self[k == "Color" and 4 or 10]:set(r, g, b, a or 1)
         elseif k == "UVOffset" then
             self[3]:set(v)
         elseif k == "UVScale" then
@@ -133,6 +136,12 @@ Material.Metadata.__create = function(Data, Ent)
     Storage[7] = Mat
     Storage[8] = Ent
     Storage[9] = Mat4() -- allocate matrix for it
+
+    local InGlowColor = Data and Data.Glow or vec4(0, 0, 0, 255)
+    R, G, B, A = InGlowColor:unpack()
+    local GlowColor = Vec4(R, G, B, A or 1):div(255)
+
+    Storage[10] = GlowColor
 
     local FitMode = Data.FitMode or MaterialFitMode.Stretch
     Storage.__FitEnum = FitMode

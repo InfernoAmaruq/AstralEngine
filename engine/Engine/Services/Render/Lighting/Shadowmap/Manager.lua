@@ -2,10 +2,12 @@ local ShadowmapManager = {}
 
 local Table = table.new
 local Texture = AstralEngine.Graphics.NewRawTexture
+local View = AstralEngine.Graphics.NewTextureView
 local Pass = AstralEngine.Graphics.NewPass
 
 local MAX_LAYERS = AstralEngine.Graphics.GPU.GetLimit("RenderSize").z -- will be our step size
 local ALLOC_STEP = 1.2                                                -- ceil'd to a multiple of MAX_LAYERS
+local MAX_SHADOWMAPS = 100                                            -- for each type, n * 6 for point lights
 local TEXTURE_SIZE = 256
 
 local ShadowmapData = {
@@ -17,6 +19,7 @@ local ShadowmapData = {
             type = "cube",
             label = "shadowcube",
         },
+        Waitlist = {},
         Texture = nil,
         TargetPass = nil,
         Registry = nil,
@@ -24,6 +27,7 @@ local ShadowmapData = {
         Passes = nil,
         Valid = false,
         Count = -1,
+        Allocated = -1,
     },
     ["2D"] = {
         Parameters = {
@@ -33,6 +37,7 @@ local ShadowmapData = {
             type = "array",
             label = "shadowmap",
         },
+        Waitlist = {},
         Texture = nil,
         TargetPass = nil,
         Registry = nil,
@@ -40,9 +45,66 @@ local ShadowmapData = {
         Passes = nil,
         Valid = false,
         Count = -1,
+        Allocated = -1,
     },
 }
 
-function ShadowmapManager.Realloc() end
+local TextureViewData = {
+    layercount = MAX_LAYERS,
+    layer = -1,
+}
+
+local PassFormat = {
+    depth = nil,
+    samples = 1,
+}
+
+---@param Struct table
+---@param NewCount number
+---@param Scale number
+function ShadowmapManager.Realloc(Struct, Scale, NewCount)
+    local NewSize = math.ceil(NewCount * ALLOC_STEP) * Scale
+
+    local Passes = math.ceil(NewSize / MAX_LAYERS)
+
+    if Struct.Allocated == -1 then -- invalid, need first time alloc
+        Struct.Views = Table(Passes, 1)
+        Struct.Passes = Table(Passes, 1)
+        ---@TODO: allocate target pass here (if i add the shared draw table thing)
+        Struct.Texture = Texture(TEXTURE_SIZE, TEXTURE_SIZE, NewSize, Struct.Parameters)
+    else
+        Struct.Texture:release()
+        Struct.Texture = Texture(TEXTURE_SIZE, TEXTURE_SIZE, NewSize, Struct.Parameters)
+    end
+
+    -- now we have to update passes and texture views
+
+    local ParentTexture = Struct.Texture
+
+    for i = 1, Passes do
+        if Struct.Views[i] then
+            Struct.Views[i]:release()
+        end
+
+        local LayerNumber = (i - 1) * MAX_LAYERS
+        local Layers = math.min(NewSize - LayerNumber, MAX_LAYERS)
+        TextureViewData.layer = LayerNumber + 1
+        TextureViewData.layercount = Layers
+
+        Struct.Views[i] = View(ParentTexture, TextureViewData)
+
+        PassFormat.depth = Struct.Views[i]
+        Struct.Passes[i] = Struct.Passes[i] or Pass(PassFormat)
+    end
+
+    Struct.Allocated = NewSize
+end
+
+function ShadowmapManager.UpdateShadowmap() -- the part where we register everything from the wait list
+end
+
+function ShadowmapManager.Register(Entity) end
+
+function ShadowmapManager.Deregister() end
 
 return ShadowmapManager

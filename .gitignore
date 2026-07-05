@@ -7,3 +7,4 @@ build_here*
 *.so
 *.dll
 ignore*
+.luarc.json

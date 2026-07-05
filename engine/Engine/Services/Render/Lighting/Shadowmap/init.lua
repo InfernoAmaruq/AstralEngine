@@ -64,14 +64,14 @@ local ShadowmapData = {
 
 local ShadowmapTexture2D =
     AstralEngine.Graphics.NewRawTexture(Size, Size, PreallocationSize, ShadowmapData["2D"].Parameters)
-local ShadowmapPass2D = AstralEngine.Graphics.NewRawPass({ depth = ShadowmapTexture2D, samples = 1 })
+local ShadowmapPass2D = AstralEngine.Graphics.NewPass({ depth = ShadowmapTexture2D, samples = 1 })
 
 ShadowmapData["2D"].Texture = ShadowmapTexture2D
 ShadowmapData["2D"].Pass = ShadowmapPass2D
 
 local ShadowmapTextureCube =
     AstralEngine.Graphics.NewRawTexture(Size, Size, PreallocationSize * 6, ShadowmapData.Cube.Parameters)
-local ShadowmapPassCube = AstralEngine.Graphics.NewRawPass({ depth = ShadowmapTextureCube, samples = 1 })
+local ShadowmapPassCube = AstralEngine.Graphics.NewPass({ depth = ShadowmapTextureCube, samples = 1 })
 
 ShadowmapData.Cube.Texture = ShadowmapTextureCube
 ShadowmapData.Cube.Pass = ShadowmapPassCube

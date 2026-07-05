@@ -9,6 +9,8 @@ local AudioMeshType = ENUM({
     Manual = 2,
 }, "AudioMeshType")
 
+---@class AudioMesh: Component
+
 AudioMesh.Metadata.__create = function(Data, Ent)
     local t = {}
 

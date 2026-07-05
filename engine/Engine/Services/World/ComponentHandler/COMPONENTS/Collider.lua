@@ -1,3 +1,5 @@
+---@class Collider: Component
+
 local Physics = GetService("Physics", "Physics")
 local Component = GetService("Component", "Component")
 local WorldSer = GetService("World","World")

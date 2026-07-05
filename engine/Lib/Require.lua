@@ -17,18 +17,14 @@ package.clibtag = ext or ""
 local LoadExtensionsToTry = {
     "",
     ".lua",
-    ".aspr",
     "/init.lua",
-    "/init.aspr",
     ".laf",
 }
 
 local CacheExtensionsToTry = {
     "",
     ".lua",
-    ".aspr",
     "/init.lua",
-    "/init.aspr",
     ".laf",
     package.clibtag,
 }
@@ -46,7 +42,7 @@ local function DotFix(s)  -- fix Lua's dot indexing so require("Folder.Script") 
         or (
             s:gsub("%.(%w+)", function(ext)
                 local e = ext:lower()
-                if e == "lua" or e == "aspr" or e == "laf" or e == package.clibtag:sub(2) then
+                if e == "lua" or e == "laf" or e == package.clibtag:sub(2) then
                     return "." .. e
                 else
                     return "/" .. ext

@@ -1,3 +1,12 @@
+---@class Entity
+---@field Id integer Id of entity
+---@field UniqueId integer Unique Id of entity (generational)
+---@field Name string Name
+---@field IsNull boolean If its available
+
+---@alias IDEntity integer
+---@alias AnyEntity IDEntity|Entity
+
 local SignalLib = AstralEngine.Plugins.SignalLib
 local Component = require("ComponentHandler")
 local InstMeta, Methods = require("Instance")(Component)
@@ -18,6 +27,8 @@ World.Capacity = 0 -- points to highest id
 World.TopPtr = 0   -- points at highest alive object
 
 -- fires event on ancestry change in parent-child pairs
+---@param Id IDEntity
+---@return Entity?
 function World.GetEntityFromId(Id)
     local E = World.Alive[Id]
     if not E then
@@ -95,6 +106,9 @@ local function GetEntity()
     return ALLOC(true)
 end
 
+---@param Name string?
+---@param ... [string, table]? Component Name - Data tuple
+---@return Entity
 function Entity.New(Name, ...)
     Name = Name or "UNNAMED_ENTITY"
     assert(type(Name) == "string", "Entity name not a string!")
@@ -150,8 +164,7 @@ end
 
 local ToKill = {}
 
-local function DestroyEntity(Ent, Recursive)
-    Recursive = Recursive ~= false and true or false
+local function DestroyEntity(Ent)
     Ent = type(Ent) == "astrobj" and Ent or World.Alive[Ent]
 
     if Ent.IsNull then
@@ -190,9 +203,9 @@ local function DestroyEntity(Ent, Recursive)
     rawset(Ent, "IsNull", true)
 end
 
-function Entity.Destroy(Ent, Recursive)
-    Recursive = Recursive ~= false and true or false
-    ToKill[Ent] = Recursive
+---@param Ent AnyEntity
+function Entity.Destroy(Ent)
+    ToKill[Ent] = true
 end
 
 Methods.Destroy = Entity.Destroy
@@ -209,8 +222,8 @@ World.__ConnectDestructors = function()
     })
 
     RS.BindToStep("__DESTRUCTION_FRAME_ENTITY", ENUM.StepPriority.EntityDestruction, function()
-        for Ent, Rec in pairs(ToKill) do
-            DestroyEntity(Ent, Rec)
+        for Ent in pairs(ToKill) do
+            DestroyEntity(Ent)
             ToKill[Ent] = nil
         end
     end)

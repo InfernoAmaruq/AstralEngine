@@ -1,3 +1,5 @@
+---@class Component
+
 local SignalLib = AstralEngine.Plugins.SignalLib
 local Component = {}
 
@@ -49,6 +51,9 @@ function Component.GetComponents(e)
     return Component.SetComponents[e] or {}
 end
 
+---@param e AnyEntity
+---@param ... string names
+---@return (Component|boolean)?
 function Component.HasComponent(e, ...)
     local S = select("#", ...)
     local Comp = Component.SetComponents[type(e) == &TYPE and e.__id or e]
@@ -63,12 +68,18 @@ function Component.HasComponent(e, ...)
             end
         end
     end
+    return nil
 end
 
 local function ToString(c)
     return debug.getmetatable(c).__CName
 end
 
+---@param e AnyEntity
+---@param id string Component name
+---@param DATA table?
+---@param ShouldSink boolean? Skip dependency resolution
+---@return Component?
 function Component.AddComponent(e, id, DATA, ShouldSink)
     if type(e) == &TYPE then
         e = e.__id
@@ -208,6 +219,9 @@ end
 
 local ComponentsToKill = {}
 
+---@param e AnyEntity
+---@param id string
+---@param Force boolean? force destruction, ignoring dependency checks
 function Component.RemoveComponent(e, id, Force)
     ComponentsToKill[e] = ComponentsToKill[e] or {}
     ComponentsToKill[e][id] = Force or false
@@ -226,6 +240,8 @@ Component.GetComponentStorage = function(Name)
     return Component.Components[Name].Storage
 end
 
+---@param ... string component names
+---@return Entity[]
 Component.GetAllWithComponent = function(...)
     local Ret = {}
 
@@ -270,9 +286,9 @@ function Component.LoadComponents()
 
     for _, f in pairs(Files) do
 
-        AstralEngine.Log("LOAD COMPONENT FILE: "..f,"info","COMPONENT")
+        if f:match("%.lua$") then
+            AstralEngine.Log("LOAD COMPONENT FILE: "..f,"info","COMPONENT")
 
-        if f:match("%.lua$") or f:match("%.aspr$") then
             local File = loadfile(f)
 
             if File then

@@ -1,3 +1,5 @@
+---@class Material: Component
+
 local Comp = GetService("Component")
 local Material = {}
 

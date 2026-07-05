@@ -1,3 +1,5 @@
+---@class Light: Component
+
 local Light = {}
 
 local LightService

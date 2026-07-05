@@ -18,6 +18,8 @@ local Mt = {
     end,
 }
 
+---@class AudioSource: Component
+
 AudioSource.Metadata.__create = function(Data, Ent)
     local t = {}
 

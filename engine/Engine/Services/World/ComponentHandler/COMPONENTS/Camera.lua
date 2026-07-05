@@ -15,6 +15,9 @@ local Component = GetService("Component")
 --     STATIC COMPONENT DECLARATION
 --\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
 
+---@class Camera: Component
+---@class PostProcessingEffect : Component
+
 -- I fucking hate this code
 
 local Camera = {}

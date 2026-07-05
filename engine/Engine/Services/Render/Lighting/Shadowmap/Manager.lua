@@ -7,7 +7,7 @@ local Pass = AstralEngine.Graphics.NewPass
 
 local MAX_LAYERS = AstralEngine.Graphics.GPU.GetLimit("RenderSize").z -- will be our step size
 local ALLOC_STEP = 1.2                                                -- ceil'd to a multiple of MAX_LAYERS
-local MAX_SHADOWMAPS = 100                                            -- for each type, n * 6 for point lights
+local MAX_SHADOWMAPS = 150                                            -- for each type, n * 6 for point lights
 local TEXTURE_SIZE = 256
 
 local ShadowmapData = {
@@ -67,6 +67,10 @@ function ShadowmapManager.Realloc(Struct, Scale, NewCount)
 
     local Passes = math.ceil(NewSize / MAX_LAYERS)
 
+    if NewSize > MAX_SHADOWMAPS * Scale then
+        AstralEngine.Error("OUT OF SHADOWMAP MEMORY!", "GPU")
+    end
+
     if Struct.Allocated == -1 then -- invalid, need first time alloc
         Struct.Views = Table(Passes, 1)
         Struct.Passes = Table(Passes, 1)
@@ -100,11 +104,13 @@ function ShadowmapManager.Realloc(Struct, Scale, NewCount)
     Struct.Allocated = NewSize
 end
 
-function ShadowmapManager.UpdateShadowmap() -- the part where we register everything from the wait list
+function ShadowmapManager.UpdateShadowmap(Table) -- the part where we register everything from the wait list
 end
 
+---@param Entity AnyEntity
 function ShadowmapManager.Register(Entity) end
 
-function ShadowmapManager.Deregister() end
+---@param Entity AnyEntity
+function ShadowmapManager.Deregister(Entity) end
 
 return ShadowmapManager

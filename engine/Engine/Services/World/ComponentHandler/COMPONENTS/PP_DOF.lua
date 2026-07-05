@@ -1,3 +1,5 @@
+---@class DepthOfField: PostProcessingEffect
+
 local Component = GetService("Component")
 
 local DOF = {}

@@ -3,7 +3,7 @@ return function(ScriptService, Ctx)
 
     local ScenesPath = package.GAME_PATH .. "/Assets/Scenes/"
 
-    local AppendsToTry = { "", ".lbmf", ".lua", ".aspr" }
+    local AppendsToTry = { "", ".lbmf", ".lua" }
 
     local LoadedScenes = {}
     local CurScene

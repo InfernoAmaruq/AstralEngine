@@ -149,8 +149,6 @@ function lovr.conf(t)
 
             assert(Device, "NO VALID GPU DEVICE PROVIDED WITH --gpu PARAMETER. GOT: " .. id .. " raw: " .. arg.gpu)
 
-            print("Launching Astral with GPU: ", Device.name)
-
             return id
         else
             for idx, SubTable in pairs(GpuData) do

@@ -1,3 +1,5 @@
+---@class Transform: Component
+
 local Component = GetService("Component", "Component")
 local Physics = GetService("Physics", "Physics")
 local World = GetService("Entity")

@@ -1,3 +1,5 @@
+---@class Shape: Component
+
 local Component = GetService("Component", "Component")
 local Render = GetService("Renderer")
 

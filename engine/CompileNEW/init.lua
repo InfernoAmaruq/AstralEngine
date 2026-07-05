@@ -37,7 +37,6 @@ ConfigPresets = {
     },
     lbmf = {},
 }
-ConfigPresets.aspr = { Language = ConfigPresets.lua.Language }
 Compiler.ConfigPresets = ConfigPresets
 
 Compiler.Lexer = Lexer

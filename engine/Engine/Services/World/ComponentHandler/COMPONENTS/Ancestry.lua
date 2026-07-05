@@ -40,6 +40,8 @@ local FAST_ADD_CHILD = table.insert -- used to be a macro, changed to function r
 
 -- //\\// Component Declaration \\//\\
 
+---@class Ancestry: Component
+
 local Ancestry = {}
 
 Ancestry.Name = "Ancestry"

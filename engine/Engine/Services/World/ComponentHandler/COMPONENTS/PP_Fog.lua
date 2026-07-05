@@ -1,3 +1,5 @@
+---@class Fog: PostProcessingEffect
+
 local Component = GetService("Component")
 
 local Fog = {}

@@ -1,3 +1,5 @@
+---@class Bloom: PostProcessingEffect
+
 local Component = GetService("Component")
 
 local Bloom = {}

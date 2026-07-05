@@ -1,3 +1,5 @@
+---@class RenderTarget: Component
+
 local RendTarget = {}
 
 local Component = GetService("Component", "Component")

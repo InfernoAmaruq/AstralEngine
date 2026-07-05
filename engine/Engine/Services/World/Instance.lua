@@ -40,7 +40,7 @@ return function(Components)
         end
 
         local FastFetch = Components.FastFetch[k]
-        local s = Components.SetComponents[self.__id]
+        local s = Components.SetComponents[self.Id]
         if FastFetch and s then
             return s and s[FastFetch] and s[FastFetch][k] or nil
         end
@@ -52,7 +52,7 @@ return function(Components)
 
     function Instance.__newindex(self, k, v)
         local FastFetch = Components.FastFetch[k]
-        local s = Components.SetComponents[self.__id]
+        local s = Components.SetComponents[self.Id]
         if FastFetch and s and s[FastFetch] then
             s[FastFetch][k] = v
             return
@@ -68,7 +68,7 @@ return function(Components)
         local n = rawget(self, "Name") or ("Unnamed Entity:" .. debug.getaddress(self))
 
         local t = {}
-        for NAME in pairs(Components.GetComponents(rawget(self, "__id"))) do
+        for NAME in pairs(Components.GetComponents(rawget(self, "Id"))) do
             t[#t + 1] = NAME
         end
 

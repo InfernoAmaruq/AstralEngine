@@ -45,7 +45,7 @@ end
 
 function Component.GetComponents(e)
     if type(e) == &TYPE then
-        e = e.__id
+        e = e.Id
     end
 
     return Component.SetComponents[e] or {}
@@ -56,7 +56,7 @@ end
 ---@return (Component|boolean)?
 function Component.HasComponent(e, ...)
     local S = select("#", ...)
-    local Comp = Component.SetComponents[type(e) == &TYPE and e.__id or e]
+    local Comp = Component.SetComponents[type(e) == &TYPE and e.Id or e]
     if not Comp then return nil end
     if S == 1 then
         return Comp[(select(1, ...))]
@@ -82,7 +82,7 @@ end
 ---@return Component?
 function Component.AddComponent(e, id, DATA, ShouldSink)
     if type(e) == &TYPE then
-        e = e.__id
+        e = e.Id
     end
     Component.SetComponents[e] = Component.SetComponents[e] or {}
 
@@ -155,6 +155,8 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
     Component.ComponentAdded:Fire(Ent, id, D)
     Ent.ComponentAdded:Fire(id,D)
 
+    rawset(D,"IsNull",false)
+
     return D
 end
 
@@ -170,7 +172,7 @@ local function KillComponent(e,id,Force)
     local D = CallstackDepth() - 4
     local pre = string.rep(">",D)
     if type(e) == &TYPE then
-        e = e.__id
+        e = e.Id
     end
 
     local Comp = Component.Components[id]
@@ -260,7 +262,7 @@ Component.GetAllWithComponent = function(...)
 end
 
 function Component.__RemoveAllComponents(EntityHandle)
-    local Id = EntityHandle.__id
+    local Id = EntityHandle.Id
 
     if not Component.SetComponents[Id] then
         -- no components, return

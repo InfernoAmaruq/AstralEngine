@@ -7,7 +7,6 @@ local bit = bit
 
 local TAG_OFFSET = 40
 local TAG_UNSET = bit.lshift(0, TAG_OFFSET)
-local TAG_FORCE = bit.lshift(tonumber("01", 2), TAG_OFFSET)
 local TAG_RES = bit.lshift(tonumber("10", 2), TAG_OFFSET)
 
 local TAG_MASK = bit.lshift(tonumber("11", 2), TAG_OFFSET)
@@ -54,12 +53,6 @@ local RTMT = {
 
 local CURSHARED
 local FENV = setmetatable({
-    GID = setmetatable({}, {
-        __index = function(_, n)
-            return bit.bor(n, TAG_FORCE)
-        end,
-        __newindex = SinkNidx,
-    }),
     RES = setmetatable({}, {
         __index = function(_, s)
             if RES_HASH[s] then
@@ -137,17 +130,6 @@ function AssetMapLoader.AssetMapFromPath(Path)
             if Tag == TAG_RES then
                 AstralEngine.Assert(not RESERVE[i], "Slot " .. i .. " already reserved!", 1)
                 RESERVE[i] = true
-            elseif Tag == TAG_FORCE and IDs[i] then
-                AstralEngine.Log(
-                    "ID COLLISION: Id of "
-                    .. i
-                    .. " already defined in previous asset map. Error while loading: "
-                    .. UsePath,
-                    "Warning",
-                    "SCENEMANAGER"
-                )
-            else
-                IDs[i] = true
             end
 
             Map[#Map + 1] = Val
@@ -201,17 +183,6 @@ function AssetMapLoader.GetAssetMap(AssetMapFS, Folder)
                     if Tag == TAG_RES then
                         AstralEngine.Assert(not RESERVE[i], "Slot " .. i .. " already reserved!", 1)
                         RESERVE[i] = true
-                    elseif Tag == TAG_FORCE and IDs[i] then
-                        AstralEngine.Log(
-                            "ID COLLISION: Id of "
-                            .. i
-                            .. " already defined in previous asset map. Error while loading: "
-                            .. UsePath,
-                            "Warning",
-                            "SCENEMANAGER"
-                        )
-                    else
-                        IDs[i] = true
                     end
 
                     Map[#Map + 1] = Val
@@ -262,9 +233,7 @@ function AssetMapLoader.LoadAssetMap(Map)
         local Flags = Val.Flags and Val.Flags or 0
 
         -- summon the entity
-        if bit.band(Tag, TAG_FORCE) ~= 0 then
-            Ent = EntityService.CreateAtId(NewId, Val.Name)
-        elseif bi.band(Tag, TAG_RES) ~= 0 then
+        if bit.band(Tag, TAG_RES) ~= 0 then
             if RESERVED[NewId] then
                 AstralEngine.Log(
                     "RESERVED ID COLLISION, WITH ID " .. NewId .. " ON ENTITY " .. Val.Name,
@@ -399,13 +368,6 @@ function AssetMapLoader.LoadAssetMap(Map)
             if Tag == TAG_RES then
                 local EntityTarget =
                     AstralEngine.Assert(RESERVED[Val], "INVALID RESERVE FIELD FOUND: " .. Val, "SCENEMANAGER")
-                ResolveParent(Ent, EntityTarget)
-            elseif Tag == TAG_FORCE then
-                local EntityTarget = AstralEngine.Assert(
-                    EntityService.GetEntityFromId(Val),
-                    "INVALID RESERVE FIELD FOUND: " .. Val,
-                    "SCENEMANAGER"
-                )
                 ResolveParent(Ent, EntityTarget)
             else
                 ResolveParent(

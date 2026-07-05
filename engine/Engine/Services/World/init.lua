@@ -56,7 +56,6 @@ local function ALLOC(Use)
     local Flag = bit.bor(SignalLib.Type.NoCtx, SignalLib.Type.RTC)
 
     local t = setmetatable({
-        __id = ID,
         Id = ID,
         __gen = Gen,
         UniqueId = bit.band(bit.lshift(Gen, SHIFT), ID),
@@ -86,7 +85,7 @@ end
 
 local function Alive(Ent)
     Ent.__gen = Ent.__gen + 1
-    local k = bit.band(bit.lshift(Ent.__gen, SHIFT), Ent.__id)
+    local k = bit.band(bit.lshift(Ent.__gen, SHIFT), Ent.Id)
     Ent.UniqueId = k
 end
 
@@ -106,23 +105,20 @@ local function GetEntity()
     return ALLOC(true)
 end
 
----@param Name string?
----@param ... [string, table]? Component Name - Data tuple
----@return Entity
 function Entity.New(Name, ...)
     Name = Name or "UNNAMED_ENTITY"
     assert(type(Name) == "string", "Entity name not a string!")
     local NewEntity = GetEntity()
 
     rawset(NewEntity, "Name", Name)
-    if NewEntity.__id > World.TopPtr then
-        World.TopPtr = NewEntity.__id
+    if NewEntity.Id > World.TopPtr then
+        World.TopPtr = NewEntity.Id
         -- similar thing on memory freeing to move down ptr
     end
 
     for i = 1, select("#", ...), 2 do
         local v, Data = select(i, ...)
-        Component.AddComponent(NewEntity.__id, v, Data)
+        Component.AddComponent(NewEntity.Id, v, Data)
     end
 
     local CTX = _G.CONTEXT and _G.CONTEXT.Gen
@@ -135,33 +131,6 @@ function Entity.New(Name, ...)
     return NewEntity
 end
 
-function Entity.CreateAtId(Id, Name, ...)
-    if not World.Alive[Id] then
-        ADD(Id + 1)
-    end
-
-    local Obj = World.Alive[Id]
-
-    if not Obj.IsNull then
-        Entity.Destroy(Obj)
-    end
-
-    Alive(Obj)
-    rawset(Obj, "Name", Name)
-
-    local CTX = _G.CONTEXT and _G.CONTEXT.Gen
-    Obj.__context = CTX or Obj.__context
-
-    Obj.IsNull = false
-    if Obj.__id > World.TopPtr then
-        World.TopPtr = Obj.__id
-    end
-
-    Entity.EntityAdded:Fire(Obj)
-
-    return Obj
-end
-
 local ToKill = {}
 
 local function DestroyEntity(Ent)
@@ -172,7 +141,7 @@ local function DestroyEntity(Ent)
         return
     end
 
-    local Id = Ent.__id
+    local Id = Ent.Id
 
     if Id == World.TopPtr then
         -- reset top ptr
@@ -183,7 +152,7 @@ local function DestroyEntity(Ent)
                 break
             end
             if not TempEnt.IsNull then
-                World.TopPtr = TempEnt.__id
+                World.TopPtr = TempEnt.Id
                 break
             end
             Idx = Idx - 1

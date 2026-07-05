@@ -13,7 +13,7 @@ _G.AstralEngine = {
     System = {},
     Signals = {},
     [".Internal"] = {},
-}
+} --[[@as any]]
 
 lovr.filesystem.extractor = lovr.filesystem.load(package.ENG_PATH .. "/Lib/Extractor.lua")()
 loadfile, require, package.loadlib = unpack(lovr.filesystem.load(package.ENG_PATH .. "/Lib/Require.lua")())

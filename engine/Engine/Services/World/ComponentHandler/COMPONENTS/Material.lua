@@ -70,8 +70,6 @@ local function RebuildMatrix(self)
         GlowColor.a
     )
 
-    print("USE MATRIX:", self[9])
-
     if RT then
         local F = RT.Flags
 

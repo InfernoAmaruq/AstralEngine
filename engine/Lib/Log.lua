@@ -17,10 +17,10 @@ _G.print = function(...)
         io.write(tostring(select(i, ...)):gsub("\27%[[0-9;]*m", "") .. Tab)
     end
     io.write("\n")
-    if AstralEngine.System.PrintCallback then
-        AstralEngine.System.PrintCallback(...)
+    if AstralEngine.Callbacks.PrintCallback then
+        AstralEngine.Callbacks.PrintCallback(...)
     end
-    if AstralEngine.System.ShouldFlush then
+    if AstralEngine.Callbacks.ShouldFlush then
         io.flush()
     end
 end

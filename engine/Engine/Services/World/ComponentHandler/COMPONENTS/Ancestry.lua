@@ -21,14 +21,14 @@ local World = GetService("Entity")
 @flag:SELF_PTR = 3;
 
 local FAST_ADD_CHILD = table.insert -- used to be a macro, changed to function ref
-@macro<L,!USEBRACK>{GetSelf(&S) = rawget(&S,"__id") and Component.SetComponents[&S.__id]["Ancestry"] or &S}
+@macro<L,!USEBRACK>{GetSelf(&S) = rawget(&S,"Id") and Component.SetComponents[&S.Id]["Ancestry"] or &S}
 -- ^^ used by functions to get the ancestry component, since fast fetches with <Entity>:<AncestryFunction>() will cause 'self' to be the Entity reference. So we wish to convert to component reference
 
 -- a macro to validate user inputs
 @macro<L,!USEBRACK>{VALIDATE(&OBJ,&OUT,&REF) = 
     local PT = type(&OBJ)
     if PT == "astrobj" then
-        &OUT = rawget(&OBJ, "__id")
+        &OUT = rawget(&OBJ, "Id")
         &REF = &OBJ
     elseif PT == "number" then
         &REF = World.GetEntityFromId(&OBJ)

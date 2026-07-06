@@ -401,7 +401,15 @@ const char* os_joystick_get_name(int jid){
 }
 
 void os_joystick_update_mappings(const char* mappings){
-    glfwUpdateGamepadMappings(mappings);
+  glfwUpdateGamepadMappings(mappings) == GLFW_TRUE;
+  for (int i = 0; i < GLFW_JOYSTICK_LAST; i++){
+    bool lastState = glfwState.controllerState[i].active;
+    glfwState.controllerState[i].active = glfwJoystickIsGamepad(i);
+
+    if (!lastState && glfwState.controllerState[i].active){
+        onJoystickEvent(i,1);
+    }
+  }
 }
 
 bool os_joystick_get_button_down(int jid, os_gp button){

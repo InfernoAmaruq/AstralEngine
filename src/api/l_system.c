@@ -456,7 +456,12 @@ static int l_lovrSystemSetPreciseMouse(lua_State* L){
 
 #ifdef LOVR_ENABLE_CONTROLLER
 static int l_lovrControllerPresent(lua_State* L){
-    lua_pushboolean(L,lovrSystemControllerPresent(lua_tointeger(L,1)));
+    int id = lua_tointeger(L,1) - 1;
+
+    if (id < 0 || id > 15)
+        luaL_argerror(L, 1, "Device id must be between 1 and 16");
+
+    lua_pushboolean(L,lovrSystemControllerPresent(id));
     return 1;
 }
 
@@ -551,6 +556,12 @@ static const luaL_Reg lovrSystem[] = {
   { "messageBox", l_lovrSystemMessageBox },
 #ifdef LOVR_ENABLE_CONTROLLER
   { "controllerPresent", l_lovrControllerPresent },
+  { "controllerGetName", l_lovrControllerGetName },
+  { "controllerUpdateMappings", l_lovrControllerUpdateMappings },
+  { "controllerIsButtonDown", l_lovrControllerIsButtonDown },
+  { "controllerWasButtonPressed", l_lovrControllerWasButtonPressed },
+  { "controllerWasButtonReleased", l_lovrControllerWasButtonReleased },
+  { "controllerGetAxis", l_lovrControllerGetAxis },
 #endif
   { NULL, NULL }
 };

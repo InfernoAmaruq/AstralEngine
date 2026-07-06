@@ -131,12 +131,12 @@ static int nextEvent(lua_State* L) {
     case EVENT_CONTROLLER_CHANGED:
       lua_pushinteger(L,event.data.controllerChanged.jid);
       lua_pushboolean(L,event.data.controllerChanged.state);
-      return 2;
+      return 3;
     case EVENT_CONTROLLER_BUTTON:
       lua_pushinteger(L,event.data.controllerButton.jid);
       luax_pushenum(L, GamepadButton, event.data.controllerButton.button);
       lua_pushboolean(L,event.data.controllerButton.state);
-      return 3;
+      return 4;
 #endif
 
     case EVENT_FILECHANGED:

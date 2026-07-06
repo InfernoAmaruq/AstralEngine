@@ -92,6 +92,11 @@ void job_destroy(void) {
 }
 
 bool job_start(fn_job* fn, void* arg) {
+  if (state.workerCount == 0) {
+    fn(arg);
+    return true;
+  }
+
   mtx_lock(&state.lock);
 
   if (state.tail - state.head >= MAX_JOBS) {

@@ -124,9 +124,9 @@ Renderer.Late[#Renderer.Late + 1] = function()
     local RS = GetService("RunService")
     local Flag = bit.bor(RS.Flags.Raw, RS.Flags.Contextless)
 
-    ENUM.StepPriority.__Append("RenderShadowmap", 550)
+    Enum.StepPriority.__Append("RenderShadowmap", 550)
 
-    --RS.BindToStep("DrawShadowmap", ENUM.StepPriority.RenderShadowmap, Shadowmap.Tick, Flag)
+    --RS.BindToStep("DrawShadowmap", Enum.StepPriority.RenderShadowmap, Shadowmap.Tick, Flag)
 end
 
 local function IsInRegistry(E)
@@ -183,7 +183,7 @@ function Shadowmap.Add(E, L)
 
     local Reg = IsInRegistry(E)
     local Entry = Reg and ShadowmapRegistry[Reg]
-    local Cube = L.Type == ENUM.LightType.Point
+    local Cube = L.Type == Enum.LightType.Point
 
     if not Entry then
         Entry = {

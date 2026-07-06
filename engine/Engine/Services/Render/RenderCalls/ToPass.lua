@@ -23,7 +23,7 @@ Renderer.Late[#Renderer.Late + 1] = function()
             Camera[10] = true
             if not Bound then
                 Bound = true
-                RS.BindToStep("_REND_TO_PASS", ENUM.StepPriority.RenderSubmit.RawValue, RenderFunc, Flag)
+                RS.BindToStep("_REND_TO_PASS", Enum.StepPriority.RenderSubmit.Value, RenderFunc, Flag)
             end
         elseif not State and Camera == CoreCamera then
             CoreCamera = nil

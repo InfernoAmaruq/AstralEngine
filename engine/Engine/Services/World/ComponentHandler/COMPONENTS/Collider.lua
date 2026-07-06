@@ -9,7 +9,7 @@ local bit = bit
 
 local mt = {}
 
-local INHM = ENUM({
+local INHM = Enum({
     None = 0,
     Root = 1,
 },"ColliderSizeInheritance")
@@ -112,7 +112,7 @@ local SHAREDT = {
         if self.OnResize then
             self:OnResize(v)
         end
-        if bit.band(self.InheritanceMethod.RawValue, INHM.Root.RawValue) ~= 0 then
+        if bit.band(self.InheritanceMethod.Value, INHM.Root.Value) ~= 0 then
             self.ShapeList[1]:SetSize(v:abs())
             self.ColRef:setAwake(true)
         end
@@ -239,10 +239,10 @@ function mt.__create(DATA, e)
 
     local InheritanceMethod = DATA.InheritanceMethod or INHM.Root
 
-    local Shapes = DATA.Shapes or {DATA.Shape or Physics.Shapes.NewShape(ENUM.ColliderShape.Box)}
+    local Shapes = DATA.Shapes or {DATA.Shape or Physics.Shapes.NewShape(Enum.ColliderShape.Box)}
     local Size = Transform.Scale
 
-    if bit.band(InheritanceMethod.RawValue, INHM.Root.RawValue) ~= 0 then
+    if bit.band(InheritanceMethod.Value, INHM.Root.Value) ~= 0 then
         Shapes[1]:SetSize(Size:abs())
     end
 

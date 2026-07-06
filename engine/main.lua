@@ -15,7 +15,7 @@ AstralEngine.Callbacks = {}
 function lovr.load()
     -- LOAD MISC
 
-    _G.ENUM = require("Lib.Enum")
+    _G.Enum = require("Lib.Enum")
     require("Engine/Graphics")
 
     local Bridge = loadfile("Engine/LOVRBridge")() -- we want it to run once and be freed after. So we avoid caching
@@ -200,7 +200,7 @@ function lovr.run()
         local SyncState = Phys.LuaToJolt
         local LastPhysTime = -1
 
-        GetService"RunService".BindToStep("__PHYSICS_UPD_STEP",ENUM.StepPriority.Physics,function(Time)
+        GetService"RunService".BindToStep("__PHYSICS_UPD_STEP",Enum.StepPriority.Physics,function(Time)
             SyncState(MainPhysWorld)
             local l = MainPhysWorld.LovrWorld
             l:update(Time)

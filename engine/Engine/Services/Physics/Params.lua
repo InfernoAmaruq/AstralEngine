@@ -18,7 +18,7 @@ do
     local BlacklistRaw = 1
     local WhitelistRaw = 2
 
-    ENUM({ Blacklist = BlacklistRaw, Whitelist = WhitelistRaw }, "RaycastFilterType")
+    Enum({ Blacklist = BlacklistRaw, Whitelist = WhitelistRaw }, "RaycastFilterType")
 
     local RTF = {
         RecomputeTags = function(self)
@@ -54,7 +54,7 @@ do
         end,
         __newindex = function(self, k, v)
             if k == "FilterType" then
-                rawset(self, ".RFilterType", v.RawValue)
+                rawset(self, ".RFilterType", v.Value)
                 return
             end
             rawset(self, k, v)
@@ -126,13 +126,13 @@ do
     local SC_BOX, SC_SPHERE, SC_CYLINDER, SC_CAPSULE
 
     function RT.GetTempShape(Shape, ShapeSize)
-        local CTENUM = ENUM.ColliderShape
-        local RV = Shape.RawValue
+        local CTEnum = Enum.ColliderShape
+        local RV = Shape.Value
         if RV < 1 or RV > 4 then
             AstralEngine.Error("Attempted to use illegal shape for RaycastParams.GetShape() : " .. Shape, "RAYCAST")
         end
 
-        if Shape == CTENUM.Box then
+        if Shape == CTEnum.Box then
             if not SC_BOX then
                 SC_BOX = lovr.physics.newBoxShape(ShapeSize:unpack())
             else
@@ -140,7 +140,7 @@ do
             end
 
             return SC_BOX
-        elseif Shape == CTENUM.Sphere then
+        elseif Shape == CTEnum.Sphere then
             if not SC_SPHERE then
                 SC_SPHERE =
                     lovr.physics.newSphereShape(typeof(ShapeSize) == "number" and ShapeSize or ShapeSize:length())
@@ -149,7 +149,7 @@ do
             end
 
             return SC_SPHERE
-        elseif Shape == CTENUM.Cylinder then
+        elseif Shape == CTEnum.Cylinder then
             if not SC_CYLINDER then
                 SC_CYLINDER = lovr.physics.newCylinderShape(ShapeSize.x, ShapeSize.y)
             else
@@ -158,7 +158,7 @@ do
             end
 
             return SC_CYLINDER
-        elseif Shape == CTENUM.Capsule then
+        elseif Shape == CTEnum.Capsule then
             if not SC_CAPSULE then
                 SC_CAPSULE = lovr.physics.newCapsuleShape(ShapeSize.x, ShapeSize.y)
             else

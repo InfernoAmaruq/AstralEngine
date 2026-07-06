@@ -5,7 +5,7 @@ local Render = GetService("Renderer")
 
 local Shape = {}
 
-local E = ENUM({
+local E = Enum({
     Box = 1,
     Capsule = 2,
     Cylinder = 3,
@@ -104,7 +104,7 @@ local MT = {
         local RT = Comp.__RenderTypePtr
         if k == "Shape" then
             assert(
-                typeof(v) == "__ENUM_ShapeType",
+                typeof(v) == "__Enum_ShapeType",
                 "Attempt to set 'Shape' field of component "
                 .. tostring(Comp)
                 .. ": "

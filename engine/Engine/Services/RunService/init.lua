@@ -1,4 +1,3 @@
-local SignalLib = require("/Lib/Signal")
 local bit = bit
 
 -- define FENV for our coroutines
@@ -46,8 +45,6 @@ end
 
 local Data = {}
 
-Data.RenderStepped = SignalLib.new()
-
 Data.__BoundToStep = {}
 Data.__UsedNames = {}
 
@@ -71,8 +68,8 @@ Data.__RawUnbind = function(Name)
     Data.__BoundToStep[Data.__UsedNames[Name]][Name] = nil
 end
 
-local ENUMName = "StepPriority"
-local E = _G["ENUM"]({
+local EnumName = "StepPriority"
+local E = _G["Enum"]({
     CPUUpdate = 250,
     RenderSceneSolid = 600,
     RenderSceneTransparent = 700,
@@ -81,8 +78,8 @@ local E = _G["ENUM"]({
     RenderSubmit = 950,
     RenderMirror = 970,
     Physics = 1250,
-}, ENUMName, { CanAppend = true })
-local Processor = _G["ENUM"].__GETPROCESSOR(ENUMName, "RawValue")
+}, EnumName, { CanAppend = true })
+local Processor = _G["Enum"].__GETPROCESSOR(EnumName, "Value")
 
 Data.__TEMPBIND = function(n, Priority, F)
     Priority = Processor(Priority) or Priority
@@ -141,10 +138,6 @@ local Native = require("RunServiceNative") -- calling the so/dll
 
 Native.Init(Data)
 Data.__TICK = Native.Tick
-
-Data.BindToStep("__CORE_UPD", E and E.CPUUpdate and E.CPUUpdate.RawValue or 250, function(dt)
-    Data.RenderStepped:Fire(dt)
-end)
 
 GetService.AddService("RunService", Data)
 

@@ -11,7 +11,7 @@ type LuaBuffer = { -- these material-like properties are individual per Material
     UVScale = {[VEC2]}
     Color = {[VEC4]}
     Sampler = {[SAMPLER_NEAREST | SAMPLER_LINEAR]}
-    FitMode = {[FIT_MODE_ENUM]}
+    FitMode = {[FIT_MODE_Enum]}
     ShadowCasting = {[BOOLEAN]} -- we likely would use same buffers for rendering shadowmaps, so
 }
 

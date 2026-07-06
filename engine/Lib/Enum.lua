@@ -1,5 +1,3 @@
-local bit = bit
-
 local function NewIndex()
     error("CANNOT WRITE TO ENUM")
 end
@@ -8,23 +6,19 @@ local function EnumToString(t)
     return t.Name or "__UNDEFINED"
 end
 
-local ENUMS = {}
-
-local function EncodeEnum(Header, Value)
-    return bit.bor(bit.lshift(Header, 16), bit.band(Value, 0xffff))
-end
+local Enums = {}
 
 local TYPE = rtype or type
 local function Sub(a, b)
-    return (TYPE(a) == "table" and a.RawValue or a) - (TYPE(b) == "table" and b.RawValue or b)
+    return (TYPE(a) == "table" and a.Value or a) - (TYPE(b) == "table" and b.Value or b)
 end
 
 local function Add(a, b)
-    return (TYPE(a) == "table" and a.RawValue or a) + (TYPE(b) == "table" and b.RawValue or b)
+    return (TYPE(a) == "table" and a.Value or a) + (TYPE(b) == "table" and b.Value or b)
 end
 
 local function Eq(a, b)
-    return (TYPE(a) == "table" and a.RawValue or a) == (TYPE(b) == "table" and b.RawValue or b)
+    return (TYPE(a) == "table" and a.Value or a) == (TYPE(b) == "table" and b.Value or b)
 end
 
 local Funcs = {
@@ -33,7 +27,7 @@ local Funcs = {
         local Val
         local Name
         for N, V in pairs(self) do
-            local Idx = V.RawValue
+            local Idx = V.Value
             if Idx > n then
                 n = Idx
                 Val = V
@@ -44,11 +38,10 @@ local Funcs = {
     end,
 }
 
-local function ProcessMember(K, V, EnumName, Header)
+local function ProcessMember(K, V, EnumName)
     local DATA = {
         Name = K,
-        Value = EncodeEnum(Header, V),
-        RawValue = V,
+        Value = V,
         EnumType = EnumName or "__UNNAMED",
         __ISENUM = "__ENUM_" .. EnumName,
     }
@@ -66,33 +59,21 @@ local function ProcessMember(K, V, EnumName, Header)
     return t
 end
 
-local Byte = string.byte
-
-local function MakeHeader(Name)
-    Name = Name:gsub("[^A-Za-z]", "")
-    local H1 = Byte(Name:sub(1, 1))
-    local H2 = Byte(Name:sub(2, 2))
-    local H3 = Byte(Name:sub(3, 3))
-    return bit.bor(bit.lshift(H1, 16), bit.lshift(H2, 8), H3)
-end
-
-local function NewEnum(_, t, Name, Options, Header)
+local function NewEnum(_, t, Name, Options)
     assert(Name, "No enum name provided!")
-    local Head = MakeHeader(Header or Name)
 
-    assert(not ENUMS[Name], "ENUM WITH NAME [" .. Name .. "] ALREADY CREATED")
+    assert(not Enums[Name], "ENUM WITH NAME [" .. Name .. "] ALREADY CREATED")
     local Proxy = {}
-    Proxy.__HEADER = Header
     local DATA = {}
 
     local Opt = Options or {}
 
     for K, V in pairs(t) do
-        DATA[K] = ProcessMember(K, V, Name, Head)
+        DATA[K] = ProcessMember(K, V, Name)
     end
 
     if Name then
-        ENUMS[Name] = Proxy
+        Enums[Name] = Proxy
     end
 
     local Append
@@ -100,10 +81,10 @@ local function NewEnum(_, t, Name, Options, Header)
         Append = function(k, val)
             if type(k) == "table" then -- using a table
                 for i, v in pairs(k) do
-                    DATA[i] = ProcessMember(i, v, Name, Head)
+                    DATA[i] = ProcessMember(i, v, Name)
                 end
             else -- just a single value
-                DATA[k] = ProcessMember(k, val, Name, Head)
+                DATA[k] = ProcessMember(k, val, Name)
             end
         end
     end
@@ -134,14 +115,14 @@ local function NewEnum(_, t, Name, Options, Header)
         __tostring = function()
             local S = "ENUM: " .. Name .. " {\n"
             for NAME, ID in pairs(DATA) do
-                S = S .. "      " .. NAME .. " = " .. ID.RawValue .. ";\n"
+                S = S .. "      " .. NAME .. " = " .. ID.Value .. ";\n"
             end
             return S .. "}"
         end,
     })
 end
 
-ENUMS.__GETPROCESSOR = function(NAME, GetField)
+Enums.__GETPROCESSOR = function(NAME, GetField)
     return function(ENUM)
         if type(ENUM) == "table" and ENUM.__ISENUM and ENUM.__ISENUM:find(NAME) then
             return ENUM[GetField]
@@ -149,19 +130,4 @@ ENUMS.__GETPROCESSOR = function(NAME, GetField)
     end
 end
 
-ENUMS.GetValue = function(V)
-    return bit.band(V, 0xffff)
-end
-
-ENUMS.GetHeader = function(V, ToString)
-    local Head = bit.band(bit.rshift(V, 16), 0xffffff)
-    local H1 = bit.band(bit.rshift(Head, 16), 0xff)
-    local H2 = bit.band(bit.rshift(Head, 8), 0xff)
-    local H3 = bit.band(Head, 0xff)
-
-    return ToString and string.char(H1, H2, H3) or Head
-end
-
-ENUMS.Splice = EncodeEnum
-
-return setmetatable(ENUMS, { __call = NewEnum })
+return setmetatable(Enums, { __call = NewEnum })

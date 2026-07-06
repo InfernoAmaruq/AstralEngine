@@ -1,7 +1,7 @@
 local RawPhys = lovr.physics
 local Shapes = {}
 
-local ST = ENUM({
+local ST = Enum({
     Box = 1,
     Sphere = 2,
     Cylinder = 3,
@@ -131,7 +131,7 @@ local UDMeta = {
 function Shapes.NewShape(ShapeType, Config)
     local Shape
 
-    if ShapeType.RawValue <= 4 then
+    if ShapeType.Value <= 4 then
         Shape = RawPhys["new" .. TypeToShapeName[ShapeType]]()
     elseif ShapeType == ST.Convex then
         AstralEngine.Error("CURRENTLY NO HANDLER FOR CONVEX SHAPES FOR COLLIDERS!", "PHYSICS")

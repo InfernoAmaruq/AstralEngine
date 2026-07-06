@@ -14,7 +14,7 @@ local ParsePragma = require("Pragmas")
 @flag:ST_Vertex = 0xF1;
 @flag:ST_Fragment = 0xF2;
 
-local SHADERTYPE = ENUM({
+local SHADERTYPE = Enum({
     Compute = &ST_Compute,
     Graphics = &ST_Graphics,
     Vertex = &ST_Vertex,
@@ -39,7 +39,7 @@ function ShaderService.FromString(S1, S2, Data, Type) end
 
 -- GETTING SHADERS
 
-@macro<L,!USEBRACK>{NAME_TO_ENUM(&N) = &N and &N:sub(1,1):upper()..&N:sub(2):lower() or nil}
+@macro<L,!USEBRACK>{NAME_TO_Enum(&N) = &N and &N:sub(1,1):upper()..&N:sub(2):lower() or nil}
 
 @macro<L,!USEBRACK>{RETURN_DEFAULT(&T,&DEF) = 
     if #&T == 0 then
@@ -289,7 +289,7 @@ end
 
 function ShaderService.ComposeShader(Type,Search,Params)
     Params = Params or {}
-    Type = rtype(Type) == "number" and Type or Type.RawValue
+    Type = rtype(Type) == "number" and Type or Type.Value
 
     Search = Search or ""
 
@@ -321,8 +321,8 @@ function ShaderService.ComposeShader(Type,Search,Params)
                 Pragmas.TYPE = ShaderType:upper()
             end
 
-            local ShaderName = NAME_TO_ENUM(Pragmas.TYPE)
-            local Key = ShaderName and SHADERTYPE[ShaderName].RawValue or SHADERTYPE.Compute.RawValue
+            local ShaderName = NAME_TO_Enum(Pragmas.TYPE)
+            local Key = ShaderName and SHADERTYPE[ShaderName].Value or SHADERTYPE.Compute.Value
 
             if Key == &ST_Graphics then
                 Buckets[&ST_Vertex][#Buckets[&ST_Vertex]+1] = TEXT

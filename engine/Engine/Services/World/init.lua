@@ -167,12 +167,12 @@ Entity.__ConnectDestructors = function()
 
     local RS = GetService("RunService")
 
-    ENUM.StepPriority.__Append({
+    Enum.StepPriority.__Append({
         EntityDestruction = 496,
         ComponentDestruction = 497,
     })
 
-    RS.BindToStep("__DESTRUCTION_FRAME_ENTITY", ENUM.StepPriority.EntityDestruction, function()
+    RS.BindToStep("__DESTRUCTION_FRAME_ENTITY", Enum.StepPriority.EntityDestruction, function()
         for Ent in pairs(ToKill) do
             DestroyEntity(Ent)
             ToKill[Ent] = nil
@@ -181,7 +181,7 @@ Entity.__ConnectDestructors = function()
 
     RS.BindToStep(
         "__DESTRUCTION_FRAME_COMPONENT",
-        ENUM.StepPriority.ComponentDestruction,
+        Enum.StepPriority.ComponentDestruction,
         Component.__DrainDestructionList
     )
 end

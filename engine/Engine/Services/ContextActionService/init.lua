@@ -32,10 +32,8 @@ function Data.Bind(NAME, PRIORITY, FUNC, Conf, ...)
     end
 
     local ConfT = type(Conf)
-    local Contextless = (ConfT == "table" and Conf.Contextless)
-        or (ConfT == "string" and Conf:find("Contextless"))
-        or false
-    local IsConf = ConfT == "string" or ConfT == "table"
+    local Contextless = (ConfT == "table" and Conf.Contextless) or false
+    local IsConf = ConfT == "table"
 
     Data.__USEDNAMES[NAME] = PRIORITY
 

@@ -40,7 +40,7 @@ end
 
 local AssetManager = {}
 
-local TypeEnum = ENUM({
+local TypeEnum = Enum({
     ImageData = 1,
     Font = 2,
     Mesh = 3,

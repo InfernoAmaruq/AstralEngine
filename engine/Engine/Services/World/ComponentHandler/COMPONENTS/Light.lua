@@ -5,7 +5,7 @@ local Light = {}
 local LightService
 local World = GetService("Entity")
 
-local LightEnum = ENUM.LightType
+local LightEnum = Enum.LightType
 
 Light.Name = "Light"
 Light.Metadata = {}

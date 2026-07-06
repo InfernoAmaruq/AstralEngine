@@ -4,7 +4,7 @@ end
 
 local AudioMesh = { Name = "AudioMesh", Metadata = {} }
 
-local AudioMeshType = ENUM({
+local AudioMeshType = Enum({
     Inherited = 1,
     Manual = 2,
 }, "AudioMeshType")

@@ -39,20 +39,6 @@ end
 
 -- INPUT SYSTEM
 
-local Lookup = {
-    [0] = 'zero',
-    [1] = 'one',
-    [2] = 'two',
-    [3] = 'three',
-    [4] = 'four',
-    [5] = 'five',
-    [6] = 'six',
-    [7] = 'seven',
-    [8] = 'eight',
-    [9] = 'nine',
-    ["return"] = "enter"
-}
-
 LVRB.ConnectDevices = function()
     local InputService = GetService "InputService"
 
@@ -60,49 +46,49 @@ LVRB.ConnectDevices = function()
     local KB = InputService.Keyboard
     local CAS = GetService "ContextActionService"
 
-    local PoolSize = 60
-    local Top = PoolSize
-    local DATAPOOL = table.array(PoolSize)
+    local AstralKeys = require("Keys")
 
-    local MKeys = {}
-    local MouseLookUp = {}
-    local KBKeys = {}
+    local KB_AstralToLOVR = AstralKeys.KB
+    local Mouse_AstralToLOVR = AstralKeys.Mouse
 
-    local RawKeys = require("AllKeys")
+    local KB_LOVRToAstral = {}
+    local Mouse_LOVRToAstral = {}
 
-    local KeyMap = {}
-    for i,v in ipairs(RawKeys) do
-        KeyMap[v] = i
-    end
+    local CasTop = 1
+    local ToCASCode = {}
 
-    local Size = 0
-    for i, v in pairs(KeyMap) do
-        if type(i) == "number" then
-            local n = "MouseButton" .. i
-            MKeys[n] = v
-            MouseLookUp[i] = n
-        else
-            if tonumber(i) and Lookup[tonumber(i)] then
-                i = Lookup[tonumber(i)]
-            end
-            KBKeys[i] = v
+    local KeyArray = {}
+
+    for Astral, Lovr in pairs(KB_AstralToLOVR) do
+        KB_LOVRToAstral[Lovr] = Astral
+        KeyArray[Lovr] = false
+
+        if not ToCASCode[Astral] then -- handle key aliases safely
+            ToCASCode[Astral] = CasTop
+            CasTop = CasTop + 1
         end
-        Size = Size + 1
     end
 
-    local KeyArray = table.array(Size)
-    for _, v in pairs(KeyMap) do
-        KeyArray[v] = false
+    for Astral, Lovr in pairs(Mouse_AstralToLOVR) do
+        Mouse_LOVRToAstral[Lovr] = Astral
+        KeyArray[Lovr] = false
+
+        if not ToCASCode[Astral] then -- handle key aliases safely
+            ToCASCode[Astral] = CasTop
+            CasTop = CasTop + 1
+        end
     end
+
     InputService.__GetKeyArr = function()
         return KeyArray
     end
+
     InputService.IsDown = function(e)
-        return KeyArray[e.RawValue]
+        return KeyArray[rtype(e) == "table" and e.Value or e]
     end
 
-    local KBE = ENUM(KBKeys, "KeyCode")
-    local ME = ENUM(MKeys, "UserInputType")
+    local KBE = Enum(KB_AstralToLOVR, "KeyCode")
+    local ME = Enum(Mouse_AstralToLOVR, "UserInputType")
 
     local function INPTOSTR(t)
         local s = [[Input: {
@@ -117,71 +103,43 @@ LVRB.ConnectDevices = function()
 
     local MT = {__tostring = INPTOSTR}
 
-    local function MakeT(i)
-        return setmetatable(
-            { __INUSE = false, __index = i, KeyCode = nil, UserInputType = nil, State = nil, Mouse = nil },
+    local InputTable = setmetatable(
+            { KeyCode = nil, UserInputType = nil, State = nil, Mouse = nil },
             MT)
-    end
 
-    for i = 1, PoolSize do
-        DATAPOOL[i] = MakeT(i)
-    end
-
-    local function GetEmptyPoolObj()
-        if Top > 0 then
-            local Obj = DATAPOOL[Top]
-            Top = Top - 1
-            return Obj
-        end
-        return MakeT(-1)
-    end
-
-    local function ReleasePoolObj(t)
-        if t.__index == -1 then return end
-        Top = Top + 1
-        DATAPOOL[Top] = t
-        t.__INUSE = false
-    end
 
     CAS.__RAWBIND = CAS.Bind
 
-    @macro<L,!USEBRACK>{MAKEINPUTDATA(TERM,IsKB,CODE,ST,mx,my) = 
+    @macro<L,!USEBRACK>{MAKEINPUTDATA(TERM,IsKB,CODE,ST,mx,my,ENUM) = 
         --MACRO BEGIN
-        local DATA = GetEmptyPoolObj()
-        DATA.__INUSE = true
+        local DATA = InputTable
 
-        local ID = KeyMap[CODE]
-
-        local tn = IsKB and tonumber(CODE)
-        if tn and Lookup[tn] then
-            CODE = Lookup[tn]
-        end
+        local ID = ToCASCode[CODE]
 
         DATA.State = ST
-        DATA.UserInputType = not IsKB and ME[MouseLookUp[CODE]]
+        DATA.UserInputType = not IsKB and ENUM
         DATA.Mouse = not IsKB and vec2(mx, my)
-        DATA.KeyCode = IsKB and KBE[CODE]
+        DATA.KeyCode = IsKB and ENUM
 
         TERM = CAS.__CALL(ID, DATA)
 
-        ReleasePoolObj(DATA)
         --MACRO END
     }
 
     local OGBIND = CAS.Bind
 
-    @macro<L>:TRANSLATE_ENUM(K) = rtype(K) == "table" and K.RawValue or K;
+    @macro<L>:TRANSLATE_Enum(K) = ToCASCode[rtype(K) == "table" and K.Value or K];
 
     CAS.Bind = function(N, P, F, ...)
         if select('#', ...) > 3 then
             local t = { ... }
             for i, KEY in ipairs(t) do
-                t[i] = TRANSLATE_ENUM(KEY)
+                t[i] = TRANSLATE_Enum(KEY)
             end
             return OGBIND(N, P, F, unpack(t))
         else
             local K1, K2, K3 = select(1, ...)
-            K1, K2, K3 = TRANSLATE_ENUM(K1), TRANSLATE_ENUM(K2), TRANSLATE_ENUM(K3)
+            K1, K2, K3 = TRANSLATE_Enum(K1), TRANSLATE_Enum(K2), TRANSLATE_Enum(K3)
             return OGBIND(N, P, F, K1, K2, K3)
         end
     end
@@ -193,22 +151,31 @@ LVRB.ConnectDevices = function()
     end
 
     function lovr.mousemoved(x,y,...)
-        Mouse.Position:set(x,y)
         Mouse.MouseMoved:Fire(x,y,...)
     end
 
     function lovr.mousepressed(x, y, c)
-        KeyArray[KeyMap[c]] = true
+        KeyArray[c] = true
+
+        c = Mouse_LOVRToAstral[c]
+
+        local E = ME[c]
+
         local Terminated
-        MAKEINPUTDATA(Terminated, false, c, true, x, y)
-        Mouse.MouseButtonDown:Fire(c, x, y, Terminated)
+        MAKEINPUTDATA(Terminated, false, c, true, x, y, E)
+        Mouse.MouseButtonDown:Fire(E, x, y, Terminated)
     end
 
     function lovr.mousereleased(x, y, c)
-        KeyArray[KeyMap[c]] = false
+        KeyArray[c] = false
+
+        c = Mouse_LOVRToAstral[c]
+
+        local E = ME[c]
+
         local Terminated
-        MAKEINPUTDATA(Terminated, false, c, false, x, y)
-        Mouse.MouseButtonUp:Fire(c, x, y, Terminated)
+        MAKEINPUTDATA(Terminated, false, c, false, x, y, E)
+        Mouse.MouseButtonUp:Fire(E, x, y, Terminated)
     end
 
     function lovr.textinput(Char, Code)
@@ -219,17 +186,28 @@ LVRB.ConnectDevices = function()
 
     function lovr.keypressed(k, c, r)
         if r then return end
-        KeyArray[KeyMap[k]] = true
+
+        KeyArray[k] = true
+
+        k = KB_LOVRToAstral[k]
+
+        local E = KBE[k]
+
         local Terminated
-        MAKEINPUTDATA(Terminated, true, k, true,nil,nil)
-        KB.KeyPressed:Fire(k, c, Terminated)
+        MAKEINPUTDATA(Terminated, true, k, true,nil,nil,E)
+        KB.KeyPressed:Fire(E, c, Terminated)
     end
 
     function lovr.keyreleased(k, c)
-        KeyArray[KeyMap[k]] = false
+        KeyArray[k] = false
+
+        k = KB_LOVRToAstral[k]
+
+        local E = KBE[k]
+
         local Terminated
-        MAKEINPUTDATA(Terminated, true, k, false,nil,nil)
-        KB.KeyReleased:Fire(k, c, Terminated)
+        MAKEINPUTDATA(Terminated, true, k, false,nil,nil,E)
+        KB.KeyReleased:Fire(E, c, Terminated)
     end
 
     LVRB.ConnectDevices = nil
@@ -245,10 +223,6 @@ LVRB.LoadWindow = function()
 
     AstralEngine.Window.IsFocused = lovr.system.isWindowFocused
     AstralEngine.Window.IsWindowVisible = lovr.system.IsWindowVisible
-
-    AstralEngine.Window.GrabMouse = lovr.system.setMouseGrabbed
-
-    AstralEngine.Window.IsMouseGrabbed = lovr.system.isMouseGrabbed
 
     AstralEngine.Window.GetWindowDimensions = lovr.system.getWindowDimensions
     AstralEngine.Window.GetWindowWidth = lovr.system.getWindowWidth
@@ -291,7 +265,7 @@ LVRB.LoadWindow = function()
 
     local SetCursorIcon = lovr.system.setCursorIcon
 
-    ENUM({
+    Enum({
         Default = 1,
         Hand = 2,
         Crosshair = 3,

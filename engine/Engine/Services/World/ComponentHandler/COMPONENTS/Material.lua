@@ -19,7 +19,7 @@ Comp.ComponentAdded:Connect(function(e, id, c)
     end
 end)
 
-local MaterialFitMode = ENUM({ Stretch = 0, Tile = 1, Crop = 2 }, "MaterialFitMode")
+local MaterialFitMode = Enum({ Stretch = 0, Tile = 1, Crop = 2 }, "MaterialFitMode")
 
 Material.Metadata.EmptyMatrix = Mat4(
     0,
@@ -109,7 +109,7 @@ local Mt = {
             self[2]:set(v)
         elseif k == "FitMode" then
             rawset(self, "__FitEnum", v)
-            self[5] = v.RawValue
+            self[5] = v.Value
         elseif k == "UseNearest" then
             self[6] = v
         end
@@ -143,7 +143,7 @@ Material.Metadata.__create = function(Data, Ent)
 
     local FitMode = Data.FitMode or MaterialFitMode.Stretch
     Storage.__FitEnum = FitMode
-    Storage[5] = FitMode.RawValue
+    Storage[5] = FitMode.Value
     Storage[6] = Data.UseNearest or false
 
     if Storage[7] and Storage[7].Properties then

@@ -23,7 +23,7 @@ LightBuffer:setData(CacheTable)
 
 local LightRegistry = {} -- we use this to hold LightEntity = IdInBuffer registry
 
-local LightType = ENUM({
+local LightType = Enum({
     Point = 0,
     Spot = 1,
     Surface = 2,
@@ -37,7 +37,7 @@ Lighting.AddLight = function(LightEntity, EarlyLightComponent)
     local Angle = LightEntity.Orientation
     local TargetAngle = LC.Angle or -1
 
-    local Type = (LC.Type or LightType.Point).RawValue
+    local Type = (LC.Type or LightType.Point).Value
 
     Angle = Angle and Angle:direction() or vec3(0, 0, 1)
     local ReadyAngle = vec4(Angle.x, Angle.y, Angle.z, math.cos(math.rad(TargetAngle / 2)))

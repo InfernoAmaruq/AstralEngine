@@ -20,16 +20,16 @@ local mat4 = mat4
 
 -- > LOAD SHADERS
 local OITExtractRaw = GetService("ShaderService").ComposeShader(
-    ENUM.ShaderType.Fragment,
+    Enum.ShaderType.Fragment,
     "OIT/Composite",
     { Include = { "PostProcessing/AO/SSAO", "PostProcessing/Bloom/Extract.glsl", "Fog" } }
 )
 local OITExtractShader = lovr.graphics.newShader("fill", OITExtractRaw)
 
-local BlurShaderRaw = GetService("ShaderService").ComposeShader(ENUM.ShaderType.Fragment, "Camera/BlurPass")
+local BlurShaderRaw = GetService("ShaderService").ComposeShader(Enum.ShaderType.Fragment, "Camera/BlurPass")
 local BlurShader = lovr.graphics.newShader("fill", BlurShaderRaw)
 
-local FinalShaderRaw = GetService("ShaderService").ComposeShader(ENUM.ShaderType.Fragment, "Camera/Finalise")
+local FinalShaderRaw = GetService("ShaderService").ComposeShader(Enum.ShaderType.Fragment, "Camera/Finalise")
 local FinalShader = lovr.graphics.newShader("fill", FinalShaderRaw)
 
 -- > GET PRECOMPUTED ASSETS
@@ -765,14 +765,14 @@ Renderer.Late[#Renderer.Late + 1] = function()
     local RS = GetService("RunService")
     local Flag = bit.bor(RS.Flags.Raw, RS.Flags.Contextless)
 
-    RS.BindToStep("_REND_SCENE_SOLID", ENUM.StepPriority.RenderSceneSolid.RawValue, Renderer.DrawSolid, Flag)
+    RS.BindToStep("_REND_SCENE_SOLID", Enum.StepPriority.RenderSceneSolid.Value, Renderer.DrawSolid, Flag)
     RS.BindToStep(
         "_REND_SCENE_TRANS",
-        ENUM.StepPriority.RenderSceneTransparent.RawValue,
+        Enum.StepPriority.RenderSceneTransparent.Value,
         Renderer.DrawTransparent,
         Flag
     )
-    RS.BindToStep("_REND_SCENE_COMPOSITE", ENUM.StepPriority.RenderSceneComposite.RawValue, Renderer.Composite, Flag)
+    RS.BindToStep("_REND_SCENE_COMPOSITE", Enum.StepPriority.RenderSceneComposite.Value, Renderer.Composite, Flag)
 end
 
 function Renderer.__OnRenderTargetReady() end

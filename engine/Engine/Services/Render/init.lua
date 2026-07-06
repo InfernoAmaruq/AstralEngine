@@ -119,7 +119,7 @@ end
 local SignalLib = require("Lib/Signal")
 AstralEngine.Signals.OnMainShaderChanged = SignalLib.new(SignalLib.Type.RTC)
 
-local V, F = ShaderService.ComposeShader(ENUM.ShaderType.Graphics, "OIT/Write", {
+local V, F = ShaderService.ComposeShader(Enum.ShaderType.Graphics, "OIT/Write", {
     Include = { "Material", "Lighting", "PBR", "Misc/Instancing" },
     Define = {
         Fragment = {

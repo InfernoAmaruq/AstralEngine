@@ -17,7 +17,7 @@ local function typeFunc(_, x)
     elseif
         (mt and mt.__type)
         or (GetFunc(x, "type") and OgType(GetFunc(x, "type")) == "function" and OgT == "userdata")
-        or GetFunc(x, "__ISENUM")
+        or GetFunc(x, "__ISEnum")
     then
         return "astrobj"
     end

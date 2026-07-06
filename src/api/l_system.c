@@ -121,6 +121,41 @@ StringEntry lovrKeyboardKey[] = {
   { 0 }
 };
 
+#ifdef LOVR_ENABLE_CONTROLLER
+StringEntry lovrGamepadButton[] = {
+  [OS_GP_BUTTON_A] = ENTRY("a"),
+  [OS_GP_BUTTON_B] = ENTRY("b"),
+  [OS_GP_BUTTON_X] = ENTRY("x"),
+  [OS_GP_BUTTON_Y] = ENTRY("y"),
+
+  [OS_GP_BUTTON_LEFT_BUMPER] = ENTRY("leftbumper"),
+  [OS_GP_BUTTON_RIGHT_BUMPER] = ENTRY("rightbumper"),
+
+  [OS_GP_BUTTON_BACK] = ENTRY("back"),
+  [OS_GP_BUTTON_START] = ENTRY("start"),
+  [OS_GP_BUTTON_GUIDE] = ENTRY("guide"),
+
+  [OS_GP_BUTTON_LEFT_THUMB] = ENTRY("leftthumb"),
+  [OS_GP_BUTTON_RIGHT_THUMB] = ENTRY("rightthumb"),
+
+  [OS_GP_BUTTON_DPAD_UP] = ENTRY("up"),
+  [OS_GP_BUTTON_DPAD_RIGHT] = ENTRY("right"),
+  [OS_GP_BUTTON_DPAD_DOWN] = ENTRY("down"),
+  [OS_GP_BUTTON_DPAD_LEFT] = ENTRY("left"),
+
+  { 0 }
+};
+
+StringEntry lovrGamepadAxis[] = {
+  [OS_AXIS_LEFT] = ENTRY("axisleft"),
+  [OS_AXIS_RIGHT] = ENTRY("axisright"),
+
+  [OS_AXIS_LEFT_TRIGGER] = ENTRY("triggerleft"),
+  [OS_AXIS_RIGHT_TRIGGER] = ENTRY("triggerright"),
+  { 0 }
+};
+#endif
+
 StringEntry lovrPermission[] = {
   [PERMISSION_AUDIO_CAPTURE] = ENTRY("audiocapture"),
   { 0 }
@@ -419,6 +454,65 @@ static int l_lovrSystemSetPreciseMouse(lua_State* L){
     return 1;
 }
 
+#ifdef LOVR_ENABLE_CONTROLLER
+static int l_lovrControllerPresent(lua_State* L){
+    lua_pushboolean(L,lovrSystemControllerPresent(lua_tointeger(L,1)));
+    return 1;
+}
+
+static int l_lovrControllerGetName(lua_State* L){
+    lua_pushstring(L,lovrSystemControllerGetName(lua_tointeger(L,1)));
+    return 1;
+}
+
+static int l_lovrControllerUpdateMappings(lua_State* L){
+    lovrSystemControllerUpdateMappings(lua_tostring(L,1));
+    return 0;
+}
+
+static int l_lovrControllerIsButtonDown(lua_State* L){
+    int jid = lua_tointeger(L,1);
+    os_gp button = luax_checkenum(L, 2, GamepadButton, NULL);
+
+    lua_pushboolean(L,lovrSystemControllerIsButtonDown(jid, button));
+
+    return 1;
+}
+
+static int l_lovrControllerWasButtonPressed(lua_State* L){
+    int jid = lua_tointeger(L,1);
+    os_gp button = luax_checkenum(L, 2, GamepadButton, NULL);
+
+    lua_pushboolean(L,lovrSystemControllerWasButtonPressed(jid, button));
+
+    return 1;
+}
+
+static int l_lovrControllerWasButtonReleased(lua_State* L){
+    int jid = lua_tointeger(L,1);
+    os_gp button = luax_checkenum(L, 2, GamepadButton, NULL);
+
+    lua_pushboolean(L,lovrSystemControllerWasButtonReleased(jid, button));
+
+    return 1;
+}
+
+static int l_lovrControllerGetAxis(lua_State* L){
+    int jid = lua_tointeger(L,1);
+    os_axis axis = luax_checkenum(L, 2, GamepadAxis, NULL);
+
+    float xy[2] = {0,0};
+    int count = lovrSystemControllerGetAxis(xy, jid, axis);
+
+    lua_pushnumber(L, xy[0]);
+    if (count == 2)
+        lua_pushnumber(L, xy[1]);
+
+    return count;
+}
+
+#endif
+
 static const luaL_Reg lovrSystem[] = {
   { "getOS", l_lovrSystemGetOS },
   { "getCoreCount", l_lovrSystemGetCoreCount },
@@ -455,6 +549,9 @@ static const luaL_Reg lovrSystem[] = {
   { "setCursorIcon", l_lovrSystemSetCursorIcon },
   { "setPreciseMouse", l_lovrSystemSetPreciseMouse },
   { "messageBox", l_lovrSystemMessageBox },
+#ifdef LOVR_ENABLE_CONTROLLER
+  { "controllerPresent", l_lovrControllerPresent },
+#endif
   { NULL, NULL }
 };
 

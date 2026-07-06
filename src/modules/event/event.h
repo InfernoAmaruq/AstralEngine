@@ -31,6 +31,10 @@ typedef enum {
 #ifndef LOVR_DISABLE_THREAD
   EVENT_THREAD_ERROR,
 #endif
+#ifdef LOVR_ENABLE_CONTROLLER
+  EVENT_CONTROLLER_CHANGED,
+  EVENT_CONTROLLER_BUTTON,
+#endif
   EVENT_FILECHANGED,
   EVENT_PERMISSION,
   EVENT_CUSTOM
@@ -88,6 +92,20 @@ typedef struct {
   char* error;
 } ThreadEvent;
 
+#ifdef LOVR_ENABLE_CONTROLLER
+typedef struct {
+  uint8_t jid;
+
+  int button;
+  bool state;
+} ControllerButtonEvent;
+
+typedef struct {
+  uint8_t jid;
+  bool state;
+} ControllerStateEvent;
+#endif
+
 typedef struct {
   char* path;
   char* oldpath;
@@ -118,6 +136,10 @@ typedef union {
   ThreadEvent thread;
   FileEvent file;
   PermissionEvent permission;
+#ifdef LOVR_ENABLE_CONTROLLER
+  ControllerStateEvent controllerChanged;
+  ControllerButtonEvent controllerButton;
+#endif
   CustomEvent custom;
 } EventData;
 

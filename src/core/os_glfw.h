@@ -143,11 +143,24 @@ static struct {
   fn_mouse_button* onMouseButton;
   fn_mouse_move* onMouseMove;
   fn_mousewheel_move* onMouseWheelMove;
+#ifdef LOVR_ENABLE_CONTROLLER
+  fn_joystick_callback* onJoystickEvent;
+  fn_joystick_button* onJoystickButton;
+#endif
   uint32_t width;
   uint32_t height;
   GLFWcursor* cursors[OS_CURSOR_COUNT];
   os_cursor_icon current_cursor;
   bool fullscreen;
+  bool focused;
+
+#ifdef LOVR_ENABLE_CONTROLLER
+  struct {
+    bool active; // connected AND is a gamepad
+    GLFWgamepadstate current; // we will use a swap to track changes easily
+    GLFWgamepadstate previous; // we will use a swap to track changes easily
+  } controllerState[GLFW_JOYSTICK_LAST];
+#endif
 } glfwState;
 
 static void onError(int code, const char* description) {
@@ -157,7 +170,7 @@ static void onError(int code, const char* description) {
 static void onWindowClose(GLFWwindow* window) {
   if (glfwState.onQuitRequest) {
 
-    for (int i = 1; i < OS_CURSOR_COUNT; i++){
+    for (int i = 0; i < OS_CURSOR_COUNT; i++){
         if (glfwState.cursors[i]) glfwDestroyCursor(glfwState.cursors[i]);
     }
 
@@ -172,6 +185,7 @@ static void onWindowVisible(GLFWwindow* window, int minimized) {
 }
 
 static void onWindowFocus(GLFWwindow* window, int focused) {
+  glfwState.focused = focused;
   if (glfwState.onWindowFocus) {
     glfwState.onWindowFocus(focused);
   }
@@ -352,6 +366,70 @@ static int convertKey(os_key key) {
   }
 }
 
+#ifdef LOVR_ENABLE_CONTROLLER
+// HANDLE CONTROLLERS HERE
+
+static void onJoystickEvent(int jid, int e){
+
+    glfwState.controllerState[jid].active = glfwJoystickIsGamepad(jid);
+
+    if (glfwState.onJoystickEvent && glfwState.focused){
+        glfwState.onJoystickEvent(jid, glfwState.controllerState[jid].active );
+    }
+}
+
+static void onJoystickButton(int jit, int button, bool newState){
+    if (glfwState.onJoystickButton){
+        glfwState.onJoystickButton(jit, button, newState);
+    }
+}
+
+void os_set_joystick_callback(fn_joystick_callback* callback){
+    glfwState.onJoystickEvent = callback;
+}
+
+void os_set_joystick_button_callback(fn_joystick_button* callback){
+    glfwState.onJoystickButton = callback;
+}
+
+bool os_is_joystick_active(int jid){
+    return glfwState.controllerState[jid].active;
+}
+
+const char* os_joystick_get_name(int jid){
+    return glfwGetGamepadName(jid);
+}
+
+void os_joystick_update_mappings(const char* mappings){
+    glfwUpdateGamepadMappings(mappings);
+}
+
+bool os_joystick_get_button_down(int jid, os_gp button){
+    return glfwState.controllerState[jid].current.buttons[button] == GLFW_PRESS;
+}
+
+bool os_joystick_button_pressed(int jid, os_gp button){
+    return glfwState.controllerState[jid].current.buttons[button] == GLFW_PRESS && glfwState.controllerState[jid].previous.buttons[button] == GLFW_RELEASE;
+}
+
+bool os_joystick_button_released(int jid, os_gp button){
+    return glfwState.controllerState[jid].current.buttons[button] == GLFW_RELEASE && glfwState.controllerState[jid].previous.buttons[button] == GLFW_PRESS;
+}
+
+int os_joystick_get_axes(float* to, int jid, os_axis axis){
+    if (axis >= OS_AXIS_LEFT_TRIGGER){
+        to[0] = glfwState.controllerState[jid].current.axes[axis];
+        return 1;
+    }
+    else {
+        to[0] = glfwState.controllerState[jid].current.axes[axis];
+        to[1] = glfwState.controllerState[jid].current.axes[axis + 1];
+        return 2;
+    }
+}
+
+#endif
+
 const char* os_get_clipboard_text(void) {
   return glfwGetClipboardString(NULL);
 }
@@ -369,6 +447,28 @@ void os_poll_events(double timeout) {
     } else {
       glfwWaitEventsTimeout(timeout);
     }
+
+    // lets do controllers now
+
+#ifdef LOVR_ENABLE_CONTROLLER
+    for (int i = 0; i < GLFW_JOYSTICK_LAST; i++){
+        GLFWgamepadstate* prev = &glfwState.controllerState[i].previous;
+        GLFWgamepadstate* cur = &glfwState.controllerState[i].current;
+
+        memcpy(prev, cur, sizeof(GLFWgamepadstate));
+
+        glfwGetGamepadState(i,cur);
+
+        // lets virtualise the events (GLFW doesnt give joystick events, but we can fake it!)
+
+        for (int j = 0; j < GLFW_GAMEPAD_BUTTON_LAST; j++){
+            if (cur->buttons[j] != prev->buttons[j]){
+                // where j IS a GLFW enum but it maps onto our os_gp enums well
+                onJoystickButton(i,j,cur->buttons[j] == GLFW_PRESS);
+            }
+        }
+    }
+#endif
   }
 }
 
@@ -452,9 +552,18 @@ bool os_window_open(const os_window_config* config) {
   glfwSetMouseButtonCallback(glfwState.window, onMouseButton);
   glfwSetCursorPosCallback(glfwState.window, onMouseMove);
   glfwSetScrollCallback(glfwState.window, onMouseWheelMove);
+  glfwSetJoystickCallback(onJoystickEvent);
   glfwState.width = config->width;
   glfwState.height = config->height;
   glfwState.fullscreen = config->fullscreen;
+  glfwState.focused = glfwGetWindowAttrib(glfwState.window, GLFW_FOCUSED);
+
+  // lets configure our controllers
+
+  for (int i = 0; i < GLFW_JOYSTICK_LAST; i++){
+    glfwState.controllerState[i].active = glfwJoystickIsGamepad(i);
+  }
+
   return true;
 }
 

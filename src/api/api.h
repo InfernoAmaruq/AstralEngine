@@ -77,6 +77,10 @@ extern StringEntry lovrVerticalAlign[];
 extern StringEntry lovrVolumeUnit[];
 extern StringEntry lovrWinding[];
 extern StringEntry lovrWrapMode[];
+#ifdef LOVR_ENABLE_CONTROLLER
+extern StringEntry lovrGamepadButton[];
+extern StringEntry lovrGamepadAxis[];
+#endif
 
 // Runtime
 

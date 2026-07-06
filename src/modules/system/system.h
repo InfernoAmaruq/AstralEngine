@@ -47,3 +47,13 @@ void lovrSystemSetWindowSize(uint32_t w, uint32_t h);
 void lovrSystemSetCursorIcon(int Icon);
 void lovrMessageBox(const char* message);
 int lovrSystemSetPreciseMouse(int Bool);
+
+#ifdef LOVR_ENABLE_CONTROLLER
+bool lovrSystemControllerPresent(int at);
+const char* lovrSystemControllerGetName(int at);
+void lovrSystemControllerUpdateMappings(const char* m);
+bool lovrSystemControllerIsButtonDown(int at, int button);
+bool lovrSystemControllerWasButtonPressed(int at, int button);
+bool lovrSystemControllerWasButtonReleased(int at, int button);
+int lovrSystemControllerGetAxis(float* to, int at, int axis);
+#endif

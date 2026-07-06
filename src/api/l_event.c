@@ -33,6 +33,10 @@ StringEntry lovrEventType[] = {
 #endif
   [EVENT_FILECHANGED] = ENTRY("filechanged"),
   [EVENT_PERMISSION] = ENTRY("permission"),
+#ifdef LOVR_ENABLE_CONTROLLER
+  [EVENT_CONTROLLER_CHANGED] = ENTRY("controllerchanged"),
+  [EVENT_CONTROLLER_BUTTON] = ENTRY("controllerbutton"),
+#endif
   { 0 }
 };
 
@@ -120,6 +124,18 @@ static int nextEvent(lua_State* L) {
       lua_pushstring(L, event.data.thread.error);
       lovrRelease(event.data.thread.thread, lovrThreadDestroy);
       lovrFree(event.data.thread.error);
+      return 3;
+#endif
+
+#ifdef LOVR_ENABLE_CONTROLLER
+    case EVENT_CONTROLLER_CHANGED:
+      lua_pushinteger(L,event.data.controllerChanged.jid);
+      lua_pushboolean(L,event.data.controllerChanged.state);
+      return 2;
+    case EVENT_CONTROLLER_BUTTON:
+      lua_pushinteger(L,event.data.controllerButton.jid);
+      luax_pushenum(L, GamepadButton, event.data.controllerButton.button);
+      lua_pushboolean(L,event.data.controllerButton.state);
       return 3;
 #endif
 

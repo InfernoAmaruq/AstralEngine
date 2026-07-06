@@ -25,6 +25,7 @@ option(LOVR_ENABLE_SYSTEM "Enable the system module" ON)
 option(LOVR_ENABLE_TASK "Enable the task module" ON)
 option(LOVR_ENABLE_THREAD "Enable the thread module" ON)
 option(LOVR_ENABLE_TIMER "Enable the timer module" ON)
+option(LOVR_ENABLE_CONTROLLER "Enables the controller input. GLFW MUST BE ON" ON)
 
 option(LOVR_ENABLE_UTF8 "Enable the utf8 module" ON)
 
@@ -112,6 +113,8 @@ if(LOVR_USE_GLFW AND NOT (EMSCRIPTEN OR ANDROID))
     add_subdirectory(deps/glfw glfw)
     set(LOVR_GLFW glfw)
   endif()
+elseif(LOVR_ENABLE_CONTROLLER)
+    message(FATAL_ERROR "Cannot compile LOVR with controller without GLFW. Resolve and retry")
 endif()
 
 # Lua
@@ -577,6 +580,10 @@ if(LOVR_ENABLE_TIMER)
   target_sources(${ASTRAL_TARGET} PRIVATE src/modules/timer/timer.c src/api/l_timer.c)
 else()
   target_compile_definitions(${ASTRAL_TARGET} PRIVATE LOVR_DISABLE_TIMER)
+endif()
+
+if(LOVR_ENABLE_CONTROLLER)
+    target_compile_definitions(${ASTRAL_TARGET} PRIVATE LOVR_ENABLE_CONTROLLER)
 endif()
 
 if(LOVR_ENABLE_UTF8)

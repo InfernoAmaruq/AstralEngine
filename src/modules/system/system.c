@@ -101,6 +101,25 @@ static void onFocus(bool focused) {
   });
 }
 
+#ifdef LOVR_ENABLE_CONTROLLER
+static void onControllerChanged(int jid, bool connected) {
+    lovrEventPush((Event){
+        .type = EVENT_CONTROLLER_CHANGED,
+        .data.controllerChanged.state = connected,
+        .data.controllerChanged.jid = jid
+    });
+}
+
+static void onControllerButton(int jid, int button, bool newState) {
+    lovrEventPush((Event){
+        .type = EVENT_CONTROLLER_BUTTON,
+        .data.controllerButton.jid = jid,
+        .data.controllerButton.button = button,
+        .data.controllerButton.state = newState
+    });
+}
+#endif
+
 bool lovrSystemInit(void) {
   if (!lovrModuleAcquire(&ref)) return true;
   os_on_key(onKey);
@@ -110,6 +129,12 @@ bool lovrSystemInit(void) {
   os_on_mousewheel_move(onWheelMove);
   os_on_permission(onPermission);
   os_get_mouse_position(&state.mouseX, &state.mouseY);
+
+#ifdef LOVR_ENABLE_CONTROLLER
+  os_set_joystick_callback(onControllerChanged);
+  os_set_joystick_button_callback(onControllerButton);
+#endif
+
   lovrModuleReady(&ref);
   return true;
 }
@@ -260,3 +285,35 @@ void lovrMessageBox(const char* message){
 int lovrSystemSetPreciseMouse(int Bool){
     return os_set_precise_mouse(Bool);
 }
+
+#ifdef LOVR_ENABLE_CONTROLLER
+
+bool lovrSystemControllerPresent(int at){
+    return os_is_joystick_active(at);
+}
+
+const char* lovrSystemControllerGetName(int at){
+    return os_joystick_get_name(at);
+}
+
+void lovrSystemControllerUpdateMappings(const char* m){
+    os_joystick_update_mappings(m);
+}
+
+bool lovrSystemControllerIsButtonDown(int at, int button){
+    return os_joystick_get_button_down(at, button);
+}
+
+bool lovrSystemControllerWasButtonPressed(int at, int button){
+    return os_joystick_button_pressed(at, button);
+}
+
+bool lovrSystemControllerWasButtonReleased(int at, int button){
+    return os_joystick_button_released(at, button);
+}
+
+int lovrSystemControllerGetAxis(float* to, int at, int axis){
+    return os_joystick_get_axes(to, at, axis);
+}
+
+#endif

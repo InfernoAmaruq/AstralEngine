@@ -129,6 +129,42 @@ typedef enum {
   OS_KEY_COUNT
 } os_key;
 
+#ifdef LOVR_ENABLE_CONTROLLER
+typedef enum { // maps directly onto GLFW buttons
+  OS_GP_BUTTON_A = 0, // these are fine they map onto arrays, so
+  OS_GP_BUTTON_B,
+  OS_GP_BUTTON_X,
+  OS_GP_BUTTON_Y,
+
+  OS_GP_BUTTON_LEFT_BUMPER,
+  OS_GP_BUTTON_RIGHT_BUMPER,
+
+  OS_GP_BUTTON_BACK,
+  OS_GP_BUTTON_START,
+  OS_GP_BUTTON_GUIDE,
+
+  OS_GP_BUTTON_LEFT_THUMB,
+  OS_GP_BUTTON_RIGHT_THUMB,
+
+  OS_GP_BUTTON_DPAD_UP,
+  OS_GP_BUTTON_DPAD_RIGHT,
+  OS_GP_BUTTON_DPAD_DOWN,
+  OS_GP_BUTTON_DPAD_LEFT
+} os_gp;
+// tbh if i add support for whatever other window/input API's, then this may be ass, but, thats a problem for future me!
+
+typedef enum {
+  OS_AXIS_LEFT = 0,
+  // 1 for Y, this is X
+  OS_AXIS_RIGHT = 2,
+  // 3 for Y, this is X
+
+  // handle these uniquely
+  OS_AXIS_LEFT_TRIGGER,
+  OS_AXIS_RIGHT_TRIGGER
+} os_axis;
+#endif
+
 typedef enum {
     OS_ARROW_CURSOR,
     OS_IBEAM_CURSOR,
@@ -158,6 +194,10 @@ typedef void fn_mouse_button(int button, bool pressed);
 typedef void fn_mouse_move(double x, double y);
 typedef void fn_mousewheel_move(double deltaX, double deltaY);
 typedef void fn_permission(os_permission permission, bool granted);
+#ifdef LOVR_ENABLE_CONTROLLER
+typedef void fn_joystick_callback(int jid, bool connected);
+typedef void fn_joystick_button(int jid, int button, bool newState);
+#endif
 
 bool os_init(void);
 void os_destroy(void);
@@ -185,6 +225,22 @@ void os_on_mouse_button(fn_mouse_button* callback);
 void os_on_mouse_move(fn_mouse_move* callback);
 void os_on_mousewheel_move(fn_mousewheel_move* callback);
 void os_on_permission(fn_permission* callback);
+
+#ifdef LOVR_ENABLE_CONTROLLER
+void os_set_joystick_callback(fn_joystick_callback* callback);
+void os_set_joystick_button_callback(fn_joystick_button* callback);
+
+bool os_is_joystick_active(int jid);
+const char* os_joystick_get_name(int jid);
+
+void os_joystick_update_mappings(const char* mappings);
+
+bool os_joystick_get_button_down(int jid, os_gp button);
+bool os_joystick_button_pressed(int jid, os_gp button);
+bool os_joystick_button_released(int jid, os_gp button);
+
+int os_joystick_get_axes(float* to, int jid, os_axis axis);
+#endif
 
 void* os_vm_init(size_t size);
 bool os_vm_free(void* p, size_t size);

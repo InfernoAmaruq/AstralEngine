@@ -23,6 +23,9 @@ dev
 
 - Fix `Pass:drawPart`.
 - Fix invisible window when it was bigger than the size of the monitor.
+- Fix crash when creating `MeshShape` with empty model.
+- Fix possible hang with async functions when `t.thread.workers` is zero.
+- Fix possible crash when using graphics module from threads.
 
 ### Deprecate
 

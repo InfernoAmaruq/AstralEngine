@@ -9315,10 +9315,15 @@ static gpu_texture* createTemporaryTexture(const TextureInfo* parent, TextureFor
 
   gpu_texture* texture = lovrMalloc(gpu_sizeof_texture());
 
+  mtx_lock(&state.lock);
+
   if (!gpu_texture_init(texture, &info)) {
+    mtx_unlock(&state.lock);
     lovrFree(texture);
     return NULL;
   }
+
+  mtx_unlock(&state.lock);
 
   return texture;
 }

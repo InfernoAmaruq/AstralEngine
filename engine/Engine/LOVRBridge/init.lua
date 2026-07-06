@@ -63,8 +63,8 @@ LVRB.ConnectDevices = function()
         KB_LOVRToAstral[Lovr] = Astral
         KeyArray[Lovr] = false
 
-        if not ToCASCode[Astral] then -- handle key aliases safely
-            ToCASCode[Astral] = CasTop
+        if not ToCASCode[Lovr] then -- handle key aliases safely
+            ToCASCode[Lovr] = CasTop
             CasTop = CasTop + 1
         end
     end
@@ -73,8 +73,8 @@ LVRB.ConnectDevices = function()
         Mouse_LOVRToAstral[Lovr] = Astral
         KeyArray[Lovr] = false
 
-        if not ToCASCode[Astral] then -- handle key aliases safely
-            ToCASCode[Astral] = CasTop
+        if not ToCASCode[Lovr] then -- handle key aliases safely
+            ToCASCode[Lovr] = CasTop
             CasTop = CasTop + 1
         end
     end
@@ -84,7 +84,7 @@ LVRB.ConnectDevices = function()
     end
 
     InputService.IsDown = function(e)
-        return KeyArray[rtype(e) == "table" and e.Value or e]
+        return KeyArray[e.Value]
     end
 
     local KBE = Enum(KB_AstralToLOVR, "KeyCode")
@@ -128,7 +128,7 @@ LVRB.ConnectDevices = function()
 
     local OGBIND = CAS.Bind
 
-    @macro<L>:TRANSLATE_Enum(K) = ToCASCode[rtype(K) == "table" and K.Value or K];
+    @macro<L>:TRANSLATE_Enum(K) = ToCASCode[K.Value];
 
     CAS.Bind = function(N, P, F, ...)
         if select('#', ...) > 3 then
@@ -157,9 +157,9 @@ LVRB.ConnectDevices = function()
     function lovr.mousepressed(x, y, c)
         KeyArray[c] = true
 
-        c = Mouse_LOVRToAstral[c]
+        local ac = Mouse_LOVRToAstral[c]
 
-        local E = ME[c]
+        local E = ME[ac]
 
         local Terminated
         MAKEINPUTDATA(Terminated, false, c, true, x, y, E)
@@ -169,9 +169,9 @@ LVRB.ConnectDevices = function()
     function lovr.mousereleased(x, y, c)
         KeyArray[c] = false
 
-        c = Mouse_LOVRToAstral[c]
+        local ac = Mouse_LOVRToAstral[c]
 
-        local E = ME[c]
+        local E = ME[ac]
 
         local Terminated
         MAKEINPUTDATA(Terminated, false, c, false, x, y, E)
@@ -189,9 +189,9 @@ LVRB.ConnectDevices = function()
 
         KeyArray[k] = true
 
-        k = KB_LOVRToAstral[k]
+        local ak = KB_LOVRToAstral[k]
 
-        local E = KBE[k]
+        local E = KBE[ak]
 
         local Terminated
         MAKEINPUTDATA(Terminated, true, k, true,nil,nil,E)
@@ -201,9 +201,9 @@ LVRB.ConnectDevices = function()
     function lovr.keyreleased(k, c)
         KeyArray[k] = false
 
-        k = KB_LOVRToAstral[k]
+        local ak = KB_LOVRToAstral[k]
 
-        local E = KBE[k]
+        local E = KBE[ak]
 
         local Terminated
         MAKEINPUTDATA(Terminated, true, k, false,nil,nil,E)

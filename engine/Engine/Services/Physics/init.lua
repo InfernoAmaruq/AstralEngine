@@ -120,7 +120,7 @@ function Physics.NewWorld(Parameters)
     end
 
     if Parameters and Parameters.Gravity then
-        if rtype(Parameters.Gravity) == "number" then
+        if type(Parameters.Gravity) == "number" then
             W:setGravity(vec3(0,Parameters.Gravity,0))
         else
             W:setGravity(vec3(Parameters.Gravity))

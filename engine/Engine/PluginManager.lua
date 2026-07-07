@@ -42,7 +42,7 @@ PluginHandler.Load = function(Path)
     local Success, Tab = pcall(MetadataFile, Alloc)
 
     AstralEngine.Assert(Success, "FAILED TO LOAD PLUGIN META.LUA FILE: " .. tostring(Tab), "PLUGIN")
-    AstralEngine.Assert(Tab and rtype(Tab) == "table" and Tab.Name, "INVALID DATA INSIDE META.LUA FILE", "PLUGIN")
+    AstralEngine.Assert(Tab and type(Tab) == "table" and Tab.Name, "INVALID DATA INSIDE META.LUA FILE", "PLUGIN")
 
     if PluginCache[Tab.Name] then
         return

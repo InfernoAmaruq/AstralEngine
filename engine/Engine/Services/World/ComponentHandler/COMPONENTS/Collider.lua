@@ -197,7 +197,7 @@ local METATAB = {
             return a
         end
         local v = Col[k]
-        if rtype(v) == "function" then
+        if type(v) == "function" then
             rawset(self, ".NEXTCALL", v)
             return CALLFUNC
         end
@@ -215,7 +215,7 @@ local METATAB = {
             return self.ColRef[DirectSetter](self.ColRef,v)
         end
         local Func = FIELDTOFUNC[k]
-        if rtype(k) == "string" and Func then
+        if type(k) == "string" and Func then
             Func(self,v)
         else
             AstralEngine.Error("CANNOT WRITE TO COLLIDER FIELD: "..k,"COLLIDER",2)

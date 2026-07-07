@@ -8,23 +8,21 @@ Component.SetComponents = {}
 Component.FastFetch = {}
 
 local DEADMT = {
-    __index = function(_,k)
+    __index = function(_, k)
         return k == "IsDead" or error("ILLEGAL ACCESS: ATTEMPT TO ACCESS DEAD COMPONENT")
-    end
+    end,
 }
 
-local MTCACHE = setmetatable({},{__mode = "v"})
-local CBaseMT = {__type = "ComponentPrefab"}
+local MTCACHE = setmetatable({}, { __mode = "v" })
+local CBaseMT = { __type = "ComponentPrefab" }
 
 Component.ComponentAdded = SignalLib.new(bit.bor(SignalLib.Type.RTC, SignalLib.Type.NoCtx))
 Component.ComponentRemoved = SignalLib.new(bit.bor(SignalLib.Type.RTC, SignalLib.Type.NoCtx))
 
 function Component.NewComponent(Name, Pattern, Metadata, FastFetch)
     assert(not Component.Components[Name], "Component already exists: " .. Name)
-    Component.Components[Name] = setmetatable(
-        { Storage = {}, Name = Name, Pattern = Pattern, Metadata = Metadata },
-        CBaseMT
-    )
+    Component.Components[Name] =
+        setmetatable({ Storage = {}, Name = Name, Pattern = Pattern, Metadata = Metadata }, CBaseMT)
 
     if FastFetch then
         for _, Obj in pairs(FastFetch) do
@@ -37,14 +35,8 @@ function Component.GetName(Comp)
     return getmetatable(Comp).__CName
 end
 
--- so, it used to be solobj, then astralobj, then engineobj... its a fuckin mess dude with all the renaming, so i just make it a flag!
-@execute<UNSAFE>{
-    local NAME = type.EngineObj
-    return "@flag:TYPE='"..NAME.."';"
-}
-
 function Component.GetComponents(e)
-    if type(e) == &TYPE then
+    if kind(e) == "astrobj" then
         e = e.Id
     end
 
@@ -56,8 +48,10 @@ end
 ---@return (Component|boolean)?
 function Component.GetComponent(e, ...)
     local S = select("#", ...)
-    local Comp = Component.SetComponents[type(e) == &TYPE and e.Id or e]
-    if not Comp then return nil end
+    local Comp = Component.SetComponents[kind(e) == "astrobj" and e.Id or e]
+    if not Comp then
+        return nil
+    end
     if S == 1 then
         return Comp[(select(1, ...))]
     else
@@ -81,7 +75,7 @@ end
 ---@param ShouldSink boolean? Skip dependency resolution
 ---@return Component?
 function Component.AddComponent(e, id, DATA, ShouldSink)
-    if type(e) == &TYPE then
+    if kind(e) == "astrobj" then
         e = e.Id
     end
     Component.SetComponents[e] = Component.SetComponents[e] or {}
@@ -89,7 +83,7 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
     local D
     local t = Component.Components[id]
 
-    AstralEngine.Assert(t,"No component "..id.." found!","COMPONENT")
+    AstralEngine.Assert(t, "No component " .. id .. " found!", "COMPONENT")
 
     -- check if can set
 
@@ -99,7 +93,11 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
         local HardDependency = t.Metadata and t.Metadata.HardDependency
         if HardDependency then
             for Name in pairs(HardDependency) do
-                AstralEngine.Assert(Component.SetComponents[e][Name],"CANNOT CREATE COMPONENT "..id.." HARD DEPENDENCY CHECK FAILED ON COMPONENT: "..Name,"COMPONENT")
+                AstralEngine.Assert(
+                    Component.SetComponents[e][Name],
+                    "CANNOT CREATE COMPONENT " .. id .. " HARD DEPENDENCY CHECK FAILED ON COMPONENT: " .. Name,
+                    "COMPONENT"
+                )
             end
         end
 
@@ -108,7 +106,11 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
         local Exclusion = t.Metadata and t.Metadata.HardExclusion
         if Exclusion then
             for Name in pairs(Exclusion) do
-                AstralEngine.Assert(not Component.SetComponents[e][Name], "CANNOT CREATE COMPONENT "..id.." HARD EXCLUSION CHECK FAILED ON COMPONENT: "..Name,"COMPONENT")
+                AstralEngine.Assert(
+                    not Component.SetComponents[e][Name],
+                    "CANNOT CREATE COMPONENT " .. id .. " HARD EXCLUSION CHECK FAILED ON COMPONENT: " .. Name,
+                    "COMPONENT"
+                )
             end
         end
     end
@@ -133,7 +135,7 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
     end
 
     local MT = getmetatable(D)
-    rawset(D,".CONTEXT",_G.CONTEXTGEN or 0)
+    rawset(D, ".CONTEXT", _G.CONTEXTGEN or 0)
     if MT then
         MT.__type = "Component"
         MT.__tostring = ToString
@@ -145,33 +147,23 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
             Cached = { __type = "Component", __tostring = ToString, __CName = id }
             MTCACHE[id] = Cached
         end
-        setmetatable(D,Cached)
+        setmetatable(D, Cached)
     end
 
     Component.Components[id].Storage[e] = D
     Component.SetComponents[e][id] = D
 
-    local Ent = GetService"Entity".GetEntityFromId(e)
+    local Ent = GetService("Entity").GetEntityFromId(e)
     Component.ComponentAdded:Fire(Ent, id, D)
-    Ent.ComponentAdded:Fire(id,D)
+    Ent.ComponentAdded:Fire(id, D)
 
-    rawset(D,"IsNull",false)
+    rawset(D, "IsNull", false)
 
     return D
 end
 
-local function CallstackDepth()
-    local Depth = 0
-    while debug.getinfo(Depth + 1, "") do
-        Depth = Depth + 1
-    end
-    return Depth
-end
-
-local function KillComponent(e,id,Force)
-    local D = CallstackDepth() - 4
-    local pre = string.rep(">",D)
-    if type(e) == &TYPE then
+local function KillComponent(e, id, Force)
+    if kind(e) == "astrobj" then
         e = e.Id
     end
 
@@ -183,23 +175,28 @@ local function KillComponent(e,id,Force)
 
     local CompInst = Component.SetComponents[e][id]
 
-    if not CompInst then return end
+    if not CompInst then
+        return
+    end
 
     if not Force then
         for Name, UserComp in pairs(Component.SetComponents[e]) do
             if v ~= UserComp then
-
                 local UCMeta = Component.Components[Name].Metadata
                 if UCMeta and UCMeta.HardDependency and UCMeta.HardDependency[id] then
-                    AstralEngine.Error("CANNOT REMOVE COMPONENT "..id.." BECAUSE COMPONENT "..Name.." DEPENDS ON IT!","COMPONENT",2)
+                    AstralEngine.Error(
+                        "CANNOT REMOVE COMPONENT " .. id .. " BECAUSE COMPONENT " .. Name .. " DEPENDS ON IT!",
+                        "COMPONENT",
+                        2
+                    )
                 end
             end
         end
     end
 
     if not Force then
-        local Ent = GetService"Entity".GetEntityFromId(e)
-        Component.ComponentRemoved:Fire(Ent,id,Component.SetComponents[e][id])
+        local Ent = GetService("Entity").GetEntityFromId(e)
+        Component.ComponentRemoved:Fire(Ent, id, Component.SetComponents[e][id])
         Ent.ComponentRemoving:Fire(id, Component.SetComponents[e][id])
     end
 
@@ -211,7 +208,7 @@ local function KillComponent(e,id,Force)
         CompInst[i] = nil
     end
 
-    rawset(CompInst,"IsNull",true)
+    rawset(CompInst, "IsNull", true)
 
     setmetatable(CompInst, DEADMT)
 
@@ -232,7 +229,7 @@ end
 function Component.__DrainDestructionList()
     for Entity, List in pairs(ComponentsToKill) do
         for Comp, Force in pairs(List) do
-            KillComponent(Entity,Comp,Force)
+            KillComponent(Entity, Comp, Force)
         end
         ComponentsToKill[Entity] = nil
     end
@@ -247,14 +244,18 @@ end
 Component.GetAllWithComponent = function(...)
     local Ret = {}
 
-    local n = select("#",...)
+    local n = select("#", ...)
     for i = 1, n do
-        local Comp = select(i,...)
-        local Storage = AstralEngine.Assert(Component.Components[Comp].Storage,"INVALID COMPONENT NAME AT GetAllWithComponent, NAME: "..Comp.." AT INDEX: "..i,"COMPONENT")
+        local Comp = select(i, ...)
+        local Storage = AstralEngine.Assert(
+            Component.Components[Comp].Storage,
+            "INVALID COMPONENT NAME AT GetAllWithComponent, NAME: " .. Comp .. " AT INDEX: " .. i,
+            "COMPONENT"
+        )
 
         for EntId in pairs(Storage) do
-            local EntRef = GetService"Entity".GetEntityFromId(EntId)
-            table.insert(Ret,EntRef)
+            local EntRef = GetService("Entity").GetEntityFromId(EntId)
+            table.insert(Ret, EntRef)
         end
     end
 
@@ -270,7 +271,7 @@ function Component.__RemoveAllComponents(EntityHandle)
     end
 
     for CId in pairs(Component.SetComponents[Id]) do
-        Component.RemoveComponent(Id,CId,true)
+        Component.RemoveComponent(Id, CId, true)
     end
 end
 
@@ -288,21 +289,29 @@ function Component.LoadComponents()
     local Files = lovr.filesystem.getAliasedFiles("Components")
 
     for _, f in pairs(Files) do
-
         if f:match("%.lua$") then
-            AstralEngine.Log("LOAD COMPONENT FILE: "..f,"info","COMPONENT")
+            AstralEngine.Log("LOAD COMPONENT FILE: " .. f, "info", "COMPONENT")
 
             local File = loadfile(f)
 
             if File then
                 local S, Res = pcall(File)
 
-                if not S or not Res then AstralEngine.Log("FAILED TO LOAD COMPONENT: "..f.." - "..(Res or "COMPONENT RETURNED NIL"),"warn","COMPONENT") goto continue else File = Res end
+                if not S or not Res then
+                    AstralEngine.Log(
+                        "FAILED TO LOAD COMPONENT: " .. f .. " - " .. (Res or "COMPONENT RETURNED NIL"),
+                        "warn",
+                        "COMPONENT"
+                    )
+                    goto continue
+                else
+                    File = Res
+                end
 
                 Component.NewComponent(File.Name, File.Pattern, File.Metadata, File.FastFetch)
                 table.insert(FinalProcessing, File.FinalProcessing)
             else
-                AstralEngine.Log("FAILED TO LOAD COMPONENT: "..f,"warn","COMPONENT")
+                AstralEngine.Log("FAILED TO LOAD COMPONENT: " .. f, "warn", "COMPONENT")
             end
         end
 
@@ -313,7 +322,11 @@ function Component.LoadComponents()
 
     if AstralEngine.Config.Astral.Debug then
         for i in pairs(Component.Components) do
-            AstralEngine.Log("LOADED COMP: "..ANSI.Magenta..ANSI.Underscore..i..ANSI.Clear,"success","COMPONENT")
+            AstralEngine.Log(
+                "LOADED COMP: " .. ANSI.Magenta .. ANSI.Underscore .. i .. ANSI.Clear,
+                "success",
+                "COMPONENT"
+            )
         end
     end
 end

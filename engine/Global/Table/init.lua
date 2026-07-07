@@ -4,7 +4,7 @@ unpack = function(t, i, j)
     local mt = debug.getmetatable(t)
     local UnpackField = mt and mt.__unpack
     if UnpackField then
-        local t = rtype(UnpackField)
+        local t = type(UnpackField)
         if t == "function" then
             return UnpackField(t, i, j)
         else

@@ -117,7 +117,7 @@ end
 local ToKill = {}
 
 local function DestroyEntity(Ent)
-    Ent = type(Ent) == "astrobj" and Ent or Entity.Alive[Ent]
+    Ent = kind(Ent) == "astrobj" and Ent or Entity.Alive[Ent]
 
     if Ent.IsNull then
         AstralEngine.Log("Attempt to destroy dead entity", "warning", "ENTITY")

@@ -79,10 +79,9 @@ local E = _G["Enum"]({
     RenderMirror = 970,
     Physics = 1250,
 }, EnumName, { CanAppend = true })
-local Processor = _G["Enum"].__GETPROCESSOR(EnumName, "Value")
 
 Data.__TEMPBIND = function(n, Priority, F)
-    Priority = Processor(Priority) or Priority
+    Priority = type(Priority) == "number" and Priority or Priority.Value
     assert(math.floor(Priority) == Priority, Priority .. " NOT AN INT")
     Data.__BoundToStep[Priority] = Data.__BoundToStep[Priority] or {}
     Data.__BoundToStep[Priority][n] = F
@@ -106,13 +105,13 @@ Data.Flags = {
 
 Data.BindToStep = function(Name, Priority, F, Flag)
     Flag = Flag or 0
-    Priority = Processor(Priority) or Priority
+    Priority = type(Priority) == "number" and Priority or Priority.Value
     assert(math.floor(Priority) == Priority, Priority .. " NOT AN INT")
 
     local BindRaw = bit.band(Flag, Data.Flags.Raw) ~= 0
     local Contextless = bit.band(Flag, Data.Flags.Contextless) ~= 0
 
-    if rtype(F) == "function" and not BindRaw then
+    if type(F) == "function" and not BindRaw then
         F = AllocRoutine(F)
     end
 

@@ -30,7 +30,7 @@ TagService.TagRemoved = SignalLib.new(SignalLib.Type.RTC)
 -- virtualized to entity
 function TagService.HasTag(Entity, Tag)
     local EntRef, EntId
-    if rtype("Entity") == "number" then
+    if type(Entity) == "number" then
         EntRef = World.Alive[Entity]
         EntId = Entity
         AstralEngine.Assert(EntRef and not EntRef.IsNull, "ATTEMPT TO USE TAGS ON DEAD ENTITY: " .. EntRef, "TAGS")
@@ -54,7 +54,7 @@ end
 
 function TagService.AddTag(Entity, Tag)
     local EntRef, EntId
-    if rtype("Entity") == "number" then
+    if type(Entity) == "number" then
         EntRef = World.Alive[Entity]
         EntId = Entity
         AstralEngine.Assert(EntRef and not EntRef.IsNull, "ATTEMPT TO USE TAGS ON DEAD ENTITY: " .. EntRef, "TAGS")
@@ -72,7 +72,7 @@ end
 
 function TagService.RemoveTag(Entity, Tag)
     local EntRef, EntId
-    if rtype("Entity") == "number" then
+    if type(Entity) == "number" then
         EntRef = World.Alive[Entity]
         EntId = Entity
         AstralEngine.Assert(EntRef and not EntRef.IsNull, "ATTEMPT TO USE TAGS ON DEAD ENTITY: " .. EntRef, "TAGS")
@@ -90,7 +90,7 @@ end
 
 function TagService.ClearTags(Entity)
     local EntRef, EntId
-    if rtype("Entity") == "number" then
+    if type(Entity) == "number" then
         EntRef = World.Alive[Entity]
         EntId = Entity
         AstralEngine.Assert(EntRef and not EntRef.IsNull, "ATTEMPT TO USE TAGS ON DEAD ENTITY: " .. EntRef, "TAGS")
@@ -110,7 +110,7 @@ end
 
 function TagService.GetAllTags(Entity)
     local EntRef, EntId
-    if rtype("Entity") == "number" then
+    if type(Entity) == "number" then
         EntRef = World.Alive[Entity]
         EntId = Entity
         AstralEngine.Assert(EntRef and not EntRef.IsNull, "ATTEMPT TO USE TAGS ON DEAD ENTITY: " .. EntRef, "TAGS")

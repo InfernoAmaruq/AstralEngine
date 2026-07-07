@@ -157,7 +157,7 @@ Meta.__index = function(t, k)
         return Methods[k]
     end
 
-    k = rtype(k) == "string" and AliasMap[k] or k
+    k = type(k) == "string" and AliasMap[k] or k
     local W = rawget(t, "LovrWorld")
     local v = W and W[k]
 
@@ -165,7 +165,7 @@ Meta.__index = function(t, k)
         return t.LovrWorld:getGravity()
     end
 
-    if rtype(v) == "function" then
+    if type(v) == "function" then
         rawset(t, ".NEXTCALL", v)
         return CAPTUREFUNC
     else

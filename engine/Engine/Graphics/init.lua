@@ -17,7 +17,7 @@ end
 local function IDX(t, k)
     local Og = t[1]
     local Val = Og and Og[k] or Og[k:sub(1, 1):lower() .. k:sub(2)]
-    if rtype(Val) == "function" then
+    if type(Val) == "function" then
         rawset(t, ".NEXTCALL", Val)
         return CAPTURE
     end

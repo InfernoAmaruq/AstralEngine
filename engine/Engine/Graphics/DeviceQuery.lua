@@ -42,7 +42,7 @@ DeviceQuery.GetLimit = function(Key)
         AstralEngine.Error("Invalid limit key provided: " .. Key, "GPU")
     end
 
-    if type(Limit) == "lovrobj" then
+    if kind(Limit) == "lovrobj" then
         Limit = vec3(Limit)
     end
 

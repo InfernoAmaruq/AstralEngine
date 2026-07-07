@@ -1,7 +1,7 @@
 local OgPairs = pairs
 local OgIpairs = ipairs
 
-local rtype = rtype or type
+local type = type or type
 
 local GetMt = debug.getmetatable
 
@@ -9,7 +9,7 @@ pairs = function(t)
     local mt = GetMt(t)
     local p = mt and mt.__pairs
     if p then
-        local Type = rtype(p)
+        local Type = type(p)
 
         if Type == "table" then
             return OgPairs(t)
@@ -25,7 +25,7 @@ ipairs = function(t)
     local mt = GetMt(t)
     local p = mt and mt.__ipairs
     if p then
-        local Type = rtype(p)
+        local Type = type(p)
 
         if Type == "table" then
             return OgIpairs(p)

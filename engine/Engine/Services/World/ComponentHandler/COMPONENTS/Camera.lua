@@ -562,7 +562,7 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
 
     for i, v in pairs(Camera.Pattern) do
         if not Data[i] then
-            Data[i] = rtype(v) == "function" and v() or v
+            Data[i] = type(v) == "function" and v() or v
         end
     end
 

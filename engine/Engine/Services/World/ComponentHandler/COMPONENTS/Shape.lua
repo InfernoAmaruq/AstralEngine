@@ -104,7 +104,7 @@ local MT = {
         local RT = Comp.__RenderTypePtr
         if k == "Shape" then
             assert(
-                typeof(v) == "__Enum_ShapeType",
+                typeof(v) == "Enum.ShapeType",
                 "Attempt to set 'Shape' field of component "
                 .. tostring(Comp)
                 .. ": "

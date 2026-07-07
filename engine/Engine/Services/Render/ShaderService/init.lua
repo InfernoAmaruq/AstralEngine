@@ -1,5 +1,5 @@
 local Def = require("Def")
-local TYPE = _G.rtype or _G.type
+local TYPE = _G.type or _G.type
 local ShaderService = {}
 
 local FileSystem = lovr.filesystem
@@ -234,7 +234,7 @@ local function Compile(Tab,Tag)
     if Defined then
         for i,v in pairs(Defined) do
             local Str
-            if rtype(i) == "number" then
+            if type(i) == "number" then
                 Str = "#define "..tostring(v).."\n"
             else
                 Str = "#define "..tostring(i).." "..tostring(v).."\n"
@@ -289,7 +289,7 @@ end
 
 function ShaderService.ComposeShader(Type,Search,Params)
     Params = Params or {}
-    Type = rtype(Type) == "number" and Type or Type.Value
+    Type = type(Type) == "number" and Type or Type.Value
 
     Search = Search or ""
 

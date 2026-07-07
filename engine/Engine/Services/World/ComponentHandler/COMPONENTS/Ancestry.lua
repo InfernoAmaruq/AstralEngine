@@ -26,7 +26,7 @@ local FAST_ADD_CHILD = table.insert -- used to be a macro, changed to function r
 
 -- a macro to validate user inputs
 @macro<L,!USEBRACK>{VALIDATE(&OBJ,&OUT,&REF) = 
-    local PT = type(&OBJ)
+    local PT = kind(&OBJ)
     if PT == "astrobj" then
         &OUT = rawget(&OBJ, "Id")
         &REF = &OBJ

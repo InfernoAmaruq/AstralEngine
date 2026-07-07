@@ -120,7 +120,7 @@ local function MTNewIndex(Ret, k, v)
     end
 
     if not Skip then
-        if rtype(v) == "userdata" and v.type and v.type() then
+        if type(v) == "userdata" and v.type and v.type() then
             local F = IndexFields[k]
             if not F then
                 return

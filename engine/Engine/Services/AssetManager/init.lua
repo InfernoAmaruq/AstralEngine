@@ -165,7 +165,7 @@ function AssetManager.NewModelData() end
 function AssetManager.NewTexture(Path, Options)
     local CanonPath
     local ImageData
-    if rtype(Path) == "table" then
+    if type(Path) == "table" then
         ImageData = {}
         for i, v in pairs(Path) do
             local RawData = GetRawImageData(GetPaths(nil, v))
@@ -217,7 +217,7 @@ local function ProcessMaterialInput(Input)
         if i == "Color" or i == "Glow" then
             local r, g, b, a
 
-            local t = rtype(v)
+            local t = type(v)
             if t == "table" then
                 r, g, b, a = unpack(v)
                 r = r / 255
@@ -232,7 +232,7 @@ local function ProcessMaterialInput(Input)
         elseif i == "UvShift" or i == "UvScale" then
             local x, y
 
-            local t = rtype(v)
+            local t = type(v)
             if t == "table" then
                 x, y = unpack(t)
             elseif t == "number" then
@@ -244,7 +244,7 @@ local function ProcessMaterialInput(Input)
 
             InputProcessed[i] = { x, y }
         elseif i:match("[%w_]*[Tt]exture[%w_]*") then
-            local ObjType = rtype(v)
+            local ObjType = type(v)
 
             local t = ObjType == "string" and AssetManager.NewTexture(v) or (v[1] or v)
 
@@ -269,7 +269,7 @@ local function ProcessMaterialInput(Input)
         InputProcessed[Lower] = Val -- lovr likes camelCase, i like pascalCase
 
         local SubStr = "[" .. Field .. "]="
-        local Type = rtype(Val)
+        local Type = type(Val)
 
         if Type == "number" then
             SubStr = SubStr .. tostring(Val) .. ";"

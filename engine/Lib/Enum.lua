@@ -43,17 +43,16 @@ local function ProcessMember(K, V, EnumName)
         Name = K,
         Value = V,
         EnumType = EnumName or "__UNNAMED",
-        __ISENUM = "__ENUM_" .. EnumName,
     }
 
     local t = setmetatable({}, {
         __newindex = NewIndex,
-        __metatable = false,
         __index = DATA,
         __tostring = EnumToString,
         __add = Add,
         __sub = Sub,
         __eq = Eq,
+        __type = "Enum." .. EnumName,
     })
 
     return t
@@ -108,10 +107,10 @@ local function NewEnum(_, t, Name, Options)
             end
         end,
         __newindex = NewIndex,
-        __metatable = false,
         __pairs = function()
             return next, DATA, nil
         end,
+        __type = "Enum.Registry." .. Name,
         __tostring = function()
             local S = "ENUM: " .. Name .. " {\n"
             for NAME, ID in pairs(DATA) do
@@ -120,14 +119,6 @@ local function NewEnum(_, t, Name, Options)
             return S .. "}"
         end,
     })
-end
-
-Enums.__GETPROCESSOR = function(NAME, GetField)
-    return function(ENUM)
-        if type(ENUM) == "table" and ENUM.__ISENUM and ENUM.__ISENUM:find(NAME) then
-            return ENUM[GetField]
-        end
-    end
 end
 
 return setmetatable(Enums, { __call = NewEnum })

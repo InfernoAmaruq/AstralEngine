@@ -66,10 +66,17 @@ AstralEngine.Graphics = {
 
         return OgTex(unpack(Args))
     end,
+
     NewTexture = lovr.graphics.newTexture,
     NewPass = lovr.graphics.newPass,
     NewTextureView = lovr.graphics.newTextureView,
     NewBuffer = lovr.graphics.newBuffer,
+
+    SetBackgroundColor = lovr.graphics.setBackgroundColor,
+    GetBackgroundColor = lovr.graphics.getBackgroundColor,
+    EnableTiming = lovr.graphics.setTimingEnabled,
+    IsTimingEnabled = lovr.graphics.isTimingEnabled,
+    GetDefaultFont = lovr.graphics.getDefaultFont,
 }
 
 function AstralEngine.Window.__WindowResizedTextures(...)

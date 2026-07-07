@@ -17,8 +17,12 @@ local function Add(a, b)
     return (TYPE(a) == "table" and a.Value or a) + (TYPE(b) == "table" and b.Value or b)
 end
 
-local function Eq(a, b)
+local function ValEq(a, b)
     return (TYPE(a) == "table" and a.Value or a) == (TYPE(b) == "table" and b.Value or b)
+end
+
+local function NameEq(a, b)
+    return (TYPE(a) == "table" and a.Name or a) == (TYPE(b) == "table" and b.Name or b)
 end
 
 local Funcs = {
@@ -38,11 +42,10 @@ local Funcs = {
     end,
 }
 
-local function ProcessMember(K, V, EnumName)
+local function ProcessMember(K, V, EnumName, UseNameEq)
     local DATA = {
         Name = K,
         Value = V,
-        EnumType = EnumName or "__UNNAMED",
     }
 
     local t = setmetatable({}, {
@@ -51,7 +54,7 @@ local function ProcessMember(K, V, EnumName)
         __tostring = EnumToString,
         __add = Add,
         __sub = Sub,
-        __eq = Eq,
+        __eq = UseNameEq and NameEq or ValEq,
         __type = "Enum." .. EnumName,
     })
 
@@ -67,8 +70,10 @@ local function NewEnum(_, t, Name, Options)
 
     local Opt = Options or {}
 
+    local NameEqCheck = Opt.NameEquality
+
     for K, V in pairs(t) do
-        DATA[K] = ProcessMember(K, V, Name)
+        DATA[K] = ProcessMember(K, V, Name, NameEqCheck)
     end
 
     if Name then
@@ -80,10 +85,10 @@ local function NewEnum(_, t, Name, Options)
         Append = function(k, val)
             if type(k) == "table" then -- using a table
                 for i, v in pairs(k) do
-                    DATA[i] = ProcessMember(i, v, Name)
+                    DATA[i] = ProcessMember(i, v, Name, NameEqCheck)
                 end
             else -- just a single value
-                DATA[k] = ProcessMember(k, val, Name)
+                DATA[k] = ProcessMember(k, val, Name, NameEqCheck)
             end
         end
     end

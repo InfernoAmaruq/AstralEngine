@@ -19,19 +19,19 @@ end
 LVRB.VirtualiseScheduler = function(Scheduler)
     _G.task = {}
     local Global = _G.task
-    Global.wait = wrapself(Scheduler,Scheduler.Wait,false)
-    Global.delay = wrapself(Scheduler,Scheduler.Delay,false)
-    Global.defer = wrapself(Scheduler,Scheduler.Defer,false)
-    Global.spawn = wrapself(Scheduler,Scheduler.Spawn,false)
-    Global.waitfor = wrapself(Scheduler,Scheduler.WaitFor)
-    Global.spawnat = wrapself(Scheduler,Scheduler.SpawnAt)
-    Global.escape = wrapself(Scheduler,Scheduler.Escape)
+    Global.wait = wrapself(Scheduler, Scheduler.Wait, false)
+    Global.delay = wrapself(Scheduler, Scheduler.Delay, false)
+    Global.defer = wrapself(Scheduler, Scheduler.Defer, false)
+    Global.spawn = wrapself(Scheduler, Scheduler.Spawn, false)
+    Global.waitfor = wrapself(Scheduler, Scheduler.WaitFor)
+    Global.spawnat = wrapself(Scheduler, Scheduler.SpawnAt)
+    Global.escape = wrapself(Scheduler, Scheduler.Escape)
 
     Global.raw = {
-        wait = wrapself(Scheduler,Scheduler.Wait,true),
-        delay = wrapself(Scheduler,Scheduler.Delay,true),
-        defer = wrapself(Scheduler,Scheduler.Defer,true),
-        spawn = wrapself(Scheduler,Scheduler.Spawn,true)
+        wait = wrapself(Scheduler, Scheduler.Wait, true),
+        delay = wrapself(Scheduler, Scheduler.Delay, true),
+        defer = wrapself(Scheduler, Scheduler.Defer, true),
+        spawn = wrapself(Scheduler, Scheduler.Spawn, true),
     }
 
     LVRB.VirtualiseScheduler = nil
@@ -40,11 +40,11 @@ end
 -- INPUT SYSTEM
 
 LVRB.ConnectDevices = function()
-    local InputService = GetService "InputService"
+    local InputService = GetService("InputService")
 
     local Mouse = InputService.Mouse
     local KB = InputService.Keyboard
-    local CAS = GetService "ContextActionService"
+    local CAS = GetService("ContextActionService")
 
     local AstralKeys = require("Keys")
 
@@ -95,51 +95,40 @@ LVRB.ConnectDevices = function()
             KeyCode = %s,
             UserInputType = %s,
             State = %s,
-            Mouse = %s
+            Mouse = %s,
+            Controller = %s
         }]]
-        return s:format(tostring(t.KeyCode) or "NIL", tostring(t.UserInputType) or "NIL", tostring(t.State),
-            tostring(t.Mouse) or "NIL")
+        return s:format(
+            tostring(t.KeyCode) or "NIL",
+            tostring(t.UserInputType) or "NIL",
+            tostring(t.State),
+            tostring(t.Mouse) or "NIL",
+            tostring(t.Controller) or "NIL"
+        )
     end
 
-    local MT = {__tostring = INPTOSTR}
+    local MT = { __tostring = INPTOSTR }
 
-    local InputTable = setmetatable(
-            { KeyCode = nil, UserInputType = nil, State = nil, Mouse = nil },
-            MT)
-
+    local InputTable =
+        setmetatable({ KeyCode = nil, UserInputType = nil, State = nil, Mouse = nil, Controller = nil }, MT)
 
     CAS.__RAWBIND = CAS.Bind
 
-    @macro<L,!USEBRACK>{MAKEINPUTDATA(TERM,IsKB,CODE,ST,mx,my,ENUM) = 
-        --MACRO BEGIN
-        local DATA = InputTable
-
-        local ID = ToCASCode[CODE]
-
-        DATA.State = ST
-        DATA.UserInputType = not IsKB and ENUM
-        DATA.Mouse = not IsKB and vec2(mx, my)
-        DATA.KeyCode = IsKB and ENUM
-
-        TERM = CAS.__CALL(ID, DATA)
-
-        --MACRO END
-    }
-
     local OGBIND = CAS.Bind
 
-    @macro<L>:TRANSLATE_Enum(K) = ToCASCode[K.Value];
-
     CAS.Bind = function(N, P, F, ...)
-        if select('#', ...) > 3 then
+        if select("#", ...) > 3 then
             local t = { ... }
             for i, KEY in ipairs(t) do
-                t[i] = TRANSLATE_Enum(KEY)
+                t[i] = ToCASCode[KEY.Value] or KEY.Value
             end
             return OGBIND(N, P, F, unpack(t))
         else
             local K1, K2, K3 = select(1, ...)
-            K1, K2, K3 = TRANSLATE_Enum(K1), TRANSLATE_Enum(K2), TRANSLATE_Enum(K3)
+            K1, K2, K3 =
+                K1 and (ToCASCode[K1.Value] or K1.Value),
+                K2 and (ToCASCode[K2.Value] or K2.Value),
+                K3 and (ToCASCode[K3.Value] or K3.Value)
             return OGBIND(N, P, F, K1, K2, K3)
         end
     end
@@ -150,8 +139,8 @@ LVRB.ConnectDevices = function()
         Mouse.WheelMoved:Fire(...)
     end
 
-    function lovr.mousemoved(x,y,...)
-        Mouse.MouseMoved:Fire(x,y,...)
+    function lovr.mousemoved(x, y, ...)
+        Mouse.MouseMoved:Fire(x, y, ...)
     end
 
     function lovr.mousepressed(x, y, c)
@@ -161,8 +150,17 @@ LVRB.ConnectDevices = function()
 
         local E = ME[ac]
 
-        local Terminated
-        MAKEINPUTDATA(Terminated, false, c, true, x, y, E)
+        local Data = InputTable
+        Data.State = true
+        Data.Controller = nil
+        Data.KeyCode = nil
+        Data.Mouse = vec2(x, y)
+        Data.UserInputType = E
+
+        local Code = ToCASCode[c]
+
+        local Terminated = CAS.__CALL(Code, Data)
+
         Mouse.MouseButtonDown:Fire(E, x, y, Terminated)
     end
 
@@ -173,9 +171,18 @@ LVRB.ConnectDevices = function()
 
         local E = ME[ac]
 
-        local Terminated
-        MAKEINPUTDATA(Terminated, false, c, false, x, y, E)
-        Mouse.MouseButtonUp:Fire(E, x, y, Terminated)
+        local Data = InputTable
+        Data.State = false
+        Data.Controller = nil
+        Data.KeyCode = nil
+        Data.Mouse = vec2(x, y)
+        Data.UserInputType = E
+
+        local Code = ToCASCode[c]
+
+        local Terminated = CAS.__CALL(Code, Data)
+
+        Mouse.MouseButtonDown:Fire(E, x, y, Terminated)
     end
 
     function lovr.textinput(Char, Code)
@@ -185,7 +192,9 @@ LVRB.ConnectDevices = function()
     -- KB
 
     function lovr.keypressed(k, c, r)
-        if r then return end
+        if r then
+            return
+        end
 
         KeyArray[k] = true
 
@@ -193,8 +202,17 @@ LVRB.ConnectDevices = function()
 
         local E = KBE[ak]
 
-        local Terminated
-        MAKEINPUTDATA(Terminated, true, k, true,nil,nil,E)
+        local Data = InputTable
+        Data.State = true
+        Data.Controller = nil
+        Data.KeyCode = E
+        Data.Mouse = nil
+        Data.UserInputType = nil
+
+        local Code = ToCASCode[k]
+
+        local Terminated = CAS.__CALL(Code, Data)
+
         KB.KeyPressed:Fire(E, c, Terminated)
     end
 
@@ -205,9 +223,43 @@ LVRB.ConnectDevices = function()
 
         local E = KBE[ak]
 
-        local Terminated
-        MAKEINPUTDATA(Terminated, true, k, false,nil,nil,E)
+        local Data = InputTable
+        Data.State = false
+        Data.Controller = nil
+        Data.KeyCode = E
+        Data.Mouse = nil
+        Data.UserInputType = nil
+
+        local Code = ToCASCode[k]
+
+        local Terminated = CAS.__CALL(Code, Data)
         KB.KeyReleased:Fire(E, c, Terminated)
+    end
+
+    -- Controller
+
+    if InputService.Controller then
+        local LovrToAstral = InputService.Controller.__Finalise()
+        local Max = InputService.Controller.MAX_CONTROLLERS
+
+        local GlobalEnum = Enum.Controller
+
+        function lovr.controllerbutton(Id, Button, State)
+            if Id > Max then
+                return
+            end
+            local Key = LovrToAstral[Button]
+            local Enum = GlobalEnum[Key]
+
+            local Data = InputTable
+            Data.State = State
+            Data.Controller = Id
+            Data.KeyCode = Enum
+            Data.Mouse = nil
+            Data.UserInputType = nil
+
+            CAS.__CALL(Enum.Value, Data)
+        end
     end
 
     LVRB.ConnectDevices = nil
@@ -238,18 +290,18 @@ LVRB.LoadWindow = function()
 
     AstralEngine.Signals.OnWindowResize = Sig.new(Sig.Type.RTC)
 
-    function lovr.resize(w,h)
+    function lovr.resize(w, h)
         AstralEngine.Window.W = w
         AstralEngine.Window.H = h
-        AstralEngine.Window.__WindowResizedTextures(w,h)
-        AstralEngine.Signals.OnWindowResize:Fire(w,h)
-        GetService"Renderer".PassStorage.RebuildPassTable()
+        AstralEngine.Window.__WindowResizedTextures(w, h)
+        AstralEngine.Signals.OnWindowResize:Fire(w, h)
+        GetService("Renderer").PassStorage.RebuildPassTable()
         collectgarbage("collect")
     end
 
     -- FINALLY OPEN THE WINDOW
 
-    local W,H = AstralEngine.Config.Game.Window.Width, AstralEngine.Config.Game.Window.Height
+    local W, H = AstralEngine.Config.Game.Window.Width, AstralEngine.Config.Game.Window.Height
 
     lovr.system.openWindow({
         width = W,
@@ -271,8 +323,8 @@ LVRB.LoadWindow = function()
         Crosshair = 3,
         IBeam = 4,
         HResize = 5,
-        VResize = 6
-    },"CursorIconType")
+        VResize = 6,
+    }, "CursorIconType")
 
     AstralEngine.Window.SetCursorIcon = function(Inp)
         SetCursorIcon(Inp and Inp.Name:lower() or "default")
@@ -294,23 +346,23 @@ LVRB.LoadRandom = function()
     local pid = lovr.system.getCoreCount()
     local addr = debug.getaddress({})
 
-    local SEED = bit.bxor(math.floor(t * 1e9),
-     (#os * 0x9e3779b9),
-     bit.lshift(pid, 16),
-     tonumber(addr, 16))
-    math.randomseed(SEED, bit.bxor(SEED, tonumber(debug.getaddress({}),16)))
+    local SEED = bit.bxor(math.floor(t * 1e9), (#os * 0x9e3779b9), bit.lshift(pid, 16), tonumber(addr, 16))
+    math.randomseed(SEED, bit.bxor(SEED, tonumber(debug.getaddress({}), 16)))
 
     math.newrandom = function(...)
         local RanGen = lovr.math.newRandomGenerator(...)
         local Mt = getmetatable(RanGen)
 
-        if Mt.WRAPPED then return RanGen end
+        if Mt.WRAPPED then
+            return RanGen
+        end
 
         local OgIdx = Mt.__index
-        Mt.__index = function(_,k)
-            local r = k:sub(1,1)
+        Mt.WRAPPED = true
+        Mt.__index = function(_, k)
+            local r = k:sub(1, 1)
             if r == r:upper() then
-                k = r:lower()..k:sub(2)
+                k = r:lower() .. k:sub(2)
             end
             return OgIdx[k]
         end
@@ -326,8 +378,8 @@ LVRB.Alias = function()
 
     -- FILESYSTEM
     AstralEngine.Filesystem = {}
-    for i,v in pairs(lovr.filesystem) do
-        local Key = i:sub(1,1):upper()..i:sub(2)
+    for i, v in pairs(lovr.filesystem) do
+        local Key = i:sub(1, 1):upper() .. i:sub(2)
         AstralEngine.Filesystem[Key] = v
     end
 
@@ -347,12 +399,6 @@ LVRB.Alias = function()
 
     AstralEngine.System.Quit = lovr.event.quit
     AstralEngine.System.Restart = lovr.event.quit
-
-    AstralEngine.Graphics.SetBackgroundColor = lovr.graphics.setBackgroundColor
-    AstralEngine.Graphics.GetBackgroundColor = lovr.graphics.getBackgroundColor
-    AstralEngine.Graphics.EnableTiming = lovr.graphics.setTimingEnabled
-    AstralEngine.Graphics.IsTimingEnabled = lovr.graphics.isTimingEnabled
-    AstralEngine.Graphics.GetDefaultFont = lovr.graphics.getDefaultFont
 
     AstralEngine.GetHostVersion = lovr.getVersion
 

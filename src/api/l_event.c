@@ -129,11 +129,11 @@ static int nextEvent(lua_State* L) {
 
 #ifdef LOVR_ENABLE_CONTROLLER
     case EVENT_CONTROLLER_CHANGED:
-      lua_pushinteger(L,event.data.controllerChanged.jid);
+      lua_pushinteger(L,event.data.controllerChanged.jid + 1);
       lua_pushboolean(L,event.data.controllerChanged.state);
       return 3;
     case EVENT_CONTROLLER_BUTTON:
-      lua_pushinteger(L,event.data.controllerButton.jid);
+      lua_pushinteger(L,event.data.controllerButton.jid + 1);
       luax_pushenum(L, GamepadButton, event.data.controllerButton.button);
       lua_pushboolean(L,event.data.controllerButton.state);
       return 4;

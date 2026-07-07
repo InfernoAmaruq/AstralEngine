@@ -466,7 +466,7 @@ static int l_lovrControllerPresent(lua_State* L){
 }
 
 static int l_lovrControllerGetName(lua_State* L){
-    lua_pushstring(L,lovrSystemControllerGetName(lua_tointeger(L,1)));
+    lua_pushstring(L,lovrSystemControllerGetName(lua_tointeger(L,1) - 1));
     return 1;
 }
 
@@ -476,7 +476,7 @@ static int l_lovrControllerUpdateMappings(lua_State* L){
 }
 
 static int l_lovrControllerIsButtonDown(lua_State* L){
-    int jid = lua_tointeger(L,1);
+    int jid = lua_tointeger(L,1) - 1;
     os_gp button = luax_checkenum(L, 2, GamepadButton, NULL);
 
     lua_pushboolean(L,lovrSystemControllerIsButtonDown(jid, button));
@@ -485,7 +485,7 @@ static int l_lovrControllerIsButtonDown(lua_State* L){
 }
 
 static int l_lovrControllerWasButtonPressed(lua_State* L){
-    int jid = lua_tointeger(L,1);
+    int jid = lua_tointeger(L,1) - 1;
     os_gp button = luax_checkenum(L, 2, GamepadButton, NULL);
 
     lua_pushboolean(L,lovrSystemControllerWasButtonPressed(jid, button));
@@ -494,7 +494,7 @@ static int l_lovrControllerWasButtonPressed(lua_State* L){
 }
 
 static int l_lovrControllerWasButtonReleased(lua_State* L){
-    int jid = lua_tointeger(L,1);
+    int jid = lua_tointeger(L,1) - 1;
     os_gp button = luax_checkenum(L, 2, GamepadButton, NULL);
 
     lua_pushboolean(L,lovrSystemControllerWasButtonReleased(jid, button));
@@ -503,7 +503,7 @@ static int l_lovrControllerWasButtonReleased(lua_State* L){
 }
 
 static int l_lovrControllerGetAxis(lua_State* L){
-    int jid = lua_tointeger(L,1);
+    int jid = lua_tointeger(L,1) - 1;
     os_axis axis = luax_checkenum(L, 2, GamepadAxis, NULL);
 
     float xy[2] = {0,0};

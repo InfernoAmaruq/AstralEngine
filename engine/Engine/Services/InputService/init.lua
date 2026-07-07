@@ -37,6 +37,10 @@ InputService.Keyboard = {
     TextInput = SignalLib.new(RTC),
 }
 
+if lovr.system.controllerPresent then
+    InputService.Controller = require("Controller.lua")
+end
+
 -- we define IS.IsDown in LOVRBridge
 
 GetService.AddService("InputService", InputService)

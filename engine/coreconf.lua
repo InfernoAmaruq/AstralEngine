@@ -43,6 +43,9 @@ return {
         --  You can define your own values with the same logic of KEY = {VALUES}, and it will be read as: @ifdef<KEY.VALUE>
         --]]
     },
+    Input = {
+        MaxControllers = 4, -- set to 0 or under to disable
+    },
     Astral = {
         Debug = true,
         LogCrash = true,

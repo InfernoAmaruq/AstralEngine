@@ -14,11 +14,9 @@ local function typeFunc(_, x)
     local GetFunc = OgT == "table" and rawget or get
     if mt and mt.__array then
         return "array"
-    elseif
-        (mt and mt.__type)
-        or (GetFunc(x, "type") and OgType(GetFunc(x, "type")) == "function" and OgT == "userdata")
-        or GetFunc(x, "__ISEnum")
-    then
+    elseif GetFunc(x, "type") and OgType(GetFunc(x, "type")) == "function" and OgT == "userdata" then
+        return "lovrobj"
+    elseif (mt and mt.__type) or GetFunc(x, "__ISEnum") then
         return "astrobj"
     end
     return OgT
@@ -27,6 +25,7 @@ end
 type = setmetatable({
     -- EXTRA
     EngineObj = "astrobj",
+    LovrObj = "lovrobj",
     Integer = "Integer",
     Double = "Double",
     Inf = "Inf",

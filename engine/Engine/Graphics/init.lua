@@ -69,6 +69,7 @@ AstralEngine.Graphics = {
     NewTexture = lovr.graphics.newTexture,
     NewPass = lovr.graphics.newPass,
     NewTextureView = lovr.graphics.newTextureView,
+    NewBuffer = lovr.graphics.newBuffer,
 }
 
 function AstralEngine.Window.__WindowResizedTextures(...)

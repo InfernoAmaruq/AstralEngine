@@ -99,6 +99,7 @@ Renderer.Assets.Shaders = {}
 
 -- LATE INIT
 
+--[[
 Renderer.Late = {}
 function Renderer.LateCall()
     for _, v in pairs(Renderer.Late) do
@@ -115,10 +116,11 @@ for _, File in ipairs(lovr.filesystem.getAliasedFiles("RenderCalls")) do
         Renderer.Late[#Renderer.Late + 1] = f
     end
 end
-
+]]
 local SignalLib = require("Lib/Signal")
 AstralEngine.Signals.OnMainShaderChanged = SignalLib.new(SignalLib.Type.RTC)
 
+--[[
 local V, F = ShaderService.ComposeShader(Enum.ShaderType.Graphics, "OIT/Write", {
     Include = { "Material", "Lighting", "PBR", "Misc/Instancing" },
     Define = {
@@ -126,9 +128,17 @@ local V, F = ShaderService.ComposeShader(Enum.ShaderType.Graphics, "OIT/Write", 
             MAX_LIGHTS = 256,
         },
     },
+})]]
+
+local Shader = ShaderService.NewShader(Enum.ShaderType.Graphics, "Camera/Camera.glsl", "Camera/Camera.glsl", {
+    Defines = {
+        Fragment = {
+            MAX_LIGHTS = 256,
+        },
+    },
 })
 
-Renderer.SetMainShader(lovr.graphics.newShader(V, F, { flags = { normalMap = true, vertexTangents = false } }))
+Renderer.SetMainShader(Shader)
 
 Renderer.Lighting = loadfile("Lighting")(Renderer)
 

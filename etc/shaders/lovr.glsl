@@ -5,7 +5,7 @@ layout(constant_id = 1002) const bool flag_passColor = true;
 layout(constant_id = 1003) const bool flag_materialColor = true;
 layout(constant_id = 1004) const bool flag_vertexColors = true;
 layout(constant_id = 1005) const bool flag_uvTransform = true;
-layout(constant_id = 1006) const bool flag_alphaCutoff = false;
+layout(constant_id = 1006) const bool flag_alphaCutoff = true;
 layout(constant_id = 1007) const bool flag_glow = true;
 layout(constant_id = 1008) const bool flag_normalMap = true;
 layout(constant_id = 1009) const bool flag_vertexTangents = true;
@@ -565,14 +565,6 @@ void main() {
 vec4 lovrmain();
 void main() {
   PixelColor = lovrmain();
-
-  if (flag_glow) {
-    if (flag_glowTexture) {
-      PixelColor.rgb += getPixel(GlowTexture, UV).rgb * Material.glow.rgb * Material.glow.a;
-    } else {
-      PixelColor.rgb += Material.glow.rgb * Material.glow.a;
-    }
-  }
 
   if (flag_tonemap) {
     PixelColor.rgb = tonemap(PixelColor.rgb);

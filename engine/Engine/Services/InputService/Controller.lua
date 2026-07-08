@@ -28,8 +28,6 @@ Enum({
 }, "ControllerAxis")
 
 local bit = bit
-local KeyMask = tonumber("00001111", 2)
-local IdMask = tonumber("11110000", 2)
 
 local EnumToId = {
     A = 1,

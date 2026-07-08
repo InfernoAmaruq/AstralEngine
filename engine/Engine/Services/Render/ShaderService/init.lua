@@ -130,7 +130,6 @@ function ShaderService.NewShader(Type, Shader1, Shader2, Data)
         local CodeFragment = GetShaderCode(Shader2, DefineFragment, Caller)
 
         print("---GENERATED VERTEX: \n" .. CodeVertex)
-        print("---GENERATED FRAGMENT: \n" .. CodeFragment)
 
         LovrShader = lovr.graphics.newShader(CodeVertex, CodeFragment, LovrData)
     end

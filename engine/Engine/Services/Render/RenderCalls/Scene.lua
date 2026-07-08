@@ -19,18 +19,12 @@ local Component = GetService("Component")
 local mat4 = mat4
 
 -- > LOAD SHADERS
-local OITExtractRaw = GetService("ShaderService").ComposeShader(
-    Enum.ShaderType.Fragment,
-    "OIT/Composite",
-    { Include = { "PostProcessing/AO/SSAO", "PostProcessing/Bloom/Extract.glsl", "Fog" } }
-)
-local OITExtractShader = lovr.graphics.newShader("fill", OITExtractRaw)
+local ShaderService = GetService "ShaderService"
+local OITExtractShader = ShaderService.NewShader(Enum.ShaderType.Graphics, "Camera/CameraComposite.glsl")
 
-local BlurShaderRaw = GetService("ShaderService").ComposeShader(Enum.ShaderType.Fragment, "Camera/BlurPass")
-local BlurShader = lovr.graphics.newShader("fill", BlurShaderRaw)
+local BlurShader = ShaderService.NewShader(Enum.ShaderType.Graphics, "Camera/BlurPass.glsl")
 
-local FinalShaderRaw = GetService("ShaderService").ComposeShader(Enum.ShaderType.Fragment, "Camera/Finalise")
-local FinalShader = lovr.graphics.newShader("fill", FinalShaderRaw)
+local FinalShader = ShaderService.NewShader(Enum.ShaderType.Graphics, "Camera/Finalise.glsl")
 
 -- > GET PRECOMPUTED ASSETS
 

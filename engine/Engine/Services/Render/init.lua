@@ -101,7 +101,7 @@ Renderer.Assets.Shaders = {}
 
 Renderer.Late = {}
 function Renderer.LateCall()
-    for i, v in pairs(Renderer.Late) do
+    for _, v in pairs(Renderer.Late) do
         v()
     end
     Renderer.Late = nil

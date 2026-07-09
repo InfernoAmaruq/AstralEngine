@@ -18,9 +18,9 @@ vec4 GetInstancedTransform(){
 
     mat4 TransformMat = InstTransformData[InstanceIndex];
 
-    PositionWorld = vec3(Transform * VertexPosition);
+    PositionWorld = vec3(TransformMat * VertexPosition);
     Normal = mat3(transpose(inverse(TransformMat))) * VertexNormal;
 
-    return Projection * View * Transform * VertexPosition;
+    return Projection * View * TransformMat * VertexPosition;
 }
 #endif

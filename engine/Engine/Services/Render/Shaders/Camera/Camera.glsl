@@ -16,13 +16,14 @@ vec4 lovrmain(){
 }
 #else
 vec4 lovrmain(){
-    Material_GetUV(UV);
-
     vec4 p;
+
     if (IsInstanced)
         p = GetInstancedTransform();
     else
         p = DefaultPosition;
+
+    Material_GetUV(UV);
 
     return DoOIT(p);
 }

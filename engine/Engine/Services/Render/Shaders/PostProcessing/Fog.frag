@@ -1,7 +1,3 @@
-@TYPE:FRAGMENT;
-@PRIORITY:-10;
-@IDENTIFIER:FogMain;
-
 uniform bool Fog_DoFog;
 uniform float Fog_CamNear;
 
@@ -14,10 +10,8 @@ uniform Fog_Info {
     // w - horizon y offset
 };
 
-#define FOG_VALUE_CHECK fogOcclusion
-
-vec4 astral_main(){
-    unmangled float fogOcclusion = 0;
+vec3 DoFog(float depth, vec3 CurrentColor, inout float fogOcclusion){
+    fogOcclusion = 0;
 
     if (Fog_DoFog){
         float Fog_Near = otherData.x;
@@ -25,7 +19,6 @@ vec4 astral_main(){
         float Fog_Sharpness = otherData.z;
 
         ivec2 iUV = ivec2(UV * Resolution);
-        float depth = OIT_ResolveRG(OIT_TexDepth, iUV).r;
 
         vec3 fragPos;
         float finalDepth;
@@ -49,14 +42,16 @@ vec4 astral_main(){
 
         vec3 hColor = horizonColor.rgb;
         if (horizonColor.a <= 0){
-            hColor = CurrentColor.rgb;
+            hColor = CurrentColor;
         }
 
         vec3 effectiveFogColor = clamp(mix(hColor, fogColor.rgb, heightAlpha),vec3(0),vec3(1));
         float effectiveAlpha = clamp(mix(horizonColor.a, fogColor.a, heightAlpha),0,1);
 
-        vec3 FinalColor = mix(CurrentColor.rgb, effectiveFogColor, fogFactor * effectiveAlpha);
-        CurrentColor.rgb = FinalColor;
+        vec3 FinalColor = mix(CurrentColor, effectiveFogColor, fogFactor * effectiveAlpha);
         fogOcclusion = fogFactor * effectiveAlpha;
+        return FinalColor;
     }
+
+    return CurrentColor;
 }

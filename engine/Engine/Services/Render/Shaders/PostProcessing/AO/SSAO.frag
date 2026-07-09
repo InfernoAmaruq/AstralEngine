@@ -1,7 +1,3 @@
-@TYPE:FRAGMENT;
-@PRIORITY:100;
-@IDENTIFIER:SSAO;
-
 uniform mat4 Proj;
 
 uniform mat4 ProjInv;
@@ -19,20 +15,17 @@ uniform sampler2D SSAO_Noise;
 
 layout(location = 1) out vec4 SSAO_OUTPUT;
 
-unmangled vec3 ReconstructViewPos(vec2 UV, float z){
+vec3 ReconstructViewPos(vec2 UV, float z){
     vec4 clip = vec4(UV * 2.0 - 1.0, z, 1.0);
     vec4 view = ProjInv * clip;
     vec3 pos = view.xyz / view.w;
     return pos;
 }
 
-vec4 astral_main(){
+void SSAO_GetValue(vec3 normal, float depth, float mul){
     ivec2 iUV = ivec2(UV * Resolution);
-    vec3 normal = OIT_ResolveRGB(OIT_TexNormal, iUV) * 2 - 1;
 
     normal = normalize(mat3(ViewMatrix) * normal);
-
-    float depth = OIT_ResolveRG(OIT_TexDepth, iUV).r;
 
     float ao = 0;
 
@@ -65,7 +58,7 @@ vec4 astral_main(){
             vec2 sampleOffset = dir * adaptiveRadius;
             vec2 sampleUV = UV + sampleOffset / Resolution;
 
-            float sampleDepth = OIT_ResolveRG(OIT_TexDepth, ivec2(sampleUV * Resolution)).r;
+            float sampleDepth = OIT_ResolveRGB(OIT_TexDepth, ivec2(sampleUV * Resolution)).r;
             vec3 samplePos = ReconstructViewPos(sampleUV, sampleDepth);
 
             vec3 diff = samplePos - position;
@@ -88,9 +81,7 @@ vec4 astral_main(){
         ao *= distanceFade;
     }
     
-    #ifdef FOG_VALUE_CHECK
-    ao *= 1 - FOG_VALUE_CHECK;
-    #endif
+    ao *= mul;
 
     SSAO_OUTPUT = vec4(1 - (ao * SSAO_Depth));
 }

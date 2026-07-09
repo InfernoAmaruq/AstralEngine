@@ -5,7 +5,7 @@ local ShaderType = Enum({
     Graphics = 2,
 }, "ShaderType")
 
-local ShaderPath = "/Engine/Services/Render/Shaders/NEW/"
+local ShaderPath = "/Engine/Services/Render/Shaders/"
 
 local Normalize = lovr.filesystem.normalize
 local IsFile = lovr.filesystem.isFile
@@ -81,8 +81,21 @@ local function ResolveFile(File, IncludedFiles, ErrDepth)
     return Content
 end
 
+local ShaderCodes = {
+    unlit = true,
+    normal = true,
+    font = true,
+    cubemap = true,
+    equirect = true,
+    fill = true,
+}
+
 local function GetShaderCode(SourceFile, Defines, CallerPath)
     local ShaderCode = ""
+
+    if ShaderCodes[SourceFile] then
+        return SourceFile
+    end
 
     if Defines then
         ShaderCode = "//INJECTED DEFINES\n"
@@ -117,7 +130,9 @@ function ShaderService.NewShader(Type, Shader1, Shader2, Data)
 
         LovrShader = lovr.graphics.newShader(Code, LovrData)
     elseif Type == ShaderType.Graphics then
+        local NoShader2 = false
         if type(Shader2) ~= "string" then
+            NoShader2 = true
             Data = Shader2
             Shader2 = Shader1
         end
@@ -127,9 +142,12 @@ function ShaderService.NewShader(Type, Shader1, Shader2, Data)
         local DefineFragment = Defines and Defines.Fragment
 
         local CodeVertex = GetShaderCode(Shader1, DefineVertex, Caller)
-        local CodeFragment = GetShaderCode(Shader2, DefineFragment, Caller)
-
-        print("---GENERATED VERTEX: \n" .. CodeVertex)
+        local CodeFragment
+        if NoShader2 then
+            CodeFragment = CodeVertex
+        else
+            CodeFragment = GetShaderCode(Shader2, DefineFragment, Caller)
+        end
 
         LovrShader = lovr.graphics.newShader(CodeVertex, CodeFragment, LovrData)
     end
@@ -138,4 +156,5 @@ function ShaderService.NewShader(Type, Shader1, Shader2, Data)
 end
 
 GetService.AddService("ShaderService", ShaderService)
+
 return ShaderService

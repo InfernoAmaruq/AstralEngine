@@ -116,7 +116,7 @@ local MT = {
 
             Comp[IdxFields.Shape] = v
             local Flags = RT.Flags
-            RT:Update(Flags.Param_Old, Flags.Param_Old, Conversion, Conversion)
+            RT:Update(Flags.Param_Old, Flags.Param_Old, Conversion, Conversion, Flags.Param_Old)
         end
     end,
 }
@@ -146,7 +146,7 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
     Comp.__RenderTypePtr = RT
     Comp.__Ent = e
 
-    RT:Update(RT:GetMaterial(), RT.Flags.Stack_Solid, Val, Val) -- SUBMIT MATERIAL HERE AS WELL
+    RT:Update(RT:GetMaterial(), RT.Flags.Stack_Solid, Val, Val, false) -- SUBMIT MATERIAL HERE AS WELL
 
     return setmetatable(Comp, MT)
 end

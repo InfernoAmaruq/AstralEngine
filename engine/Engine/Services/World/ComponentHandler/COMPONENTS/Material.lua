@@ -75,7 +75,7 @@ local function RebuildMatrix(self)
 
         local Flag = (Color.a >= 0.99 and (self[1] and F.Stack_Both or F.Stack_Solid) or F.Stack_Transparent)
 
-        RT:Update(self[1], Flag, F.Param_Old, F.Param_Old)
+        RT:Update(self[1], Flag, F.Param_Old, F.Param_Old, F.Param_Old)
     end
 end
 

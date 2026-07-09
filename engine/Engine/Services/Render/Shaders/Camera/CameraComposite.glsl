@@ -1,9 +1,9 @@
 #ifdef GL_FRAGMENT_SHADER
 
-#include "OIT/Composite.glsl"
-#include "AO/SSAO.frag"
-#include "PostProcessing/Fog.frag"
 #include "PostProcessing/Bloom/Extract.glsl"
+#include "OIT/Composite.glsl"
+#include "PostProcessing/AO/SSAO.frag"
+#include "PostProcessing/Fog.frag"
 
 vec4 lovrmain() {
     float Depth;
@@ -20,5 +20,7 @@ vec4 lovrmain() {
     return Color;
 }
 #else
-vec4 lovrmain() { return DefaultPosition; }
+vec4 lovrmain() {
+    return DefaultPosition;
+}
 #endif

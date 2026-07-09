@@ -16,6 +16,8 @@ local FIELDS = {
     __Material = 3,
     __GeometryHash = 4,
     __DrawType = 5,
+    __Shader = 6,
+    __ShaderLock = 7,
 }
 
 local RenderFlags = {
@@ -35,20 +37,35 @@ local Methods = {
         end
         return false
     end,
-    Update = function(self, Material, Solid, GeometryHash, DrawType)
+    ShaderLock = function(State)
+        self[FIELDS.__ShaderLock] = State
+    end,
+    Update = function(self, Material, Solid, GeometryHash, DrawType, Shader)
         local bit = bit
-        local OldSolid, OldMaterial, OldGeometryHash, OldDrawType = unpack(self, 2, 5)
+        local OldSolid, OldMaterial, OldGeometryHash, OldDrawType, OldShader = unpack(self, 2, 6)
 
         Solid = Solid == RenderFlags.Param_Old and OldSolid or Solid or RenderFlags.Stack_None
-        Material = Material == RenderFlags.Param_Old and OldMaterial or Material or false
         GeometryHash = GeometryHash == RenderFlags.Param_Old and OldGeometryHash or GeometryHash or -1
         DrawType = DrawType == RenderFlags.Param_Old and OldDrawType or DrawType or -1
+
+        if Shader == RenderFlags.Param_Old then
+            Shader = OldShader
+        end
+
+        if Material == RenderFlags.Param_Old then
+            Material = OldShader
+        end
+
+        if self[FIELDS.__ShaderLock] and Shader ~= OldShader then
+            AstralEngine.Error("Attempt to set a new shader to a ShaderLocked object!", "RenderTarget")
+        end
 
         if
             Solid == OldSolid
             and Material == OldMaterial
             and GeometryHash == OldGeometryHash
             and DrawType == OldDrawType
+            and Shader == OldShader
         then
             self:Invalidate()
             return
@@ -63,29 +80,30 @@ local Methods = {
         local DrawTable = Renderer.DrawTable
 
         if HadTransparent and not DoTransparent then
-            DrawTable.RemoveFromStack(Entity, false, OldMaterial, GeometryHash)
+            DrawTable.RemoveFromStack(Entity, false, OldMaterial, GeometryHash, Shader)
         elseif not HadTransparent and DoTransparent then
-            DrawTable.AddToStack(Entity, false, Material, GeometryHash, DrawType)
+            DrawTable.AddToStack(Entity, false, Material, GeometryHash, DrawType, Shader)
         elseif
             (OldMaterial ~= Material or DrawType ~= OldDrawType or OldGeometryHash ~= GeometryHash) and DoTransparent
         then
-            DrawTable.RemoveFromStack(Entity, false, OldMaterial, OldGeometryHash)
-            DrawTable.AddToStack(Entity, false, Material, GeometryHash, DrawType)
+            DrawTable.RemoveFromStack(Entity, false, OldMaterial, OldGeometryHash, Shader)
+            DrawTable.AddToStack(Entity, false, Material, GeometryHash, DrawType, Shader)
         end
 
         if HadSolid and not DoSolid then
-            DrawTable.RemoveFromStack(Entity, true, OldMaterial, GeometryHash)
+            DrawTable.RemoveFromStack(Entity, true, OldMaterial, GeometryHash, Shader)
         elseif not HadSolid and DoSolid then
-            DrawTable.AddToStack(Entity, true, Material, GeometryHash, DrawType)
+            DrawTable.AddToStack(Entity, true, Material, GeometryHash, DrawType, Shader)
         elseif (OldMaterial ~= Material or DrawType ~= OldDrawType or OldGeometryHash ~= GeometryHash) and DoSolid then
-            DrawTable.RemoveFromStack(Entity, true, OldMaterial, OldGeometryHash)
-            DrawTable.AddToStack(Entity, true, Material, GeometryHash, DrawType)
+            DrawTable.RemoveFromStack(Entity, true, OldMaterial, OldGeometryHash, Shader)
+            DrawTable.AddToStack(Entity, true, Material, GeometryHash, DrawType, Shader)
         end
 
         self[2] = Solid
         self[3] = Material
         self[4] = GeometryHash
         self[5] = DrawType
+        self[6] = Shader
     end,
     Invalidate = function(self)
         Renderer.DrawTable.Invalidate(self[3], self[4])
@@ -115,6 +133,8 @@ RendTarget.Metadata.__create = function(Type, Entity)
         [FIELDS.__GeometryHash] = -1,
         [FIELDS.__DrawType] = -1,
         [FIELDS.__Material] = false,
+        [FIELDS.__Shader] = false,
+        [FIELDS.__ShaderLock] = false,
         __E = Entity,
     }, mt)
 

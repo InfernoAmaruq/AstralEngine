@@ -20,11 +20,11 @@ local mat4 = mat4
 
 -- > LOAD SHADERS
 local ShaderService = GetService "ShaderService"
-local OITExtractShader = ShaderService.NewShader(Enum.ShaderType.Graphics, "Camera/CameraComposite.glsl")
+local OITExtractShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "Camera/CameraComposite.glsl")
 
-local BlurShader = ShaderService.NewShader(Enum.ShaderType.Graphics, "Camera/BlurPass.glsl")
+local BlurShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "Camera/BlurPass.glsl")
 
-local FinalShader = ShaderService.NewShader(Enum.ShaderType.Graphics, "Camera/Finalise.glsl")
+local FinalShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "Camera/Finalise.glsl")
 
 -- > GET PRECOMPUTED ASSETS
 
@@ -44,39 +44,9 @@ local BlurSampler = lovr.graphics.newSampler({ wrap = "clamp" })
 
 local MainShader
 
--- lets cache instanced buffer formats here
-
-local BFI_Transform
-local BFI_Material
-local BFI_Scale
-
-Renderer.GetMainShader = function()
-    return MainShader
-end
-
-Renderer.SetMainShader = function(Shader)
-    MainShader = Shader
-
-    if not Shader:hasVariable("INSTANCE_Transform") then
-        INSTANCING_THRESHOLD = math.huge -- should not instance
-        return
-    end
-
-    -- now to pull formats in case they were updated!
-
-    if BFI_Transform then
-        -- override and potentially rebuild
-        local New_BFI_Transform
-        local New_BFI_Material
-        local New_BFI_Scale
-
-        -- TODO
-    else
-        BFI_Transform = "mat4"
-        BFI_Material = "mat4"
-        BFI_Scale = "vec3"
-    end
-end
+local BFI_Transform = "mat4"
+local BFI_Material = "mat4"
+local BFI_Scale = "vec3"
 
 -- > HANDLE RENDERING DATA
 -- >> STACK
@@ -145,6 +115,103 @@ local DrawTable = {
 }
 Renderer.DrawTable = DrawTable
 
+-- Shader pipelines
+
+local ShaderRegistry = {}
+local ShaderList = {}
+local ShaderManifest = {}
+local ShaderListTop = 0
+
+local BASE_MANIFEST = {
+    TransparentPipeline = true, SolidPipeline = true, SendDirectLightingData = true, SendIndirectLightingData = true, CanBeInstanced = true
+}
+
+local function SortFunc(a, b)
+    return a.Priority < b.Priority
+end
+
+local function SortShaders()
+    for i = 1, #ShaderList do
+        ShaderList[i] = nil
+        ShaderManifest[i] = nil
+    end
+
+    local Idx = 1
+    for _, Val in pairs(ShaderRegistry) do
+        ShaderList[Idx] = Val
+        Idx = Idx + 1
+    end
+
+    table.sort(ShaderList, SortFunc)
+
+    ShaderListTop = #ShaderList
+    for i = 1, ShaderListTop do
+        ShaderManifest[i] = ShaderList[i].Manifest
+        ShaderList[i] = ShaderList[i].Shader
+    end
+end
+
+function Renderer.BindShaderPipeline(Name, Shader, Config)
+    local RegistryInfo = table.new(0, 4)
+
+    Name = AstralEngine.Assert(tostring(Name), "Cannot bind an unnamed shader pipeline!", "Renderer")
+
+    AstralEngine.Assert(ShaderRegistry[Shader] == nil,
+        "Shader pipeline with shader: " .. tostring(Shader) .. " already exists!",
+        "Renderer")
+
+    local Manifest
+
+    if Config and Config.Manifest then
+        Manifest = {}
+
+        for i, v in pairs(Config.Manifest) do
+            Manifest[i] = v
+        end
+    else
+        Manifest = BASE_MANIFEST
+    end
+
+    RegistryInfo.Priority = Config and Config.Priority or 101
+    RegistryInfo.Manifest = Manifest
+    RegistryInfo.Name = Name
+    RegistryInfo.Shader = Shader
+
+    ShaderRegistry[Shader] = RegistryInfo
+
+    SortShaders()
+end
+
+function Renderer.UnbindShaderPipeline(Name)
+    for i, v in pairs(ShaderRegistry) do
+        if v.Name == Name then
+            ShaderRegistry[i] = nil
+
+            if DrawTable.Solid[v.Shader] or DrawTable.Transparent[v.Shader] then
+                AstralEngine.Log("Unbound shader pipeline with geometry bound to shader. Geometry will be ignored",
+                    "warn", "Renderer")
+            end
+
+            SortShaders()
+            return
+        end
+    end
+end
+
+Renderer.GetMainShader = function()
+    return MainShader
+end
+
+Renderer.SetMainShader = function(Shader)
+    MainShader = Shader
+
+    Renderer.SetMainShader = nil
+
+    Renderer.BindShaderPipeline("__PRIMARY_GEOMETRY_PIPELINE", Shader)
+end
+
+-- Geometry/Register
+
 local function Enqueue(Table, Entity)
     if Table.Queue[Entity] then
         return
@@ -176,33 +243,36 @@ local function Dequeue(Table, Entity)
     Table.State = GTS_NEEDS_UPDATE
 end
 
-function DrawTable.AddToStack(Entity, IsSolid, Material, GeometryHash, DrawType)
+function DrawTable.AddToStack(Entity, IsSolid, Material, GeometryHash, DrawType, Shader)
     local SubTable = IsSolid and DrawTable.Solid or DrawTable.Transparent
+
+    Shader = Shader or MainShader
+
+    local LookUpShader = ShaderRegistry[Shader]
+    if not LookUpShader then
+        AstralEngine.Log(
+            "Shader " ..
+            tostring(Shader) .. " is missing from shader registy. Objects with this shader will not be drawn",
+            "warn", "Renderer")
+
+        local Manifest = Shader.Manifest
+        if IsSolid and not Manifest.SolidPipeline then return end
+        if not IsSolid and not Manifest.TransparentPipeline then return end
+    end
+
+    local ShaderTable = SubTable[Shader] or {}
+    SubTable[Shader] = ShaderTable
 
     Material = Material or false
 
-    local MatTable = SubTable[Material] or {}
-
-    SubTable[Material] = MatTable
+    local MatTable = ShaderTable[Material] or {}
+    ShaderTable[Material] = MatTable
 
     local GeometryTable = MatTable[GeometryHash] or { Top = 0, Type = DrawType, Queue = table.new(10, 50) }
 
     MatTable[GeometryHash] = GeometryTable
 
     Enqueue(GeometryTable, Entity)
-
-    --[[local T = GeometryTable.Top + 1
-
-    GeometryTable[T] = Entity
-
-    GeometryTable.Top = T
-    if T > INSTANCING_THRESHOLD and not GeometryTable.IsInstanced then
-        GeometryTable.State = GTS_NEEDS_ALLOC
-    elseif GeometryTable.IsInstanced then
-        GeometryTable.State = GTS_NEEDS_UPDATE
-    else
-        GeometryTable.State = GTS_READY
-    end]]
 end
 
 function DrawTable.Invalidate(Material, GeometryHash)
@@ -227,13 +297,23 @@ function DrawTable.Invalidate(Material, GeometryHash)
     end
 end
 
-function DrawTable.RemoveFromStack(Entity, IsSolid, Material, GeometryHash)
+function DrawTable.RemoveFromStack(Entity, IsSolid, Material, GeometryHash, Shader)
     -- here the RenderTarget component will know material, geometry hash and state
     local SubTable = IsSolid and DrawTable.Solid or DrawTable.Transparent
 
+    Shader = Shader or MainShader
+
+    local ShaderTable = SubTable[Shader]
+
+    AstralEngine.Assert(
+        ShaderTable,
+        "No shader table exists for Entity: " .. Entity .. " - Cannot remove from render stack",
+        "Renderer"
+    )
+
     Material = Material or false
 
-    local MatTable = SubTable[Material]
+    local MatTable = ShaderTable[Material]
 
     AstralEngine.Assert(
         MatTable,
@@ -250,37 +330,6 @@ function DrawTable.RemoveFromStack(Entity, IsSolid, Material, GeometryHash)
     )
 
     Dequeue(GeometryTable, Entity)
-
-    --[[local Top, Id = GeometryTable.Top, -1
-    for i = 1, Top do
-        if GeometryTable[i] == Entity then
-            Id = i
-        end
-    end
-
-    AstralEngine.Assert(Id ~= -1, "Entity not found in material-geometry pair table. Cannot remove", "Renderer")
-
-    -- swap so we have our linear array
-
-    if Top == 1 then
-        GeometryTable[Top] = nil
-        GeometryTable.State = GTS_NEEDS_FREE_FULL
-        -- free when drawing. Not now since it COULD be repopulated. Happens often when changing an object from one stack to another
-    else
-        local TopEnt = GeometryTable[Top]
-        GeometryTable[Id] = TopEnt
-        GeometryTable[Top] = nil
-
-        if Top - 1 < INSTANCING_THRESHOLD and GeometryTable.IsInstanced then
-            GeometryTable.State = GTS_NEEDS_FREE_GPU
-        elseif GeometryTable.IsInstanced then
-            GeometryTable.State = GTS_NEEDS_UPDATE
-        else
-            GeometryTable.State = GTS_READY
-        end
-    end
-
-    GeometryTable.Top = Top - 1]]
 end
 
 local function Populate(Table, From)
@@ -518,6 +567,10 @@ local function GetDrawFunc(IsSolid)
 
         local Lighting = Renderer.Lighting
 
+        local ShaderListTop = ShaderListTop
+        local ShaderList = ShaderList
+        local ShaderManifest = ShaderManifest
+
         for CamId = 1, CamCount do
             local EntId = Cameras[CamId]
             local Camera = CSCamera[EntId]
@@ -554,45 +607,60 @@ local function GetDrawFunc(IsSolid)
 
             -- CONFIGURE SHADER
 
-            Pass:setShader(MainShader)
-            Pass:send("Lighting_Ambience", Camera[9])
-            Pass:send("Transparent", IsTransparent)
+            for i = 1, ShaderListTop do
+                local Shader, Manifest = ShaderList[i], ShaderManifest[i]
 
-            Pass:send("Lighting_Data", Lighting.LightBuffer)
-            Pass:send("Lighting_LTC", Lighting.LTCTexture)
-            Pass:send("Lighting_LTC_Amp", Lighting.LTCAmp)
-            Pass:send("CamTransform", TransformMatrix)
+                Pass:setShader(Shader)
+                Pass:send("Transparent", IsTransparent)
 
-            Pass:send("PBR_SphericalHarmonics", Camera[29])
-            Pass:send("PBR_EnvMap", Skybox)
+                if Manifest.SendDirectLightingData then
+                    Pass:send("Lighting_Data", Lighting.LightBuffer)
+                    Pass:send("Lighting_LTC", Lighting.LTCTexture)
+                    Pass:send("Lighting_LTC_Amp", Lighting.LTCAmp)
+                    Pass:send("CamTransform", TransformMatrix)
+                end
 
-            for Material, GeometryList in pairs(Stack) do
-                Pass:setMaterial(Material or nil)
+                if Manifest.SendIndirectLightingData then
+                    Pass:send("Lighting_Ambience", Camera[9])
 
-                for DrawHash, GeometryTable in pairs(GeometryList) do
-                    Pass:push("state")
+                    Pass:send("PBR_SphericalHarmonics", Camera[29])
+                    Pass:send("PBR_EnvMap", Skybox)
+                end
 
-                    --local ShouldDrop = (GeometryTable.State == GTS_READY) and false or DrawTableFix(GeometryTable)
-                    local ShouldContinue = GeometryTable.State == GTS_READY
-                        or DrawTableFix(GeometryTable, GeometryList, DrawHash)
+                local CanBeInstanced = Manifest.CanBeInstanced
 
-                    if ShouldContinue then
-                        local Functions = FunctionRegistry[GeometryTable.Type]
-                        if GeometryTable.IsInstanced and Functions.Bulk then
-                            Pass:send("IsInstanced", true)
+                if Manifest.Setter then
+                    Manifest.Setter(Pass, Shader, IsSolid, Camera)
+                end
 
-                            Pass:send("INSTANCE_Transform", GeometryTable.GPU_Transform)
-                            Pass:send("INSTANCE_Material", GeometryTable.GPU_Material)
-                            Pass:send("INSTANCE_Scale", GeometryTable.GPU_Scale)
+                for Material, GeometryList in pairs(Stack[Shader]) do
+                    Pass:setMaterial(Material or nil)
 
-                            Functions.Bulk(Pass, GeometryTable, DrawHash)
-                        else
-                            Pass:send("IsInstanced", false)
-                            Functions.Single(Pass, GeometryTable, DrawHash)
+                    for DrawHash, GeometryTable in pairs(GeometryList) do
+                        Pass:push("state")
+
+                        --local ShouldDrop = (GeometryTable.State == GTS_READY) and false or DrawTableFix(GeometryTable)
+                        local ShouldContinue = GeometryTable.State == GTS_READY
+                            or DrawTableFix(GeometryTable, GeometryList, DrawHash)
+
+                        if ShouldContinue then
+                            local Functions = FunctionRegistry[GeometryTable.Type]
+                            if CanBeInstanced and GeometryTable.IsInstanced and Functions.Bulk then
+                                Pass:send("IsInstanced", true)
+
+                                Pass:send("INSTANCE_Transform", GeometryTable.GPU_Transform)
+                                Pass:send("INSTANCE_Material", GeometryTable.GPU_Material)
+                                Pass:send("INSTANCE_Scale", GeometryTable.GPU_Scale)
+
+                                Functions.Bulk(Pass, GeometryTable, DrawHash)
+                            else
+                                Pass:send("IsInstanced", false)
+                                Functions.Single(Pass, GeometryTable, DrawHash)
+                            end
                         end
-                    end
 
-                    Pass:pop("state")
+                        Pass:pop("state")
+                    end
                 end
             end
         end
@@ -677,12 +745,6 @@ function Renderer.Composite()
         CompositePass:setSampler("nearest")
         CompositePass:fill()
 
-        if true then
-            MainPass:reset()
-            MainPass:fill(Camera[33][1])
-            return
-        end
-
         -- BLUR PASS
 
         BlurPassV:reset()
@@ -740,6 +802,7 @@ function Renderer.Composite()
         BlurPassV:fill()
 
         -- FINALISE
+
         MainPass:reset()
         MainPass:setShader(FinalShader)
 

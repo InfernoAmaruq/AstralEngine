@@ -29,11 +29,20 @@ local RenderFlags = {
     Stack_Both = 3,
 }
 
+RendTarget.Metadata.Flags = RenderFlags
+
 local Methods = {
-    GetMaterial = function(Entity)
-        local Mat = Component.GetComponent(Entity, "Material")
+    GetMaterial = function(self)
+        local Mat = Component.GetComponent(self.__E, "Material")
         if Mat then
             return Mat[1] or false
+        end
+        return false
+    end,
+    GetShader = function(self)
+        local Shader = Component.GetComponent(self.__E, "Shader")
+        if Shader then
+            return Shader[1] or false
         end
         return false
     end,
@@ -124,19 +133,31 @@ local mt = {
     end,
 }
 
-RendTarget.Metadata.__create = function(Type, Entity)
+RendTarget.Metadata.__create = function(In, Entity)
     local RM = Renderer.CamMask
 
     local Data = setmetatable({
         [FIELDS.__RenderMask] = RM,
         [FIELDS.__Stacks] = RenderFlags.Stack_None,
-        [FIELDS.__GeometryHash] = -1,
-        [FIELDS.__DrawType] = -1,
-        [FIELDS.__Material] = false,
-        [FIELDS.__Shader] = false,
         [FIELDS.__ShaderLock] = false,
         __E = Entity,
     }, mt)
+
+    local Material, Stack, Hash, Type, Shader = unpack(In)
+    local MatComp = Component.GetComponent(Entity, "Material")
+    Shader = Shader or Methods.GetShader(Data)
+
+    if MatComp then
+        Material = MatComp[1] or false
+        local IsSolid = MatComp.Color.a == 255
+        if Material then
+            Stack = IsSolid and RenderFlags.Stack_Both or RenderFlags.Stack_Transparent
+        else
+            Stack = IsSolid and RenderFlags.Stack_Solid or RenderFlags.Stack_Transparent
+        end
+    end
+
+    Methods.Update(Data, Material, Stack, Hash, Type, Shader)
 
     return Data
 end

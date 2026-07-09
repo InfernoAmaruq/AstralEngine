@@ -137,7 +137,13 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
         Component.AddComponent(e, "Transform")
     end
 
-    local RT = Component.AddComponent(e, "RenderTarget")
+    local RT = Component.AddComponent(e, "RenderTarget", {
+        false,
+        Component.Components.RenderTarget.Metadata.Flags.Stack_Solid,
+        Val,
+        Val,
+        false,
+    })
 
     local Comp = {
         [IdxFields.Shape] = ShapeEnum,
@@ -145,8 +151,6 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
 
     Comp.__RenderTypePtr = RT
     Comp.__Ent = e
-
-    RT:Update(RT:GetMaterial(), RT.Flags.Stack_Solid, Val, Val, false) -- SUBMIT MATERIAL HERE AS WELL
 
     return setmetatable(Comp, MT)
 end

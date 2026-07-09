@@ -6,19 +6,6 @@ local Material = {}
 Material.Name = "Material"
 Material.Metadata = {}
 
-Comp.ComponentAdded:Connect(function(e, id, c)
-    local Mat = Comp.GetComponent(e, "Material")
-    if id == "RenderTarget" and Mat then
-        if Mat[1] then
-            c:SetMaterial(Mat[1])
-        else
-            local Alpha = Mat[4].w
-            c:RemoveFromStack()
-            c:SwapStacks(Alpha == 1)
-        end
-    end
-end)
-
 local MaterialFitMode = Enum({ Stretch = 0, Tile = 1, Crop = 2 }, "MaterialFitMode")
 
 Material.Metadata.EmptyMatrix = Mat4(
@@ -37,9 +24,9 @@ Material.Metadata.EmptyMatrix = Mat4(
     0,
     0,
     --
-    1,
-    1,
-    1,
+    0,
+    0,
+    0,
     1
 -- glow
 )
@@ -135,7 +122,7 @@ Material.Metadata.__create = function(Data, Ent)
     Storage[8] = Ent
     Storage[9] = Mat4() -- allocate matrix for it
 
-    local InGlowColor = Data and Data.Glow or vec4(0, 0, 0, 255)
+    local InGlowColor = Data and Data.GlowColor or vec4(0, 0, 0, 255)
     R, G, B, A = InGlowColor:unpack()
     local GlowColor = Vec4(R, G, B, A or 1):div(255)
 

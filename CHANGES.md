@@ -7,6 +7,7 @@ dev
 ### Fix
 
 - Fix `Pass:drawPart`.
+- Fix `ModelData:getMeshIndex` for meshes with multiple parts.
 - Fix crash when creating `MeshShape` with empty model.
 - Fix possible hang with async functions when `t.thread.workers` is zero.
 - Fix possible crash when using graphics module from threads.

@@ -10,6 +10,7 @@ dev
 - Fix crash when creating `MeshShape` with empty model.
 - Fix possible hang with async functions when `t.thread.workers` is zero.
 - Fix possible crash when using graphics module from threads.
+- Fix issues with missing files in zip archives mounted with mountpoints.
 
 v0.19.0 - 2026-06-07
 ---

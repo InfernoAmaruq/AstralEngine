@@ -145,7 +145,11 @@ RendTarget.Metadata.__create = function(In, Entity)
 
     local Material, Stack, Hash, Type, Shader = unpack(In)
     local MatComp = Component.GetComponent(Entity, "Material")
-    Shader = Shader or Methods.GetShader(Data)
+    local ShaderComp = Component.GetComponent(Entity, "Shader")
+
+    if ShaderComp then
+        Shader = ShaderComp[1] or false
+    end
 
     if MatComp then
         Material = MatComp[1] or false

@@ -10,6 +10,7 @@ local ALLOC_STEP = 1.2                                                -- ceil'd 
 local MAX_SHADOWMAPS = 150                                            -- for each type, n * 6 for point lights
 local TEXTURE_SIZE = 256
 
+local ShadowmapShader
 local ShadowmapData = {
     Cube = {
         Parameters = {
@@ -72,6 +73,9 @@ function ShadowmapManager.Realloc(Struct, Scale, NewCount)
     end
 
     if Struct.Allocated == -1 then -- invalid, need first time alloc
+        ShadowmapShader =
+            GetService("ShaderService").NewShader(Enum.ShaderType.Graphics, "unlit", "Shadowmap/Shadowmap.frag")
+
         Struct.Views = Table(Passes, 1)
         Struct.Passes = Table(Passes, 1)
         ---@TODO: allocate target pass here (if i add the shared draw table thing)

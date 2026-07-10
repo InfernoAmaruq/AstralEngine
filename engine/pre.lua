@@ -95,6 +95,7 @@ lovr.filesystem.mountRecursively(PATH, package.GAME_PATH, package.GAME_PATH, fun
         if Name == "Components" and VfsPath:find("Plugin") then
             return
         end
+
         lovr.filesystem.alias(VfsPath, GameAliasTable[Name])
     end
 end)

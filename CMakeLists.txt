@@ -47,10 +47,6 @@ option(LOVR_BUILD_SHARED "Build a shared library (takes precedence over LOVR_BUI
 option(LOVR_BUILD_BUNDLE "On macOS, build a .app bundle instead of a raw program" OFF)
 option(LOVR_BUILD_WITH_SYMBOLS "Build with C function symbols exposed" ON)
 
-if(MSVC)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" CACHE STRING "" FORCE)
-endif()
-
 # Setup
 if(EMSCRIPTEN)
   string(CONCAT EMSCRIPTEN_LINKER_FLAGS
@@ -78,7 +74,7 @@ if(EMSCRIPTEN)
   set(LOVR_USE_STEAM_AUDIO OFF)
 elseif(MSVC)
   add_compile_options(/MP)
-  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" CACHE STRING "" FORCE)
 elseif(ANDROID)
   find_package(Java REQUIRED)
   set(LOVR_USE_SIMULATOR OFF)

@@ -138,11 +138,11 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
     end
 
     local RT = Component.AddComponent(e, "RenderTarget", {
-        false,
-        Component.Components.RenderTarget.Metadata.Flags.Stack_Solid,
-        Val,
-        Val,
-        false,
+        Shader = false,
+        Stack = Component.Components.RenderTarget.Metadata.Flags.Stack_Solid,
+        GeometryType = Val,
+        GeometryHash = Val,
+        Material = false,
     })
 
     local Comp = {

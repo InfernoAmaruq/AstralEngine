@@ -115,7 +115,7 @@ local Methods = {
         self[6] = Shader
     end,
     Invalidate = function(self)
-        Renderer.DrawTable.Invalidate(self[3], self[4])
+        Renderer.DrawTable.Invalidate(self[6], self[3], self[4])
     end,
 }
 
@@ -139,15 +139,14 @@ RendTarget.Metadata.__create = function(In, Entity)
     local Data = setmetatable({
         [FIELDS.__RenderMask] = RM,
         [FIELDS.__Stacks] = RenderFlags.Stack_None,
-        [FIELDS.__ShaderLock] = false,
         __E = Entity,
     }, mt)
 
-    local Material, Stack, Hash, Type, Shader = unpack(In)
+    local Material, Stack, Hash, Type, Shader = In.Material, In.Stack, In.GeometryHash, In.GeometryType, In.Shader
     local MatComp = Component.GetComponent(Entity, "Material")
     local ShaderComp = Component.GetComponent(Entity, "Shader")
 
-    if ShaderComp then
+    if ShaderComp and not Data[FIELDS.__ShaderLock] then
         Shader = ShaderComp[1] or false
     end
 
@@ -162,6 +161,8 @@ RendTarget.Metadata.__create = function(In, Entity)
     end
 
     Methods.Update(Data, Material, Stack, Hash, Type, Shader)
+
+    Data[FIELDS.__ShaderLock] = In.ShaderLock or false
 
     return Data
 end

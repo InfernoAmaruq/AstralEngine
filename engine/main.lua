@@ -138,9 +138,15 @@ function lovr.run()
     -- try execute core script first
     local HasWorld, WorldRes = pcall(loadfile,package.GAME_PATH.."/PhysicsWorld.lua")
 
-    if HasWorld then
+    if HasWorld and WorldRes then
         local Ok, WorldData = pcall(WorldRes)
         if not Ok then AstralEngine.Error("Failed to load PhysicsWorld.lua file: "..WorldData,"PHYSICS") end
+        local ps = GetService"Physics"
+        if WorldData then
+            local W = ps.NewWorld(WorldData)
+            ps.SetMainWorld(W)
+        end
+    elseif HasWorld and not WorldRes then
         local ps = GetService"Physics"
         local W = ps.NewWorld(WorldData)
         ps.SetMainWorld(W)

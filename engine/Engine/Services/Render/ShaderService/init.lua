@@ -5,7 +5,7 @@ local ShaderType = Enum({
     Graphics = 2,
 }, "ShaderType")
 
-local ShaderPath = "/Engine/Services/Render/Shaders/"
+local ShaderPath = { "Engine/Services/Render/Shaders/", "GAMEFILE/Assets/Shaders/" }
 
 local Normalize = lovr.filesystem.normalize
 local IsFile = lovr.filesystem.isFile
@@ -13,9 +13,12 @@ local Read = lovr.filesystem.read
 
 local function ResolvePath(File, LocalPath)
     -- try shaders
-    local Shader = Normalize(ShaderPath .. File)
-    if IsFile(Shader) then
-        return Shader
+
+    for _, ToSearch in ipairs(ShaderPath) do
+        local Shader = Normalize(ToSearch .. File)
+        if IsFile(Shader) then
+            return Shader
+        end
     end
 
     -- try local

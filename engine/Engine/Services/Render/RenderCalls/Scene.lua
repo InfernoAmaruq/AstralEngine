@@ -168,6 +168,12 @@ function Renderer.BindShaderPipeline(Name, Shader, Config)
         for i, v in pairs(Config.Manifest) do
             Manifest[i] = v
         end
+
+        for i, v in pairs(BASE_MANIFEST) do
+            if Manifest[i] == nil then
+                Manifest[i] = v
+            end
+        end
     else
         Manifest = BASE_MANIFEST
     end
@@ -275,23 +281,29 @@ function DrawTable.AddToStack(Entity, IsSolid, Material, GeometryHash, DrawType,
     Enqueue(GeometryTable, Entity)
 end
 
-function DrawTable.Invalidate(Material, GeometryHash)
+function DrawTable.Invalidate(Shader, Material, GeometryHash)
     Material = Material or false
 
     for i = 1, 2 do
-        local t1 = DrawTable[i == 1 and "Solid" or "Transparent"][Material]
+        local t1 = DrawTable[i == 1 and "Solid" or "Transparent"][Shader]
 
         if not t1 then
             goto continue
         end
 
-        local t2 = t1[GeometryHash]
+        local t2 = t1[Material]
 
         if not t2 then
             goto continue
         end
 
-        t2.State = GTS_NEEDS_UPDATE
+        local t3 = t2[GeometryHash]
+
+        if not t2 then
+            goto continue
+        end
+
+        t3.State = GTS_NEEDS_UPDATE
 
         ::continue::
     end
@@ -362,9 +374,12 @@ local function Populate(Table, From)
     Table.IsInstanced = true
 end
 
-local function DrawTableFix(Table, Where, Key)
+local function DrawTableFix(Table, Where, Key, Shader)
     -- this will be called if the table needs repairs or changes to be made
     -- nts: do not forget to check if the Type of geometry has a bulk function before allocating
+
+    local ShaderTable = ShaderRegistry[Shader]
+    local Manifest = ShaderTable.Manifest
 
     local State = Table.State
     local Inst = Table.IsInstanced
@@ -385,6 +400,12 @@ local function DrawTableFix(Table, Where, Key)
         local C_Transform, C_Material = CompReg.Transform.Storage, CompReg.Material.Storage
 
         local EmptyMatrix = CompReg.Material.Metadata.EmptyMatrix
+
+        local ShaderUpdated = Manifest.EntityChanged
+
+        if ShaderUpdated then
+            ShaderUpdated(Table, Queue, i, v)
+        end
 
         for i, v in pairs(Queue) do
             if v then
@@ -429,7 +450,7 @@ local function DrawTableFix(Table, Where, Key)
 
         State = GTS_NEEDS_UPDATE
 
-        if GeometryTypeRegistry[Table.Type].Bulk then
+        if GeometryTypeRegistry[Table.Type].Bulk and Manifest.CanBeInstanced then
             if Top >= INSTANCING_THRESHOLD and not Table.IsInstanced then
                 State = GTS_NEEDS_ALLOC
             elseif Top == 0 then
@@ -460,6 +481,8 @@ local function DrawTableFix(Table, Where, Key)
             Table.Material_MatrixInstanced = nil
             Table.Material_MatrixInstanced = nil
             Table.AllocatorState = ALLOCATOR_STATE_NONE
+
+            if Manifest.InstFree then Manifest.InstFree(Table) end
         end
 
         if State == GTS_NEEDS_FREE_FULL then
@@ -501,6 +524,8 @@ local function DrawTableFix(Table, Where, Key)
             Table.GPU_Material:setData(Table.Material_MatrixInstanced)
             Table.GPU_Scale:setData(Table.Material_ObjectScaleInstanced)
         end
+
+        if Manifest.InstRealloc then Manifest.InstRealloc(Table, Alloc, OldSize) end
     elseif State == GTS_NEEDS_ALLOC then
         local New = table.new
         local NewBuffer = lovr.graphics.newBuffer
@@ -527,6 +552,8 @@ local function DrawTableFix(Table, Where, Key)
         Table.State = GTS_NEEDS_UPDATE
         Table.AllocatorState = ALLOCATOR_STATE_NEEDS_FILL
 
+        if Manifest.InstAlloc then Manifest.InstAlloc(Table, Alloc) end
+
         return true
         -- we can only update it NEXT frame since more performance friendly
     elseif State == GTS_NEEDS_UPDATE or Table.AllocatorState then
@@ -540,6 +567,10 @@ local function DrawTableFix(Table, Where, Key)
             Table.GPU_Transform:setData(T_Transform)
             Table.GPU_Material:setData(T_Mat)
             Table.GPU_Scale:setData(T_Scale)
+        end
+
+        if Manifest.InstUpdate then
+            Manifest.InstUpdate(Table)
         end
     end
 
@@ -578,7 +609,8 @@ local function GetDrawFunc(IsSolid)
             local Pass = Camera[IsSolid and 22 or 21]
 
             local Projection = Camera[26]
-            local TransformMatrix = CSTransform[EntId][3]
+            local CamTransform = CSTransform[EntId]
+            local TransformMatrix = CamTransform[3]
             local Culling = Camera[15] and "back"
 
             -- ASSIGN PASS VARIABLES
@@ -610,6 +642,8 @@ local function GetDrawFunc(IsSolid)
             for i = 1, ShaderListTop do
                 local Shader, Manifest = ShaderList[i], ShaderManifest[i]
 
+                Pass:push("state")
+
                 Pass:setShader(Shader)
                 Pass:send("Transparent", IsTransparent)
 
@@ -630,38 +664,43 @@ local function GetDrawFunc(IsSolid)
                 local CanBeInstanced = Manifest.CanBeInstanced
 
                 if Manifest.Setter then
-                    Manifest.Setter(Pass, Shader, IsSolid, Camera)
+                    Manifest.Setter(Pass, Shader, IsSolid, Camera, CamTransform)
                 end
 
-                for Material, GeometryList in pairs(Stack[Shader]) do
-                    Pass:setMaterial(Material or nil)
+                local Geom = Stack[Shader]
+                if Geom then
+                    for Material, GeometryList in pairs(Geom) do
+                        Pass:setMaterial(Material or nil)
 
-                    for DrawHash, GeometryTable in pairs(GeometryList) do
-                        Pass:push("state")
+                        for DrawHash, GeometryTable in pairs(GeometryList) do
+                            Pass:push("state")
 
-                        --local ShouldDrop = (GeometryTable.State == GTS_READY) and false or DrawTableFix(GeometryTable)
-                        local ShouldContinue = GeometryTable.State == GTS_READY
-                            or DrawTableFix(GeometryTable, GeometryList, DrawHash)
+                            --local ShouldDrop = (GeometryTable.State == GTS_READY) and false or DrawTableFix(GeometryTable)
+                            local ShouldContinue = GeometryTable.State == GTS_READY
+                                or DrawTableFix(GeometryTable, GeometryList, DrawHash, Shader)
 
-                        if ShouldContinue then
-                            local Functions = FunctionRegistry[GeometryTable.Type]
-                            if CanBeInstanced and GeometryTable.IsInstanced and Functions.Bulk then
-                                Pass:send("IsInstanced", true)
+                            if ShouldContinue then
+                                local Functions = FunctionRegistry[GeometryTable.Type]
+                                if CanBeInstanced and GeometryTable.IsInstanced and Functions.Bulk then
+                                    Pass:send("IsInstanced", true)
 
-                                Pass:send("INSTANCE_Transform", GeometryTable.GPU_Transform)
-                                Pass:send("INSTANCE_Material", GeometryTable.GPU_Material)
-                                Pass:send("INSTANCE_Scale", GeometryTable.GPU_Scale)
+                                    Pass:send("INSTANCE_Transform", GeometryTable.GPU_Transform)
+                                    Pass:send("INSTANCE_Material", GeometryTable.GPU_Material)
+                                    Pass:send("INSTANCE_Scale", GeometryTable.GPU_Scale)
 
-                                Functions.Bulk(Pass, GeometryTable, DrawHash)
-                            else
-                                Pass:send("IsInstanced", false)
-                                Functions.Single(Pass, GeometryTable, DrawHash)
+                                    Functions.Bulk(Pass, GeometryTable, DrawHash)
+                                else
+                                    Pass:send("IsInstanced", false)
+                                    Functions.Single(Pass, GeometryTable, DrawHash)
+                                end
                             end
-                        end
 
-                        Pass:pop("state")
+                            Pass:pop("state")
+                        end
                     end
                 end
+
+                Pass:pop("state")
             end
         end
     end

@@ -1,5 +1,21 @@
 local ShadowmapManager = {}
 
+--[[NOTE TO MR AMARO
+
+WE HAVE:
+Allocation/Reallocation
+
+Need: Register/Deregister queue
+
+Not need: Invalidation checks
+Need: PRE-Camera shadowmap validity/reallocation check
+
+Need: Drawing
+Need: Sampling
+Need: Light structs knowing what shadowmap they are bound to
+
+]]
+
 local Table = table.new
 local Texture = AstralEngine.Graphics.NewRawTexture
 local View = AstralEngine.Graphics.NewTextureView
@@ -60,6 +76,11 @@ local PassFormat = {
     samples = 1,
 }
 
+local function Init()
+    ShadowmapShader =
+        GetService("ShaderService").NewShader(Enum.ShaderType.Graphics, "unlit", "Shadowmap/Shadowmap.frag")
+end
+
 ---@param Struct table
 ---@param NewCount number
 ---@param Scale number
@@ -73,9 +94,8 @@ function ShadowmapManager.Realloc(Struct, Scale, NewCount)
     end
 
     if Struct.Allocated == -1 then -- invalid, need first time alloc
-        ShadowmapShader =
-            GetService("ShaderService").NewShader(Enum.ShaderType.Graphics, "unlit", "Shadowmap/Shadowmap.frag")
-
+        Init()
+        Init = nil
         Struct.Views = Table(Passes, 1)
         Struct.Passes = Table(Passes, 1)
         ---@TODO: allocate target pass here (if i add the shared draw table thing)
@@ -102,7 +122,12 @@ function ShadowmapManager.Realloc(Struct, Scale, NewCount)
         Struct.Views[i] = View(ParentTexture, TextureViewData)
 
         PassFormat.depth = Struct.Views[i]
-        Struct.Passes[i] = Struct.Passes[i] or Pass(PassFormat)
+
+        if Struct.Passes[i] then
+            Struct.Passes[i]:setCanvas(PassFormat)
+        else
+            Struct.Passes[i] = Pass(PassFormat)
+        end
     end
 
     Struct.Allocated = NewSize

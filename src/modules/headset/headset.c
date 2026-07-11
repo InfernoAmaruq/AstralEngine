@@ -313,6 +313,7 @@ static struct {
     bool presence;
     bool questPassthrough;
     bool renderModel;
+    bool reverbController;
     bool swapchainUpdate;
     bool refreshRate;
     bool threadHint;
@@ -455,6 +456,7 @@ bool lovrHeadsetConnect(void) {
     { "XR_EXT_hand_joints_motion_range", &state.extensions.handTrackingMotionRange, true },
     { "XR_EXT_hand_tracking", &state.extensions.handTracking, true },
     { "XR_EXT_hand_tracking_data_source", &state.extensions.handTrackingDataSource, true },
+    { "XR_EXT_hp_mixed_reality_controller", &state.extensions.reverbController, true },
     { "XR_EXT_interaction_profile_battery_state_display", &state.extensions.battery, true },
     { "XR_EXT_interaction_render_model", &state.extensions.interactionRenderModel, true },
     { "XR_EXT_local_floor", &state.extensions.localFloor, true },

@@ -22,6 +22,8 @@ readonly buffer INSTANCE_Scale {
 #define Material_FitMode int(IsInstanced ? Material_MatrixInstanced[InstIndex][2].x : Material_Matrix[2].x)
 #define Material_UsePixelSampler int(IsInstanced ? Material_MatrixInstanced[InstIndex][2].y : Material_Matrix[2].y) == 1
 #define Material_Scale (IsInstanced ? Material_ObjectScaleInstanced[InstIndex] : Material_ObjectScale)
+#define Material_ShadowAlpha (IsInstanced ? Material_MatrixInstanced[InstIndex][2].z : Material_Matrix[2].z)
+#define Material_Emissive (IsInstanced ? Material_MatrixInstanced[InstIndex][3] : Material_Matrix[3])
 
 #else
 
@@ -30,6 +32,8 @@ readonly buffer INSTANCE_Scale {
 #define Material_FitMode int(Material_Matrix[2].x)
 #define Material_UsePixelSampler int(Material_Matrix[2].y) == 1
 #define Material_Scale Material_ObjectScale
+#define Material_ShadowAlpha Material_Matrix[2].z
+#define Material_Emissive Material_Matrix[3]
 
 #endif
 
@@ -52,11 +56,7 @@ Surface linearMaterial(inout Surface surface) {
 Surface getMaterialSurface(){
     Surface s;
 
-    #ifdef INSTANCING_ACTIVE
-    vec4 sColor = IsInstanced ? Material_MatrixInstanced[InstIndex][1] : Material_Matrix[1];
-    #else
-    vec4 sColor = Material_Matrix[1];
-    #endif
+    vec4 sColor = Material_Color;
 
 	if (Material_UsePixelSampler) {
 	    s = newSurface();
@@ -67,11 +67,7 @@ Surface getMaterialSurface(){
 
 	s.baseColor *= sColor;
     
-    #ifdef INSTANCING_ACTIVE
-    vec4 emissiveColor = IsInstanced ? Material_MatrixInstanced[InstIndex][3] : Material_Matrix[3];
-    #else
-    vec4 emissiveColor = Material_Matrix[3];
-    #endif
+    vec4 emissiveColor = Material_Emissive;
     s.emissive.rgb += emissiveColor.rgb * emissiveColor.a;
 
     return s;

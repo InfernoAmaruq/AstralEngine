@@ -233,6 +233,7 @@ static bool luax_checkfieldt(lua_State* L, int index, const DataField* field, vo
       lua_rawgeti(L, index, i);
     }
   }
+
   bool ok = luax_checkfieldn(L, -n, field, data);
   lua_pop(L, n);
   return ok;
@@ -302,7 +303,6 @@ static bool luax_checkarray(lua_State* L, int index, int start, int count, const
       if (!luax_checkstruct(L, -1, array, data)) {
         return false;
       }
-      lua_pop(L, 1);
     }
   } else {
     lua_rawgeti(L, index, start);

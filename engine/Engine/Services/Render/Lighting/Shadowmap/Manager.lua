@@ -21,10 +21,18 @@ local Texture = AstralEngine.Graphics.NewRawTexture
 local View = AstralEngine.Graphics.NewTextureView
 local Pass = AstralEngine.Graphics.NewPass
 
-local MAX_LAYERS = AstralEngine.Graphics.GPU.GetLimit("RenderSize").z -- will be our step size
-local ALLOC_STEP = 1.2                                                -- ceil'd to a multiple of MAX_LAYERS
-local MAX_SHADOWMAPS = 150                                            -- for each type, n * 6 for point lights
+local MAX_LAYERS = 6       -- will be our step size
+local ALLOC_STEP = 1.2     -- ceil'd to a multiple of MAX_LAYERS
+local MAX_SHADOWMAPS = 150 -- for each type, n * 6 for point lights
 local TEXTURE_SIZE = 256
+
+if AstralEngine.Graphics.GPU.GetLimit("RenderSize").z < MAX_LAYERS then
+    AstralEngine.Error(
+        "Your GPU cannot do shadowmapping. Must be able to do at least 6 texture layers. Got: "
+        .. AstralEngine.Graphics.GPU.GetLimit("RenderSize").z,
+        "Shadowmap"
+    )
+end
 
 local ShadowmapShader
 local ShadowmapData = {
@@ -77,8 +85,7 @@ local PassFormat = {
 }
 
 local function Init()
-    ShadowmapShader =
-        GetService("ShaderService").NewShader(Enum.ShaderType.Graphics, "unlit", "Shadowmap/Shadowmap.frag")
+    ShadowmapShader = GetService("ShaderService").NewShader(Enum.ShaderType.Graphics, "Shadowmap/Shadowmap.glsl")
 end
 
 ---@param Struct table
@@ -94,10 +101,13 @@ function ShadowmapManager.Realloc(Struct, Scale, NewCount)
     end
 
     if Struct.Allocated == -1 then -- invalid, need first time alloc
-        Init()
-        Init = nil
-        Struct.Views = Table(Passes, 1)
-        Struct.Passes = Table(Passes, 1)
+        if Init then
+            Init()
+            Init = nil
+        end
+        Struct.Views = Table(Passes, 0)
+        Struct.Passes = Table(Passes, 0)
+        Struct.Registry = Table(NewSize, 0)
         ---@TODO: allocate target pass here (if i add the shared draw table thing)
         Struct.Texture = Texture(TEXTURE_SIZE, TEXTURE_SIZE, NewSize, Struct.Parameters)
     else
@@ -137,7 +147,12 @@ function ShadowmapManager.UpdateShadowmap(Table) -- the part where we register e
 end
 
 ---@param Entity AnyEntity
-function ShadowmapManager.Register(Entity) end
+function ShadowmapManager.Register(Entity, Light)
+    local Type = Light.Type or Enum.LightType.Point
+    local Registry = ShadowmapData[Type == Enum.LightType.Point and "Cube" or "2D"]
+
+    print("REGISTER AS:", Type == Enum.LightType.Point and "Cube" or "2D", Type)
+end
 
 ---@param Entity AnyEntity
 function ShadowmapManager.Deregister(Entity) end

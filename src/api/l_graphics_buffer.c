@@ -300,9 +300,11 @@ static bool luax_checkarray(lua_State* L, int index, int start, int count, const
 
   if (array->fieldCount > 0) {
     for (int i = 0; i < count; i++, data += array->stride) {
+        lua_rawgeti(L,index,i+1);
       if (!luax_checkstruct(L, -1, array, data)) {
         return false;
       }
+      lua_pop(L,1);
     }
   } else {
     lua_rawgeti(L, index, start);

@@ -1,28 +1,7 @@
 local OgTex = lovr.graphics.newTexture
-local OgPass = lovr.graphics.newPass
 local FS = lovr.filesystem
 
 local RefToRebuild = setmetatable({}, { __mode = "v" })
-
-local TOSTRING = function(self)
-    return "Wrapped Texture: " .. debug.getaddress(self)
-end
-
-local function CAPTURE(t, ...)
-    local Val = t[1]
-    local NEXTCALL = t[".NEXTCALL"]
-    return NEXTCALL(Val, ...)
-end
-
-local function IDX(t, k)
-    local Og = t[1]
-    local Val = Og and Og[k] or Og[k:sub(1, 1):lower() .. k:sub(2)]
-    if type(Val) == "function" then
-        rawset(t, ".NEXTCALL", Val)
-        return CAPTURE
-    end
-    return Val or rawget(t, k)
-end
 
 local function ResolvePath(Path)
     if FS.isFile(Path) then
@@ -34,30 +13,8 @@ local function ResolvePath(Path)
     return FS.normalize(FS.folderFromPath(LocalizedPath) .. Path)
 end
 
-local MT = { __index = IDX, __tostring = TOSTRING }
-
-local function MakeRef(Value, Capture)
-    return setmetatable({ [1] = Value, __CAPTURE = Capture }, MT)
-end
-
-lovr.graphics.newTexture = function(...)
-    local ARGS
-    if type(select(1, ...)) == "string" then
-        ARGS = { ... }
-        ARGS[1] = ResolvePath(ARGS[1])
-    end
-    local CAPTURE
-    if ARGS then
-        CAPTURE = MakeRef(OgTex(unpack(ARGS)), ARGS)
-    else
-        CAPTURE = MakeRef(OgTex(...), { ... })
-    end
-    table.insert(RefToRebuild, CAPTURE)
-    return CAPTURE
-end
-
 AstralEngine.Graphics = {
-    NewRawTexture = function(...)
+    NewTexture = function(...)
         local Args = { ... }
 
         if type(Args[1]) == "string" then
@@ -66,8 +23,6 @@ AstralEngine.Graphics = {
 
         return OgTex(unpack(Args))
     end,
-
-    NewTexture = lovr.graphics.newTexture,
     NewPass = lovr.graphics.newPass,
     NewTextureView = lovr.graphics.newTextureView,
     NewBuffer = lovr.graphics.newBuffer,

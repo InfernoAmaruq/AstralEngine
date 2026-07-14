@@ -85,7 +85,7 @@ local Mt = {
     __newindex = function(self, k, v)
         if k == "Material" then
             self[7] = v
-            self[1] = v and v.__lmat or v[1] or v
+            self[1] = v
         elseif k == "Color" or k == "GlowColor" then
             v = v or vec4(255, 255, 255, 255)
             local r, g, b, a = v:div(255):unpack()
@@ -107,10 +107,8 @@ local Mt = {
 Material.Metadata.__create = function(Data, Ent)
     local Storage = {}
 
-    local RT = Comp.GetComponent(Ent, "RenderTarget")
-
     local Mat = Data and Data.Material
-    Storage[1] = Mat and (Mat.__lmat or Mat[1] or Mat)
+    Storage[1] = Mat
     Storage[2] = Data and Data.UVScale and Vec2(Data.UVScale) or Vec2(1, 1)
     Storage[3] = Data and Data.UVOffset and Vec2(Data.UVOffset) or Vec2(0, 0)
 

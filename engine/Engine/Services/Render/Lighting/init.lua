@@ -16,8 +16,8 @@ CacheTable.Light_ExtrasTwo = table.new(256, 0)
 local LightBuffer = lovr.graphics.newBuffer(MainBufferFormat)
 Lighting.LightBuffer = LightBuffer
 
-Lighting.LTCTexture = GetService("AssetService").NewTexture("ltc_mat.dds", { linear = true })[1]
-Lighting.LTCAmp = GetService("AssetService").NewTexture("ltc_amp.dds", { linear = true })[1]
+Lighting.LTCTexture = GetService("AssetService").NewTexture("ltc_mat.dds", { linear = true })
+Lighting.LTCAmp = GetService("AssetService").NewTexture("ltc_amp.dds", { linear = true })
 
 LightBuffer:setData(CacheTable)
 

@@ -90,7 +90,6 @@ local LookupTable = {
 }
 
 Shape.Name = "Shape"
-Shape.Pattern = { Shape = 0 }
 
 local IdxFields = {
     Shape = 1,

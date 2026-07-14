@@ -17,7 +17,7 @@ Need: Light structs knowing what shadowmap they are bound to
 ]]
 
 local Table = table.new
-local Texture = AstralEngine.Graphics.NewRawTexture
+local Texture = AstralEngine.Graphics.NewTexture
 local View = AstralEngine.Graphics.NewTextureView
 local Pass = AstralEngine.Graphics.NewPass
 

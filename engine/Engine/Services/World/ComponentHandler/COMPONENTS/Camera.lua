@@ -95,7 +95,7 @@ local FIELDS = {
     BlurredAOS1 = 42,
 }
 
-local EmptySkybox = AstralEngine.Graphics.NewRawTexture(1, 1, 6)
+local EmptySkybox = AstralEngine.Graphics.NewTexture(1, 1, 6)
 
 local function RawViewToRay(self, Vector)
     local EntPtr = self.__EntityPtr
@@ -362,7 +362,7 @@ local function OnRebuld(CameraRef, w, h, d)
 
     for _, TextureIDs in ipairs(Textures) do
         local OldV = CameraRef[TextureIDs]
-        local NewV = AstralEngine.Graphics.NewRawTexture(w, h, OldV.__CAPTURE[3])
+        local NewV = AstralEngine.Graphics.NewTexture(w, h, OldV[2])
         OldV[1]:release()
         OldV[1] = NewV
     end
@@ -452,25 +452,25 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     local Density = Input.Density or lovr.system.getWindowDensity()
     Data.Density = Density
 
-    local Texture = AstralEngine.Graphics.NewTexture(W, H, TextureConfig)
-    local OITTex = AstralEngine.Graphics.NewTexture(W, H, TexConf2)
-    local OITDepth = AstralEngine.Graphics.NewTexture(W, H, OIT_CONF)
-    local SolidTex = AstralEngine.Graphics.NewTexture(W, H, MSAASolid)
-    local DepthTexture = AstralEngine.Graphics.NewTexture(W, H, DEPTH_CONF)
+    local Texture = { AstralEngine.Graphics.NewTexture(W, H, TextureConfig), TextureConfig }
+    local OITTex = { AstralEngine.Graphics.NewTexture(W, H, TexConf2), TexConf2 }
+    local OITDepth = { AstralEngine.Graphics.NewTexture(W, H, OIT_CONF), TexConf2 }
+    local SolidTex = { AstralEngine.Graphics.NewTexture(W, H, MSAASolid), MSAASolid }
+    local DepthTexture = { AstralEngine.Graphics.NewTexture(W, H, DEPTH_CONF), DEPTH_CONF }
 
-    local NormalBuffer = AstralEngine.Graphics.NewTexture(W, H, NORMAL_CONF)
+    local NormalBuffer = { AstralEngine.Graphics.NewTexture(W, H, NORMAL_CONF), NORMAL_CONF }
 
-    local BloomThreshold = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
-    local CompositedTexture = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
-    local AOTexture = AstralEngine.Graphics.NewTexture(W, H, AO_CONF)
+    local BloomThreshold = { AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF), NORMAL_COMPOSITE_CONF }
+    local CompositedTexture = { AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF), NORMAL_COMPOSITE_CONF }
+    local AOTexture = { AstralEngine.Graphics.NewTexture(W, H, AO_CONF), AO_CONF }
 
-    local BloomBlurred = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
-    local ColorBlurred = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
-    local BlurredAO = AstralEngine.Graphics.NewTexture(W, H, AO_CONF)
+    local BloomBlurred = { AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF), NORMAL_COMPOSITE_CONF }
+    local ColorBlurred = { AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF), NORMAL_COMPOSITE_CONF }
+    local BlurredAO = { AstralEngine.Graphics.NewTexture(W, H, AO_CONF), AO_CONF }
 
-    local BloomBlurredS1 = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
-    local ColorBlurredS1 = AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF)
-    local BlurredAOS1 = AstralEngine.Graphics.NewTexture(W, H, AO_CONF)
+    local BloomBlurredS1 = { AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF), NORMAL_COMPOSITE_CONF }
+    local ColorBlurredS1 = { AstralEngine.Graphics.NewTexture(W, H, NORMAL_COMPOSITE_CONF), NORMAL_COMPOSITE_CONF }
+    local BlurredAOS1 = { AstralEngine.Graphics.NewTexture(W, H, AO_CONF), AO_CONF }
 
     Data.Skybox = Input.Skybox
 

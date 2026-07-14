@@ -246,9 +246,9 @@ local function ProcessMaterialInput(Input)
         elseif i:match("[%w_]*[Tt]exture[%w_]*") then
             local ObjType = type(v)
 
-            local t = ObjType == "string" and AssetManager.NewTexture(v) or (v[1] or v)
+            local t = ObjType == "string" and AssetManager.NewTexture(v) or v
 
-            InputProcessed[i] = t[1] or t -- NewTexture gives wrapped texture, we need unwrapped
+            InputProcessed[i] = t
         else
             InputProcessed[i] = v
         end
@@ -290,13 +290,6 @@ local function ProcessMaterialInput(Input)
     return Hashed, InputProcessed
 end
 
-local MatMt = {
-    __type = "Material",
-    __newindex = function()
-        AstralEngine.Error("MATERIALS ARE READ-ONLY", "MATERIAL", 2)
-    end,
-}
-
 function AssetManager.NewMaterial(Input)
     local Hash, InputProcessed = ProcessMaterialInput(Input)
 
@@ -313,14 +306,9 @@ function AssetManager.NewMaterial(Input)
 
     local LovrMat = lovr.graphics.newMaterial(InputProcessed)
 
-    Material = setmetatable({
-        __lmat = LovrMat,
-        Properties = Input,
-    }, MatMt)
+    Cache[TypeEnum.Material][Hash] = LovrMat
 
-    Cache[TypeEnum.Material][Hash] = Material
-
-    return Material
+    return LovrMat
 end
 
 function AssetManager.NewMesh() end

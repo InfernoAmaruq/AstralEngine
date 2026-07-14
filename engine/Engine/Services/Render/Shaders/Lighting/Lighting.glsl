@@ -239,7 +239,7 @@ vec3 lighting_getLights(const Surface s){
 	switch(l.type){
 		case LIGHTTYPE_DIRECTIONAL:
 			distAtt = 1;
-			diff = l.direction; // prolly wont work right with shadows..
+			diff = -l.direction; // prolly wont work right with shadows..
 			break;
 		case LIGHTTYPE_SPOT:
             diff = l.position - PositionWorld;

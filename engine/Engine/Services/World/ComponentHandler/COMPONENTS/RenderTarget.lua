@@ -18,6 +18,7 @@ local FIELDS = {
     __DrawType = 5,
     __Shader = 6,
     __ShaderLock = 7,
+    __Enabled = 8,
 }
 
 local RenderFlags = {
@@ -55,6 +56,7 @@ local Methods = {
 
         Solid = Solid == RenderFlags.Param_Old and OldSolid or Solid or RenderFlags.Stack_None
         GeometryHash = GeometryHash == RenderFlags.Param_Old and OldGeometryHash or GeometryHash or -1
+
         DrawType = DrawType == RenderFlags.Param_Old and OldDrawType or DrawType or -1
 
         if Shader == RenderFlags.Param_Old then
@@ -69,43 +71,48 @@ local Methods = {
             AstralEngine.Error("Attempt to set a new shader to a ShaderLocked object!", "RenderTarget")
         end
 
-        if
-            Solid == OldSolid
-            and Material == OldMaterial
-            and GeometryHash == OldGeometryHash
-            and DrawType == OldDrawType
-            and Shader == OldShader
-        then
-            self:Invalidate()
-            return
-        end
+        if self[FIELDS.__Enabled] then
+            if
+                Solid == OldSolid
+                and Material == OldMaterial
+                and GeometryHash == OldGeometryHash
+                and DrawType == OldDrawType
+                and Shader == OldShader
+            then
+                self:Invalidate()
+                return
+            end
 
-        local HadTransparent, HadSolid =
-            bit.band(OldSolid, RenderFlags.Stack_Transparent) ~= 0, bit.band(OldSolid, RenderFlags.Stack_Solid) ~= 0
-        local DoTransparent, DoSolid =
-            bit.band(Solid, RenderFlags.Stack_Transparent) ~= 0, bit.band(Solid, RenderFlags.Stack_Solid) ~= 0
+            local HadTransparent, HadSolid =
+                bit.band(OldSolid, RenderFlags.Stack_Transparent) ~= 0, bit.band(OldSolid, RenderFlags.Stack_Solid) ~= 0
+            local DoTransparent, DoSolid =
+                bit.band(Solid, RenderFlags.Stack_Transparent) ~= 0, bit.band(Solid, RenderFlags.Stack_Solid) ~= 0
 
-        local Entity = self.__E
-        local DrawTable = Renderer.DrawTable
+            local Entity = self.__E
+            local DrawTable = Renderer.DrawTable
 
-        if HadTransparent and not DoTransparent then
-            DrawTable.RemoveFromStack(Entity, false, OldMaterial, GeometryHash, Shader)
-        elseif not HadTransparent and DoTransparent then
-            DrawTable.AddToStack(Entity, false, Material, GeometryHash, DrawType, Shader)
-        elseif
-            (OldMaterial ~= Material or DrawType ~= OldDrawType or OldGeometryHash ~= GeometryHash) and DoTransparent
-        then
-            DrawTable.RemoveFromStack(Entity, false, OldMaterial, OldGeometryHash, Shader)
-            DrawTable.AddToStack(Entity, false, Material, GeometryHash, DrawType, Shader)
-        end
+            if HadTransparent and not DoTransparent then
+                DrawTable.RemoveFromStack(Entity, false, OldMaterial, GeometryHash, Shader)
+            elseif not HadTransparent and DoTransparent then
+                DrawTable.AddToStack(Entity, false, Material, GeometryHash, DrawType, Shader)
+            elseif
+                (OldMaterial ~= Material or DrawType ~= OldDrawType or OldGeometryHash ~= GeometryHash)
+                and DoTransparent
+            then
+                DrawTable.RemoveFromStack(Entity, false, OldMaterial, OldGeometryHash, Shader)
+                DrawTable.AddToStack(Entity, false, Material, GeometryHash, DrawType, Shader)
+            end
 
-        if HadSolid and not DoSolid then
-            DrawTable.RemoveFromStack(Entity, true, OldMaterial, GeometryHash, Shader)
-        elseif not HadSolid and DoSolid then
-            DrawTable.AddToStack(Entity, true, Material, GeometryHash, DrawType, Shader)
-        elseif (OldMaterial ~= Material or DrawType ~= OldDrawType or OldGeometryHash ~= GeometryHash) and DoSolid then
-            DrawTable.RemoveFromStack(Entity, true, OldMaterial, OldGeometryHash, Shader)
-            DrawTable.AddToStack(Entity, true, Material, GeometryHash, DrawType, Shader)
+            if HadSolid and not DoSolid then
+                DrawTable.RemoveFromStack(Entity, true, OldMaterial, GeometryHash, Shader)
+            elseif not HadSolid and DoSolid then
+                DrawTable.AddToStack(Entity, true, Material, GeometryHash, DrawType, Shader)
+            elseif
+                (OldMaterial ~= Material or DrawType ~= OldDrawType or OldGeometryHash ~= GeometryHash) and DoSolid
+            then
+                DrawTable.RemoveFromStack(Entity, true, OldMaterial, OldGeometryHash, Shader)
+                DrawTable.AddToStack(Entity, true, Material, GeometryHash, DrawType, Shader)
+            end
         end
 
         self[2] = Solid
@@ -131,6 +138,35 @@ local mt = {
         local v = FIELDS[k]
         return (k == "Flags" and RenderFlags) or Methods[k] or (v and rawget(self, v))
     end,
+    __newindex = function(self, k, v)
+        if k == "Enabled" then
+            local Old = self[FIELDS.__Enabled]
+            local Bool = not not v
+            self[FIELDS.__Enabled] = Bool
+
+            local DrawTable = Renderer.DrawTable
+            local OldSolid, OldMaterial, OldGeometryHash, OldDrawType, OldShader = unpack(self, 2, 6)
+            local Entity = self.__E
+
+            local HadTransparent, HadSolid =
+                bit.band(OldSolid, RenderFlags.Stack_Transparent) ~= 0, bit.band(OldSolid, RenderFlags.Stack_Solid) ~= 0
+
+            if Old == true and Bool == false then
+                if HadTransparent then
+                    DrawTable.RemoveFromStack(Entity, false, OldMaterial, OldGeometryHash, OldShader)
+                end
+                if HadSolid then
+                    DrawTable.RemoveFromStack(Entity, true, OldMaterial, OldGeometryHash, OldShader)
+                end
+            elseif Old == false and Bool == true then
+                if HadTransparent then
+                    DrawTable.AddToStack(Entity, false, OldMaterial, OldGeometryHash, OldDrawType, OldShader)
+                elseif HadSolid then
+                    DrawTable.AddToStack(Entity, true, OldMaterial, OldGeometryHash, OldDrawType, OldShader)
+                end
+            end
+        end
+    end,
 }
 
 RendTarget.Metadata.__create = function(In, Entity)
@@ -139,6 +175,12 @@ RendTarget.Metadata.__create = function(In, Entity)
     local Data = setmetatable({
         [FIELDS.__RenderMask] = RM,
         [FIELDS.__Stacks] = RenderFlags.Stack_None,
+        [FIELDS.__Enabled] = In.Enabled == nil and true or In.Enabled,
+        [2] = false,
+        [3] = false,
+        [4] = false,
+        [5] = false,
+        [6] = false,
         __E = Entity,
     }, mt)
 

@@ -35,7 +35,7 @@ SSAO_Noise_Image:mapPixel(function()
     local Unit = vec2(x, y):normalize() * 255
     return Unit.x, Unit.y
 end)
-local SSAO_Noise_Texture = AstralEngine.Graphics.NewRawTexture(SSAO_Noise_Image, { usage = { "sample" } })
+local SSAO_Noise_Texture = AstralEngine.Graphics.NewTexture(SSAO_Noise_Image, { usage = { "sample" } })
 SSAO_Noise_Image:release()
 
 local BlurSampler = lovr.graphics.newSampler({ wrap = "clamp" })
@@ -254,6 +254,8 @@ function DrawTable.AddToStack(Entity, IsSolid, Material, GeometryHash, DrawType,
 
     Shader = Shader or MainShader
 
+    AstralEngine.Assert(GeometryTypeRegistry[DrawType], "No DrawType " .. DrawType .. " exists in registry", "Renderer")
+
     local LookUpShader = ShaderRegistry[Shader]
     if not LookUpShader then
         AstralEngine.Log(
@@ -274,7 +276,8 @@ function DrawTable.AddToStack(Entity, IsSolid, Material, GeometryHash, DrawType,
     local MatTable = ShaderTable[Material] or {}
     ShaderTable[Material] = MatTable
 
-    local GeometryTable = MatTable[GeometryHash] or { Top = 0, Type = DrawType, Queue = table.new(10, 50) }
+    local GeometryTable = MatTable[GeometryHash] or
+        { Top = 0, Type = DrawType, Hash = GeometryHash, Queue = table.new(10, 50) }
 
     MatTable[GeometryHash] = GeometryTable
 
@@ -317,29 +320,17 @@ function DrawTable.RemoveFromStack(Entity, IsSolid, Material, GeometryHash, Shad
 
     local ShaderTable = SubTable[Shader]
 
-    AstralEngine.Assert(
-        ShaderTable,
-        "No shader table exists for Entity: " .. Entity .. " - Cannot remove from render stack",
-        "Renderer"
-    )
+    if not ShaderTable then return end
 
     Material = Material or false
 
     local MatTable = ShaderTable[Material]
 
-    AstralEngine.Assert(
-        MatTable,
-        "No material table exists for Entity: " .. Entity .. " - Cannot remove from render stack",
-        "Renderer"
-    )
+    if not MatTable then return end
 
     local GeometryTable = MatTable[GeometryHash]
 
-    AstralEngine.Assert(
-        GeometryTable,
-        "No geometry table exists for Entity: " .. Entity .. " - Cannot remove from render stack",
-        "Renderer"
-    )
+    if not GeometryTable then return end
 
     Dequeue(GeometryTable, Entity)
 end
@@ -486,6 +477,10 @@ local function DrawTableFix(Table, Where, Key, Shader)
         end
 
         if State == GTS_NEEDS_FREE_FULL then
+            for i in pairs(Table) do
+                Table[i] = nil
+            end
+
             Where[Key] = nil -- remove table ref
             return false
         end

@@ -78,7 +78,11 @@ local function ResolveFile(File, IncludedFiles, ErrDepth)
             AstralEngine.Error("Cannot link itself. Attempt to link file to itself in Shader", "Shader", ErrDepth)
         end
 
-        return ResolveFile(PathTo, IncludedFiles, ErrDepth + 1)
+        local Include = ResolveFile(PathTo, IncludedFiles, ErrDepth + 1)
+
+        Include = string.format('\n#line 1 "%s"\n', Cont) .. Include
+
+        return Include
     end)
 
     return Content

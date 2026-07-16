@@ -3003,7 +3003,7 @@ bool lovrTextureGenerateMipmaps(Texture* texture, uint32_t base, uint32_t count)
   mtx_lock(&state.lock);
   gpu_barrier barrier = syncStream(texture->sync, GPU_PHASE_BLIT, GPU_CACHE_TRANSFER_READ | GPU_CACHE_TRANSFER_WRITE);
   gpu_sync(state.stream, &barrier, 1);
-  mipmapTexture(state.stream, texture, texture->baseLevel + base, count);
+  mipmapTexture(state.stream, texture, base, count);
   mtx_unlock(&state.lock);
   return true;
 }
@@ -9469,9 +9469,9 @@ static void mipmapTexture(gpu_stream* stream, Texture* texture, uint32_t base, u
   if (count == ~0u) count = texture->info.mipmaps - (base + 1);
   bool volumetric = texture->info.type == TEXTURE_3D;
   for (uint32_t i = 0; i < count; i++) {
-    uint32_t level = base + i + 1;
-    uint32_t srcOffset[4] = { 0, 0, 0, level - 1 };
-    uint32_t dstOffset[4] = { 0, 0, 0, level };
+    uint32_t level = texture->baseLevel + base + i + 1;
+    uint32_t srcOffset[4] = { 0, 0, texture->baseLayer, level - 1 };
+    uint32_t dstOffset[4] = { 0, 0, texture->baseLayer, level };
     uint32_t srcExtent[3] = {
       MAX(texture->info.width >> (level - 1), 1),
       MAX(texture->info.height >> (level - 1), 1),

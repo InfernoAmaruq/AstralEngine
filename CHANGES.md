@@ -28,6 +28,7 @@ dev
 - Fix possible hang with async functions when `t.thread.workers` is zero.
 - Fix possible crash when using graphics module from threads.
 - Fix issues with missing files in zip archives mounted with mountpoints.
+- Fix issues when generating mipmaps for texture views.
 
 ### Deprecate
 

@@ -369,6 +369,31 @@ group('graphics', function()
     end)
   end)
 
+  group('Texture', function()
+    group(':generateMipmaps', function()
+      test('texture views', function()
+        local texture = lovr.graphics.newTexture(4, 4, 4, { usage = { 'transfer' }, mipmaps = true })
+        local view = lovr.graphics.newTextureView(texture, { type = '2d', layer = 3, layercount = 1 })
+        expect(view:getMipmapCount()).to.equal(3)
+
+        texture:clear(0, 0, 0, 0)
+
+        -- Clear 3rd layer of 1st mipmap to red
+        texture:clear(1, 0, 0, 1, 3, 1, 1, 1)
+        expect({ texture:getPixels(0, 0, 3, 1):getPixel(0, 0) }).to.equal({ 1, 0, 0, 1 })
+        expect({ texture:getPixels(0, 0, 3, 3, 1, 1):getPixel(0, 0) }).to.equal({ 0, 0, 0, 0 })
+
+        view:generateMipmaps()
+
+        -- 3rd layer of last mipmap should be red
+        expect({ texture:getPixels(0, 0, 3, 3, 1, 1):getPixel(0, 0) }).to.equal({ 1, 0, 0, 1 })
+
+        -- 1st layer of last mipmap should still be black
+        expect({ texture:getPixels(0, 0, 0, 3, 1, 1):getPixel(0, 0) }).to.equal({ 0, 0, 0, 0 })
+      end)
+    end)
+  end)
+
   group('Font', function()
     test('newFont(Rasterizer)', function()
       do lovr.graphics.newFont(lovr.data.newRasterizer(42)) end

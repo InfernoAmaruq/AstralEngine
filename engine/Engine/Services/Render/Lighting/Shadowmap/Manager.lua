@@ -1,3 +1,5 @@
+local Renderer, Lighting = select(1, ...)
+
 local ShadowmapManager = {}
 
 --[[NOTE TO MR AMARO
@@ -33,6 +35,9 @@ if AstralEngine.Graphics.GPU.GetLimit("RenderSize").z < MAX_LAYERS then
         "Shadowmap"
     )
 end
+
+-- we allocate matrices we use and just reuse them. Weak so they get collected naturally wehn not used
+local ProjRegistry = setmetatable({}, { __mode = "v" })
 
 local ShadowmapShader
 local ShadowmapData = {
@@ -108,7 +113,7 @@ function ShadowmapManager.Realloc(Struct, Scale, NewCount)
         Struct.Views = Table(Passes, 0)
         Struct.Passes = Table(Passes, 0)
         Struct.Registry = Table(NewSize, 0)
-        ---@TODO: allocate target pass here (if i add the shared draw table thing)
+
         Struct.Texture = Texture(TEXTURE_SIZE, TEXTURE_SIZE, NewSize, Struct.Parameters)
     else
         Struct.Texture:release()
@@ -151,10 +156,12 @@ function ShadowmapManager.Register(Entity, Light)
     local Type = Light.Type or Enum.LightType.Point
     local Registry = ShadowmapData[Type == Enum.LightType.Point and "Cube" or "2D"]
 
-    print("REGISTER AS:", Type == Enum.LightType.Point and "Cube" or "2D", Type)
+    Registry.Waitlist[Entity] = Light
 end
 
 ---@param Entity AnyEntity
-function ShadowmapManager.Deregister(Entity) end
+function ShadowmapManager.Deregister(Entity)
+    local Type = Entity.Light
+end
 
 return ShadowmapManager

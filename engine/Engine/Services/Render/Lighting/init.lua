@@ -6,6 +6,7 @@ local MainBufferFormat = MainShader:getBufferFormat("Lighting_Data")
 
 local CacheTable = {}
 local LightCount = 0
+
 CacheTable.Light_LightCount = 0 -- amount of lights set
 CacheTable.Light_Positions = table.new(256, 0)
 CacheTable.Light_Colors = table.new(256, 0)
@@ -130,7 +131,7 @@ Lighting.RemoveLight = function(LightEntity)
 end
 
 if meta.getdefined("Lighting", "DoShadowmap") then
-    Lighting.Shadowmap = require("Shadowmap", Renderer)
+    Lighting.Shadowmap = loadfile("Shadowmap")(Renderer, Lighting)
 end
 
 return Lighting

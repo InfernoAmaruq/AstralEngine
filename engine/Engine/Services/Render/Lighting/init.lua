@@ -8,11 +8,7 @@ local CacheTable = {}
 local LightCount = 0
 
 CacheTable.Light_LightCount = 0 -- amount of lights set
-CacheTable.Light_Positions = table.new(256, 0)
-CacheTable.Light_Colors = table.new(256, 0)
-CacheTable.Light_Directions = table.new(256, 0)
-CacheTable.Light_Extras = table.new(256, 0)
-CacheTable.Light_ExtrasTwo = table.new(256, 0)
+CacheTable.Light_LightData = table.new(256, 0)
 
 local LightBuffer = lovr.graphics.newBuffer(MainBufferFormat)
 Lighting.LightBuffer = LightBuffer
@@ -41,13 +37,10 @@ Lighting.AddLight = function(LightEntity, EarlyLightComponent)
     local Type = (LC.Type or LightType.Point).Value
 
     Angle = Angle and Angle:direction() or vec3(0, 0, 1)
-    local ReadyAngle = vec4(Angle.x, Angle.y, Angle.z, math.cos(math.rad(TargetAngle / 2)))
 
     Distance = Distance * Distance
 
     local Pos = LightEntity.Position
-
-    local PosVector = vec4(Pos.x, Pos.y, Pos.z, Distance)
 
     local Id = LightRegistry[LightEntity]
 
@@ -58,37 +51,32 @@ Lighting.AddLight = function(LightEntity, EarlyLightComponent)
         CacheTable.Light_LightCount = LightCount
     end
 
-    CacheTable.Light_Colors[Id] = CacheTable.Light_Colors[Id] or Vec4()
-    CacheTable.Light_Colors[Id]:set(Color)
+    local Tab = CacheTable.Light_LightData[Id] or {}
+    CacheTable.Light_LightData[Id] = Tab
 
-    CacheTable.Light_Positions[Id] = CacheTable.Light_Positions[Id] or Vec4()
-    CacheTable.Light_Positions[Id]:set(PosVector)
+    Tab[1], Tab[2], Tab[3] = Pos:unpack()
+    Tab[4] = Distance
 
-    CacheTable.Light_Directions[Id] = CacheTable.Light_Directions[Id] or Vec4()
-    CacheTable.Light_Directions[Id]:set(ReadyAngle)
+    Tab[5], Tab[6], Tab[7] = Angle:unpack()
+    Tab[8] = math.cos(math.rad(TargetAngle / 2))
 
-    local ExtrasVector = vec4()
-    ExtrasVector.xy = LC.SurfaceSize or vec2.zero
-    ExtrasVector.z = Type
-    ExtrasVector.w = 1 / (LC.Hardness or 1)
+    Tab[9], Tab[10], Tab[11], Tab[12] = Color:unpack()
 
-    CacheTable.Light_Extras[Id] = CacheTable.Light_Extras[Id] or Vec4()
-    CacheTable.Light_Extras[Id]:set(ExtrasVector)
+    Tab[13], Tab[14] = (LC.SurfaceSize or vec2.zero):unpack()
+    Tab[15] = Type
+    Tab[16] = 1 / (LC.Hardness or 1)
 
-    local Extras2Vec = vec4()
-    Extras2Vec.xyz = LightEntity.Transform.UpVector
-    Extras2Vec.w = LC.ShadowCasting and 1 or 0
+    Tab[17], Tab[18], Tab[19] = LightEntity.Transform.UpVector:unpack()
+    local CastShadow = LC.ShadowCasting
+    Tab[20] = CastShadow and 999 or -1 -- 999 as placeholder for now
 
     if Lighting.Shadowmap then
-        if Extras2Vec.w == 1 then
-            Lighting.Shadowmap.Add(LightEntity, LC)
+        if CastShadow then
+            Lighting.Shadowmap.Add(LightEntity, LC, Tab)
         else
-            Lighting.Shadowmap.Remove(LightEntity)
+            Lighting.Shadowmap.Remove(LightEntity, Tab)
         end
     end
-
-    CacheTable.Light_ExtrasTwo[Id] = CacheTable.Light_ExtrasTwo[Id] or Vec4()
-    CacheTable.Light_ExtrasTwo[Id]:set(Extras2Vec)
 
     LightBuffer:setData(CacheTable)
 end
@@ -105,18 +93,14 @@ Lighting.RemoveLight = function(LightEntity)
 
     local Top = LightCount
     if Top == 1 then
-        CacheTable.Light_Colors[Id]:set(0)
-        CacheTable.Light_Positions[Id]:set(0)
-        CacheTable.Light_Directions[Id]:set(0)
-        CacheTable.Light_Extras[Id]:set(0)
+        CacheTable.Light_LightData[Id] = nil
     elseif Top ~= Id then
         local TopEnt = table.find(LightRegistry, Top)
         LightRegistry[TopEnt] = Id
 
-        CacheTable.Light_Colors[Id]:set(CacheTable.Light_Colors[Top])
-        CacheTable.Light_Positions[Id]:set(CacheTable.Light_Positions[Top])
-        CacheTable.Light_Directions[Id]:set(CacheTable.Light_Directions[Top])
-        CacheTable.Light_Extras[Id]:set(CacheTable.Light_Extras[Top])
+        CacheTable.Light_LightData[Id] = CacheTable.Light_LightData[Top]
+        -- yes, we are NOT freeing the top table we swap. Chances are they'll be needed again eventually, so no freeing for now
+        -- Light_LightCount should point us to top, so we know when to stop
     end
 
     LightRegistry[LightEntity] = nil

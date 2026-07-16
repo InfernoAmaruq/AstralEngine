@@ -1,5 +1,4 @@
 #pragma once
-
 uniform mat4 Material_Matrix;
 uniform sampler Material_PixelSampler;
 

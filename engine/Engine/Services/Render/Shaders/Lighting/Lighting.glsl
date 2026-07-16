@@ -9,8 +9,20 @@ uniform vec4 Lighting_Ambience;
 #define LIGHTTYPE_SURFACE 2
 #define LIGHTTYPE_DIRECTIONAL 3
 
+uniform sampler2DArrayShadow Light_Shadowmaps;
+
+struct PaddedLight {
+    vec4 Position; // w for max dist
+    vec4 Direction; // w is angle and must be > 0
+    vec4 Color; // a for brightness
+    vec4 SurfaceSizeHardnessType; // xy for surface size, w for hardness, z for type
+    vec4 UpVectorCastShadow; // xyz for upvec (normalized), w for shadow index
+};
+
 uniform Lighting_Data {
     uint Light_LightCount;
+
+    PaddedLight Light_LightData[MAX_LIGHTS];
 
     vec4 Light_Positions[MAX_LIGHTS]; // where w is max distance
     vec4 Light_Directions[MAX_LIGHTS]; // where w is angle and MUST be > 0. If angle is < 0, interpret it as a point light!
@@ -30,7 +42,7 @@ struct Light {
     float brightness;
     vec3 color;
     vec3 upVec;
-    bool castShadow;
+    int shadowIndex;
     float angleCos;
     vec3 direction;
     vec2 surfaceSize;
@@ -41,23 +53,19 @@ struct Light {
 Light lighting_getLight(int id){
     Light l;
 
-    vec4 pos = Light_Positions[id];
-    vec4 color = Light_Colors[id];
-    vec4 dir = Light_Directions[id];
-    vec4 extras = Light_Extras[id];
-    vec4 ext2 = Light_ExtrasTwo[id];
+    PaddedLight pl = Light_LightData[id];
 
-    l.color = color.rgb;
-    l.position = pos.xyz;
-    l.rad2 = pos.w;
-    l.brightness = color.a;
-    l.angleCos = dir.w;
-    l.direction = dir.xyz;
-    l.hardness = extras.w;
-    l.surfaceSize = extras.xy;
-    l.type = int(extras.z);
-    l.upVec = ext2.xyz;
-    l.castShadow = ext2.w == 1 ? true : false;
+    l.color = pl.Color.rgb;
+    l.position = pl.Position.xyz;
+    l.rad2 = pl.Position.w;
+    l.brightness = pl.Color.a;
+    l.angleCos = pl.Direction.w;
+    l.direction = pl.Direction.xyz;
+    l.hardness = pl.SurfaceSizeHardnessType.w;
+    l.surfaceSize = pl.SurfaceSizeHardnessType.xy;
+    l.type = int(pl.SurfaceSizeHardnessType.z);
+    l.upVec = pl.UpVectorCastShadow.xyz;
+    l.shadowIndex = int(pl.UpVectorCastShadow.w);
 
     return l;
 }
@@ -75,7 +83,7 @@ vec2 ltcCoords(float cosTheta, float roughness) {
     return coords;
 }
 
-/** Get inverse matrix from LTC lookup texture */
+/* Get inverse matrix from LTC lookup texture */
 mat3 ltcMatrix(vec2 coord) {
     vec4 t = texture(Lighting_LTC, coord);
     mat3 Minv = mat3(

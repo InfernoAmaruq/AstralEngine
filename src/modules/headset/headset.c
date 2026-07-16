@@ -275,8 +275,10 @@ static struct {
   XrDebugUtilsMessengerEXT messenger;
   struct {
     bool battery;
+    bool cosmosController;
     bool debug;
     bool depth;
+    bool focus3Controller;
     bool foveatedInset;
     bool foveation;
     bool foveationConfig;
@@ -476,6 +478,8 @@ bool lovrHeadsetConnect(void) {
     { "XR_FB_keyboard_tracking", &state.extensions.keyboardTracking, true },
     { "XR_FB_passthrough", &state.extensions.questPassthrough, true },
     { "XR_FB_swapchain_update_state", &state.extensions.swapchainUpdate, true },
+    { "XR_HTC_vive_cosmos_controller_interaction", &state.extensions.cosmosController, true },
+    { "XR_HTC_vive_focus3_controller_interaction", &state.extensions.focus3Controller, true },
     { "XR_FB_touch_controller_pro", &state.extensions.touchPro, true },
     { "XR_LOGITECH_mx_ink_stylus_interaction", &state.extensions.mxInk, true },
     { "XR_META_automatic_layer_filter", &state.extensions.layerAutoFilter, true },
@@ -854,6 +858,18 @@ bool lovrHeadsetConnect(void) {
 
   if (!state.extensions.frameController) {
     bindingCount[PROFILE_FRAME] = 0;
+  }
+
+  if (!state.extensions.reverbController) {
+    bindingCount[PROFILE_HP] = 0;
+  }
+
+  if (!state.extensions.cosmosController) {
+    bindingCount[PROFILE_COSMOS] = 0;
+  }
+
+  if (!state.extensions.focus3Controller) {
+    bindingCount[PROFILE_FOCUS3] = 0;
   }
 
   // Remove bindings for unsupported extensions

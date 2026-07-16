@@ -51,7 +51,7 @@ Lighting.AddLight = function(LightEntity, EarlyLightComponent)
         CacheTable.Light_LightCount = LightCount
     end
 
-    local Tab = CacheTable.Light_LightData[Id] or {}
+    local Tab = CacheTable.Light_LightData[Id] or table.new(20, 0)
     CacheTable.Light_LightData[Id] = Tab
 
     Tab[1], Tab[2], Tab[3] = Pos:unpack()

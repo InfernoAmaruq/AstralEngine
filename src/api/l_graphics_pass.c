@@ -1111,7 +1111,7 @@ static int l_lovrPassSkybox(lua_State* L) {
 
 static int l_lovrPassFill(lua_State* L) {
   Pass* pass = luax_checktype(L, 1, Pass);
-  Texture* texture = luax_totype(L, 2, Texture);
+  Texture* texture = lua_isnoneornil(L, 2) ? NULL : luax_checktype(L, 2, Texture);
   luax_assert(L, lovrPassFill(pass, texture));
   return 0;
 }

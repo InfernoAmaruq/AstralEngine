@@ -18,6 +18,7 @@ dev
 - Change `lovr.data.newRasterizer` to take an `Image` to use for a BMFont atlas.
 - Change `lovr.graphics.newFont` to take an `Image` to use for a BMFont atlas.
 - Change `lovr.timer.getDelta/getAverageDelta/getFPS` to return values from the headset when VR is active.
+- Change `Pass:fill` to error unless its argument is nil or a Texture.
 
 ### Fix
 

@@ -9491,9 +9491,10 @@ static bool checkTextureBounds(const TextureInfo* info, uint32_t offset[4], uint
   uint32_t maxWidth = MAX(info->width >> offset[3], 1);
   uint32_t maxHeight = MAX(info->height >> offset[3], 1);
   uint32_t maxLayers = info->type == TEXTURE_3D ? MAX(info->layers >> offset[3], 1) : info->layers;
-  lovrCheck(offset[0] + extent[0] <= maxWidth, "Texture x range [%d,%d] exceeds width (%d)", offset[0], offset[0] + extent[0], maxWidth);
-  lovrCheck(offset[1] + extent[1] <= maxHeight, "Texture y range [%d,%d] exceeds height (%d)", offset[1], offset[1] + extent[1], maxHeight);
-  lovrCheck(offset[2] + extent[2] <= maxLayers, "Texture layer range [%d,%d] exceeds layer count (%d)", offset[2], offset[2] + extent[2], maxLayers);
+  lovrCheck(extent[0] > 0 && extent[1] && extent[2] > 0, "Texture copy size can't be zero");
+  lovrCheck(offset[0] < maxWidth && extent[0] <= maxWidth - offset[0], "Texture x range [%d,%d] exceeds width (%d)", offset[0], offset[0] + extent[0], maxWidth);
+  lovrCheck(offset[1] < maxHeight && extent[1] <= maxHeight - offset[1], "Texture y range [%d,%d] exceeds height (%d)", offset[0], offset[0] + extent[0], maxWidth);
+  lovrCheck(offset[2] < maxLayers && extent[2] <= maxLayers - offset[2], "Texture layer range [%d,%d] exceeds layer count (%d)", offset[2], offset[2] + extent[2], maxLayers);
   lovrCheck(offset[3] < info->mipmaps, "Texture mipmap %d exceeds its mipmap count (%d)", offset[3] + 1, info->mipmaps);
   return true;
 }

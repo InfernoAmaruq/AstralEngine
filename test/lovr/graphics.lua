@@ -389,7 +389,7 @@ group('graphics', function()
         expect(texture:getPixels(0, 0, 3, 3, 1, 1):getPixel(0, 0)).to.equal(1, 0, 0, 1)
 
         -- 1st layer of last mipmap should still be black
-        expect(texture:getPixels(0, 0, 0, 3, 1, 1):getPixel(0, 0)).to.equal(0, 0, 0, 0)
+        expect(texture:getPixels(0, 0, 1, 3, 1, 1):getPixel(0, 0)).to.equal(0, 0, 0, 0)
       end)
     end)
   end)

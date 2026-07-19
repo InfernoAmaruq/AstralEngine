@@ -3123,6 +3123,7 @@ bool lovrGraphicsCompileShader(ShaderSource* stages, ShaderSource* outputs, uint
     "#extension GL_EXT_multiview : require\n"
     "#extension GL_EXT_ray_query : enable\n"
 #endif
+    "#extension GL_EXT_nonuniform_qualifier : enable\n"
     "#extension GL_EXT_samplerless_texture_functions : require\n"
     "#extension GL_EXT_scalar_block_layout : enable\n"
     "#extension GL_GOOGLE_include_directive : require\n";

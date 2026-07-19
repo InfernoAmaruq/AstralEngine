@@ -492,69 +492,120 @@ group('graphics', function()
       end)
     end)
 
-    test(':send', function()
-      -- First draw has uniforms, second draw does not, and first draw is culled
-      shader1 = lovr.graphics.newShader('unlit', [[
-        Constants { vec4 color; };
-        vec4 lovrmain() { return color; }
-      ]])
+    group(':send', function()
+      test('culled draws with uniforms', function()
+        -- First draw has uniforms, second draw does not, and first draw is culled
+        shader1 = lovr.graphics.newShader('unlit', [[
+          uniform vec4 color;
+          vec4 lovrmain() { return color; }
+        ]])
 
-      shader2 = lovr.graphics.newShader('unlit', [[
-        vec4 lovrmain() { return vec4(1.); }
-      ]])
+        shader2 = lovr.graphics.newShader('unlit', [[
+          vec4 lovrmain() { return vec4(1.); }
+        ]])
 
-      texture = lovr.graphics.newTexture(1, 1)
-      pass = lovr.graphics.newPass(texture)
-      pass:setViewCull(true)
-      pass:setShader(shader1)
-      pass:sphere(0, 0, 10)
-      pass:setShader(shader2)
-      pass:sphere(0, 0, -10)
-      lovr.graphics.submit(pass)
+        texture = lovr.graphics.newTexture(1, 1)
+        pass = lovr.graphics.newPass(texture)
+        pass:setViewCull(true)
+        pass:setShader(shader1)
+        pass:sphere(0, 0, 10)
+        pass:setShader(shader2)
+        pass:sphere(0, 0, -10)
+        lovr.graphics.submit(pass)
+      end)
 
-      -- First dispatch has uniforms, second dispatch does not
-      shader1 = lovr.graphics.newShader([[
-        Constants { vec4 color; };
-        void lovrmain() { }
-      ]])
+      test('computes with uniforms', function()
+        -- First dispatch has uniforms, second dispatch does not
+        shader1 = lovr.graphics.newShader([[
+          uniform vec4 color;
+          void lovrmain() { }
+        ]])
 
-      shader2 = lovr.graphics.newShader([[
-        void lovrmain() { }
-      ]])
+        shader2 = lovr.graphics.newShader([[
+          void lovrmain() { }
+        ]])
 
-      pass = lovr.graphics.newPass()
-      pass:setShader(shader1)
-      pass:compute()
-      pass:setShader(shader2)
-      pass:compute()
-      lovr.graphics.submit(pass)
+        pass = lovr.graphics.newPass()
+        pass:setShader(shader1)
+        pass:compute()
+        pass:setShader(shader2)
+        pass:compute()
+        lovr.graphics.submit(pass)
+      end)
 
-      -- Test that second draw with bigger uniform buffer is able to use its trailing uniforms
-      shader1 = lovr.graphics.newShader('fill', [[
-        uniform vec4 color1;
-        vec4 lovrmain() { return color1; }
-      ]])
+      test('draws with more uniform data are able to use all uniforms', function()
+        shader1 = lovr.graphics.newShader('fill', [[
+          uniform vec4 color1;
+          vec4 lovrmain() { return color1; }
+        ]])
 
-      shader2 = lovr.graphics.newShader('fill', [[
-        uniform vec4 color1;
-        uniform vec4 color2;
-        vec4 lovrmain() { return color2; }
-      ]])
+        shader2 = lovr.graphics.newShader('fill', [[
+          uniform vec4 color1;
+          uniform vec4 color2;
+          vec4 lovrmain() { return color2; }
+        ]])
 
-      texture = lovr.graphics.newTexture(1, 1, { usage = { 'render', 'transfer' } })
-      pass = lovr.graphics.newPass(texture)
+        texture = lovr.graphics.newTexture(1, 1, { usage = { 'render', 'transfer' } })
+        pass = lovr.graphics.newPass(texture)
 
-      pass:setShader(shader1)
-      pass:send('color1', vec4(1, 0, 0, 1))
-      pass:fill()
+        pass:setShader(shader1)
+        pass:send('color1', vec4(1, 0, 0, 1))
+        pass:fill()
 
-      pass:setShader(shader2)
-      pass:send('color2', vec4(0, 0, 1, 1))
-      pass:fill()
+        pass:setShader(shader2)
+        pass:send('color2', vec4(0, 0, 1, 1))
+        pass:fill()
 
-      lovr.graphics.submit(pass)
-      image = texture:getPixels()
-      expect(image:getPixel(0, 0)).to.equal(0, 0, 1, 1)
+        lovr.graphics.submit(pass)
+        image = texture:getPixels()
+        expect(image:getPixel(0, 0)).to.equal(0, 0, 1, 1)
+      end)
+
+      test('arrays of texture variables', function()
+        local shader = lovr.graphics.newShader('fill', [[
+          uniform texture2D textures[2];
+          vec4 lovrmain() { return getPixel(textures[0], UV); }
+        ]])
+
+        -- Make a red texture
+        local textures = { lovr.graphics.newTexture(1, 1) }
+        local pass = lovr.graphics.newPass(textures[1])
+        pass:setColor(1, 0, 0, 1)
+        pass:fill()
+        lovr.graphics.submit(pass)
+
+        local canvas = lovr.graphics.newTexture(1, 1, { usage = { 'render', 'transfer' } })
+        pass = lovr.graphics.newPass(canvas)
+        pass:setShader(shader)
+        pass:send('textures', textures)
+        pass:fill()
+        lovr.graphics.submit(pass)
+        local image = canvas:getPixels()
+        expect(image:getPixel(0, 0)).to.equal(1, 0, 0, 1)
+
+        -- Should use default texture if no textures are sent
+        canvas = lovr.graphics.newTexture(1, 1, { usage = { 'render', 'transfer' } })
+        pass = lovr.graphics.newPass(canvas)
+        pass:setShader(shader)
+        pass:fill()
+        lovr.graphics.submit(pass)
+        image = canvas:getPixels()
+        expect(image:getPixel(0, 0)).to.equal(1, 1, 1, 1)
+
+        -- sampler2D should work as well
+        shader = lovr.graphics.newShader('fill', [[
+          uniform sampler2D textures[2];
+          vec4 lovrmain() { return getPixel(textures[0], UV); }
+        ]])
+        canvas = lovr.graphics.newTexture(1, 1, { usage = { 'render', 'transfer' } })
+        pass = lovr.graphics.newPass(canvas)
+        pass:setShader(shader)
+        pass:send('textures', textures)
+        pass:fill()
+        lovr.graphics.submit(pass)
+        image = canvas:getPixels()
+        expect(image:getPixel(0, 0)).to.equal(1, 0, 0, 1)
+      end)
     end)
   end)
 

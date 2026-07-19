@@ -109,6 +109,7 @@ enum {
 typedef struct {
   uint32_t hash;
   uint32_t binding;
+  uint32_t arraySize;
   gpu_slot_type type;
   gpu_phase phase;
   gpu_cache cache;
@@ -710,25 +711,25 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
   map_init(&state.pipelineLookup, 64);
 
   gpu_slot builtinSlots[] = {
-    { 0, GPU_SLOT_UNIFORM_BUFFER, GPU_STAGE_GRAPHICS }, // Globals
-    { 1, GPU_SLOT_UNIFORM_BUFFER_DYNAMIC, GPU_STAGE_GRAPHICS }, // Cameras
-    { 2, GPU_SLOT_UNIFORM_BUFFER_DYNAMIC, GPU_STAGE_GRAPHICS }, // DrawData
-    { 3, GPU_SLOT_SAMPLER, GPU_STAGE_GRAPHICS } // Sampler
+    { 0, 1, GPU_SLOT_UNIFORM_BUFFER, GPU_STAGE_GRAPHICS }, // Globals
+    { 1, 1, GPU_SLOT_UNIFORM_BUFFER_DYNAMIC, GPU_STAGE_GRAPHICS }, // Cameras
+    { 2, 1, GPU_SLOT_UNIFORM_BUFFER_DYNAMIC, GPU_STAGE_GRAPHICS }, // DrawData
+    { 3, 1, GPU_SLOT_SAMPLER, GPU_STAGE_GRAPHICS } // Sampler
   };
 
   gpu_slot materialSlots[] = {
-    { 0, GPU_SLOT_UNIFORM_BUFFER, GPU_STAGE_GRAPHICS }, // Data
-    { 1, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Color
-    { 2, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Glow
-    { 3, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Occlusion
-    { 4, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Metalness
-    { 5, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Roughness
-    { 6, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Clearcoat
-    { 7, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS } // Normal
+    { 0, 1, GPU_SLOT_UNIFORM_BUFFER, GPU_STAGE_GRAPHICS }, // Data
+    { 1, 1, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Color
+    { 2, 1, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Glow
+    { 3, 1, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Occlusion
+    { 4, 1, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Metalness
+    { 5, 1, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Roughness
+    { 6, 1, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS }, // Clearcoat
+    { 7, 1, GPU_SLOT_SAMPLED_TEXTURE, GPU_STAGE_GRAPHICS } // Normal
   };
 
   gpu_slot uniformSlots[] = {
-    { 0, GPU_SLOT_UNIFORM_BUFFER_DYNAMIC, GPU_STAGE_GRAPHICS | GPU_STAGE_COMPUTE }
+    { 0, 1, GPU_SLOT_UNIFORM_BUFFER_DYNAMIC, GPU_STAGE_GRAPHICS | GPU_STAGE_COMPUTE }
   };
 
   state.builtinLayout = getLayout(builtinSlots, COUNTOF(builtinSlots));
@@ -3620,11 +3621,17 @@ Shader* lovrShaderCreate(const ShaderInfo* info) {
 
       uint32_t index = shader->resourceCount++;
 
+      bool buffer = resource->type == SPV_UNIFORM_BUFFER || resource->type == SPV_STORAGE_BUFFER;
+      bool texture = resource->type == SPV_SAMPLED_TEXTURE || resource->type == SPV_STORAGE_TEXTURE || resource->type == SPV_COMBINED_TEXTURE_SAMPLER;
+      bool sampler = resource->type == SPV_SAMPLER;
+      bool raytracer = resource->type == SPV_ACCELERATION_STRUCTURE;
+      bool storage = resource->type == SPV_STORAGE_BUFFER || resource->type == SPV_STORAGE_TEXTURE;
+
       lovrCheckGoto(fail, index < MAX_SHADER_RESOURCES, "Shader resource count exceeds resourcesPerShader limit (%d)", MAX_SHADER_RESOURCES);
       lovrCheckGoto(fail, resource->type != SPV_UNIFORM_TEXEL_BUFFER, "Shader variable '%s' is a%s, which is not supported%s", resource->name, " uniform texel buffer", "");
       lovrCheckGoto(fail, resource->type != SPV_STORAGE_TEXEL_BUFFER, "Shader variable '%s' is a%s, which is not supported%s", resource->name, " storage texel buffer", "");
       lovrCheckGoto(fail, resource->type != SPV_INPUT_ATTACHMENT, "Shader variable '%s' is a%s, which is not supported%s", resource->name, "n input attachment", "");
-      lovrCheckGoto(fail, resource->arraySize == 0, "Arrays of resources in shaders are not currently supported");
+      lovrCheckGoto(fail, resource->arraySize == 0 || texture, "Currently arrays of resources are only supported for textures");
 
       // Move resources into user set and give them auto-incremented binding numbers
       // Default shaders refer to resources with explicit binding numbers, so leave those alone
@@ -3632,12 +3639,6 @@ Shader* lovrShaderCreate(const ShaderInfo* info) {
         *set = resourceSet;
         *binding = index;
       }
-
-      bool buffer = resource->type == SPV_UNIFORM_BUFFER || resource->type == SPV_STORAGE_BUFFER;
-      bool texture = resource->type == SPV_SAMPLED_TEXTURE || resource->type == SPV_STORAGE_TEXTURE || resource->type == SPV_COMBINED_TEXTURE_SAMPLER;
-      bool sampler = resource->type == SPV_SAMPLER;
-      bool raytracer = resource->type == SPV_ACCELERATION_STRUCTURE;
-      bool storage = resource->type == SPV_STORAGE_BUFFER || resource->type == SPV_STORAGE_TEXTURE;
 
       shader->bufferMask |= (buffer << *binding);
       shader->textureMask |= (texture << *binding);
@@ -3648,6 +3649,7 @@ Shader* lovrShaderCreate(const ShaderInfo* info) {
       shader->resources[index] = (ShaderResource) {
         .hash = hash,
         .binding = *binding,
+        .arraySize = resource->arraySize,
         .type = type,
         .phase = phase
       };
@@ -3792,6 +3794,7 @@ Shader* lovrShaderCreate(const ShaderInfo* info) {
     ShaderResource* resource = &shader->resources[i];
     slots[i] = (gpu_slot) {
       .number = resource->binding,
+      .arraySize = resource->arraySize,
       .type = resource->type,
       .stages =
         ((resource->phase & GPU_PHASE_SHADER_VERTEX) ? GPU_STAGE_VERTEX : 0) |
@@ -7188,7 +7191,7 @@ void lovrPassSetShader(Pass* pass, Shader* shader) {
     gpu_binding bindings[32];
 
     // Ensure there's a valid binding for every resource in the new shader.  If the old shader had a
-    // binding with the same name and type, then use that, otherwise use a "default" resource.
+    // binding with the same name, type, and array size, then use that, otherwise use a "default" resource.
     for (uint32_t i = 0; i < shader->resourceCount; i++) {
       ShaderResource* resource = &shader->resources[i];
       bool useDefault = true;
@@ -7196,7 +7199,7 @@ void lovrPassSetShader(Pass* pass, Shader* shader) {
       if (old) {
         ShaderResource* other = old->resources;
         for (uint32_t j = 0; j < old->resourceCount; j++, other++) {
-          if (other->hash == resource->hash && other->type == resource->type) {
+          if (other->hash == resource->hash && other->type == resource->type && other->arraySize == resource->arraySize) {
             bindings[resource->binding] = pass->bindings[other->binding];
             useDefault = false;
             break;
@@ -7216,8 +7219,16 @@ void lovrPassSetShader(Pass* pass, Shader* shader) {
           case GPU_SLOT_SAMPLED_TEXTURE:
           case GPU_SLOT_STORAGE_TEXTURE:
           case GPU_SLOT_SAMPLER:
-            bindings[i].texture.object = state.defaultTexture->gpu;
-            bindings[i].texture.sampler = state.defaultSamplers[FILTER_LINEAR]->gpu;
+            if (resource->arraySize > 0) {
+              bindings[i].textures = lovrPassAllocate(pass, resource->arraySize * sizeof(gpu_texture_binding));
+              for (uint32_t j = 0; j < resource->arraySize; j++) {
+                bindings[i].textures[j].object = state.defaultTexture->gpu;
+                bindings[i].textures[j].sampler = state.defaultSamplers[FILTER_LINEAR]->gpu;
+              }
+            } else {
+              bindings[i].texture.object = state.defaultTexture->gpu;
+              bindings[i].texture.sampler = state.defaultSamplers[FILTER_LINEAR]->gpu;
+            }
             break;
           default: break;
         }
@@ -7385,7 +7396,9 @@ bool lovrPassSendBuffer(Pass* pass, const char* name, size_t length, Buffer* buf
   return true;
 }
 
-bool lovrPassSendTexture(Pass* pass, const char* name, size_t length, Texture* texture) {
+bool lovrPassSendTexture(Pass* pass, const char* name, size_t length, Texture** textures, uint32_t count) {
+  if (count == 0) return true;
+
   Shader* shader = pass->pipeline->shader;
   lovrCheck(shader, "A Shader must be active to send resources");
 
@@ -7394,25 +7407,39 @@ bool lovrPassSendTexture(Pass* pass, const char* name, size_t length, Texture* t
   uint32_t slot = resource->binding;
 
   lovrCheck(shader->textureMask & (1u << slot), "Trying to send a Texture to '%s', but the active Shader doesn't have a Texture in that slot", name);
+  bool storage = shader->storageMask & (1u << slot);
 
-  if (resource->textureFlags & SPV_TEXTURE_MULTISAMPLE) {
-    lovrCheck(texture->info.samples > 1, "Shader variable '%s' is a multisampled texture, but this texture is not multisampled", name);
-  } else {
-    lovrCheck(texture->info.samples == 1, "Shader variable '%s' is not a multisampled texture, but this texture is multisampled", name);
+  for (uint32_t i = 0; i < count; i++) {
+    if (resource->textureFlags & SPV_TEXTURE_MULTISAMPLE) {
+      lovrCheck(textures[i]->info.samples > 1, "Shader variable '%s' is a multisampled texture, but this texture is not multisampled", name);
+    } else {
+      lovrCheck(textures[i]->info.samples == 1, "Shader variable '%s' is not a multisampled texture, but this texture is multisampled", name);
+    }
+
+    if (storage) {
+      lovrCheck(textures[i]->info.usage & TEXTURE_STORAGE, "Textures must be created with the 'storage' usage to send them to image variables in shaders");
+    } else {
+      lovrCheck(textures[i]->info.usage & TEXTURE_SAMPLE, "Textures must be created with the 'sample' usage to send them to sampler variables in shaders");
+    }
   }
 
-  gpu_texture* view;
-  if (shader->storageMask & (1u << slot)) {
-    lovrCheck(texture->info.usage & TEXTURE_STORAGE, "Textures must be created with the 'storage' usage to send them to image variables in shaders");
-    view = texture->storageView;
+  if (resource->arraySize > 0) {
+    count = MIN(count, resource->arraySize);
+    gpu_texture_binding* textureBindings = lovrPassAllocate(pass, resource->arraySize * sizeof(gpu_texture_binding));
+    memcpy(textureBindings, pass->bindings[slot].textures, resource->arraySize * sizeof(gpu_texture_binding));
+    pass->bindings[slot].textures = textureBindings;
+
+    for (uint32_t i = 0; i < count; i++) {
+      trackTexture(pass, textures[i], resource->phase, resource->cache);
+      pass->bindings[slot].textures[i].object = storage ? textures[i]->storageView : textures[i]->sampleView;
+      pass->bindings[slot].textures[i].sampler = textures[i]->sampler ? textures[i]->sampler->gpu : state.defaultSamplers[FILTER_LINEAR]->gpu;
+    }
   } else {
-    lovrCheck(texture->info.usage & TEXTURE_SAMPLE, "Textures must be created with the 'sample' usage to send them to sampler variables in shaders");
-    view = texture->sampleView;
+    trackTexture(pass, textures[0], resource->phase, resource->cache);
+    pass->bindings[slot].texture.object = storage ? textures[0]->storageView : textures[0]->sampleView;
+    pass->bindings[slot].texture.sampler = textures[0]->sampler ? textures[0]->sampler->gpu : state.defaultSamplers[FILTER_LINEAR]->gpu;
   }
 
-  trackTexture(pass, texture, resource->phase, resource->cache);
-  pass->bindings[slot].texture.object = view;
-  pass->bindings[slot].texture.sampler = texture->sampler ? texture->sampler->gpu : state.defaultSamplers[FILTER_LINEAR]->gpu;
   pass->flags |= DIRTY_BINDINGS;
   return true;
 }
@@ -7584,7 +7611,7 @@ static gpu_binding* lovrPassResolveBindings(Pass* pass, Shader* shader, gpu_bind
     bindings[i] = pass->bindings[shader->resources[i].binding];
     bindings[i].type = shader->resources[i].type;
     bindings[i].number = shader->resources[i].binding;
-    bindings[i].count = 0;
+    bindings[i].count = shader->resources[i].arraySize;
   }
 
   pass->flags &= ~DIRTY_BINDINGS;

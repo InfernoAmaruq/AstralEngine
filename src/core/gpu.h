@@ -365,6 +365,7 @@ typedef enum {
 
 typedef struct {
   uint32_t number;
+  uint32_t arraySize;
   gpu_slot_type type;
   uint8_t stages;
   uint8_t access;

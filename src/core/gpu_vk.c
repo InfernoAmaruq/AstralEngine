@@ -2245,7 +2245,7 @@ bool gpu_stream_end(gpu_stream* stream) {
   return true;
 }
 
-void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas) {
+void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas, gpu_timestamp_writes* timestamps) {
   static const VkAttachmentLoadOp loadOps[] = {
     [GPU_LOAD_OP_CLEAR] = VK_ATTACHMENT_LOAD_OP_CLEAR,
     [GPU_LOAD_OP_DISCARD] = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -2283,6 +2283,12 @@ void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas) {
       .imageMemoryBarrierCount = barrierCount,
       .pImageMemoryBarriers = barriers
     });
+  }
+
+  // Timestamps
+
+  if (timestamps && timestamps->tally && timestamps->beginIndex != ~0u) {
+    vkCmdWriteTimestamp(stream->commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, timestamps->tally->handle, timestamps->beginIndex);
   }
 
   // Begin pass
@@ -2574,13 +2580,19 @@ void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas) {
   }
 }
 
-void gpu_render_end(gpu_stream* stream, gpu_canvas* canvas) {
+void gpu_render_end(gpu_stream* stream, gpu_canvas* canvas, gpu_timestamp_writes* timestamps) {
   if (state.extensions.dynamicRendering) {
     vkCmdEndRenderingKHR(stream->commands);
   } else {
     vkCmdEndRenderPass2KHR(stream->commands, &(VkSubpassEndInfo) {
       .sType = VK_STRUCTURE_TYPE_SUBPASS_END_INFO
     });
+  }
+
+  // Timestamps
+
+  if (timestamps && timestamps->tally && timestamps->endIndex != ~0u) {
+    vkCmdWriteTimestamp(stream->commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, timestamps->tally->handle, timestamps->endIndex);
   }
 
   // Layout transitions
@@ -2609,12 +2621,16 @@ void gpu_render_end(gpu_stream* stream, gpu_canvas* canvas) {
   }
 }
 
-void gpu_compute_begin(gpu_stream* stream) {
-  //
+void gpu_compute_begin(gpu_stream* stream, gpu_timestamp_writes* timestamps) {
+  if (timestamps && timestamps->tally && timestamps->beginIndex != ~0u) {
+    vkCmdWriteTimestamp(stream->commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, timestamps->tally->handle, timestamps->beginIndex);
+  }
 }
 
-void gpu_compute_end(gpu_stream* stream) {
-  //
+void gpu_compute_end(gpu_stream* stream, gpu_timestamp_writes* timestamps) {
+  if (timestamps && timestamps->tally && timestamps->endIndex != ~0u) {
+    vkCmdWriteTimestamp(stream->commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, timestamps->tally->handle, timestamps->endIndex);
+  }
 }
 
 void gpu_set_viewport(gpu_stream* stream, float view[4], float depthRange[2]) {
@@ -2875,10 +2891,6 @@ void gpu_tally_begin(gpu_stream* stream, gpu_tally* tally, uint32_t index) {
 
 void gpu_tally_finish(gpu_stream* stream, gpu_tally* tally, uint32_t index) {
   vkCmdEndQuery(stream->commands, tally->handle, index);
-}
-
-void gpu_tally_mark(gpu_stream* stream, gpu_tally* tally, uint32_t index) {
-  vkCmdWriteTimestamp(stream->commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, tally->handle, index);
 }
 
 // Acquires an OpenXR swapchain texture, transitioning it to the natural layout

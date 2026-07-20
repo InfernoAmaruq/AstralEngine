@@ -665,6 +665,12 @@ typedef struct {
   uint32_t area[4];
 } gpu_canvas;
 
+typedef struct {
+  gpu_tally* tally;
+  uint32_t beginIndex;
+  uint32_t endIndex;
+} gpu_timestamp_writes;
+
 typedef enum {
   GPU_PHASE_INDIRECT = (1 << 0),
   GPU_PHASE_INPUT_INDEX = (1 << 1),
@@ -716,10 +722,10 @@ typedef struct {
 
 gpu_stream* gpu_stream_begin(const char* label);
 bool gpu_stream_end(gpu_stream* stream);
-void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas);
-void gpu_render_end(gpu_stream* stream, gpu_canvas* canvas);
-void gpu_compute_begin(gpu_stream* stream);
-void gpu_compute_end(gpu_stream* stream);
+void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas, gpu_timestamp_writes* timestamps);
+void gpu_render_end(gpu_stream* stream, gpu_canvas* canvas, gpu_timestamp_writes* timestamps);
+void gpu_compute_begin(gpu_stream* stream, gpu_timestamp_writes* timestamps);
+void gpu_compute_end(gpu_stream* stream, gpu_timestamp_writes* timestamps);
 void gpu_set_viewport(gpu_stream* stream, float viewport[4], float depthRange[2]);
 void gpu_set_scissor(gpu_stream* stream, uint32_t scissor[4]);
 void gpu_push_constants(gpu_stream* stream, gpu_shader* shader, void* data, uint32_t size);
@@ -746,7 +752,6 @@ void gpu_build_tree(gpu_stream* stream, gpu_tree* tree, gpu_build_info* info);
 void gpu_sync(gpu_stream* stream, gpu_barrier* barriers, uint32_t count);
 void gpu_tally_begin(gpu_stream* stream, gpu_tally* tally, uint32_t index);
 void gpu_tally_finish(gpu_stream* stream, gpu_tally* tally, uint32_t index);
-void gpu_tally_mark(gpu_stream* stream, gpu_tally* tally, uint32_t index);
 void gpu_xr_acquire(gpu_stream* stream, gpu_texture* texture);
 void gpu_xr_release(gpu_stream* stream, gpu_texture* texture);
 

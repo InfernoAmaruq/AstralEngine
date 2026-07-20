@@ -1086,7 +1086,7 @@ void lovrGraphicsSetTimingEnabled(bool enable) {
   state.timingEnabled = enable;
 }
 
-static bool recordComputePass(Pass* pass, gpu_stream* stream) {
+static bool recordComputePass(Pass* pass, gpu_stream* stream, gpu_timestamp_writes* timestamps) {
   if (pass->computeCount == 0) {
     return true;
   }
@@ -1098,7 +1098,7 @@ static bool recordComputePass(Pass* pass, gpu_stream* stream) {
   uint32_t uniformOffset = 0;
   uint32_t uniformSize = 0;
 
-  gpu_compute_begin(stream);
+  gpu_compute_begin(stream, timestamps);
 
   for (uint32_t i = 0; i < pass->computeCount; i++) {
     Compute* compute = &pass->computes[i];
@@ -1151,7 +1151,7 @@ static bool recordComputePass(Pass* pass, gpu_stream* stream) {
     }
   }
 
-  gpu_compute_end(stream);
+  gpu_compute_end(stream, timestamps);
   return true;
 }
 
@@ -1164,7 +1164,7 @@ static void compilePipeline(void* arg) {
   job->done = true;
 }
 
-static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
+static bool recordRenderPass(Pass* pass, gpu_stream* stream, gpu_timestamp_writes* timestamps) {
   Canvas* canvas = &pass->canvas;
 
   if (!canvas->color->texture && !canvas->depth.texture) {
@@ -1378,8 +1378,8 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
   pass->stats.drawsCulled = pass->drawCount - activeDrawCount;
 
   if (activeDrawCount == 0) {
-    gpu_render_begin(stream, &pass->target);
-    gpu_render_end(stream, &pass->target);
+    gpu_render_begin(stream, &pass->target, timestamps);
+    gpu_render_end(stream, &pass->target, timestamps);
     return true;
   }
 
@@ -1500,7 +1500,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
   uint32_t uniformSize = 0;
   gpu_bundle* uniformBundle = NULL;
 
-  gpu_render_begin(stream, &pass->target);
+  gpu_render_begin(stream, &pass->target, timestamps);
   gpu_bind_vertex_buffers(stream, &state.defaultBuffer->gpu, NULL, 1, 1);
 
   bool hasError = false;
@@ -1631,7 +1631,7 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
     gpu_tally_finish(stream, pass->tally.gpu, tally * pass->views);
   }
 
-  gpu_render_end(stream, &pass->target);
+  gpu_render_end(stream, &pass->target, timestamps);
 
   // Automipmap
 
@@ -1695,12 +1695,12 @@ static bool recordRenderPass(Pass* pass, gpu_stream* stream) {
     gpu_bundle* bundle = getBundle(shader->layout, bindings, COUNTOF(bindings));
     if (!bundle) return false;
 
-    gpu_compute_begin(stream);
+    gpu_compute_begin(stream, NULL);
     gpu_bind_pipeline(stream, shader->computePipeline, GPU_PIPELINE_COMPUTE);
     gpu_bind_bundles(stream, shader->gpu, &bundle, 0, 1, NULL, 0);
     gpu_push_constants(stream, shader->gpu, (uint32_t[2]) { count, pass->views }, 2 * sizeof(uint32_t));
     gpu_compute(stream, (count + 31) / 32, 1, 1);
-    gpu_compute_end(stream);
+    gpu_compute_end(stream, NULL);
   }
 
   return true;
@@ -1863,20 +1863,35 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
   lovrAssertGoto(fail, gpu_stream_end(state.stream), "Failed to end GPU command buffer: %s", gpu_get_error());
 
   for (uint32_t i = 0; i < count; i++) {
-    gpu_stream* stream = streams[streamCount++] = gpu_stream_begin(passes[i]->label);
+    Pass* pass = passes[i];
+    gpu_stream* stream = streams[streamCount++] = gpu_stream_begin(pass->label);
+
+    gpu_timestamp_writes computeTimestamps = { 0 };
+    gpu_timestamp_writes renderTimestamps = { 0 };
 
     if (state.timingEnabled) {
       times[i].cpuTime = os_get_time();
-      gpu_tally_mark(stream, state.timestamps, 2 * i + 0);
+
+      bool compute = pass->computeCount > 0;
+      bool render = pass->canvas.color->texture || pass->canvas.depth.texture;
+
+      computeTimestamps.tally = state.timestamps;
+      renderTimestamps.tally = state.timestamps;
+
+      computeTimestamps.beginIndex = 2 * i + 0;
+      computeTimestamps.endIndex = render ? ~0u : 2 * i + 1;
+
+      renderTimestamps.beginIndex = compute ? ~0u : 2 * i + 0;
+      renderTimestamps.endIndex = 2 * i + 1;
     }
 
-    if (!recordComputePass(passes[i], stream)) {
+    if (!recordComputePass(pass, stream, &computeTimestamps)) {
       goto fail;
     }
 
     gpu_sync(stream, &computeBarriers[i], 1);
 
-    if (!recordRenderPass(passes[i], stream)) {
+    if (!recordRenderPass(pass, stream, &renderTimestamps)) {
       goto fail;
     }
 
@@ -1884,7 +1899,6 @@ bool lovrGraphicsSubmit(Pass** passes, uint32_t count) {
 
     if (state.timingEnabled) {
       times[i].cpuTime = os_get_time() - times[i].cpuTime;
-      gpu_tally_mark(stream, state.timestamps, 2 * i + 1);
     }
 
     lovrAssertGoto(fail, gpu_stream_end(stream), "Failed to end GPU command buffer: %s", gpu_get_error());
@@ -5735,7 +5749,7 @@ static bool lovrModelAnimateVertices(Model* model) {
 
   mtx_lock(&state.lock);
 
-  gpu_compute_begin(state.stream);
+  gpu_compute_begin(state.stream, NULL);
 
   if (blend) {
     Shader* shader = lovrGraphicsGetDefaultShader(SHADER_BLENDER);
@@ -5880,7 +5894,7 @@ static bool lovrModelAnimateVertices(Model* model) {
     }
   }
 
-  gpu_compute_end(state.stream);
+  gpu_compute_end(state.stream, NULL);
 
   state.barrier.prev |= GPU_PHASE_SHADER_COMPUTE;
   state.barrier.next |= GPU_PHASE_INPUT_VERTEX;

@@ -4,11 +4,9 @@ local Lighting = {}
 local MainShader = Renderer.GetMainShader()
 local MainBufferFormat = MainShader:getBufferFormat("Lighting_Data")
 
-local CacheTable = {}
+local CacheTable = table.new(256, 0)
 local LightCount = 0
-
-CacheTable.Light_LightCount = 0 -- amount of lights set
-CacheTable.Light_LightData = table.new(256, 0)
+Lighting.LightCount = 0
 
 local LightBuffer = lovr.graphics.newBuffer(MainBufferFormat)
 Lighting.LightBuffer = LightBuffer
@@ -48,11 +46,11 @@ Lighting.AddLight = function(LightEntity, EarlyLightComponent)
         LightCount = LightCount + 1
         Id = LightCount
         LightRegistry[LightEntity] = Id
-        CacheTable.Light_LightCount = LightCount
+        Lighting.LightCount = LightCount
     end
 
-    local Tab = CacheTable.Light_LightData[Id] or table.new(20, 0)
-    CacheTable.Light_LightData[Id] = Tab
+    local Tab = CacheTable or table.new(20, 0)
+    CacheTable[Id] = Tab
 
     Tab[1], Tab[2], Tab[3] = Pos:unpack()
     Tab[4] = Distance
@@ -78,7 +76,7 @@ Lighting.AddLight = function(LightEntity, EarlyLightComponent)
         end
     end
 
-    LightBuffer:setData(CacheTable)
+    LightBuffer:setData(CacheTable, 1, 1, LightCount)
 end
 
 Lighting.UpdateLight = function(E)
@@ -93,12 +91,12 @@ Lighting.RemoveLight = function(LightEntity)
 
     local Top = LightCount
     if Top == 1 then
-        CacheTable.Light_LightData[Id] = nil
+        CacheTable[Id] = nil
     elseif Top ~= Id then
         local TopEnt = table.find(LightRegistry, Top)
         LightRegistry[TopEnt] = Id
 
-        CacheTable.Light_LightData[Id] = CacheTable.Light_LightData[Top]
+        CacheTable[Id] = CacheTable[Top]
         -- yes, we are NOT freeing the top table we swap. Chances are they'll be needed again eventually, so no freeing for now
         -- Light_LightCount should point us to top, so we know when to stop
     end
@@ -106,8 +104,9 @@ Lighting.RemoveLight = function(LightEntity)
     LightRegistry[LightEntity] = nil
 
     LightCount = LightCount - 1
-    CacheTable.Light_LightCount = LightCount
-    LightBuffer:setData(CacheTable)
+    Lighting.LightCount = LightCount
+
+    LightBuffer:setData(CacheTable, 1, 1, LightCount)
 
     if Lighting.Shadowmap then
         Lighting.Shadowmap.Remove(LightEntity)

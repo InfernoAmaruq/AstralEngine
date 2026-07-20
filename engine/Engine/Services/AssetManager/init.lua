@@ -212,6 +212,7 @@ local function ProcessMaterialInput(Input)
     InputProcessed.NormalScale = 1
     InputProcessed.Metalness = 1
     InputProcessed.Roughness = 1
+    InputProcessed.OcclusionStrength = 1
 
     for i, v in pairs(Input) do
         if i == "Color" or i == "Glow" then

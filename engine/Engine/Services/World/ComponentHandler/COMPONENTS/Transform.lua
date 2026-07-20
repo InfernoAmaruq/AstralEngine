@@ -165,7 +165,8 @@ Transform.Metadata.__create = function(DATA, Entity)
         for i, v in pairs(DATA) do
             if Transform.Pattern[i] and IndexFields[i] then
                 local Type = typeof(v)
-                local Wrap = Type == "Vec3" or Type == "Quat" or Type == "Mat"
+                local Wrap = Type == "Vec3" or Type == "Quat" or Type == "Mat4"
+
                 Ret[IndexFields[i]] = Wrap and Transform.Pattern[i](v) or v
             end
         end

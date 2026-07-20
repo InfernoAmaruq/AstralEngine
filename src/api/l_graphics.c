@@ -403,7 +403,7 @@ static int callback_selectGPU(void* luaPtr, GraphicsDevice* gd, uint32_t count){
     lua_insert(L, -2);
     lua_call(L,1,1);
 
-    int idx = luaL_optinteger(L, -1, 0) - 1;
+    int idx = luaL_optinteger(L, -1, 1) - 1;
     lua_pop(L,1);
 
     lua_pushnil(L);

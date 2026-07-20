@@ -216,6 +216,16 @@ local METHODS = {
         end
         self[26] = CurrentMatrix
     end,
+    SetSkybox = function(self, Skybox, RecalculateSH)
+        self[28] = Skybox or EmptySkybox
+
+        if RecalculateSH then
+            self:RecalculateSphericalHarmonics()
+        end
+    end,
+    RecalculateSphericalHarmonics = function(self)
+        self.__LuaSHBuffer.Valid = false
+    end,
 }
 
 local READ_ONLY = {
@@ -237,11 +247,8 @@ local SETTER = {
         end
     end,
     Ambience = function(self, Val)
-        local R, G, B, A = Val:div(255):unpack()
-        self[9]:set(R, G, B, A or 1)
-    end,
-    Skybox = function(self, Val)
-        self[28] = Val or EmptySkybox
+        local R, G, B = Val:div(255):unpack()
+        self[9]:set(R, G, B)
     end,
 }
 
@@ -250,7 +257,7 @@ local GETTER = {
         return math.deg(self[FIELDS.RadFOV])
     end,
     Ambience = function(self)
-        return vec4(self[9] * 255)
+        return vec3(self[9] * 255)
     end,
     Resolution = function(self)
         return vec2(self[FIELDS.W], self[FIELDS.H]) / self[FIELDS.Density]
@@ -261,8 +268,9 @@ local GETTER = {
 }
 
 local SHIndexMap = {
+    Ambient = 1, -- lovr 1-indexes GLSL buffers for us
     LinearY = 2,
-    LinearX = 3, -- lovr 1-indexes GLSL buffers for us
+    LinearX = 3,
     LinearZ = 4,
     QuadX2 = 5,
     QuadXY = 6,
@@ -273,6 +281,15 @@ local SHIndexMap = {
 
 local function SHIndex(self, key)
     local LuaBuffer = self.__LuaSHBuffer
+
+    if LuaBuffer.Valid == 1 then
+        LuaBuffer.Valid = 2
+        local Dat = self[29]:getData()
+        for i = 1, 9 do
+            local j = (i - 1) * 3 + 1
+            LuaBuffer[i]:set(Dat[j], Dat[j + 1], Dat[j + 2])
+        end
+    end
 
     local Key = SHIndexMap[key]
     return LuaBuffer[Key] * 255
@@ -324,7 +341,7 @@ local mt = {
     end,
 }
 
-local BaseAmbience = Vec4(180, 180, 180, 255)
+local BaseAmbience = Vec3(180, 180, 180)
 
 local OIT_CONF = { format = "rg16f", samples = 4, usage = { "render", "sample" }, mipmaps = false }
 local DEPTH_CONF = { format = "d32f", samples = 4, usage = { "render", "sample" }, mipmaps = false, linear = true }
@@ -521,8 +538,8 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     Data.OITPass:setClear({ { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, depth = false })
 
     local Color = Input.Ambience or BaseAmbience
-    local R, G, B, A = Color:unpack()
-    Data.Ambience = Vec4(R, G, B, A or 1):div(255)
+    local R, G, B = Color:unpack()
+    Data.Ambience = Vec3(R, G, B):div(255)
 
     --Data.CameraPass.ResizeCallback = REBUILD_CALLBACK
 
@@ -548,8 +565,10 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
 
     local SHData = table.new(9, 0)
     for i = 1, 9 do
-        SHData[i] = Vec3()
+        SHData[i] = Vec3(0)
     end
+
+    SHData.Valid = 0
 
     local Buffer = lovr.graphics.newBuffer(BufferFormat, SHData)
     Data.SHBuffer = Buffer

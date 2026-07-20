@@ -1,5 +1,3 @@
-uniform vec4 Lighting_Ambience;
-
 #ifndef MAX_LIGHTS
 #define MAX_LIGHTS 256
 #endif
@@ -19,16 +17,10 @@ struct PaddedLight {
     vec4 UpVectorCastShadow; // xyz for upvec (normalized), w for shadow index
 };
 
-uniform Lighting_Data {
-    uint Light_LightCount;
+uniform int Light_LightCount;
 
-    PaddedLight Light_LightData[MAX_LIGHTS];
-
-    vec4 Light_Positions[MAX_LIGHTS]; // where w is max distance
-    vec4 Light_Directions[MAX_LIGHTS]; // where w is angle and MUST be > 0. If angle is < 0, interpret it as a point light!
-    vec4 Light_Colors[MAX_LIGHTS];
-    vec4 Light_Extras[MAX_LIGHTS];
-    vec4 Light_ExtrasTwo[MAX_LIGHTS];
+readonly buffer Lighting_Data {
+    PaddedLight Light_LightData[];
 };
 
 uniform sampler2D Lighting_LTC;

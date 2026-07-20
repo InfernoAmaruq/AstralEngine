@@ -122,6 +122,10 @@ local function GetShaderCode(SourceFile, Defines, CallerPath)
 end
 
 function ShaderService.NewShader(Type, Shader1, Shader2, Data)
+    if not Data and type(Shader2) == "table" then
+        Data = Shader2
+    end
+
     local Raw = Data and Data.Raw or false
     local Label = Data and Data.Label or "AstralShader"
     local Flags = Data and Data.Flags or nil
@@ -132,7 +136,6 @@ function ShaderService.NewShader(Type, Shader1, Shader2, Data)
     local Caller = AstralEngine.Filesystem.FolderFromPath(AstralEngine.Filesystem.GetCurrentPath(2))
 
     if Type == ShaderType.Compute then
-        Data = Shader2
         local Code = GetShaderCode(Shader1, Data and Data.Defines, Caller)
 
         LovrShader = lovr.graphics.newShader(Code, LovrData)

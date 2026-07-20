@@ -20,11 +20,18 @@ local mat4 = mat4
 
 -- > LOAD SHADERS
 local ShaderService = GetService "ShaderService"
+
+--- > GRAPHICS SHADERS
+
 local OITExtractShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "Camera/CameraComposite.glsl")
 
 local BlurShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "Camera/BlurPass.glsl")
 
 local FinalShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "Camera/Finalise.glsl")
+
+--- > COMPUTE SHADERS
+
+local ExtractSHShader = ShaderService.NewShader(Enum.ShaderType.Compute, "PBR/GetSH.comp", { Raw = true })
 
 -- > GET PRECOMPUTED ASSETS
 
@@ -628,7 +635,31 @@ local function GetDrawFunc(IsSolid)
                 Pass:setBlendMode(1, "add", "premultiplied")
                 Pass:setBlendMode(2, "add", "premultiplied")
             else
-                Pass:skybox(Skybox) -- draw skybox only on first solid pass
+                -- draw skybox only on solid pass
+
+                -- recalculate SH if we need to
+
+                if Camera.__LuaSHBuffer.Valid == 0 then
+                    local Type = Skybox and Skybox:getType()
+
+                    if Type == "cube" then
+                        Pass:setShader(ExtractSHShader)
+                        Pass:send("envMap", Skybox)
+                        Pass:send("SHBuffer", Camera[29])
+
+                        local Size = Skybox:getHeight()
+
+                        local x, y = ExtractSHShader:getWorkgroupSize()
+
+                        Pass:compute((Size + x - 1) / x, (Size + y - 1) / y, 6)
+
+                        Pass:setShader()
+                    end
+
+                    Camera.__LuaSHBuffer.Valid = 1
+                end
+
+                Pass:skybox(Skybox)
                 -- uses a unique shader so we draw it first
             end
 
@@ -643,6 +674,7 @@ local function GetDrawFunc(IsSolid)
                 Pass:send("Transparent", IsTransparent)
 
                 if Manifest.SendDirectLightingData then
+                    Pass:send("Light_LightCount", Lighting.LightCount)
                     Pass:send("Lighting_Data", Lighting.LightBuffer)
                     Pass:send("Lighting_LTC", Lighting.LTCTexture)
                     Pass:send("Lighting_LTC_Amp", Lighting.LTCAmp)

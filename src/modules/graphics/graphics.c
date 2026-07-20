@@ -831,9 +831,10 @@ bool lovrGraphicsInit(GraphicsConfig* config) {
   state.defaultMaterial = lovrMaterialCreate(&(MaterialInfo) {
     .data.color = { 1.f, 1.f, 1.f, 1.f },
     .data.uvScale = { 1.f, 1.f },
-    .data.metalness = 0.f,
+    .data.metalness = .5f,
     .data.roughness = 1.f,
     .data.normalScale = 1.f,
+    .data.occlusionStrength = 1.f,
     .texture = state.defaultTexture
   });
 
@@ -4013,7 +4014,7 @@ void lovrInitDefaultMaps(){
     lovrImageSetPixel(tempImage,0,0,normalPixel);
     defaultNormalMap = lovrTextureCreate(&texInf);
 
-    float RnMPixel[4] = {0.f,.5f,0.f,1.f};
+    float RnMPixel[4] = {1.f,.5f,0.f,1.f};
 
     lovrImageSetPixel(tempImage,0,0,RnMPixel);
     defaultRoughnessAndMetalnessMap = lovrTextureCreate(&texInf);
@@ -4034,7 +4035,7 @@ Material* lovrMaterialCreate(const MaterialInfo* info) {
     info->metalnessTexture ? info->metalnessTexture : defaultRoughnessAndMetalnessMap,
     info->roughnessTexture ? info->roughnessTexture : defaultRoughnessAndMetalnessMap,
     info->clearcoatTexture,
-    info->occlusionTexture,
+    info->occlusionTexture ? info->occlusionTexture : defaultRoughnessAndMetalnessMap,
     info->normalTexture ? info->normalTexture : defaultNormalMap
   };
 

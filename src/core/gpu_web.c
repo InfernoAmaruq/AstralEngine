@@ -846,7 +846,7 @@ bool gpu_stream_end(gpu_stream* stream) {
   return true;
 }
 
-void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas) {
+void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas, gpu_timestamp_writes* timestamps) {
   static const WGPU_LOAD_OP loadOps[] = {
     [GPU_LOAD_OP_CLEAR] = WGPU_LOAD_OP_CLEAR,
     [GPU_LOAD_OP_DISCARD] = WGPU_LOAD_OP_CLEAR,
@@ -897,21 +897,37 @@ void gpu_render_begin(gpu_stream* stream, gpu_canvas* canvas) {
     .occlusionQuerySet = canvas->pixelTally ? canvas->pixelTally->handle : 0
   };
 
+  if (timestamps) {
+    info.timestampWrites = (WGpuRenderPassTimestampWrites) {
+      .querySet = timestamps->tally ? timestamps->tally->handle : 0,
+      .beginningOfPassWriteIndex = timestamps->beginIndex,
+      .endOfPassWriteIndex = timestamps->endIndex
+    };
+  }
+
   stream->pass = wgpu_command_encoder_begin_render_pass(stream->commands, &info);
 }
 
-void gpu_render_end(gpu_stream* stream, gpu_canvas* canvas) {
+void gpu_render_end(gpu_stream* stream, gpu_canvas* canvas, gpu_timestamp_writes* timestamps) {
   wgpu_render_pass_encoder_end(stream->pass);
   stream->pass = 0;
 }
 
-void gpu_compute_begin(gpu_stream* stream) {
+void gpu_compute_begin(gpu_stream* stream, gpu_timestamp_writes* timestamps) {
   WGpuComputePassDescriptor info = { 0 };
+
+  if (timestamps) {
+    info.timestampWrites = (WGpuComputePassTimestampWrites) {
+      .querySet = timestamps->tally ? timestamps->tally->handle : 0,
+      .beginningOfPassWriteIndex = timestamps->beginIndex,
+      .endOfPassWriteIndex = timestamps->endIndex
+    };
+  }
 
   stream->pass = wgpu_command_encoder_begin_compute_pass(stream->commands, &info);
 }
 
-void gpu_compute_end(gpu_stream* stream) {
+void gpu_compute_end(gpu_stream* stream, gpu_timestamp_writes* timestamps) {
   wgpu_compute_pass_encoder_end(stream->pass);
   stream->pass = 0;
 }
@@ -1081,10 +1097,6 @@ void gpu_tally_finish(gpu_stream* stream, gpu_tally* tally, uint32_t index) {
   wgpu_render_pass_encoder_end_occlusion_query(stream->pass);
 }
 
-void gpu_tally_mark(gpu_stream* stream, gpu_tally* tally, uint32_t index) {
-  // TODO unsupported
-}
-
 void gpu_xr_acquire(gpu_stream* stream, gpu_texture* texture) {
   //
 }
@@ -1123,6 +1135,7 @@ bool gpu_init(gpu_config* config) {
     config->features->float64 = false;
     config->features->int64 = false;
     config->features->int16 = false;
+    config->features->atomicFloatAdd = false;
 
     config->features->formats[GPU_FORMAT_R8][0] = GPU_FEATURE_SAMPLE | GPU_FEATURE_RENDER | GPU_FEATURE_BLIT;
     config->features->formats[GPU_FORMAT_RG8][0] = GPU_FEATURE_SAMPLE | GPU_FEATURE_RENDER | GPU_FEATURE_BLIT;

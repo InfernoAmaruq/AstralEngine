@@ -186,24 +186,47 @@ void* lovrImageGetLayerData(Image* image, uint32_t level, uint32_t layer) {
   return (uint8_t*) image->mipmaps[level].data + layer * image->mipmaps[level].stride;
 }
 
-typedef union { void* raw; uint8_t* u8; uint16_t* u16; float* f32; } ImagePointer;
+typedef union { void* raw; uint8_t* u8; uint16_t* u16; uint32_t* u32; float* f32; } ImagePointer;
 
-static void getPixelR8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.u8[i] / 255.f; }
-static void getPixelRG8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.u8[i] / 255.f; }
+static void getPixelR8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.u8[i] / 255.f; dst[3] = 1.f; }
+static void getPixelRG8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.u8[i] / 255.f; dst[3] = 1.f; }
 static void getPixelRGBA8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.u8[i] / 255.f; }
-static void getPixelR16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.u16[i] / 65535.f; }
-static void getPixelRG16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.u16[i] / 65535.f; }
+static void getPixelBGRA8(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.u8[(2u - i) & 0x3] / 255.f; }
+static void getPixelR16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.u16[i] / 65535.f; dst[3] = 1.f; }
+static void getPixelRG16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.u16[i] / 65535.f; dst[3] = 1.f; }
 static void getPixelRGBA16(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.u16[i] / 65535.f; }
-static void getPixelR16F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = float16to32(src.u16[i]); }
-static void getPixelRG16F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = float16to32(src.u16[i]); }
+static void getPixelR16F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = float16to32(src.u16[i]); dst[3] = 1.f; }
+static void getPixelRG16F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = float16to32(src.u16[i]); dst[3] = 1.f; }
 static void getPixelRGBA16F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = float16to32(src.u16[i]); }
-static void getPixelR32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.f32[i]; }
-static void getPixelRG32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.f32[i]; }
+static void getPixelR32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 1; i++) dst[i] = src.f32[i]; dst[3] = 1.f; }
+static void getPixelRG32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 2; i++) dst[i] = src.f32[i]; dst[3] = 1.f; }
 static void getPixelRGBA32F(ImagePointer src, float* dst) { for (uint32_t i = 0; i < 4; i++) dst[i] = src.f32[i]; }
+
+static void getPixelRGB565(ImagePointer src, float* dst) {
+  dst[0] = ((src.u16[0] >> 11) & 0x1f) / 31.f;
+  dst[1] = ((src.u16[0] >> 5) & 0x3f) / 63.f;
+  dst[2] = ((src.u16[0] >> 0) & 0x1f) / 31.f;
+  dst[3] = 1.f;
+}
+
+static void getPixelRGB5A1(ImagePointer src, float* dst) {
+  dst[0] = ((src.u16[0] >> 11) & 0x1f) / 31.f;
+  dst[1] = ((src.u16[0] >> 6) & 0x1f) / 31.f;
+  dst[2] = ((src.u16[0] >> 1) & 0x1f) / 31.f;
+  dst[3] = ((src.u16[0] >> 0) & 0x1) / 1.f;
+}
+
+static void getPixelRGB10A2(ImagePointer src, float* dst) {
+  dst[0] = ((src.u32[0] >> 0) & 0x3ff) / 1023.f;
+  dst[1] = ((src.u32[0] >> 10) & 0x3ff) / 1023.f;
+  dst[2] = ((src.u32[0] >> 20) & 0x3ff) / 1023.f;
+  dst[3] = ((src.u32[0] >> 30) & 0x3) / 3.f;
+}
 
 static void setPixelR8(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 1; i++) dst.u8[i] = (uint8_t) (src[i] * 255.f + .5f); }
 static void setPixelRG8(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 2; i++) dst.u8[i] = (uint8_t) (src[i] * 255.f + .5f); }
 static void setPixelRGBA8(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 4; i++) dst.u8[i] = (uint8_t) (src[i] * 255.f + .5f); }
+static void setPixelBGRA8(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 4; i++) dst.u8[i] = (uint8_t) (src[(2u - i) & 0x3] * 255.f + .5f); }
 static void setPixelR16(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 1; i++) dst.u16[i] = (uint16_t) (src[i] * 65535.f + .5f); }
 static void setPixelRG16(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 2; i++) dst.u16[i] = (uint16_t) (src[i] * 65535.f + .5f); }
 static void setPixelRGBA16(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 4; i++) dst.u16[i] = (uint16_t) (src[i] * 65535.f + .5f); }
@@ -214,6 +237,29 @@ static void setPixelR32F(float* src, ImagePointer dst) { for (uint32_t i = 0; i 
 static void setPixelRG32F(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 2; i++) dst.f32[i] = src[i]; }
 static void setPixelRGBA32F(float* src, ImagePointer dst) { for (uint32_t i = 0; i < 4; i++) dst.f32[i] = src[i]; }
 
+static void setPixelRGB565(float* src, ImagePointer dst) {
+  dst.u16[0] =
+    ((uint16_t) (CLAMP(src[0], 0.f, 1.f) * 31.f + .5f) << 11) |
+    ((uint16_t) (CLAMP(src[1], 0.f, 1.f) * 63.f + .5f) << 5) |
+    ((uint16_t) (CLAMP(src[2], 0.f, 1.f) * 31.f + .5f) << 0);
+}
+
+static void setPixelRGB5A1(float* src, ImagePointer dst) {
+  dst.u16[0] =
+    ((uint16_t) (CLAMP(src[0], 0.f, 1.f) * 31.f + .5f) << 11) |
+    ((uint16_t) (CLAMP(src[1], 0.f, 1.f) * 31.f + .5f) << 6) |
+    ((uint16_t) (CLAMP(src[2], 0.f, 1.f) * 31.f + .5f) << 1) |
+    (uint16_t) (CLAMP(src[3], 0.f, 1.f) + .5f);
+}
+
+static void setPixelRGB10A2(float* src, ImagePointer dst) {
+  dst.u32[0] =
+    ((uint32_t) (CLAMP(src[0], 0.f, 1.f) * 1023.f + .5f) << 0) |
+    ((uint32_t) (CLAMP(src[1], 0.f, 1.f) * 1023.f + .5f) << 10) |
+    ((uint32_t) (CLAMP(src[2], 0.f, 1.f) * 1023.f + .5f) << 20) |
+    ((uint32_t) (CLAMP(src[3], 0.f, 1.f) * 3.f + .5f) << 30);
+}
+
 bool lovrImageGetPixel(Image* image, uint32_t x, uint32_t y, float pixel[4]) {
   lovrCheck(!lovrImageIsCompressed(image), "Unable to access individual pixels of a compressed image");
   lovrCheck(x < image->width && y < image->height, "Pixel coordinates must be within Image bounds");
@@ -223,6 +269,7 @@ bool lovrImageGetPixel(Image* image, uint32_t x, uint32_t y, float pixel[4]) {
     case FORMAT_R8: getPixelR8(p, pixel); return true;
     case FORMAT_RG8: getPixelRG8(p, pixel); return true;
     case FORMAT_RGBA8: getPixelRGBA8(p, pixel); return true;
+    case FORMAT_BGRA8: getPixelBGRA8(p, pixel); return true;
     case FORMAT_R16: getPixelR16(p, pixel); return true;
     case FORMAT_RG16: getPixelRG16(p, pixel); return true;
     case FORMAT_RGBA16: getPixelRGBA16(p, pixel); return true;
@@ -232,6 +279,9 @@ bool lovrImageGetPixel(Image* image, uint32_t x, uint32_t y, float pixel[4]) {
     case FORMAT_R32F: getPixelR32F(p, pixel); return true;
     case FORMAT_RG32F: getPixelRG32F(p, pixel); return true;
     case FORMAT_RGBA32F: getPixelRGBA32F(p, pixel); return true;
+    case FORMAT_RGB565: getPixelRGB565(p, pixel); return true;
+    case FORMAT_RGB5A1: getPixelRGB5A1(p, pixel); return true;
+    case FORMAT_RGB10A2: getPixelRGB10A2(p, pixel); return true;
     default: return lovrSetError("Unsupported format for Image:getPixel");
   }
 }
@@ -245,6 +295,7 @@ bool lovrImageSetPixel(Image* image, uint32_t x, uint32_t y, float pixel[4]) {
     case FORMAT_R8: setPixelR8(pixel, p); return true;
     case FORMAT_RG8: setPixelRG8(pixel, p); return true;
     case FORMAT_RGBA8: setPixelRGBA8(pixel, p); return true;
+    case FORMAT_BGRA8: setPixelBGRA8(pixel, p); return true;
     case FORMAT_R16: setPixelR16(pixel, p); return true;
     case FORMAT_RG16: setPixelRG16(pixel, p); return true;
     case FORMAT_RGBA16: setPixelRGBA16(pixel, p); return true;
@@ -254,6 +305,9 @@ bool lovrImageSetPixel(Image* image, uint32_t x, uint32_t y, float pixel[4]) {
     case FORMAT_R32F: setPixelR32F(pixel, p); return true;
     case FORMAT_RG32F: setPixelRG32F(pixel, p); return true;
     case FORMAT_RGBA32F: setPixelRGBA32F(pixel, p); return true;
+    case FORMAT_RGB565: setPixelRGB565(pixel, p); return true;
+    case FORMAT_RGB5A1: setPixelRGB5A1(pixel, p); return true;
+    case FORMAT_RGB10A2: setPixelRGB10A2(pixel, p); return true;
     default: return lovrSetError("Unsupported format for Image:setPixel");
   }
 }
@@ -268,6 +322,7 @@ bool lovrImageMapPixel(Image* image, uint32_t x0, uint32_t y0, uint32_t w, uint3
     case FORMAT_R8: getPixel = getPixelR8, setPixel = setPixelR8; break;
     case FORMAT_RG8: getPixel = getPixelRG8, setPixel = setPixelRG8; break;
     case FORMAT_RGBA8: getPixel = getPixelRGBA8, setPixel = setPixelRGBA8; break;
+    case FORMAT_BGRA8: getPixel = getPixelBGRA8, setPixel = setPixelBGRA8; break;
     case FORMAT_R16: getPixel = getPixelR16, setPixel = setPixelR16; break;
     case FORMAT_RG16: getPixel = getPixelRG16, setPixel = setPixelRG16; break;
     case FORMAT_RGBA16: getPixel = getPixelRGBA16, setPixel = setPixelRGBA16; break;
@@ -277,6 +332,9 @@ bool lovrImageMapPixel(Image* image, uint32_t x0, uint32_t y0, uint32_t w, uint3
     case FORMAT_R32F: getPixel = getPixelR32F, setPixel = setPixelR32F; break;
     case FORMAT_RG32F: getPixel = getPixelRG32F, setPixel = setPixelRG32F; break;
     case FORMAT_RGBA32F: getPixel = getPixelRGBA32F, setPixel = setPixelRGBA32F; break;
+    case FORMAT_RGB565: getPixel = getPixelRGB565, setPixel = setPixelRGB565; break;
+    case FORMAT_RGB5A1: getPixel = getPixelRGB5A1, setPixel = setPixelRGB5A1; break;
+    case FORMAT_RGB10A2: getPixel = getPixelRGB10A2, setPixel = setPixelRGB10A2; break;
     default: return lovrSetError("Unsupported format for Image:mapPixel");
   }
   float pixel[4] = { 0.f, 0.f, 0.f, 1.f };
@@ -339,11 +397,21 @@ static uint32_t crc32(uint8_t* data, size_t length) {
 }
 
 Blob* lovrImageEncode(Image* image) {
-  lovrCheck(image->format == FORMAT_RGBA8, "Currently, only images with the rgba8 format can be encoded");
-  uint32_t w = image->width;
-  uint32_t h = image->height;
-  uint8_t* pixels = (uint8_t*) image->blob->data;
-  uint32_t stride = (int) (w * 4);
+  uint8_t depth;
+
+  switch (image->format) {
+    case FORMAT_R8: depth = 8; break;
+    case FORMAT_RG8: depth = 8; break;
+    case FORMAT_RGBA8: depth = 8; break;
+    case FORMAT_BGRA8: depth = 8; break;
+    case FORMAT_R16: depth = 16; break;
+    case FORMAT_RG16: depth = 16; break;
+    case FORMAT_RGBA16: depth = 16; break;
+    case FORMAT_RGB565: depth = 8; break;
+    case FORMAT_RGB5A1: depth = 8; break;
+    case FORMAT_RGB10A2: depth = 16; break;
+    default: return lovrSetError("This format is not currently supported by Image:encode"), NULL;
+  }
 
   // The world's worst png encoder
   // Encoding uses one unfiltered IDAT chunk, each row is an uncompressed huffman block
@@ -353,14 +421,17 @@ Blob* lovrImageEncode(Image* image) {
   // - n bytes for the image data itself (width * height * 4)
   // - 4 bytes for the adler32 checksum
 
+  uint32_t w = image->width;
+  uint32_t h = image->height;
+
   uint8_t signature[] = { 137, 80, 78, 71, 13, 10, 26, 10 };
   uint8_t header[13] = {
     w >> 24, w >> 16, w >> 8, w >> 0,
     h >> 24, h >> 16, h >> 8, h >> 0,
-    8, 6, 0, 0, 0
+    depth, 6, 0, 0, 0
   };
 
-  size_t rowSize = w * 4;
+  size_t rowSize = w * 4 * (depth / 8);
   size_t imageSize = rowSize * h;
   size_t blockSize = rowSize + 1;
   size_t idatSize = 2 + (h * (5 + 1)) + imageSize + 4;
@@ -392,7 +463,6 @@ Blob* lovrImageEncode(Image* image) {
 
   {
     uint8_t* p = data + 8;
-    size_t length = imageSize;
 
     // adler32 counters
     uint64_t s1 = 1, s2 = 0;
@@ -401,10 +471,10 @@ Blob* lovrImageEncode(Image* image) {
     *p++ = (7 << 4) + (8 << 0);
     *p++ = 1;
 
-    while (length >= rowSize) {
+    for (uint32_t y = 0; y < h; y++) {
 
       // 1 indicates the final block
-      *p++ = (length == rowSize);
+      *p++ = (y == h - 1);
 
       // Write length and negated length
       memcpy(p + 0, &(uint16_t) {  blockSize & 0xffff }, 2);
@@ -413,22 +483,40 @@ Blob* lovrImageEncode(Image* image) {
 
       // Write the filter method (0) and the row data
       *p++ = 0x00;
-      memcpy(p, pixels, rowSize);
+
+      if (image->format == FORMAT_RGBA8) {
+        memcpy(p, (uint8_t*) image->blob->data + y * rowSize, rowSize);
+      } else if (depth == 8) {
+        for (uint32_t x = 0; x < w; x++) {
+          float pixel[4];
+          lovrImageGetPixel(image, x, y, pixel);
+          for (uint32_t c = 0; c < 4; c++) {
+            p[x * 4 + c] = (uint8_t) (pixel[c] * 255.f + .5f);
+          }
+        }
+      } else {
+        for (uint32_t x = 0; x < w; x++) {
+          float pixel[4];
+          lovrImageGetPixel(image, x, y, pixel);
+          for (uint32_t c = 0; c < 4; c++) {
+            uint16_t v = (uint16_t) (pixel[c] * 65535.f + .5f);
+            p[x * 8 + 2 * c + 0] = v >> 8;
+            p[x * 8 + 2 * c + 1] = v & 0xff;
+          }
+        }
+      }
 
       // Update adler32
       s1 += 0;
       s2 += s1;
       for (size_t i = 0; i < rowSize; i++) {
-        s1 = (s1 + pixels[i]);
+        s1 = (s1 + p[i]);
         s2 = (s2 + s1);
       }
       s1 %= 65521;
       s2 %= 65521;
 
-      // Update cursors
       p += rowSize;
-      pixels += stride;
-      length -= rowSize;
     }
 
     // Write adler32 checksum

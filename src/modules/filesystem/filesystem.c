@@ -435,16 +435,21 @@ void lovrFilesystemGetDirectoryItems(const char* p, void (*callback)(void* conte
   size_t length = sizeof(path);
   if (sanitize(p, path, &length)) {
     FOREACH_ARCHIVE(archive) {
-      if (archiveContains(archive, path, length)) {
+      if (archive->mountLength == 0) {
         archive->list(archive, path, callback, context);
-      } else if (mountpointContains(archive, path, length)) {
-        const char* leaf = archive->mountpoint + length + 1;
+      } else if (memcmp(archive->mountpoint, path, MIN(length, archive->mountLength))) {
+        continue;
+      } else if (length < archive->mountLength && (archive->mountpoint[length] == '/' || length == 0)) {
+        size_t offset = length > 0 ? length + 1 : 0;
+        const char* leaf = archive->mountpoint + offset;
         const char* slash = strchr(leaf, '/');
-        size_t sublength = slash ? slash - leaf : archive->mountLength - length - 1;
+        size_t sublength = slash ? slash - leaf : archive->mountLength - offset;
         char buffer[1024];
         memcpy(buffer, leaf, sublength);
         buffer[sublength] = '\0';
         callback(context, buffer);
+      } else if (path[archive->mountLength] == '/' || path[archive->mountLength] == '\0') {
+        archive->list(archive, path, callback, context);
       }
     }
   }
@@ -705,8 +710,7 @@ static bool zip_init(Archive* archive, const char* filename, const char* root) {
   arr_reserve(&archive->nodes, nodeCount);
   map_init(&archive->lookup, nodeCount);
 
-  zip_node rootNode;
-  memset(&rootNode, 0xff, sizeof(zip_node));
+  zip_node rootNode = { .firstChild = ~0u, .nextSibling = ~0u, .directory = true };
   arr_push(&archive->nodes, rootNode);
 
   // See where the zip thinks its central directory is
@@ -854,8 +858,9 @@ static bool zip_init(Archive* archive, const char* filename, const char* root) {
   return true;
 }
 
-static zip_node* zip_resolve(Archive* archive, const char* fulpathLength) {
-  const char* path = fulpathLength + (archive->mountLength ? archive->mountLength + 1 : 0);
+static zip_node* zip_resolve(Archive* archive, const char* fullpath) {
+  if (strlen(fullpath) <= archive->mountLength) return &archive->nodes.data[0];
+  const char* path = fullpath + (archive->mountLength ? archive->mountLength + 1 : 0);
   size_t length = strlen(path);
   if (length == 0) return &archive->nodes.data[0];
   uint64_t hash = hash64(path, length);

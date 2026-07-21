@@ -1,6 +1,52 @@
 Changelog
 ===
 
+dev
+---
+
+### Add
+
+- Add `lovr.timer.getDisplayTime`.
+- Add support for atomic floats in shaders.
+
+### Change
+
+- Change `Pass:setScissor` to clamp negative x/y values to zero.
+- Change `lovr.math.gammaToLinear/linearToGamma` to return their 4th argument unchanged.
+- Change `Image:get/set/mapPixel` to support `rgb565`, `rgb5a1`, `rgb10a2` formats.
+- Change `Image:getPixel` to return an alpha of 1 for formats that don't have alpha.
+- Change `Image:encode` to support more formats (all uncompressed non-float color formats).
+- Change `lovr.data.newRasterizer` to take an `Image` to use for a BMFont atlas.
+- Change `lovr.graphics.newFont` to take an `Image` to use for a BMFont atlas.
+- Change `lovr.timer.getDelta/getAverageDelta/getFPS` to return values from the headset when VR is active.
+- Change `Pass:fill` to error unless its argument is nil or a Texture.
+
+### Fix
+
+- Fix `Pass:drawPart`.
+- Fix `ModelData:getMeshIndex` for meshes with multiple parts.
+- Fix invisible window when it was bigger than the size of the monitor.
+- Fix crash when creating `MeshShape` with empty model.
+- Fix possible hang with async functions when `t.thread.workers` is zero.
+- Fix possible crash when using graphics module from threads.
+- Fix issues with missing files in zip archives mounted with mountpoints.
+- Fix issues when generating mipmaps for texture views.
+
+### Deprecate
+
+- Deprecate `lovr.headset.getTime` (use `lovr.timer.getDisplayTime`).
+- Deprecate `lovr.headset.getDeltaTime` (use `lovr.timer.getDelta`).
+
+### Remove
+
+- Remove `Collider:is/setGravityIgnored` (previously deprecated).
+- Remove `World:get/setTightness` (previously deprecated).
+- Remove `World:get/setResponseTime` (previously deprecated).
+- Remove `World:get/setLinearDamping` (previously deprecated).
+- Remove `World:get/setAngularDamping` (previously deprecated).
+- Remove `World:is/setSleepingAllowed` (previously deprecated).
+- Remove `World:get/setStepCount` (previously deprecated).
+
 v0.19.0 - 2026-06-07
 ---
 

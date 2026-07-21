@@ -421,15 +421,17 @@ static int l_lovrModelDataGetMeshIndex(lua_State* L) {
 
   // Add the part's base vertex to the index value, so that everything is relative to the beginning
   // of the mesh and people don't have to worry about base vertex.  But we have to find the part...
-  uint32_t part = 0;
-  while (index < mesh->parts[part].start) {
-    part++;
+  uint32_t partIndex = 0;
+  while (mesh->parts[partIndex].start + mesh->parts[partIndex].count <= index) {
+    partIndex++;
   }
 
+  ModelPart* part = &mesh->parts[partIndex];
+
   if (model->meta.indexSize == 4) {
-    lua_pushinteger(L, ((uint32_t*) model->indices)[mesh->indexOffset + index] + mesh->parts[part].baseVertex + 1);
+    lua_pushinteger(L, ((uint32_t*) model->indices)[mesh->indexOffset + index] + part->baseVertex + 1);
   } else {
-    lua_pushinteger(L, ((uint16_t*) model->indices)[mesh->indexOffset + index] + mesh->parts[part].baseVertex + 1);
+    lua_pushinteger(L, ((uint16_t*) model->indices)[mesh->indexOffset + index] + part->baseVertex + 1);
   }
 
   return 1;

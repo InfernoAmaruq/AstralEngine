@@ -11,14 +11,13 @@ function lovr.errhand(message)
   local borderRadius = 8
 
   local stack = {}
-  local level = 1
+  local level
   local frame
 
   local layout = {}
   local panel = 1
   local stackColumnWidth = 0
   local sourceScroll = 0
-  local rendered = false
   local dirty = true
 
   local thumbsticks = {}
@@ -33,6 +32,15 @@ function lovr.errhand(message)
     return math.min(math.max(x, min), max)
   end
 
+  local function inside(x, y, rect)
+    return x >= rect.x and x <= rect.x + rect.w and y >= rect.y and y <= rect.y + rect.h
+  end
+
+  local function scrollSource(value)
+    local limit = math.max(#stack[level].lines * textSize - (layout.source.h - 2 * padding), 0)
+    sourceScroll = clamp(value, 0, limit)
+  end
+
   local function setLevel(index)
     local prev = level
 
@@ -40,7 +48,7 @@ function lovr.errhand(message)
     frame = stack[level]
 
     if level ~= prev and stack[level].lines and stack[level].currentline ~= -1 then
-      sourceScroll = math.max((frame.currentline + .5) * textSize - ((layout.source.h - padding) / 2), 0)
+      scrollSource((frame.currentline + .5) * textSize - (layout.source.h - padding) / 2)
     end
   end
 
@@ -59,14 +67,32 @@ function lovr.errhand(message)
         depth = depth
       }
 
+      row.contents = type(row.value) == 'string' and string.format("'%s'", row.value) or tostring(row.value)
+      row.contents = row.contents:gsub('\n', '\\n')
+
+      if #row.contents > 10000 then
+        row.contents = row.contents:sub(1, 10000) .. '...'
+      end
+
       table.insert(frame.rows, row)
 
       if type(value) == 'table' then
         row.id = id .. string.format('%p:%s', name, value)
 
         if frame.expanded[row.id] then
-          for k, v in pairs(value) do
-            halp(k, v, row, row.id, depth + 1)
+          if next(value) then
+            for k, v in pairs(value) do
+              halp(tostring(k), v, row, row.id, depth + 1)
+            end
+          else
+            table.insert(frame.rows, {
+              name = '',
+              value = nil,
+              contents = '<empty>',
+              parent = row,
+              index = #frame.rows + 1,
+              depth = depth + 1
+            })
           end
         end
       end
@@ -75,126 +101,6 @@ function lovr.errhand(message)
     for i, var in ipairs(frame.variables) do
       halp(var[1], var[2], nil, '', 0)
     end
-  end
-
-  if debug then
-    for i = 4, 50 do
-      local frame = debug.getinfo(i, 'Snufl')
-
-      if not frame then break end
-
-      table.insert(stack, frame)
-
-      frame.variables = {}
-      frame.expanded = {}
-      frame.rowIndex = 1
-      frame.scroll = 0
-
-      -- Pretty name
-      if frame.func then
-        if frame.name and lovr[frame.name] == frame.func then
-          frame.label = 'lovr.' .. frame.name
-        elseif frame.what == 'C' then
-          for module, value in pairs(lovr) do
-            if type(value) == 'table' then
-              for name, fn in pairs(value) do
-                if fn == frame.func then
-                  frame.label = string.format('lovr.%s.%s', module, name)
-                end
-              end
-            end
-          end
-
-          for object, methods in pairs(debug.getregistry()) do
-            if type(object) == 'string' and object:match('^%u') then
-              for name, fn in pairs(methods) do
-                if fn == frame.func then
-                  frame.label = string.format('%s:%s', object, name)
-                end
-              end
-            end
-          end
-        end
-      end
-
-      frame.label = frame.label or frame.name or '<anonymous>'
-      stackColumnWidth = math.max(stackColumnWidth, font:getWidth(frame.label) * textSize)
-
-      -- Locals
-      for j = 1, 100 do
-        local name, value = debug.getlocal(i, j)
-
-        if not name then
-          break
-        elseif name:sub(1, 1) ~= '(' then
-          table.insert(frame.variables, { name, value })
-        end
-      end
-
-      -- Upvalues
-      for j = 1, 100 do
-        local name, value = debug.getupvalue(frame.func, j)
-
-        if not name then
-          break
-        else
-          table.insert(frame.variables, { name, value })
-        end
-      end
-
-      table.insert(frame.variables, { '_ENV', getfenv(i) })
-
-      -- Source
-      if frame.source:sub(1, 1) == '@' then
-        local contents = lovr.filesystem.read(frame.source:sub(2))
-
-        if contents then
-          frame.lines = {}
-          for line in contents:gmatch('([^\n]*)\n') do
-            table.insert(frame.lines, line)
-          end
-        end
-      end
-
-      if frame.short_src == 'vector' then
-        frame.short_src = '[vector]:' .. frame.currentline
-      elseif frame.short_src and frame.currentline ~= -1 then
-        frame.short_src = frame.short_src .. ':' .. frame.currentline
-      end
-
-      buildVariableTable(frame)
-    end
-
-    while #stack > 0 and stack[#stack].short_src and (stack[#stack].short_src:match('boot.lua') or stack[#stack].short_src:match('[C]')) do
-      table.remove(stack)
-    end
-
-    if #stack == 0 then
-      table.insert(stack, {
-        label = '<none>',
-        short_src = '',
-        variables = {},
-        expanded = {},
-        rows = {},
-        rowIndex = 1,
-        scroll = 0
-      })
-    end
-
-    while level < #stack and stack[level].what == 'C' or (stack[level].short_src and stack[level].short_src:match('^%[vector%]')) do
-      level = level + 1
-    end
-
-    setLevel(level)
-  end
-
-  local function inside(x, y, rect)
-    return x >= rect.x and x <= rect.x + rect.w and y >= rect.y and y <= rect.y + rect.h
-  end
-
-  local function scrollSource(value)
-    local limit = math.max(#stack[level].lines * textSize - (layout.source.h - 2 * padding), 0)
-    sourceScroll = clamp(value, 0, limit)
   end
 
   local function clampVariableScroll()
@@ -402,9 +308,7 @@ function lovr.errhand(message)
 
         pass:setColor(i == frame.rowIndex and 0xffffff or 0xc0c0c0)
         pass:text(row.name, x + padding + row.depth * padding, y - frame.scroll + padding, 0, textSize, nil, 0, 'left', 'top')
-
-        local value = type(row.value) == 'string' and string.format("'%s'", row.value) or tostring(row.value)
-        pass:text(value, x + padding + frame.columnWidth + padding, y - frame.scroll + padding, 0, textSize, nil, 0, 'left', 'top')
+        pass:text(row.contents, x + padding + frame.columnWidth + padding, y - frame.scroll + padding, 0, textSize, nil, 0, 'left', 'top')
         y = y + textSize
 
         if y > edge then
@@ -412,6 +316,126 @@ function lovr.errhand(message)
         end
       end
     end)
+  end
+
+  if debug then
+    for i = 4, 50 do
+      local frame = debug.getinfo(i, 'Snufl')
+
+      if not frame then break end
+
+      table.insert(stack, frame)
+
+      frame.variables = {}
+      frame.expanded = {}
+      frame.rowIndex = 1
+      frame.scroll = 0
+
+      -- Pretty name
+      if frame.func then
+        if frame.name and lovr[frame.name] == frame.func then
+          frame.label = 'lovr.' .. frame.name
+        elseif frame.what == 'C' then
+          for module, value in pairs(lovr) do
+            if type(value) == 'table' then
+              for name, fn in pairs(value) do
+                if fn == frame.func then
+                  frame.label = string.format('lovr.%s.%s', module, name)
+                end
+              end
+            end
+          end
+
+          for object, methods in pairs(debug.getregistry()) do
+            if type(object) == 'string' and object:match('^%u') then
+              for name, fn in pairs(methods) do
+                if fn == frame.func then
+                  frame.label = string.format('%s:%s', object, name)
+                end
+              end
+            end
+          end
+        end
+      end
+
+      frame.label = frame.label or frame.name or '<anonymous>'
+      stackColumnWidth = math.max(stackColumnWidth, font:getWidth(frame.label) * textSize)
+
+      -- Locals
+      for j = 1, 100 do
+        local name, value = debug.getlocal(i, j)
+
+        if not name then
+          break
+        elseif name:sub(1, 1) ~= '(' then
+          table.insert(frame.variables, { name, value })
+        end
+      end
+
+      -- Upvalues
+      for j = 1, 100 do
+        local name, value = debug.getupvalue(frame.func, j)
+
+        if not name then
+          break
+        else
+          table.insert(frame.variables, { name, value })
+        end
+      end
+
+      table.insert(frame.variables, { '_ENV', getfenv(i) })
+
+      -- Source
+      if frame.source:sub(1, 1) == '@' then
+        local contents = lovr.filesystem.read(frame.source:sub(2))
+
+        if contents then
+          frame.lines = {}
+          for line in contents:gmatch('([^\n]*)\n') do
+            table.insert(frame.lines, line)
+          end
+        end
+      end
+
+      if frame.short_src == 'vector' then
+        frame.short_src = '[vector]:' .. frame.currentline
+      elseif frame.short_src and frame.currentline ~= -1 then
+        frame.short_src = frame.short_src .. ':' .. frame.currentline
+      end
+
+      buildVariableTable(frame)
+    end
+
+    while #stack > 0 and stack[#stack].short_src and (stack[#stack].short_src:match('boot.lua') or stack[#stack].short_src:match('[C]')) do
+      table.remove(stack)
+    end
+
+    if #stack == 0 then
+      table.insert(stack, {
+        label = '<none>',
+        short_src = '',
+        variables = {},
+        expanded = {},
+        rows = {},
+        rowIndex = 1,
+        scroll = 0
+      })
+    end
+
+    local index = 1
+
+    while index < #stack and stack[index].what == 'C' or (stack[index].short_src and stack[index].short_src:match('^%[vector%]')) do
+      index = index + 1
+    end
+
+    -- Need to compute layout so setLevel knows where to scroll
+    if lovr.headset and lovr.headset.isActive() then
+      resize(lovr.headset.getDisplayDimensions())
+    elseif lovr.system.isWindowOpen() then
+      resize(lovr.system.getWindowDimensions())
+    end
+
+    setLevel(index)
   end
 
   if not lovr.graphics or not lovr.graphics.isInitialized() then
@@ -436,11 +460,12 @@ function lovr.errhand(message)
   end
 
   lovr.system.setKeyRepeat(true)
+  lovr.system.setMouseMode('normal')
 
   return function()
     lovr.timer.step()
 
-    local timeout = (not rendered or (lovr.headset and lovr.headset.isActive())) and 0 or math.huge
+    local timeout = lovr.headset and lovr.headset.isActive() and 0 or .25
     lovr.system.pollEvents(timeout)
 
     for name, a, b, c in lovr.event.poll() do
@@ -604,7 +629,6 @@ function lovr.errhand(message)
 
     if window or quad or headset then
       lovr.graphics.submit(window, quad, headset)
-      rendered = true
 
       if headset then
         lovr.headset.submit()

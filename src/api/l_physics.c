@@ -113,23 +113,6 @@ static int l_lovrPhysicsNewWorld(lua_State* L) {
       }
     }
     lua_pop(L, 1);
-  } else { // Deprecated
-    info.allowSleep = lua_gettop(L) < 4 || lua_toboolean(L, 4);
-    if (lua_type(L, 5) == LUA_TTABLE) {
-      info.tagCount = luax_len(L, 5);
-      luax_check(L, info.tagCount <= MAX_TAGS, "Max number of world tags is %d", MAX_TAGS);
-      for (uint32_t i = 0; i < info.tagCount; i++) {
-        lua_rawgeti(L, -1, (int) i + 1);
-        if (lua_isstring(L, -1)) {
-          info.tags[i] = lua_tostring(L, -1);
-        } else {
-          return luaL_error(L, "World tags must be a table of strings");
-        }
-        lua_pop(L, 1);
-      }
-    } else {
-      info.tagCount = 0;
-    }
   }
 
   World* world = lovrWorldCreate(&info);

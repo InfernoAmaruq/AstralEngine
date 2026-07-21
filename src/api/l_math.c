@@ -191,12 +191,26 @@ static int l_lovrMathGammaToLinear(lua_State* L) {
       lua_pop(L, 1);
       lua_pushnumber(L, lovrMathGammaToLinear(component));
     }
+
+    if (luax_len(L, 1) > 3) {
+      lua_rawgeti(L, 1, 4);
+      return 4;
+    }
+
     return 3;
   } else {
-    int n = CLAMP(lua_gettop(L), 1, 3);
+    int top = lua_gettop(L);
+    int n = CLAMP(top, 1, 3);
+
     for (int i = 0; i < n; i++) {
       lua_pushnumber(L, lovrMathGammaToLinear(luax_checkfloat(L, i + 1)));
     }
+
+    if (top > 3) {
+      lua_pushvalue(L, 4);
+      return 4;
+    }
+
     return n;
   }
 }
@@ -209,12 +223,26 @@ static int l_lovrMathLinearToGamma(lua_State* L) {
       lua_pop(L, 1);
       lua_pushnumber(L, lovrMathLinearToGamma(component));
     }
+
+    if (luax_len(L, 1) > 3) {
+      lua_rawgeti(L, 1, 4);
+      return 4;
+    }
+
     return 3;
   } else {
-    int n = CLAMP(lua_gettop(L), 1, 3);
+    int top = lua_gettop(L);
+    int n = CLAMP(top, 1, 3);
+
     for (int i = 0; i < n; i++) {
       lua_pushnumber(L, lovrMathLinearToGamma(luax_checkfloat(L, i + 1)));
     }
+
+    if (top > 3) {
+      lua_pushvalue(L, 4);
+      return 4;
+    }
+
     return n;
   }
 }

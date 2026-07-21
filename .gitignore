@@ -1,6 +1,3 @@
-.tup
-.obj
-bin
 build*
 build_here*
 *.*.h

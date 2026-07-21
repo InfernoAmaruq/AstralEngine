@@ -109,6 +109,8 @@ enum {
 bool lovrGraphicsInit(GraphicsConfig* config);
 void lovrGraphicsDestroy(void);
 bool lovrGraphicsIsInitialized(void);
+void lovrGraphicsInitWorker(void);
+void lovrGraphicsDestroyWorker(void);
 
 void lovrGraphicsGetDevice(GraphicsDevice* device);
 void lovrGraphicsGetFeatures(GraphicsFeatures* features);
@@ -723,7 +725,7 @@ void lovrPassSetWinding(Pass* pass, Winding winding);
 void lovrPassSetWireframe(Pass* pass, bool wireframe);
 
 bool lovrPassSendBuffer(Pass* pass, const char* name, size_t length, Buffer* buffer, uint32_t offset, uint32_t extent);
-bool lovrPassSendTexture(Pass* pass, const char* name, size_t length, Texture* texture);
+bool lovrPassSendTexture(Pass* pass, const char* name, size_t length, Texture** texture, uint32_t count);
 bool lovrPassSendSampler(Pass* pass, const char* name, size_t length, Sampler* sampler);
 bool lovrPassSendRaytracer(Pass* pass, const char* name, size_t length, Raytracer* raytracer);
 bool lovrPassSendData(Pass* pass, const char* name, size_t length, void** data, DataField** format);

@@ -69,27 +69,21 @@ end
 -- Assertions
 local function isa(v, x)
   if type(x) == 'string' then
-    return type(v) == x,
-      'expected ' .. tostring(v) .. ' to be a ' .. x,
-      'expected ' .. tostring(v) .. ' to not be a ' .. x
+    return type(v[1]) == x, 'expected ' .. tostring(v[1]) .. ' to be a ' .. x
   elseif type(x) == 'table' then
-    if type(v) ~= 'table' then
-      return false,
-        'expected ' .. tostring(v) .. ' to be a ' .. tostring(x),
-        'expected ' .. tostring(v) .. ' to not be a ' .. tostring(x)
+    if type(v[1]) ~= 'table' then
+      return false, 'expected ' .. tostring(v[1]) .. ' to be a ' .. tostring(x)
     end
 
     local seen = {}
-    local meta = v
+    local meta = v[1]
     while meta and not seen[meta] do
       if meta == x then return true end
       seen[meta] = true
       meta = getmetatable(meta) and getmetatable(meta).__index
     end
 
-    return false,
-      'expected ' .. tostring(v) .. ' to be a ' .. tostring(x),
-      'expected ' .. tostring(v) .. ' to not be a ' .. tostring(x)
+    return false, 'expected ' .. tostring(v[1]) .. ' to be a ' .. tostring(x)
   end
 
   error('invalid type ' .. tostring(x))
@@ -115,105 +109,141 @@ local function eq(t1, t2, eps)
   return true
 end
 
-local function stringify(t)
-  if type(t) == 'string' then return "'" .. tostring(t) .. "'" end
-  if type(t) ~= 'table' or getmetatable(t) and getmetatable(t).__tostring then return tostring(t) end
-  local strings = {}
-  for i, v in ipairs(t) do
-    strings[#strings + 1] = stringify(v)
-  end
-  for k, v in pairs(t) do
-    if type(k) ~= 'number' or k > #t or k < 1 then
-      strings[#strings + 1] = ('[%s] = %s'):format(stringify(k), stringify(v))
+local function stringify(...)
+  local values = {}
+  for i = 1, select('#', ...) do
+    local value = select(i, ...)
+    if type(value) == 'string' then
+      table.insert(values, "'" .. tostring(value) .. "'")
+    elseif type(value) ~= 'table' or getmetatable(value) and getmetatable(value).__tostring then
+      table.insert(values, tostring(value))
+    else
+      local entries = {}
+      for i, v in ipairs(value) do
+        entries[#entries + 1] = stringify(v)
+      end
+      for k, v in pairs(value) do
+        if type(k) ~= 'number' or k > #value or k < 1 then
+          entries[#entries + 1] = ('[%s] = %s'):format(stringify(k), stringify(v))
+        end
+      end
+      table.insert(values, '{ ' .. table.concat(entries, ', ') .. ' }')
     end
   end
-  return '{ ' .. table.concat(strings, ', ') .. ' }'
+  return table.concat(values, ', ')
 end
+
+local function all(t, fn, ...)
+  for i = 1, t.n or #t do
+    if not fn(t[i], i, ...) then return false end
+  end
+  return true
+end
+
+local function any(t, fn, ...)
+  for i, v in ipairs(t) do
+    if fn(v, i, ...) then return true end
+  end
+  return false
+end
+
+local function concat(t, s)
+  local strings = {}
+  for i = 1, t.n or #t do
+    table.insert(strings, tostring(t[i]))
+  end
+  return table.concat(strings, s)
+end
+
+local unpack = _G.unpack or table.unpack
+local function istable(x) return type(x) == 'table' end
 
 local paths = {
   [''] = { 'to', 'to_not' },
-  to = { 'have', 'equal', 'be', 'exist', 'fail', 'match' },
-  to_not = { 'have', 'equal', 'be', 'exist', 'fail', 'match', chain = function(a) a.negate = not a.negate end },
+  to = { 'have', 'equal', 'be', 'exist', 'fail', 'match', 'approximately' },
+  to_not = {
+    'have', 'equal', 'be', 'exist', 'fail', 'match', 'approximately',
+    chain = function(a) a.negate = not a.negate end
+  },
   a = { test = isa },
   an = { test = isa },
-  be = { 'a', 'an', 'truthy',
-    test = function(v, x)
-      return v == x,
-        'expected ' .. tostring(v) .. ' and ' .. tostring(x) .. ' to be the same',
-        'expected ' .. tostring(v) .. ' and ' .. tostring(x) .. ' to not be the same'
+  be = { 'a', 'an', 'truthy', 'falsy',
+    test = function(v, ...)
+      local same = v.n == select('#', ...) and all(v, function(x, i, ...) return x == select(i, ...) end, ...)
+      return same, 'expected ' .. concat(v, ', ') .. ' and ' .. concat({ n = select('#', ...), ... }, ', ') .. ' to be the same'
     end
   },
   exist = {
     test = function(v)
-      return v ~= nil,
-        'expected ' .. tostring(v) .. ' to exist',
-        'expected ' .. tostring(v) .. ' to not exist'
+      return v.n > 0 and all(v, function(x) return x ~= nil end), 'expected ' .. concat(v, ', ') .. ' to exist'
     end
   },
   truthy = {
     test = function(v)
-      return v,
-        'expected ' .. tostring(v) .. ' to be truthy',
-        'expected ' .. tostring(v) .. ' to not be truthy'
+      return v.n > 0 and all(v, function(x) return x end), 'expected ' .. concat(v, ', ') .. ' to be truthy'
+    end
+  },
+  falsy = {
+    test = function(v)
+      return all(v, function(x) return not x end), 'expected ' .. concat(v, ', ') .. ' to be falsy'
     end
   },
   equal = {
-    test = function(v, x, eps)
-      local comparison = ''
-      local equal = eq(v, x, eps)
+    test = function(v, ...)
+      local equal = true
 
-      if not equal and (type(v) == 'table' or type(x) == 'table') then
-        comparison = comparison .. '\n' .. indent(lust.level + 1) .. 'LHS: ' .. stringify(v)
-        comparison = comparison .. '\n' .. indent(lust.level + 1) .. 'RHS: ' .. stringify(x)
+      equal = equal and v.n == select('#', ...)
+      equal = equal and all(v, function(x, i, ...) return eq(x, select(i, ...), v.epsilon) end, ...)
+
+      local comparison = ''
+      if any(v, istable) or any({ ... }, istable) then
+        comparison = comparison .. '\n' .. indent(lust.level + 1) .. 'LHS: ' .. stringify(unpack(v))
+        comparison = comparison .. '\n' .. indent(lust.level + 1) .. 'RHS: ' .. stringify(...)
       end
 
-      return equal,
-        'expected ' .. tostring(v) .. ' and ' .. tostring(x) .. ' to be equal' .. comparison,
-        'expected ' .. tostring(v) .. ' and ' .. tostring(x) .. ' to not be equal'
+      return equal, 'expected ' .. concat(v, ', ') .. ' and ' .. concat({ n = select('#', ...), ... }, ', ') .. ' to be equal' .. comparison
     end
   },
   have = {
     test = function(v, x)
-      if type(v) ~= 'table' then
-        error('expected ' .. tostring(v) .. ' to be a table')
+      if type(v[1]) ~= 'table' then
+        error('expected ' .. tostring(v[1]) .. ' to be a table')
       end
 
-      return has(v, x),
-        'expected ' .. tostring(v) .. ' to contain ' .. tostring(x),
-        'expected ' .. tostring(v) .. ' to not contain ' .. tostring(x)
+      return has(v[1], x), 'expected ' .. tostring(v[1]) .. ' to contain ' .. tostring(x)
     end
   },
   fail = { 'with',
-    test = function(v)
-      return not pcall(v),
-        'expected ' .. tostring(v) .. ' to fail',
-        'expected ' .. tostring(v) .. ' to not fail'
+    test = function(v, pattern)
+      local ok, err = pcall(unpack(v))
+
+      if pattern then
+        return not ok and string.find(err, pattern), 'expected ' .. tostring(v[1]) .. ' to fail with error matching "' .. pattern .. '"'
+      else
+        return not ok, 'expected ' .. tostring(v[1]) .. ' to fail'
+      end
     end
   },
   with = {
     test = function(v, pattern)
-      local ok, message = pcall(v)
-      return not ok and message:match(pattern),
-        'expected ' .. tostring(v) .. ' to fail with error matching "' .. pattern .. '"',
-        'expected ' .. tostring(v) .. ' to not fail with error matching "' .. pattern .. '"'
+      local ok, message = pcall(unpack(v))
+      return not ok and message:match(pattern), 'expected ' .. tostring(v[1]) .. ' to fail with error matching "' .. pattern .. '"'
     end
   },
   match = {
-    test = function(v, p)
-      if type(v) ~= 'string' then v = tostring(v) end
-      local result = string.find(v, p)
-      return result ~= nil,
-        'expected ' .. v .. ' to match pattern [[' .. p .. ']]',
-        'expected ' .. v .. ' to not match pattern [[' .. p .. ']]'
+    test = function(v, pattern)
+      local value = tostring(v[1])
+      local result = string.find(value, pattern)
+      return result ~= nil, 'expected ' .. value .. ' to match pattern [[' .. pattern .. ']]'
     end
+  },
+  approximately = { 'be', 'equal',
+    chain = function(a, x) a.epsilon = x or 1e-3 end
   }
 }
 
-function lust.expect(v)
-  local assertion = {}
-  assertion.val = v
-  assertion.action = ''
-  assertion.negate = false
+function lust.expect(...)
+  local assertion = { action = '', negate = false, epsilon = 0, n = select('#', ...), ... }
 
   setmetatable(assertion, {
     __index = function(t, k)
@@ -227,14 +257,17 @@ function lust.expect(v)
     end,
     __call = function(t, ...)
       if paths[t.action].test then
-        local res, err, nerr = paths[t.action].test(t.val, ...)
+        local res, err = paths[t.action].test(t, ...)
         if assertion.negate then
           res = not res
-          err = nerr or err
+          err = err:gsub(' to ', ' to not ', 1)
         end
         if not res then
           error(err or 'unknown failure', 2)
         end
+      elseif paths[t.action].chain then
+        paths[t.action].chain(t, ...)
+        return t
       end
     end
   })

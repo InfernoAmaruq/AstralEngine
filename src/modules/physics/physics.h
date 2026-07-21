@@ -95,20 +95,6 @@ bool lovrWorldEnableCollisionBetween(World* world, const char* tag1, const char*
 bool lovrWorldIsCollisionEnabledBetween(World* world, const char* tag1, const char* tag2, bool* enabled);
 void lovrWorldSetCallbacks(World* world, WorldCallbacks* callbacks);
 
-// Deprecated
-int lovrWorldGetStepCount(World* world);
-void lovrWorldSetStepCount(World* world, int iterations);
-float lovrWorldGetResponseTime(World* world);
-void lovrWorldSetResponseTime(World* world, float responseTime);
-float lovrWorldGetTightness(World* world);
-void lovrWorldSetTightness(World* world, float tightness);
-void lovrWorldGetLinearDamping(World* world, float* damping, float* threshold);
-void lovrWorldSetLinearDamping(World* world, float damping, float threshold);
-void lovrWorldGetAngularDamping(World* world, float* damping, float* threshold);
-void lovrWorldSetAngularDamping(World* world, float damping, float threshold);
-bool lovrWorldIsSleepingAllowed(World* world);
-void lovrWorldSetSleepingAllowed(World* world, bool allowed);
-
 // Collider
 
 Collider* lovrColliderCreate(World* world, float position[3], Shape* shape);

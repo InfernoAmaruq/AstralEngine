@@ -625,9 +625,9 @@ bool lovrWorldShapecast(World* world, Shape* shape, float pose[7], float end[3],
   JPH_Vec3 centerOfMass;
   JPH_Shape_GetCenterOfMass(shape->handle, &centerOfMass);
 
-  JPH_RMatrix4x4 transform;
-  mat4_fromPose(&transform.m11, pose, pose + 3);
-  mat4_translate(&transform.m11, centerOfMass.x, centerOfMass.y, centerOfMass.z);
+  JPH_RMat4 transform;
+  mat4_fromPose(&transform.column[0].x, pose, pose + 3);
+  mat4_translate(&transform.column[0].x, centerOfMass.x, centerOfMass.y, centerOfMass.z);
 
   float direction[3];
   vec3_init(direction, end);
@@ -672,9 +672,9 @@ bool lovrWorldOverlapShape(World* world, Shape* shape, float pose[7], float maxD
   JPH_Vec3 centerOfMass;
   JPH_Shape_GetCenterOfMass(shape->handle, &centerOfMass);
 
-  JPH_RMatrix4x4 transform;
-  mat4_fromPose(&transform.m11, pose, pose + 3);
-  mat4_translate(&transform.m11, centerOfMass.x, centerOfMass.y, centerOfMass.z);
+  JPH_RMat4 transform;
+  mat4_fromPose(&transform.column[0].x, pose, pose + 3);
+  mat4_translate(&transform.column[0].x, centerOfMass.x, centerOfMass.y, centerOfMass.z);
 
   JPH_Vec3 scale = { 1.f, 1.f, 1.f };
   JPH_RVec3 offset = { 0.f, 0.f, 0.f };
@@ -789,20 +789,6 @@ void lovrWorldSetCallbacks(World* world, WorldCallbacks* callbacks) {
     JPH_PhysicsSystem_SetContactListener(world->system, world->listener);
   }
 }
-
-// Deprecated
-int lovrWorldGetStepCount(World* world) { return 1; }
-void lovrWorldSetStepCount(World* world, int iterations) {}
-float lovrWorldGetResponseTime(World* world) { return 0.f; }
-void lovrWorldSetResponseTime(World* world, float responseTime) {}
-float lovrWorldGetTightness(World* world) { return 0.f; }
-void lovrWorldSetTightness(World* world, float tightness) {}
-bool lovrWorldIsSleepingAllowed(World* world) { return world->defaultIsSleepingAllowed; }
-void lovrWorldSetSleepingAllowed(World* world, bool allowed) { world->defaultIsSleepingAllowed = allowed; }
-void lovrWorldGetLinearDamping(World* world, float* damping, float* threshold) { *damping = world->defaultLinearDamping, *threshold = 0.f; }
-void lovrWorldSetLinearDamping(World* world, float damping, float threshold) { world->defaultLinearDamping = damping; }
-void lovrWorldGetAngularDamping(World* world, float* damping, float* threshold) { *damping = world->defaultAngularDamping, *threshold = 0.f; }
-void lovrWorldSetAngularDamping(World* world, float damping, float threshold) { world->defaultAngularDamping = damping; }
 
 // Collider
 
@@ -1829,33 +1815,33 @@ bool lovrColliderApplyAngularImpulse(Collider* collider, float impulse[3]) {
 }
 
 void lovrColliderGetLocalPoint(Collider* collider, float world[3], float local[3]) {
-  JPH_RMatrix4x4 transform;
+  JPH_RMat4 transform;
   JPH_BodyInterface_GetWorldTransform(getBodyInterface(collider, READ), collider->id, &transform);
   vec3_init(local, world);
-  mat4_invert(&transform.m11);
-  mat4_mulPoint(&transform.m11, local);
+  mat4_invert(&transform.column[0].x);
+  mat4_mulPoint(&transform.column[0].x, local);
 }
 
 void lovrColliderGetWorldPoint(Collider* collider, float local[3], float world[3]) {
-  JPH_RMatrix4x4 transform;
+  JPH_RMat4 transform;
   JPH_BodyInterface_GetWorldTransform(getBodyInterface(collider, READ), collider->id, &transform);
   vec3_init(world, local);
-  mat4_mulPoint(&transform.m11, world);
+  mat4_mulPoint(&transform.column[0].x, world);
 }
 
 void lovrColliderGetLocalVector(Collider* collider, float world[3], float local[3]) {
-  JPH_RMatrix4x4 transform;
+  JPH_RMat4 transform;
   JPH_BodyInterface_GetWorldTransform(getBodyInterface(collider, READ), collider->id, &transform);
   vec3_init(local, world);
-  mat4_invert(&transform.m11);
-  mat4_mulDirection(&transform.m11, local);
+  mat4_invert(&transform.column[0].x);
+  mat4_mulDirection(&transform.column[0].x, local);
 }
 
 void lovrColliderGetWorldVector(Collider* collider, float local[3], float world[3]) {
-  JPH_RMatrix4x4 transform;
+  JPH_RMat4 transform;
   JPH_BodyInterface_GetWorldTransform(getBodyInterface(collider, READ), collider->id, &transform);
   vec3_init(world, local);
-  mat4_mulDirection(&transform.m11, world);
+  mat4_mulDirection(&transform.column[0].x, world);
 }
 
 void lovrColliderGetLinearVelocityFromLocalPoint(Collider* collider, float point[3], float velocity[3]) {
@@ -2052,10 +2038,10 @@ void lovrShapeGetInertia(Shape* shape, float diagonal[3], float rotation[4]) {
   JPH_Shape_GetMassProperties(shape->handle, &properties);
 
   JPH_Vec3 d;
-  JPH_Matrix4x4 m;
+  JPH_Mat4 m;
   JPH_MassProperties_DecomposePrincipalMomentsOfInertia(&properties, &m, &d);
   vec3_fromJolt(diagonal, &d);
-  quat_fromMat4(rotation, &m.m11);
+  quat_fromMat4(rotation, &m.column[0].x);
 }
 
 void lovrShapeGetCenterOfMass(Shape* shape, float center[3]) {
@@ -2096,10 +2082,10 @@ void lovrShapeGetPose(Shape* shape, float position[3], float orientation[4]) {
 void lovrShapeGetAABB(Shape* shape, float aabb[6]) {
   JPH_AABox box;
   if (shape->collider) {
-    JPH_RMatrix4x4 transform;
+    JPH_RMat4 transform;
     float position[3], orientation[4], scale[3] = { 1.f, 1.f, 1.f };
     lovrColliderGetPose(shape->collider, position, orientation);
-    mat4_fromPose(&transform.m11, position, orientation);
+    mat4_fromPose(&transform.column[0].x, position, orientation);
     JPH_Shape_GetWorldSpaceBounds(shape->handle, &transform, vec3_toJolt(scale), &box);
   } else {
     JPH_Shape_GetLocalBounds(shape->handle, &box);
@@ -2414,9 +2400,12 @@ MeshShape* lovrMeshShapeCreate(uint32_t vertexCount, float* vertices, uint32_t i
     triangles[i].userData = i;
   }
 
+  lovrCheck(vertexCount > 0 && indexCount > 0, "MeshShape requires a non-empty model");
+
   JPH_MeshShapeSettings* settings = JPH_MeshShapeSettings_Create2((const JPH_Vec3*) vertices, vertexCount, triangles, triangleCount);
   JPH_MeshShapeSettings_SetPerTriangleUserData(settings, true);
   JPH_Shape* mesh = (JPH_Shape*) JPH_MeshShapeSettings_CreateShape(settings);
+  lovrCheck(mesh, "Invalid mesh data!");
   JPH_ShapeSettings_Destroy((JPH_ShapeSettings*) settings);
   lovrFree(triangles);
 
@@ -2464,7 +2453,7 @@ TerrainShape* lovrTerrainShapeCreate(float* vertices, uint32_t n, float scaleXZ,
     .z = scaleXZ / (n - 1)
   };
 
-  JPH_HeightFieldShapeSettings* shape_settings = JPH_HeightFieldShapeSettings_Create(vertices, &offset, &scale, n);
+  JPH_HeightFieldShapeSettings* shape_settings = JPH_HeightFieldShapeSettings_Create(vertices, &offset, &scale, n, NULL);
   shape->handle = (JPH_Shape*) JPH_HeightFieldShapeSettings_CreateShape(shape_settings);
   lovrCheck(shape->handle, "Invalid terrain data!");
   JPH_Shape_SetUserData(shape->handle, (uint64_t) (uintptr_t) shape);
@@ -2586,22 +2575,22 @@ void lovrJointSetUserData(Joint* joint, uintptr_t userdata) {
 void lovrJointGetAnchors(Joint* joint, float anchor1[3], float anchor2[3]) {
   JPH_Body* body1 = JPH_TwoBodyConstraint_GetBody1((JPH_TwoBodyConstraint*) joint->constraint);
   JPH_Body* body2 = JPH_TwoBodyConstraint_GetBody2((JPH_TwoBodyConstraint*) joint->constraint);
-  JPH_RMatrix4x4 centerOfMassTransform1;
-  JPH_RMatrix4x4 centerOfMassTransform2;
+  JPH_RMat4 centerOfMassTransform1;
+  JPH_RMat4 centerOfMassTransform2;
   JPH_Body_GetCenterOfMassTransform(body1, &centerOfMassTransform1);
   JPH_Body_GetCenterOfMassTransform(body2, &centerOfMassTransform2);
-  JPH_Matrix4x4 constraintToBody1;
-  JPH_Matrix4x4 constraintToBody2;
+  JPH_Mat4 constraintToBody1;
+  JPH_Mat4 constraintToBody2;
   JPH_TwoBodyConstraint_GetConstraintToBody1Matrix((JPH_TwoBodyConstraint*) joint->constraint, &constraintToBody1);
   JPH_TwoBodyConstraint_GetConstraintToBody2Matrix((JPH_TwoBodyConstraint*) joint->constraint, &constraintToBody2);
-  mat4_mulVec4(&centerOfMassTransform1.m11, &constraintToBody1.m41);
-  mat4_mulVec4(&centerOfMassTransform2.m11, &constraintToBody2.m41);
-  anchor1[0] = constraintToBody1.m41;
-  anchor1[1] = constraintToBody1.m42;
-  anchor1[2] = constraintToBody1.m43;
-  anchor2[0] = constraintToBody2.m41;
-  anchor2[1] = constraintToBody2.m42;
-  anchor2[2] = constraintToBody2.m43;
+  mat4_mulVec4(&centerOfMassTransform1.column[0].x, &constraintToBody1.column[3].x);
+  mat4_mulVec4(&centerOfMassTransform2.column[0].x, &constraintToBody2.column[3].x);
+  anchor1[0] = constraintToBody1.column[3].x;
+  anchor1[1] = constraintToBody1.column[3].y;
+  anchor1[2] = constraintToBody1.column[3].z;
+  anchor2[0] = constraintToBody2.column[3].x;
+  anchor2[1] = constraintToBody2.column[3].y;
+  anchor2[2] = constraintToBody2.column[3].z;
 }
 
 uint32_t lovrJointGetPriority(Joint* joint) {
@@ -2750,9 +2739,9 @@ void lovrConeJointGetAxis(ConeJoint* joint, float axis[3]) {
   JPH_ConeConstraintSettings settings;
   JPH_ConeConstraint_GetSettings((JPH_ConeConstraint*) joint->constraint, &settings);
   JPH_Body* body1 = JPH_TwoBodyConstraint_GetBody1((JPH_TwoBodyConstraint*) joint->constraint);
-  JPH_RMatrix4x4 centerOfMassTransform;
+  JPH_RMat4 centerOfMassTransform;
   JPH_Body_GetCenterOfMassTransform(body1, &centerOfMassTransform);
-  JPH_Matrix4x4 constraintToBody;
+  JPH_Mat4 constraintToBody;
   JPH_TwoBodyConstraint_GetConstraintToBody1Matrix((JPH_TwoBodyConstraint*) joint->constraint, &constraintToBody);
   float translation[4] = {
     settings.twistAxis1.x,
@@ -2760,7 +2749,7 @@ void lovrConeJointGetAxis(ConeJoint* joint, float axis[3]) {
     settings.twistAxis1.z,
     0.f
   };
-  mat4_mulVec4(&centerOfMassTransform.m11, translation);
+  mat4_mulVec4(&centerOfMassTransform.column[0].x, translation);
   vec3_init(axis, translation);
 }
 
@@ -2851,9 +2840,9 @@ void lovrHingeJointGetAxis(HingeJoint* joint, float axis[3]) {
   JPH_HingeConstraintSettings settings;
   JPH_HingeConstraint_GetSettings((JPH_HingeConstraint*) joint->constraint, &settings);
   JPH_Body* body1 = JPH_TwoBodyConstraint_GetBody1((JPH_TwoBodyConstraint*) joint->constraint);
-  JPH_RMatrix4x4 centerOfMassTransform;
+  JPH_RMat4 centerOfMassTransform;
   JPH_Body_GetCenterOfMassTransform(body1, &centerOfMassTransform);
-  JPH_Matrix4x4 constraintToBody;
+  JPH_Mat4 constraintToBody;
   JPH_TwoBodyConstraint_GetConstraintToBody1Matrix((JPH_TwoBodyConstraint*) joint->constraint, &constraintToBody);
   float translation[4] = {
     settings.hingeAxis1.x,
@@ -2861,7 +2850,7 @@ void lovrHingeJointGetAxis(HingeJoint* joint, float axis[3]) {
     settings.hingeAxis1.z,
     0.f
   };
-  mat4_mulVec4(&centerOfMassTransform.m11, translation);
+  mat4_mulVec4(&centerOfMassTransform.column[0].x, translation);
   vec3_init(axis, translation);
 }
 
@@ -2988,9 +2977,9 @@ void lovrSliderJointGetAxis(SliderJoint* joint, float axis[3]) {
   JPH_SliderConstraintSettings settings;
   JPH_SliderConstraint_GetSettings((JPH_SliderConstraint*) joint->constraint, &settings);
   JPH_Body* body1 = JPH_TwoBodyConstraint_GetBody1((JPH_TwoBodyConstraint*) joint->constraint);
-  JPH_RMatrix4x4 centerOfMassTransform;
+  JPH_RMat4 centerOfMassTransform;
   JPH_Body_GetCenterOfMassTransform(body1, &centerOfMassTransform);
-  JPH_Matrix4x4 constraintToBody;
+  JPH_Mat4 constraintToBody;
   JPH_TwoBodyConstraint_GetConstraintToBody1Matrix((JPH_TwoBodyConstraint*) joint->constraint, &constraintToBody);
   float translation[4] = {
     settings.sliderAxis1.x,
@@ -2998,7 +2987,7 @@ void lovrSliderJointGetAxis(SliderJoint* joint, float axis[3]) {
     settings.sliderAxis1.z,
     0.f
   };
-  mat4_mulVec4(&centerOfMassTransform.m11, translation);
+  mat4_mulVec4(&centerOfMassTransform.column[0].x, translation);
   axis[0] = translation[0];
   axis[1] = translation[1];
   axis[2] = translation[2];

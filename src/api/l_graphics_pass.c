@@ -637,8 +637,10 @@ static int l_lovrPassSetScissor(lua_State* L) {
     lovrPassSetScissor(pass, NULL);
   } else {
     uint32_t scissor[4];
-    scissor[0] = luax_checku32(L, 2);
-    scissor[1] = luax_checku32(L, 3);
+    lua_Integer x = luaL_checkinteger(L, 2);
+    lua_Integer y = luaL_checkinteger(L, 3);
+    scissor[0] = (uint32_t) MAX(x, 0);
+    scissor[1] = (uint32_t) MAX(y, 0);
     scissor[2] = luax_checku32(L, 4);
     scissor[3] = luax_checku32(L, 5);
     luax_assert(L, lovrPassSetScissor(pass, scissor));
@@ -762,8 +764,31 @@ static int l_lovrPassSend(lua_State* L) {
   Texture* texture = luax_totype(L, 3, Texture);
 
   if (texture) {
-    luax_assert(L, lovrPassSendTexture(pass, name, length, texture));
+    luax_assert(L, lovrPassSendTexture(pass, name, length, &texture, 1));
     return 0;
+  }
+
+  if (lua_istable(L, 3) && luax_len(L, 3) > 0) {
+    lua_rawgeti(L, 3, 1);
+    bool isTexture = !!luax_totype(L, -1, Texture);
+    lua_pop(L, 1);
+
+    if (isTexture) {
+      size_t count = luax_len(L, 3);
+      Texture** textures = lovrMalloc(count * sizeof(Texture*));
+
+      for (size_t i = 0; i < count; i++) {
+        lua_rawgeti(L, 3, i + 1);
+        textures[i] = luax_totype(L, -1, Texture);
+        lovrCheck(textures[i], "Expected table of textures");
+        lua_pop(L, 1);
+      }
+
+      bool success = lovrPassSendTexture(pass, name, length, textures, count);
+      lovrFree(textures);
+      luax_assert(L, success);
+      return 0;
+    }
   }
 
   Sampler* sampler = luax_totype(L, 3, Sampler);
@@ -1043,7 +1068,7 @@ static int l_lovrPassSkybox(lua_State* L) {
 
 static int l_lovrPassFill(lua_State* L) {
   Pass* pass = luax_checktype(L, 1, Pass);
-  Texture* texture = luax_totype(L, 2, Texture);
+  Texture* texture = lua_isnoneornil(L, 2) ? NULL : luax_checktype(L, 2, Texture);
   luax_assert(L, lovrPassFill(pass, texture));
   return 0;
 }

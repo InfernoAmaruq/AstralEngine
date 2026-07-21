@@ -3,6 +3,7 @@
 #include "data/image.h"
 #include "data/modelData.h"
 #include "graphics/graphics.h"
+#include "timer/timer.h"
 #include "core/maf.h"
 #include "util.h"
 #include <stdlib.h>
@@ -110,22 +111,12 @@ static int l_lovrHeadsetConnect(lua_State* L) {
 }
 
 static int l_lovrHeadsetGetName(lua_State* L) {
-  char name[256];
-  if (lovrHeadsetGetName(name, sizeof(name))) {
-    lua_pushstring(L, name);
-  } else {
-    lua_pushnil(L);
-  }
+  lua_pushstring(L, lovrHeadsetGetName());
   return 1;
 }
 
 static int l_lovrHeadsetGetDriver(lua_State* L) {
-  char name[256];
-  if (lovrHeadsetGetDriver(name, sizeof(name))) {
-    lua_pushstring(L, name);
-  } else {
-    lua_pushnil(L);
-  }
+  lua_pushstring(L, lovrHeadsetGetDriver());
   return 1;
 }
 
@@ -197,20 +188,8 @@ static int l_lovrHeadsetPollEvents(lua_State* L) {
 }
 
 static int l_lovrHeadsetUpdate(lua_State* L) {
-  double dt = 0.;
-  luax_assert(L, lovrHeadsetUpdate(&dt));
-  lua_pushnumber(L, dt);
-  return 1;
-}
-
-static int l_lovrHeadsetGetDeltaTime(lua_State* L) {
-  lua_pushnumber(L, lovrHeadsetGetDeltaTime());
-  return 1;
-}
-
-static int l_lovrHeadsetGetTime(lua_State* L) {
-  lua_pushnumber(L, lovrHeadsetGetDisplayTime());
-  return 1;
+  luax_assert(L, lovrHeadsetUpdate());
+  return 0;
 }
 
 static int l_lovrHeadsetGetDisplayWidth(lua_State* L) {
@@ -1013,6 +992,20 @@ static int l_lovrHeadsetGetHands(lua_State* L) {
   return 1;
 }
 
+// Deprecated
+
+static int l_lovrHeadsetGetDeltaTime(lua_State* L) {
+  double dt = lovrHeadsetGetDeltaTime();
+  lua_pushnumber(L, dt == 0. ? lovrTimerGetDelta() : dt);
+  return 1;
+}
+
+static int l_lovrHeadsetGetTime(lua_State* L) {
+  double t = lovrHeadsetGetDisplayTime();
+  lua_pushnumber(L, t == 0. ? lovrTimerGetTime() : t);
+  return 1;
+}
+
 static const luaL_Reg lovrHeadset[] = {
   { "connect", l_lovrHeadsetConnect },
   { "getName", l_lovrHeadsetGetName },
@@ -1027,8 +1020,6 @@ static const luaL_Reg lovrHeadset[] = {
   { "isMounted", l_lovrHeadsetIsMounted },
   { "pollEvents", l_lovrHeadsetPollEvents },
   { "update", l_lovrHeadsetUpdate },
-  { "getDeltaTime", l_lovrHeadsetGetDeltaTime },
-  { "getTime", l_lovrHeadsetGetTime },
   { "getDisplayWidth", l_lovrHeadsetGetDisplayWidth },
   { "getDisplayHeight", l_lovrHeadsetGetDisplayHeight },
   { "getDisplayDimensions", l_lovrHeadsetGetDisplayDimensions },
@@ -1079,6 +1070,11 @@ static const luaL_Reg lovrHeadset[] = {
   { "setButton", l_lovrHeadsetSetButton },
   { "newLayer", l_lovrHeadsetNewLayer },
   { "getHands", l_lovrHeadsetGetHands },
+
+  // Deprecated
+  { "getDeltaTime", l_lovrHeadsetGetDeltaTime },
+  { "getTime", l_lovrHeadsetGetTime },
+
   { NULL, NULL }
 };
 

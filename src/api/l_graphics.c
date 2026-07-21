@@ -1545,17 +1545,26 @@ static int l_lovrGraphicsNewFont(lua_State* L) {
   if (!info.rasterizer) {
     Blob* blob = NULL;
     float size;
+    Image* atlas = NULL;
 
     if (lua_type(L, 1) == LUA_TNUMBER || lua_isnoneornil(L, 1)) {
       size = luax_optfloat(L, 1, 32.);
       info.spread = luaL_optnumber(L, 2, info.spread);
     } else {
       blob = luax_readblob(L, 1, "Font");
-      size = luax_optfloat(L, 2, 32.);
+
+      if (lua_isnoneornil(L, 2)) {
+        size = 32.f;
+      } else if (lua_type(L, 2) == LUA_TNUMBER) {
+        size = luax_tofloat(L, 2);
+      } else {
+        atlas = luax_totype(L, 2, Image);
+      }
+
       info.spread = luaL_optnumber(L, 3, info.spread);
     }
 
-    info.rasterizer = lovrRasterizerCreate(blob, size, luax_readfile);
+    info.rasterizer = lovrRasterizerCreate(blob, size, atlas, luax_readfile);
     lovrRelease(blob, lovrBlobDestroy);
     luax_assert(L, info.rasterizer);
   } else {

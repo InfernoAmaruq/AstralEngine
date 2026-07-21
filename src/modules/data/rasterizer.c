@@ -122,7 +122,7 @@ static int16_t readi16(const uint8_t* p) { int16_t x; memcpy(&x, p, sizeof(x)); 
 static uint16_t readu16(const uint8_t* p) { uint16_t x; memcpy(&x, p, sizeof(x)); return x; }
 static uint32_t readu32(const uint8_t* p) { uint32_t x; memcpy(&x, p, sizeof(x)); return x; }
 
-static bool lovrRasterizerCreateBMF(Rasterizer** result, Blob* blob, RasterizerIO* io) {
+static bool lovrRasterizerCreateBMF(Rasterizer** result, Blob* blob, Image* atlas, RasterizerIO* io) {
   if (!blob || blob->size < 4) return true;
 
   uint8_t magic[] = { 'B', 'M', 'F' };
@@ -309,14 +309,19 @@ static bool lovrRasterizerCreateBMF(Rasterizer** result, Blob* blob, RasterizerI
     }
   }
 
-  size_t atlasSize;
-  void* atlasData = io(fullpath, &atlasSize);
-  lovrAssertGoto(fail, atlasData, "Failed to read BMFont image from %s", fullpath);
+  if (atlas) {
+    rasterizer->atlas = atlas;
+    lovrRetain(atlas);
+  } else {
+    size_t atlasSize;
+    void* atlasData = io(fullpath, &atlasSize);
+    lovrAssertGoto(fail, atlasData, "Failed to read BMFont image from %s", fullpath);
 
-  Blob* atlasBlob = lovrBlobCreate(atlasData, atlasSize, "BMFont atlas");
-  rasterizer->atlas = lovrImageCreateFromFile(atlasBlob);
-  lovrRelease(atlasBlob, lovrBlobDestroy);
-  lovrAssertGoto(fail, rasterizer->atlas, "Failed to load BMfont atlas image: %s", lovrGetError());
+    Blob* atlasBlob = lovrBlobCreate(atlasData, atlasSize, "BMFont atlas");
+    rasterizer->atlas = lovrImageCreateFromFile(atlasBlob);
+    lovrRelease(atlasBlob, lovrBlobDestroy);
+    lovrAssertGoto(fail, rasterizer->atlas, "Failed to load BMfont atlas image: %s", lovrGetError());
+  }
 
   *result = rasterizer;
   return true;
@@ -327,10 +332,10 @@ fail:
   return false;
 }
 
-Rasterizer* lovrRasterizerCreate(Blob* blob, float size, RasterizerIO* io) {
+Rasterizer* lovrRasterizerCreate(Blob* blob, float size, Image* atlas, RasterizerIO* io) {
   Rasterizer* rasterizer = NULL;
   if (!rasterizer && !lovrRasterizerCreateTTF(&rasterizer, blob, size)) return NULL;
-  if (!rasterizer && !lovrRasterizerCreateBMF(&rasterizer, blob, io)) return NULL;
+  if (!rasterizer && !lovrRasterizerCreateBMF(&rasterizer, blob, atlas, io)) return NULL;
   if (!rasterizer) lovrSetError("Problem loading font: not recognized as TTF or BMFont");
   return rasterizer;
 }

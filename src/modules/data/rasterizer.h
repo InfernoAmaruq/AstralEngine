@@ -12,11 +12,11 @@ typedef enum {
   RASTERIZER_BMF
 } RasterizerType;
 
-typedef void* RasterizerIO(const char* filename, size_t* bytesRead);
+typedef void* RasterizerIO(const char* filename, size_t* size);
 
 typedef struct Rasterizer Rasterizer;
 
-Rasterizer* lovrRasterizerCreate(struct Blob* blob, float size, RasterizerIO* io);
+Rasterizer* lovrRasterizerCreate(struct Blob* blob, float size, struct Image* atlas, RasterizerIO* io);
 void lovrRasterizerDestroy(void* ref);
 RasterizerType lovrRasterizerGetType(Rasterizer* rasterizer);
 float lovrRasterizerGetFontSize(Rasterizer* rasterizer);

@@ -601,6 +601,7 @@ local function GetDrawFunc(IsSolid)
         local ComponentRegistry = Component.Components
         local CSCamera = ComponentRegistry.Camera.Storage
         local CSTransform = ComponentRegistry.Transform.Storage
+        local CSEnv = ComponentRegistry.Environment.Storage
 
         local pairs = pairs
         local FunctionRegistry = GeometryTypeRegistry
@@ -634,41 +635,44 @@ local function GetDrawFunc(IsSolid)
             Pass:setProjection(1, Projection)
             Pass:setFaceCull(Culling)
 
-            local Skybox = Camera[28] and Camera[28][1] or Camera[28]
+            local EnvComponent = CSEnv[EntId]
+            local Buff1, Buff2, Skybox
 
             if IsTransparent then
                 Pass:setDepthWrite(false)
                 Pass:setDepthTest(">=")
                 Pass:setBlendMode(1, "add", "premultiplied")
                 Pass:setBlendMode(2, "add", "premultiplied")
-            else
+            end
+
+            if EnvComponent then
                 -- draw skybox only on solid pass
+
+                Buff1 = EnvComponent.UserHarmonics
+                Buff2 = EnvComponent.__EnvHarmonics
+                Skybox = EnvComponent[1]
 
                 -- recalculate SH if we need to
 
-                if Camera.__LuaSHBuffer.Valid == 0 then
-                    local Type = Skybox and Skybox:getType()
+                if EnvComponent.__UpdateBuffers then
+                    Pass:setShader(ExtractSHShader)
+                    Pass:send("envMap", Skybox)
+                    Pass:send("SHBuffer", Buff2)
 
-                    if Type == "cube" then
-                        print "RECALC SH"
+                    local Size = Skybox:getHeight()
 
-                        Pass:setShader(ExtractSHShader)
-                        Pass:send("envMap", Skybox)
-                        Pass:send("SHBuffer", Camera[29])
+                    local x, y = ExtractSHShader:getWorkgroupSize()
 
-                        local Size = Skybox:getHeight()
+                    Pass:compute((Size + x - 1) / x, (Size + y - 1) / y, 6)
 
-                        local x, y = ExtractSHShader:getWorkgroupSize()
+                    Pass:setShader()
 
-                        Pass:compute((Size + x - 1) / x, (Size + y - 1) / y, 6)
-
-                        Pass:setShader()
-                    end
-
-                    Camera.__LuaSHBuffer.Valid = 1
+                    EnvComponent.__UpdateBuffers = false
                 end
 
-                Pass:skybox(Skybox)
+                if IsSolid then
+                    Pass:skybox(Skybox)
+                end
                 -- uses a unique shader so we draw it first
             end
 
@@ -690,10 +694,9 @@ local function GetDrawFunc(IsSolid)
                     Pass:send("CamTransform", TransformMatrix)
                 end
 
-                if Manifest.SendIndirectLightingData then
-                    Pass:send("Lighting_Ambience", Camera[9])
-
-                    Pass:send("PBR_SphericalHarmonics", Camera[29])
+                if Manifest.SendIndirectLightingData and EnvComponent then
+                    Pass:send("PBR_SphericalHarmonics_User", Buff1)
+                    Pass:send("PBR_SphericalHarmonics", Buff2)
                     Pass:send("PBR_EnvMap", Skybox)
                 end
 
@@ -749,7 +752,8 @@ Renderer.DrawTransparent = GetDrawFunc(false)
 function Renderer.Composite()
     local Cameras = Cams
     local ComponentRegistry = Component.Components
-    local CSCamera, CSTransform = ComponentRegistry.Camera.Storage, ComponentRegistry.Transform.Storage
+    local CSCamera, CSTransform, CSEnv = ComponentRegistry.Camera.Storage, ComponentRegistry.Transform.Storage,
+        ComponentRegistry.Environment.Storage
 
     local mat4 = mat4
 
@@ -886,8 +890,11 @@ function Renderer.Composite()
         MainPass:send("DoBloom", DoBloom)
         MainPass:send("Bloom", Camera[31][1])
 
-        MainPass:send("gamma", 1)
-        MainPass:send("exposure", 1)
+        local Env = CSEnv[Entity]
+        if Env then
+            MainPass:send("gamma", Env[12])
+            MainPass:send("exposure", Env[13])
+        end
 
         MainPass:fill()
     end

@@ -2,10 +2,9 @@
 #include "Material/Material.glsl"
 #include "Lighting/Lighting.glsl"
 
-uniform vec3 Lighting_Ambience;
-
 uniform textureCube PBR_EnvMap;
 buffer readonly PBR_SphericalHarmonics { vec3 PBR_SH[9]; };
+buffer readonly PBR_SphericalHarmonics_User { vec3 PBR_SH_U[9]; };
 
 Surface PBR_GetSurface(inout vec4 CurrentColor){
     Surface s = getMaterialSurface();
@@ -14,7 +13,12 @@ Surface PBR_GetSurface(inout vec4 CurrentColor){
 
     CurrentColor.rgb += lighting_getLights(s);
 
-    CurrentColor.rgb += getIndirectLighting(s, PBR_EnvMap, PBR_SH) * Lighting_Ambience;
+    vec3 SH[9];
+
+    for (int i = 0; i < 9; ++i)
+        SH[i] = PBR_SH[i] + PBR_SH_U[i];
+
+    CurrentColor.rgb += getIndirectLighting(s, PBR_EnvMap, SH);
 
     CurrentColor.rgb += s.emissive;
 
@@ -24,11 +28,16 @@ Surface PBR_GetSurface(inout vec4 CurrentColor){
 vec4 PBR_GetColor(){
     Surface s = getMaterialSurface();
 
-    vec4 CurrentColor = vec4(s.baseColor.rgb * Lighting_Ambience,s.baseColor.a);
+    vec4 CurrentColor = vec4(s.baseColor.rgb,s.baseColor.a);
 
     CurrentColor.rgb += lighting_getLights(s);
 
-    CurrentColor.rgb += getIndirectLighting(s, PBR_EnvMap, PBR_SH);
+    vec3 SH[9];
+
+    for (int i = 0; i < 9; ++i)
+        SH[i] = PBR_SH[i] + PBR_SH_U[i];
+
+    CurrentColor.rgb += getIndirectLighting(s, PBR_EnvMap, SH);
 
     CurrentColor.rgb += s.emissive;
 

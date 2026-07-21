@@ -217,14 +217,14 @@ local METHODS = {
         self[26] = CurrentMatrix
     end,
     SetSkybox = function(self, Skybox, RecalculateSH)
-        self[28] = Skybox or EmptySkybox
+        rawset(self, 28, Skybox or EmptySkybox)
 
-        if RecalculateSH then
+        if RecalculateSH or RecalculateSH == nil then
             self:RecalculateSphericalHarmonics()
         end
     end,
     RecalculateSphericalHarmonics = function(self)
-        self.__LuaSHBuffer.Valid = false
+        self.__LuaSHBuffer.Valid = 0
     end,
 }
 
@@ -292,12 +292,22 @@ local function SHIndex(self, key)
     end
 
     local Key = SHIndexMap[key]
+
     return LuaBuffer[Key] * 255
 end
 
 local function SHNewIndex(self, key, v)
     local LuaBuffer = self.__LuaSHBuffer
     local GPUBuffer = self[29]
+
+    if LuaBuffer.Valid == 1 then
+        LuaBuffer.Valid = 2
+        local Dat = self[29]:getData()
+        for i = 1, 9 do
+            local j = (i - 1) * 3 + 1
+            LuaBuffer[i]:set(Dat[j], Dat[j + 1], Dat[j + 2])
+        end
+    end
 
     local Key = SHIndexMap[key]
     LuaBuffer[Key]:set(v:div(255).rgb)
@@ -316,7 +326,7 @@ local mt = {
         end
 
         local s = tostring(k)
-        if s:find("SphericalHarmonics") then
+        if s:find("^SphericalHarmonics") then
             local SubStr = s:sub(string.len("SphericalHarmonics") + 1)
             return SHIndex(self, SubStr)
         end

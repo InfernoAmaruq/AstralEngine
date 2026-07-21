@@ -4068,39 +4068,48 @@ static Texture* defaultEmissiveMap = NULL;
 void lovrInitDefaultMaps(){
     if (defaultNormalMap) return;
 
-    Image* img[1];
-    Image** images = img;
+    TextureInfo texInf[3];
 
-    TextureInfo texInf = {
-        .type = TEXTURE_2D,
-        .format = FORMAT_RGBA8,
-        .width = 1,
-        .height = 1,
-        .layers = 1,
-        .mipmaps = ~0u,
-        .samples = 1,
-        .usage = TEXTURE_SAMPLE,
-        .imageCount = 1,
-        .srgb = false,
-        .images = images
+    static float pixels[4 * 3] = {
+        .5f, .5f, 1.f, 1.f, // normal
+        1.f, .5f, 0.f, 1.f, // mat
+        1.f, 1.f, 1.f, 1.f
     };
 
-    float normalPixel[4] = {.5f,.5f,1.f,1.f};
-    Image* tempImage = lovrImageCreateRaw(1,1,FORMAT_RGBA8, true);
-    images[0] = tempImage;
-    lovrImageSetPixel(tempImage,0,0,normalPixel);
-    defaultNormalMap = lovrTextureCreate(&texInf);
+    for (int i = 0; i < 3; ++i){
+        Image** images;
 
-    float RnMPixel[4] = {1.f,.5f,0.f,1.f};
+        Image* tempImage = lovrImageCreateRaw(1,1,FORMAT_RGBA8,true);
 
-    lovrImageSetPixel(tempImage,0,0,RnMPixel);
-    defaultRoughnessAndMetalnessMap = lovrTextureCreate(&texInf);
+        images = &tempImage;
 
-    float emissivePixel[4] = {1.f,1.f,1.f,1.f};
-    lovrImageSetPixel(tempImage,0,0,emissivePixel);
-    defaultEmissiveMap = lovrTextureCreate(&texInf);
+        lovrImageSetPixel(images[0],0,0,&pixels[i * 4]);
 
-    lovrRelease(tempImage,lovrImageDestroy);
+        texInf[i] = (TextureInfo){
+            .type = TEXTURE_2D,
+            .format = FORMAT_RGBA8,
+            .width = 1,
+            .height = 1,
+            .layers = 1,
+            .mipmaps = ~0u,
+            .samples = 1,
+            .usage = TEXTURE_SAMPLE,
+            .imageCount = 1,
+            .srgb = false,
+            .images = images
+        };
+
+        Texture* tex = lovrTextureCreate(&texInf[0]);
+
+        if (i == 0)
+            defaultNormalMap = tex;
+        else if (i == 1)
+            defaultRoughnessAndMetalnessMap = tex;
+        else
+            defaultEmissiveMap = tex;
+
+        lovrRelease(images[0],lovrImageDestroy);
+    }
 }
 
 Material* lovrMaterialCreate(const MaterialInfo* info) {

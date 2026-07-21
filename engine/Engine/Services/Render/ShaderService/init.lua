@@ -104,8 +104,23 @@ local function GetShaderCode(SourceFile, Defines, CallerPath)
         return SourceFile
     end
 
+    local Code = ResolveFile(ResolvePath(SourceFile, CallerPath))
+
+    local VerStr
+    Code = Code:gsub(
+        "^#version%s+(%d+)\n",
+        function(v) -- glsl wants versions to be always first, so we gotta do that manually
+            VerStr = v
+            return ""
+        end
+    )
+
+    if VerStr then
+        ShaderCode = "#version " .. VerStr .. "\n"
+    end
+
     if Defines then
-        ShaderCode = "//INJECTED DEFINES\n"
+        ShaderCode = ShaderCode .. "//INJECTED DEFINES\n"
         for Define, Value in pairs(Defines) do
             if type(Define) == "number" then
                 ShaderCode = ShaderCode .. string.format("#define %s\n", tostring(Value))
@@ -116,7 +131,7 @@ local function GetShaderCode(SourceFile, Defines, CallerPath)
         ShaderCode = ShaderCode .. "//CODE\n"
     end
 
-    ShaderCode = ShaderCode .. ResolveFile(ResolvePath(SourceFile, CallerPath))
+    ShaderCode = ShaderCode .. Code
 
     return ShaderCode
 end

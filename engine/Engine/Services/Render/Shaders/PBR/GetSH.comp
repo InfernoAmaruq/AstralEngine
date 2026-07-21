@@ -98,9 +98,11 @@ void main(){
     for (int i = 0; i < 9; ++i) {
         float basis = bases[i];
 #ifdef USE_ATOMICS
-        atomicAdd(shCoeffecients[i].x, color.x * basis * solidAngle);
-        atomicAdd(shCoeffecients[i].y, color.y * basis * solidAngle);
-        atomicAdd(shCoeffecients[i].z, color.z * basis * solidAngle);
+        float norm = 1.0 / 3.14159;
+
+        atomicAdd(shCoeffecients[i].x, color.x * basis * solidAngle * norm);
+        atomicAdd(shCoeffecients[i].y, color.y * basis * solidAngle * norm);
+        atomicAdd(shCoeffecients[i].z, color.z * basis * solidAngle * norm);
 #else
         accum[i] += color * basis * solidAngle; 
 #endif
@@ -112,7 +114,7 @@ void main(){
     float norm = 1.0 / 3.14159;
 
     for (int i = 0; i < 9; ++i){
-        shCoeffecients[i] += accum[i] * norm * 1000;
+        shCoeffecients[i] += accum[i] * norm * 5000; // non-atomic got precision loss. so we multiply, by a lot. 5000 seems to work?
     }
 
 #endif

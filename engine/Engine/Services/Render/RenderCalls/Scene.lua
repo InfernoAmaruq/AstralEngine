@@ -31,7 +31,14 @@ local FinalShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "C
 
 --- > COMPUTE SHADERS
 
-local ExtractSHShader = ShaderService.NewShader(Enum.ShaderType.Compute, "PBR/GetSH.comp", { Raw = true })
+local Data = { Raw = true, Defines = { USE_ATOMICS = true } }
+local Success, ExtractSHShader = pcall(ShaderService.NewShader, Enum.ShaderType.Compute, "PBR/GetSH.comp", Data)
+if not Success then
+    -- Lets try compile w/o atomics
+    Data.Defines.USE_ATOMICS = nil
+    ExtractSHShader = ShaderService.NewShader(Enum.ShaderType.Compute, "PBR/GetSH.comp", Data)
+end
+Data = nil
 
 -- > GET PRECOMPUTED ASSETS
 
@@ -643,6 +650,8 @@ local function GetDrawFunc(IsSolid)
                     local Type = Skybox and Skybox:getType()
 
                     if Type == "cube" then
+                        print "RECALC SH"
+
                         Pass:setShader(ExtractSHShader)
                         Pass:send("envMap", Skybox)
                         Pass:send("SHBuffer", Camera[29])

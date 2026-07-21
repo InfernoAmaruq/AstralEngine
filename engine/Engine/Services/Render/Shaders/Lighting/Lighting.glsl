@@ -249,7 +249,7 @@ vec3 lighting_getLights(const Surface s){
 			float d = distSqr / l.rad2;
 			distAtt = pow(1.0 - d, h);
 
-			float directionality = dot(normalize(diff),l.direction);
+			float directionality = dot(normalize(-diff),l.direction);
 			if (directionality < l.angleCos) { continue; }
 
 			float smoothed = smoothstep(l.angleCos,1.0,directionality);

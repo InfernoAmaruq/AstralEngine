@@ -255,7 +255,15 @@ mat3 getTangentMatrix() {
     vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
     vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
     float invmax = inversesqrt(max(dot(T, T), dot(B, B)));
-    return mat3(T * invmax, B * invmax, N);
+
+    T *= invmax;
+    B *= invmax;
+
+    if (dot(cross(N,T), B) < 0.0){
+	T *= -1;
+    }
+
+    return mat3(T, B, N);
   }
 }
 
@@ -381,6 +389,7 @@ vec3 getLighting(const Surface surface, vec3 direction, vec4 color, float visibi
   vec3 N = surface.normal;
   vec3 V = surface.view;
   vec3 L = normalize(direction);
+
   vec3 H = normalize(V + L);
   vec3 R = surface.reflection;
   float NoV = abs(dot(N, V)) + 1e-8;

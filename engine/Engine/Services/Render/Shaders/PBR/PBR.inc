@@ -12,11 +12,13 @@ Surface PBR_GetSurface(inout vec4 CurrentColor){
 
     CurrentColor = vec4(s.baseColor.rgb * Lighting_Ambience,s.baseColor.a);
 
-    CurrentColor.rgb += lighting_getLights(s) * Lighting_Ambience;
+    CurrentColor.rgb += lighting_getLights(s);
 
     CurrentColor.rgb += getIndirectLighting(s, PBR_EnvMap, PBR_SH);
 
     CurrentColor.rgb += s.emissive;
+
+    CurrentColor.rgb = lighting_getLights(s);
 
     return s;
 }
@@ -26,9 +28,9 @@ vec4 PBR_GetColor(){
 
     vec4 CurrentColor = vec4(s.baseColor.rgb * Lighting_Ambience,s.baseColor.a);
 
-    CurrentColor.rgb += lighting_getLights(s) * Lighting_Ambience;
+    CurrentColor.rgb += lighting_getLights(s);
 
-    CurrentColor.rgb += getIndirectLighting(s, PBR_EnvMap, PBR_SH) * Lighting_Ambience;
+    CurrentColor.rgb += getIndirectLighting(s, PBR_EnvMap, PBR_SH);
 
     CurrentColor.rgb += s.emissive;
 

@@ -60,14 +60,17 @@ Surface getMaterialSurface(){
 	if (Material_UsePixelSampler) {
 	    s = newSurface();
 	    linearMaterial(s);
-	    finalizeSurface(s);
-	} else
-	    s = getDefaultSurface();
+	} else {
+	    s = newSurface();
+        applyMaterial(s);
+    }
 
 	s.baseColor *= sColor;
     
     vec4 emissiveColor = Material_Emissive;
     s.emissive.rgb += emissiveColor.rgb * emissiveColor.a;
+
+	finalizeSurface(s);
 
     return s;
 }

@@ -144,8 +144,6 @@ fs.mountRecursively = function(path, search, coreMountPoint, handler)
             local mountAttempt, err = fs.mount(truePath, mountAt, true)
             if mountAttempt then
                 fs.mountRecursively(truePath, searchAt, mountAt, handler)
-            else
-                print("Failed mount of:", searchAt, err)
             end
         end
     end

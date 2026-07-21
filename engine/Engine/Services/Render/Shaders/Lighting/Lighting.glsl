@@ -224,9 +224,8 @@ float ltcEvaluate(vec3 N, vec3 V, vec3 P, mat3 Minv, vec3 points[4]) {
 
 vec3 lighting_getLights(const Surface s){
     vec3 AccumColor = vec3(0);
-    vec3 camPos = CamTransform[3].xyz;
 
-    vec3 V = normalize(camPos - PositionWorld);
+    vec3 V = s.view;
 
     for (int i = 0; i < Light_LightCount; ++i){
         Light l = lighting_getLight(i);
@@ -239,7 +238,7 @@ vec3 lighting_getLights(const Surface s){
 	switch(l.type){
 		case LIGHTTYPE_DIRECTIONAL:
 			distAtt = 1;
-			diff = -l.direction; // prolly wont work right with shadows..
+			diff = l.direction; // prolly wont work right with shadows..
 			break;
 		case LIGHTTYPE_SPOT:
             diff = l.position - PositionWorld;
@@ -307,15 +306,16 @@ vec3 lighting_getLights(const Surface s){
 
 			continue;
 			break;
-	}
+        }
 
         // do color
 
         float att = distAtt * spot;
 
-        vec3 clr = getLighting(s,diff,vec4(l.color,l.brightness * 2.5),att); // tweak brightness so it looks a bit brighter
+        vec3 clr = getLighting(s,diff,vec4(l.color,l.brightness * 2),att); // tweak brightness so it looks a bit brighter
 
         AccumColor += clr;
     }
+
     return AccumColor;
 }

@@ -9782,6 +9782,7 @@ static bool checkShaderFeatures(uint32_t* features, uint32_t count) {
       case 5307: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "non-uniform indexing");
       case 5308: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "non-uniform indexing");
       case 5309: return lovrSetError("Shader uses unsupported feature #%d: %s", features[i], "non-uniform indexing");
+      case 6033: lovrCheck(state.features.float32AtomicAdd, "GPU does not support shader feature #%d: %s", features[i], "atomic float adds"); break;
       default: return lovrSetError("Shader uses unknown feature #%d", features[i]);
     }
   }

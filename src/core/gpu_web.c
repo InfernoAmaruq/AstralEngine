@@ -1135,6 +1135,7 @@ bool gpu_init(gpu_config* config) {
     config->features->float64 = false;
     config->features->int64 = false;
     config->features->int16 = false;
+    config->features->atomicFloatAdd = false;
 
     config->features->formats[GPU_FORMAT_R8][0] = GPU_FEATURE_SAMPLE | GPU_FEATURE_RENDER | GPU_FEATURE_BLIT;
     config->features->formats[GPU_FORMAT_RG8][0] = GPU_FEATURE_SAMPLE | GPU_FEATURE_RENDER | GPU_FEATURE_BLIT;

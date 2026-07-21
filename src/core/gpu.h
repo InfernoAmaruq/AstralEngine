@@ -793,6 +793,7 @@ typedef struct {
   bool subgroupShuffleRelative;
   bool subgroupClustered;
   bool subgroupQuad;
+  bool float32AtomicAdd;
   bool float64;
   bool int64;
   bool int16;

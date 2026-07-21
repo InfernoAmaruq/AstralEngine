@@ -7,6 +7,7 @@ dev
 ### Add
 
 - Add `lovr.timer.getDisplayTime`.
+- Add support for atomic floats in shaders.
 
 ### Change
 

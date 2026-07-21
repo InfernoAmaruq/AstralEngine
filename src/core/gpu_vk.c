@@ -242,6 +242,7 @@ typedef struct {
   bool copy2;
   bool formatFlags2;
   bool hostImageCopy;
+  bool atomicFloat;
 } gpu_extensions;
 
 // State
@@ -3100,7 +3101,8 @@ bool gpu_init(gpu_config* config) {
       { "VK_EXT_fragment_density_map", true, &state.extensions.foveation },
       { "VK_EXT_pipeline_creation_cache_control", true, &state.extensions.pipelineCacheControl },
       { "VK_EXT_memory_budget", true, &state.extensions.memoryBudget },
-      { "VK_EXT_host_image_copy", true, &state.extensions.hostImageCopy }
+      { "VK_EXT_host_image_copy", true, &state.extensions.hostImageCopy },
+      { "VK_EXT_shader_atomic_float", true, &state.extensions.atomicFloat }
     };
 
     uint32_t extensionCount = 0;
@@ -3201,9 +3203,14 @@ bool gpu_init(gpu_config* config) {
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
     VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
     VkPhysicalDeviceHostImageCopyFeaturesEXT hostImageCopyFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES_EXT };
+    VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFloatFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT };
 
     if (state.extensions.foveation) {
       CHAIN(supported, fragmentDensityMapFeatures);
+    }
+
+    if (state.extensions.atomicFloat) {
+      CHAIN(supported, atomicFloatFeatures);
     }
 
     vkGetPhysicalDeviceFeatures2(state.adapter, &supported);
@@ -3280,6 +3287,10 @@ bool gpu_init(gpu_config* config) {
       CHAIN(enabled, hostImageCopyFeatures);
     }
 
+    if (state.extensions.atomicFloat) {
+      CHAIN(enabled, atomicFloatFeatures);
+    }
+
     if (config->features) {
       config->features->textureBC = enabled.features.textureCompressionBC;
       config->features->textureASTC = enabled.features.textureCompressionASTC_LDR;
@@ -3298,6 +3309,7 @@ bool gpu_init(gpu_config* config) {
       config->features->subgroupShuffleRelative = subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_RELATIVE_BIT;
       config->features->subgroupClustered = subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_CLUSTERED_BIT;
       config->features->subgroupQuad = subgroupProperties.supportedOperations & VK_SUBGROUP_FEATURE_QUAD_BIT;
+      config->features->float32AtomicAdd = atomicFloatFeatures.shaderBufferFloat32AtomicAdd && atomicFloatFeatures.shaderImageFloat32AtomicAdd;
       config->features->float64 = enabled.features.shaderFloat64;
       config->features->int64 = enabled.features.shaderInt64;
       config->features->int16 = enabled.features.shaderInt16;

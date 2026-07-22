@@ -291,9 +291,6 @@ LVRB.LoadWindow = function()
     AstralEngine.Signals.OnWindowResize = Sig.new(Sig.Type.RTC)
 
     function lovr.resize(w, h)
-        AstralEngine.Window.W = w
-        AstralEngine.Window.H = h
-        AstralEngine.Window.__WindowResizedTextures(w, h)
         AstralEngine.Signals.OnWindowResize:Fire(w, h)
         GetService("Renderer").PassStorage.RebuildPassTable()
         collectgarbage("collect")
@@ -311,9 +308,6 @@ LVRB.LoadWindow = function()
         title = AstralEngine.Config.Game.Window.Name,
         icon = AstralEngine.Config.Game.Window.Icon,
     })
-
-    AstralEngine.Window.W = AstralEngine.Window.GetWindowWidth()
-    AstralEngine.Window.H = AstralEngine.Window.GetWindowHeight()
 
     local SetCursorIcon = lovr.system.setCursorIcon
 

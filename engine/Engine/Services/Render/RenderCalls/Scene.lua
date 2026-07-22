@@ -616,24 +616,25 @@ local function GetDrawFunc(IsSolid)
             local EntId = Cameras[CamId]
             local Camera = CSCamera[EntId]
 
-            local Pass = Camera[IsSolid and 22 or 21]
+            local Pass = Camera[IsSolid and 32 or 33]
 
-            local Projection = Camera[26]
+            local Projection = Camera[37]
             local CamTransform = CSTransform[EntId]
             local TransformMatrix = CamTransform[3]
-            local Culling = Camera[15] and "back"
+            local Culling = Camera[44] and "back"
 
             -- ASSIGN PASS VARIABLES
 
             if IsSolid then
-                Camera[11]:reset()
+                Camera[31]:reset()
                 Pass:reset()
-                Camera[21]:reset()
+                Camera[33]:reset()
             end
 
             Pass:setViewPose(1, TransformMatrix)
             Pass:setProjection(1, Projection)
             Pass:setFaceCull(Culling)
+            Pass:setViewCull(Camera[45])
 
             local EnvComponent = CSEnv[EntId]
             local Buff1, Buff2, Skybox
@@ -674,6 +675,8 @@ local function GetDrawFunc(IsSolid)
                     Pass:skybox(Skybox)
                 end
                 -- uses a unique shader so we draw it first
+            else
+                EnvComponent = ComponentRegistry.Environment.Metadata.EmptySkybox
             end
 
             -- CONFIGURE SHADER
@@ -761,21 +764,21 @@ function Renderer.Composite()
         local Entity = Cameras[CamId]
         local Camera = CSCamera[Entity]
 
-        local MainPass = Camera[11]
-        local CompositePass = Camera[37]
-        local BlurPassH = Camera[38]
-        local BlurPassV = Camera[39]
+        local MainPass = Camera[31]
+        local CompositePass = Camera[34]
+        local BlurPassH = Camera[35]
+        local BlurPassV = Camera[36]
 
-        local SolidTexture = Camera[20][1]
-        local TransparentTexture = Camera[13][1]
-        local RevealTexture = Camera[23][1]
-        local DepthTexture = Camera[24][1]
+        local SolidTexture = Camera[5]
+        local TransparentTexture = Camera[3]
+        local RevealTexture = Camera[7]
+        local DepthTexture = Camera[9]
 
-        local Projection = Camera[26]
+        local Projection = Camera[37]
         local InvProjection = mat4(Projection):invert()
         local ViewMatrix = mat4(CSTransform[Entity][3]):invert()
 
-        local Near = Camera[5]
+        local Near = Camera[40]
 
         -- FX
 
@@ -799,7 +802,7 @@ function Renderer.Composite()
         CompositePass:send("OIT_TexTransparent", TransparentTexture)
         CompositePass:send("OIT_TexReveal", RevealTexture)
         CompositePass:send("OIT_TexDepth", DepthTexture)
-        CompositePass:send("OIT_TexNormal", Camera[30][1])
+        CompositePass:send("OIT_TexNormal", Camera[11])
 
         -- fog
         CompositePass:send("Fog_DoFog", DoFog)
@@ -837,9 +840,9 @@ function Renderer.Composite()
         BlurPassH:send("Horizontal", true)
         BlurPassV:send("Horizontal", false)
 
-        BlurPassH:send("AO_Tex", Camera[34][1])
+        BlurPassH:send("AO_Tex", Camera[15])
         BlurPassH:send("DoBloom", DoBloom)
-        BlurPassH:send("Color_Tex", Camera[33][1])
+        BlurPassH:send("Color_Tex", Camera[13])
 
         BlurPassH:send("CamNear", Near)
         BlurPassH:send("Depth_Tex", DepthTexture)
@@ -863,20 +866,20 @@ function Renderer.Composite()
         if DoBloom then
             local Size, Strength = BloomData.Size, BloomData.Strength
 
-            BlurPassH:send("Bloom_Tex", Camera[36][1])
+            BlurPassH:send("Bloom_Tex", Camera[17])
             BlurPassH:send("BloomSize", Size)
             BlurPassH:send("BloomStrength", Strength)
 
             BlurPassV:send("BloomSize", Size)
             BlurPassV:send("BloomStrength", Strength)
-            BlurPassV:send("Bloom_Tex", Camera[41][1])
+            BlurPassV:send("Bloom_Tex", Camera[19])
         end
 
         BlurPassH:fill()
 
         BlurPassV:send("Horizontal", false)
-        BlurPassV:send("AO_Tex", Camera[42][1])
-        BlurPassV:send("Color_Tex", Camera[40][1])
+        BlurPassV:send("AO_Tex", Camera[23])
+        BlurPassV:send("Color_Tex", Camera[27])
         BlurPassV:send("DoBloom", DoBloom)
         BlurPassV:fill()
 
@@ -885,10 +888,10 @@ function Renderer.Composite()
         MainPass:reset()
         MainPass:setShader(FinalShader)
 
-        MainPass:send("ColorTex", Camera[32][1])
-        MainPass:send("AO", Camera[35][1])
+        MainPass:send("ColorTex", Camera[29])
+        MainPass:send("AO", Camera[25])
         MainPass:send("DoBloom", DoBloom)
-        MainPass:send("Bloom", Camera[31][1])
+        MainPass:send("Bloom", Camera[21])
 
         local Env = CSEnv[Entity]
         if Env then

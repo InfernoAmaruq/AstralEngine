@@ -4,7 +4,9 @@ local EmptySkybox = AstralEngine.Graphics.NewTexture(1, 1, 6)
 
 local Environment = { Name = "Environment" }
 
-Environment.Metadata = {}
+Environment.Metadata = {
+    EmptySkybox = EmptySkybox,
+}
 
 local Indexes = {
     Skybox = 1,

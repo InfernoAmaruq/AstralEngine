@@ -1,8 +1,6 @@
 local OgTex = lovr.graphics.newTexture
 local FS = lovr.filesystem
 
-local RefToRebuild = setmetatable({}, { __mode = "v" })
-
 local function ResolvePath(Path)
     if FS.isFile(Path) then
         return Path
@@ -33,13 +31,5 @@ AstralEngine.Graphics = {
     IsTimingEnabled = lovr.graphics.isTimingEnabled,
     GetDefaultFont = lovr.graphics.getDefaultFont,
 }
-
-function AstralEngine.Window.__WindowResizedTextures(...)
-    for _, v in pairs(RefToRebuild) do
-        if v.ResizeCallback then
-            v.ResizeCallback(v, v.__IsPass, ...)
-        end
-    end
-end
 
 AstralEngine.Graphics.GPU = require("DeviceQuery")

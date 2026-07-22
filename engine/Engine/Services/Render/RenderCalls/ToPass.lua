@@ -5,31 +5,29 @@ Renderer.Late[#Renderer.Late + 1] = function()
     local Flag = bit.bor(RS.Flags.Raw, RS.Flags.Contextless)
 
     local CoreCamera = nil
-    local Bound = false
 
     local function RenderFunc(Pass)
         Pass:reset()
         Pass:setDepthWrite(false)
-        Pass:setSampler(CoreCamera[16] and "nearest" or "linear")
-        Pass:fill(CoreCamera[12][1])
+        Pass:setSampler(CoreCamera[46] and "nearest" or "linear")
+        Pass:fill(CoreCamera[1])
     end
 
-    Renderer.SetPrimaryCamera = function(Camera, State)
-        if State then
-            if CoreCamera then
-                CoreCamera[10] = false
-            end
-            CoreCamera = Camera
-            Camera[10] = true
-            if not Bound then
-                Bound = true
+    Renderer.SetPrimaryCamera = function(Camera)
+        if Camera then
+            if not CoreCamera then
                 RS.BindToStep("_REND_TO_PASS", Enum.StepPriority.RenderSubmit.Value, RenderFunc, Flag)
             end
-        elseif not State and Camera == CoreCamera then
+            CoreCamera = Camera
+        else
+            if CoreCamera then
+                RS.UnbindFromStep("_REND_TO_PASS")
+            end
             CoreCamera = nil
-            Camera[10] = falses
-            RS.UnbindFromStep("_REND_TO_PASS")
-            Bound = false
         end
+    end
+
+    Renderer.GetPrimaryCamera = function()
+        return CoreCamera
     end
 end

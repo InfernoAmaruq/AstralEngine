@@ -5,7 +5,7 @@ local MeshId = Render.NewGeometryType(function(Pass, Geom)
     local TransformStorage = Component.Components.Transform.Storage
     local M = Component.Components.Material
     local MatStorage = M.Storage
-    local EmptyMatrix = M.Metadata.EmptyMatrix
+    local EmptyMatrix = M.Userdata.EmptyMatrix
 
     local Mesh = Geom.Hash
 
@@ -23,9 +23,11 @@ local MeshId = Render.NewGeometryType(function(Pass, Geom)
 
         Pass:draw(Mesh, Transform[3])
     end
+end, function(Pass, Geom)
+    Pass:draw(Geom.Hash, nil, Geom.Top)
 end)
 
-local Mesh = { Metadata = {} }
+local Mesh = {}
 Mesh.Name = "Mesh"
 
 local Mt = {
@@ -35,24 +37,33 @@ local Mt = {
             self[1] = v
             local Flag = self.__RenderTypePtr.Flags.Param_Old
             self.__RenderTypePtr:Update(Flag, Flag, v or 0, Flag, Flag)
-            self.__RenderTypePtr.Enabled = not not v
+            self.__RenderTypePtr.__Enabled = not not v
+        end
+    end,
+    __index = function(self, k)
+        if k == "Mesh" then
+            return self[1]
         end
     end,
 }
 
-Mesh.Metadata.__create = function(Data, Ent)
+Mesh.New = function(Data, Ent, ShouldSink)
     AstralEngine.Assert(
-        not Component.GetComponent(e, "RenderTarget"),
+        not Component.GetComponent(Ent, "RenderTarget"),
         "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!",
         "Mesh"
     )
+
+    if not Component.GetComponent(Ent, "Transform") and not ShouldSink then
+        Component.AddComponent(Ent, "Transform")
+    end
 
     local self = {}
 
     self[1] = Data.Mesh or false
 
     -- we wanna put this onto both just incase since meshes can have transparent vertices due to vertex colors
-    local Stack = Component.Components.RenderTarget.Metadata.Flags.Stack_Both
+    local Stack = Component.Components.RenderTarget.Userdata.Flags.Stack_Both
 
     self.__RenderTypePtr = Component.AddComponent(Ent, "RenderTarget", {
         Shader = false,
@@ -66,7 +77,7 @@ Mesh.Metadata.__create = function(Data, Ent)
     return setmetatable(self, Mt)
 end
 
-Mesh.Metadata.__remove = function(_, e)
+Mesh.Destroy = function(_, e)
     if Component.GetComponent(e, "RenderTarget") then
         Component.RemoveComponent(e, "RenderTarget", true)
     end

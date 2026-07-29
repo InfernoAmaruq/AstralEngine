@@ -5,7 +5,7 @@ Renderer.Late[#Renderer.Late + 1] = function()
         return
     end
     local RS = GetService("RunService")
-    local Flag = bit.bor(RS.Flags.Raw, RS.Flags.Contextless)
+    local Flag = RS.Flags.Contextless
 
     RS.BindToStep("_MIRROR_TO_WINDOW", Enum.StepPriority.RenderMirror, function()
         local Tex = lovr.headset.getTexture()

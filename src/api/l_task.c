@@ -27,7 +27,7 @@ static void luax_unpintask(lua_State* L, Task* task) {
 int luax_yieldpoll(lua_State* L, fn_task* poll, fn_task* block, fn_continuation* continuation, void* context) {
   Task* task = luax_getthreaddata(L);
 
-  if (!task) {
+  if (!task || !task->canYield) {
     if (block(&context)) {
       return continuation ? continuation(L, true, context) : 0;
     } else {
@@ -60,7 +60,7 @@ static void runJob(void* arg) {
 int luax_yieldjob(lua_State* L, fn_task* fn, fn_continuation* continuation, void* context, uint32_t count) {
   Task* task = luax_getthreaddata(L);
 
-  if (!task) {
+  if (!task || !task->canYield) {
     if (count == 1) {
       if (fn(&context)) {
         return continuation ? continuation(L, true, context) : 0;
@@ -209,7 +209,7 @@ static int l_lovrTaskStart(lua_State* L) {
       luax_setthreaddata(T, &TASK_ERR);
       return lua_error(L);
     } else {
-      luax_setthreaddata(T, (void*) &TASK_OK);
+      luax_setthreaddata(T, NULL);
     }
   }
 
@@ -264,7 +264,7 @@ static int l_lovrTaskResume(lua_State* L) {
     lua_xmove(T, L, n);
     return n + 1;
   } else if (status == LUA_YIELD) {
-    luax_setthreaddata(T, &TASK_OK);
+    luax_setthreaddata(T, NULL);
     lua_pushboolean(L, true);
     // It yielded with coroutine.yield, return the results it yielded with
     int n = lua_gettop(T);
@@ -438,6 +438,54 @@ static int l_lovrTaskGetStatus(lua_State* L) {
   return 1;
 }
 
+static int l_lovrTaskSetYieldable(lua_State* L){
+    luaL_checktype(L,1,LUA_TTHREAD);
+    lua_State* T = lua_tothread(L,1);
+    Task* data = luax_getthreaddata(T);
+
+    if (!data){
+        luaL_error(L,"Not a LOVR task!");
+    }
+
+    bool state = lua_toboolean(L,2);
+    data->canYield = state;
+    return 0;
+}
+
+static int l_lovrTaskIsYieldable(lua_State* L){
+    luaL_checktype(L,1,LUA_TTHREAD);
+    lua_State* T = lua_tothread(L,1);
+    Task* data = luax_getthreaddata(T);
+
+    if (!data){
+        luaL_error(L,"Not a LOVR task!");
+    }
+
+    lua_pushboolean(L,data->canYield);
+
+    return 1;
+}
+
+static bool luax_taskyield(void** ctx){
+    return true;
+}
+
+static int l_lovrTaskYield(lua_State* T){
+    Task* data = luax_getthreaddata(T);
+
+    if (!data){
+        data = lovrTaskCreate(T);
+        luax_setthreaddata(T,data);
+    }
+    else if (!data->canYield){
+        lovrTaskDestroy(data);
+        luax_setthreaddata(T,NULL);
+        return 0;
+    }
+
+    return luax_yieldpoll(T,luax_taskyield,NULL,NULL,NULL);
+}
+
 extern const luaL_Reg lovrTask[];
 
 static const luaL_Reg lovrTaskModule[] = {
@@ -445,6 +493,9 @@ static const luaL_Reg lovrTaskModule[] = {
   { "resume", l_lovrTaskResume },
   { "wait", l_lovrTaskWait },
   { "getStatus", l_lovrTaskGetStatus },
+  { "setYieldable", l_lovrTaskSetYieldable },
+  { "isYieldable", l_lovrTaskIsYieldable },
+  { "yield", l_lovrTaskYield },
   { NULL, NULL }
 };
 

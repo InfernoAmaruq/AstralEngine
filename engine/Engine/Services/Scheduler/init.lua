@@ -1,256 +1,139 @@
-local RESUME, STATUS, CREATE = coroutine.resume, coroutine.status, coroutine.create
-local ALLOCATE = table.new
+local TASK = lovr.task
+local POLL = TASK.poll
+local RESUME = TASK.resume
 
-coroutine.isyieldable = function(CO)
-    CO = CO or coroutine.running()
-    local EngThread = AstralEngine.__ENGINETHREAD
-    return EngThread ~= CO
-end
+local TIME = lovr.timer.getTime
+local SLEEP = lovr.timer.sleep
 
 local Scheduler = {}
 
-local ThreadCtx = setmetatable({},{__mode = "k"})
+local StatusEnum = Enum({
+    Running = 1,
+    Completed = 2,
+    Failed = 3,
+    Waiting = 4,
+    Ready = 5,
+    Unregistered = 6,
+}, "TaskStatus")
+
+local StatusToEnum = {
+    running = StatusEnum.Running,
+    complete = StatusEnum.Completed,
+    failed = StatusEnum.Failed,
+    waiting = StatusEnum.Waiting,
+    ready = StatusEnum.Ready,
+}
+
+-- Thread additions
+local ThreadCtx = setmetatable({}, { __mode = "k" })
 local ThreadMT = {
-    __index = function(Co,K)
-        if K == "Context" then return ThreadCtx[Co] or 0 end
+    __index = function(Co, K)
+        if K == "Context" then
+            return ThreadCtx[Co] or 0
+        end
     end,
-    __newindex = function(Co,K,V)
-        if K == "Context" then ThreadCtx[Co] = V end
-    end
+    __newindex = function(Co, K, V)
+        if K == "Context" then
+            ThreadCtx[Co] = V
+        end
+    end,
 }
 
-debug.setmetatable(coroutine.running(),ThreadMT)
+debug.setmetatable(coroutine.running(), ThreadMT)
 
-Scheduler.__index = Scheduler
+-- Scheduler
 
-@ifdef<Sched.UseNative || Sched.UseAuto>{
-local NativeUpdate = require("NativeSched")
-}
-
-@macro<L,!USEBRACK>{ERROR_ROUTINE(&Err,&Co) = AstralEngine.Log("Scheduled coroutine encountered an error! Routine: "..debug.getaddress(&Co).."\n\t"..(&Err or "NO ERR PROVIDED"):gsub("\n","\n\t").."\n"..debug.traceback(&Co),"warn") }
-
-function Scheduler.New(Clock, budget)
-    @ifdef<Sched.UseNative || Sched.UseAuto>{
-        Clock = NativeUpdate.Clock
-    }
-    @ifdef<Sched.UseLua>{
-        if not Clock and not Scheduler.Clock then return end
-    }
-
-    return setmetatable({
-        Budget   = budget or 0.01,
-        Routines = ALLOCATE(100,0),
-        ResumeAt = ALLOCATE(0,100),
-        Queue    = ALLOCATE(100,0),
-        Clock    = Clock,
-        ExternQueued = ALLOCATE(0,100)
-    }, Scheduler)
+local Budget = 0.001
+function Scheduler.SetBudget(n)
+    Budget = n
 end
 
-@macro<L,!USEBRACK>{SafeRemove(&O,&T) = 
-    local __MAXN = #&T
-    local __CURIDX = table.find(&T,&O)
+function Scheduler.Update()
+    local a = AstralEngine.Assert
+    local StartTime = TIME()
 
-    if __CURIDX and __MAXN then
-        &T[__CURIDX] = &T[__MAXN]
-        &T[__MAXN] = nil
-    end
-}
+    for Task in POLL() do
+        a(RESUME(Task))
 
-@macro<L,!USEBRACK>{VERF(&P) = if not &P then return end}
+        local Delta = TIME() - StartTime
 
-@macro<L,!USEBRACK>{CTX_BIND(&RV, &TSK) =
-    -- CTX_BIND
-    local CONTEXT = &RV and _G.CONTEXT
-    if CONTEXT then
-        CONTEXT:BindToContext("Tasks",&TSK)
-    end
-}
-
-local RS = GetService("RunService","RS")
-local GetAddress = debug.getaddress
-
-function Scheduler:WaitFor(Priority)
-    -- BIND BASED
-    VERF(Priority)
-    local C = coroutine.running()
-    RS.__TEMPBIND("TEMP_"..GetAddress(C),Priority,C)
-    self.ExternQueued[C] = true
-    local a,b,c,d,e,f,g = coroutine.yield(-1)
-    self.ExternQueued[C] = nil
-    return a,b,c,d,e,f,g
-end
-
-function Scheduler:SpawnAt(Priority,Task)
-    -- BIND BASED
-    VERF(Priority)
-
-    local COR = coroutine.create(Task)
-    RS.__TEMPBIND("TEMP_"..GetAddress(COR),Priority,COR)
-end
-
-function Scheduler:Wait(RAW,s)
-    -- USE W CTX
-    local co = coroutine.running()
-    if not co or co == AstralEngine.__ENGINETHREAD then return end
-
-    if not RAW and _G.CONTEXT then
-        _G.CONTEXT:BindToContext("Tasks",co)
-    end
-
-    local Exists = false
-    for _, v in pairs(self.Routines) do
-        if v == co then
-            Exists = true
-            break
+        if Delta > Budget then
+            return
         end
     end
-
-    if not Exists then
-        self.Routines[#self.Routines + 1] = co
-    end
-
-    self.ResumeAt[co] = self.Clock() + (s or 0)
-    coroutine.yield()
-    return true
 end
 
-function Scheduler:Spawn(RAW, f, ...)
-    -- USE W CTX
-    local co = CREATE(f)
-    local Ok, Err = RESUME(co,...)
-    if not Ok then
-        ERROR_ROUTINE(Err,co)
-    end
-    local Status = STATUS(co)
-    if Status ~= "dead" then
+function Scheduler.Status(t)
+    local LovrStatus = TASK.getStatus(t or coroutine.running())
 
-        if not RAW and _G.CONTEXT then
-            _G.CONTEXT:BindToContext("Tasks",co)
-        end
-
-        local Exists = table.find(self.Routines,co)
-        if not Exists then
-            self.Routines[#self.Routines + 1] = co
-        end
-    end
-    return co, Status
+    return StatusToEnum[LovrStatus] or StatusEnum.Unregistered
 end
 
-function Scheduler:Escape(co)
-    co = co or coroutine.running()
-    local t = self.Routines
-    SafeRemove(co,t)
-    self.ExternQueued[co] = nil
+-- Spawning functions
+
+Scheduler.Spawn = TASK.start
+
+function Scheduler.Defer(f, ...)
+    return Scheduler.Spawn(function(...)
+        TASK.yield()
+        f(...)
+    end, ...)
 end
 
-function Scheduler:Defer(RAW, f, ...)
-    -- USE W CTX
-    self.Queue[#self.Queue + 1] = { F = f, P = { ... }, CTX = not RAW and (_G.CONTEXT and _G.CONTEXT.Gen)}
+function Scheduler.Delay(f, ...)
+    return Scheduler.Spawn(function(...)
+        Scheduler.Wait(n)
+        f(...)
+    end, ...)
 end
 
-function Scheduler:Delay(RAW, s, f)
-    -- USE W CTX
-    local co = coroutine.create(f)
+Scheduler.CallOnThread = lovr.thread.call
 
-    if not RAW and _G.CONTEXT then
-        _G.CONTEXT:BindToContext("Tasks", co)
+-- Other
+
+Scheduler.Resume = TASK.resume
+
+Scheduler.Yield = TASK.yield
+
+function Scheduler.Wait(n, ...)
+    if type(n) ~= "number" then
+        return TASK.wait(n, ...)
+    else
+        SLEEP(n or 0)
+        return true
     end
-
-    self.ResumeAt[co] = self.Clock() + s
-    self.Routines[#self.Routines + 1] = co
 end
 
-@ifdef<Sched.UseNative & !Sched.UseAuto & !Sched.UseLua>{
-Scheduler.Update = NativeUpdate.Update
-Scheduler.Clock = NativeUpdate.Clock
-}
-@ifdef<!Sched.UseNative & Sched.UseLua | Sched.UseAuto>{
-function Scheduler:Update()
-    local C = self.Clock
-    local Now = C()
+-- sync/async blocks
+local AsyncBlocks = setmetatable({}, getmetatable(Escaped))
 
-    @ifdef<Sched.UseAuto>{
-    local Count = 0
-    for _ in pairs(self.Routines) do
-        Count = Count + 1
-    end
-    if Count > 30 then
-        NativeUpdate.Update(self)
+function Scheduler.CanAsync(t)
+    t = t or coroutine.running()
+    return (not AsyncBlocks[t]) and TASK.isYieldable(t)
+end
+
+function Scheduler.PushSyncBlock(t)
+    t = t or coroutine.running()
+    AsyncBlocks[t] = (AsyncBlocks[t] or 0) + 1
+    TASK.setYieldable(t, false)
+end
+
+function Scheduler.PopSyncBlock(t)
+    t = t or coroutine.running()
+    if not AsyncBlocks[t] then
         return
     end
-    }
 
-    local r = self.Routines
-    local ResAt = self.ResumeAt
-    local n = #r
-    local Budget = self.Budget
-    local EQ = self.ExternQueued
-    for i = n, 1, -1 do
-        local Routine = r[i]
+    AsyncBlocks[t] = AsyncBlocks[t] - 1
 
-        local t = C()
-
-        if t - Now > Budget then return end
-        if EQ[Routine] then goto continue end
-        local Wake = ResAt[Routine]
-        if Wake and Wake > Now then goto continue end
-
-        local Ok, Err = RESUME(Routine)
-
-        if not Ok then
-            ERROR_ROUTINE(Err,Routine)
-        end
-
-        if STATUS(Routine) == "dead" then
-            local Top = #r
-            if Top == i then
-                r[i] = nil
-            else
-                r[i] = r[Top]
-                r[Top] = nil
-            end
-            EQ[Routine] = nil; ResAt[Routine] = nil
-        end
-
-        ::continue::
-    end
-
-    local Queue = self.Queue
-    for i = #Queue, 1, -1 do
-        local q = Queue[i]
-        if C() - Now > Budget then break end
-        local co = CREATE(q.F)
-        local CTX = _G.CONTEXT
-        if CTX and q.CTX == CTX.Gen then
-            CTX:BindToContext("Tasks",co)
-        end
-        self.Queue[i] = nil
-        local ok, err = RESUME(co, unpack(q.P))
-        Upd = true
-        if not ok then
-            print("[Scheduler] Error: ", debug.traceback(co,err))
-            goto continue
-        end
-        local Status = STATUS(co)
-        if Status == "dead" then goto continue end
-
-        if q.CTX and _G.CONTEXT then
-            _G.CONTEXT:BindToContext("Tasks",co)
-        end
-
-        if self.Routines[#self.Routines] == co then goto continue end
-        local Found = false
-        for _,MiscCo in ipairs(self.Routines) do
-            if MiscCo == co then Found = true break end
-        end
-        if Found then goto continue end
-        self.Routines[#self.Routines + 1] = co
-        ::continue::
+    if AsyncBlocks[t] <= 0 then
+        AsyncBlocks[t] = nil
+        TASK.setYieldable(t, true)
     end
 end
-}
 
-GetService.AddService("Scheduler",Scheduler)
+Scheduler.Time = TIME
+
+GetService.AddService("Scheduler", Scheduler)
 
 return Scheduler

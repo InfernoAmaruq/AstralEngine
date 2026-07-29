@@ -1,28 +1,19 @@
 local Signal = {}
 
 Signal.__index = Signal
-Signal.Scheduler = nil
-Signal.Clock = os.clock
 
-Signal.Type = {
-    Default = 0,
-    RTC = 1,
-    Yield = 2,
-    NoCtx = 4,
-}
+local Scheduler
 
-function Signal.new(Type, timeout)
-    Type = Type or Signal.Type.Default
+function Signal.new(NoCtx)
+    Scheduler = Scheduler or GetService and GetService("Scheduler")
 
     local Tab = {
         _connections = {},
         _waiting = {},
-        _RTC = bit.band(Type, Signal.Type.RTC) ~= 0,
-        _yielding = bit.band(Type, Signal.Type.Yield) ~= 0,
-        _type = Type,
-        _timeout = timeout or 0.05,
+        _conLen = 0,
+        _waitLen = 0,
     }
-    if _G.CONTEXT and bit.band(Type, Signal.Type.NoCtx) == 0 then
+    if _G.CONTEXT and not NoCtx then
         _G.CONTEXT:BindToContext("Signal", Tab)
     end
 
@@ -30,14 +21,15 @@ function Signal.new(Type, timeout)
 end
 
 function Signal:GetListenerCount()
-    return #self._connections
+    return self._conLen + self._waitLen
 end
 
 function Signal:Clear()
-    local Size = #self._connections
-
-    for i = 1, Size do
+    for i = 1, self._conLen do
         self._connections[i] = nil
+    end
+    for i = 1, self._waitLen do
+        self._waiting[i] = nil
     end
 end
 
@@ -53,14 +45,18 @@ local DisconnectFunc = function(s)
             if _G.CONTEXT then
                 _G.CONTEXT:UnbindFromContext("SignalBind", s)
             end
+            self._conLen = self._conLen - 1
             break
         end
     end
 end
 local ConMt = { __index = { Disconnect = DisconnectFunc }, __mode = "v" }
 
+-- Listener
+
 function Signal:Connect(Callback)
     table.insert(self._connections, Callback)
+    self._conLen = self._conLen + 1
 
     local Tab = setmetatable({ _self = self, _callback = Callback }, ConMt)
     if _G.CONTEXT then
@@ -70,83 +66,59 @@ function Signal:Connect(Callback)
     return Tab
 end
 
--- todo:
--- these'll just call the specific ones in :Fire() instead of the giant fucking 'if' statement
--- :Fire() should also be overridden with one of these
-function Signal:FireAndYield() end
-
-function Signal:FireAndForget() end
-
-function Signal:FireRTC() end
-
--- end of todo
-
-function Signal:Fire(...)
-    local CON = self._connections
-    local WAIT = self._waiting
-
-    if #CON == 0 and #WAIT == 0 then
-        return
-    end
-    for i = #WAIT, 1, -1 do
-        coroutine.resume(WAIT[i], ...)
-        WAIT[i] = nil
-    end
-    if self._RTC then
-        for _, f in ipairs(self._connections) do
-            local s, err = pcall(f, ...)
-            if not s then
-                AstralEngine.Log("SIGNAL ERROR: " .. debug.traceback(err), "warn", "SIGNAL")
-            end
-        end
-    elseif self._yielding then
-        local Threads = {}
-
-        for _, cb in ipairs(self._connections) do
-            local Thread = self.Scheduler:Spawn(false, cb, ...)
-            table.insert(Threads, Thread)
-        end
-
-        local ST = self.Clock() -- os.clock is bad here
-        while self.Clock() - ST < self._timeout do
-            local Done = true
-
-            for _, thread in ipairs(Threads) do
-                if coroutine.status(thread) ~= "dead" then
-                    Done = false
-                    break
-                end
-            end
-
-            if Done then
-                break
-            end
-
-            coroutine.yield()
-        end
-    else
-        for _, cb in ipairs(self._connections) do
-            local Ok, Error = self.Scheduler:Spawn(false, cb, ...)
-            if not Ok then
-                print("SIGNAL ERR:" .. Error)
-            end
-        end
-    end
-end
-
 function Signal:Wait()
-    table.insert(self._waiting, coroutine.running())
-    task.escape()
+    local r = coroutine.running()
+    assert(Scheduler.CanAsync(r), "Cannot <Signal>:Wait() in a non-async block!")
+    table.insert(self._waiting, r)
+    self._waitLen = self._waitLen + 1
     return coroutine.yield()
 end
 
+function Signal:Once(f)
+    local s = nil
+    s = Signal.Connect(self, function(...)
+        s:Disconnect() -- wanna disconnect first just incase the function errors
+        f(...)
+    end)
+end
+
+-- Messenger
+
+function Signal:FireAndDefer()
+    error("INCOMPLETE, KILL FLAME")
+end
+
+function Signal:FireAndSpawn()
+    error("INCOMPLETE, KILL FLAME")
+end
+
+function Signal:FireRTC(...)
+    local ConLen, WaitLen = self._conLen, self._waitLen
+
+    if ConLen == 0 and WaitLen == 0 then
+        return
+    end
+
+    local Con = self._connections
+    local Wait = self._waiting
+
+    for i = WaitLen, 1, -1 do
+        Scheduler.Resume(Wait[i], ...)
+        Wait[i] = nil
+    end
+
+    self._waitLen = 0
+
+    for i = 1, ConLen do
+        local s, err = pcall(Con[i], ...)
+        if not s then
+            AstralEngine.Error("SIGNAL ERROR: ", debug.traceback(err), "SIGNAL")
+        end
+    end
+end
+
 function Signal:Destroy()
-    for i in pairs(self._connections) do
-        self._connections[i] = nil
-    end
-    for i in pairs(self) do
-        self[i] = nil
-    end
+    Signal.Clear(self)
 
     if _G.CONTEXT then
         _G.CONTEXT:UnbindFromContext("Signal", self)

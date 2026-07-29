@@ -1,42 +1,5 @@
 local LVRB = {}
 
--- configure our clock
-debug.cpuclock = os.clock
-os.clock = lovr.timer.getTime
-
-local wrapself = function(s, f, VAL)
-    if VAL ~= nil then
-        return function(...)
-            return f(s, VAL, ...)
-        end
-    else
-        return function(...)
-            return f(s, ...)
-        end
-    end
-end
-
-LVRB.VirtualiseScheduler = function(Scheduler)
-    _G.task = {}
-    local Global = _G.task
-    Global.wait = wrapself(Scheduler, Scheduler.Wait, false)
-    Global.delay = wrapself(Scheduler, Scheduler.Delay, false)
-    Global.defer = wrapself(Scheduler, Scheduler.Defer, false)
-    Global.spawn = wrapself(Scheduler, Scheduler.Spawn, false)
-    Global.waitfor = wrapself(Scheduler, Scheduler.WaitFor)
-    Global.spawnat = wrapself(Scheduler, Scheduler.SpawnAt)
-    Global.escape = wrapself(Scheduler, Scheduler.Escape)
-
-    Global.raw = {
-        wait = wrapself(Scheduler, Scheduler.Wait, true),
-        delay = wrapself(Scheduler, Scheduler.Delay, true),
-        defer = wrapself(Scheduler, Scheduler.Defer, true),
-        spawn = wrapself(Scheduler, Scheduler.Spawn, true),
-    }
-
-    LVRB.VirtualiseScheduler = nil
-end
-
 -- INPUT SYSTEM
 
 LVRB.ConnectDevices = function()
@@ -136,11 +99,11 @@ LVRB.ConnectDevices = function()
     -- MOUSE
 
     function lovr.wheelmoved(...)
-        Mouse.WheelMoved:Fire(...)
+        Mouse.WheelMoved:FireRTC(...)
     end
 
     function lovr.mousemoved(x, y, ...)
-        Mouse.MouseMoved:Fire(x, y, ...)
+        Mouse.MouseMoved:FireRTC(x, y, ...)
     end
 
     function lovr.mousepressed(x, y, c)
@@ -161,7 +124,7 @@ LVRB.ConnectDevices = function()
 
         local Terminated = CAS.__CALL(Code, Data)
 
-        Mouse.MouseButtonDown:Fire(E, x, y, Terminated)
+        Mouse.MouseButtonDown:FireRTC(E, x, y, Terminated)
     end
 
     function lovr.mousereleased(x, y, c)
@@ -182,11 +145,11 @@ LVRB.ConnectDevices = function()
 
         local Terminated = CAS.__CALL(Code, Data)
 
-        Mouse.MouseButtonDown:Fire(E, x, y, Terminated)
+        Mouse.MouseButtonDown:FireRTC(E, x, y, Terminated)
     end
 
     function lovr.textinput(Char, Code)
-        KB.TextInput:Fire(Char, Code)
+        KB.TextInput:FireRTC(Char, Code)
     end
 
     -- KB
@@ -213,7 +176,7 @@ LVRB.ConnectDevices = function()
 
         local Terminated = CAS.__CALL(Code, Data)
 
-        KB.KeyPressed:Fire(E, c, Terminated)
+        KB.KeyPressed:FireRTC(E, c, Terminated)
     end
 
     function lovr.keyreleased(k, c)
@@ -233,7 +196,7 @@ LVRB.ConnectDevices = function()
         local Code = ToCASCode[k]
 
         local Terminated = CAS.__CALL(Code, Data)
-        KB.KeyReleased:Fire(E, c, Terminated)
+        KB.KeyReleased:FireRTC(E, c, Terminated)
     end
 
     -- Controller
@@ -268,7 +231,7 @@ end
 LVRB.LoadWindow = function()
     local Sig = require("Lib.Signal")
 
-    AstralEngine.Signals.OnFocusChanged = Sig.new(Sig.Type.Default)
+    AstralEngine.Signals.OnFocusChanged = Sig.new(true)
 
     AstralEngine.Window.SetSize = lovr.system.setWindowSize
     AstralEngine.Window.SetFullscreen = lovr.system.setWindowFullscreen
@@ -285,15 +248,18 @@ LVRB.LoadWindow = function()
     AstralEngine.Window.IsFullscreen = lovr.system.isWindowFullscreen
 
     function lovr.focus(f)
-        AstralEngine.Signals.OnFocusChanged:Fire(f)
+        AstralEngine.Signals.OnFocusChanged:FireRTC(f)
     end
 
-    AstralEngine.Signals.OnWindowResize = Sig.new(Sig.Type.RTC)
+    AstralEngine.Signals.OnWindowResize = Sig.new(true)
 
+    local Sched = AstralEngine.Scheduler
     function lovr.resize(w, h)
-        AstralEngine.Signals.OnWindowResize:Fire(w, h)
+        Sched.PushSyncBlock()
+        AstralEngine.Signals.OnWindowResize:FireRTC(w, h)
         GetService("Renderer").PassStorage.RebuildPassTable()
         collectgarbage("collect")
+        Sched.PopSyncBlock()
     end
 
     -- FINALLY OPEN THE WINDOW

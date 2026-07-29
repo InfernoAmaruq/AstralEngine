@@ -4,8 +4,9 @@ local EmptySkybox = AstralEngine.Graphics.NewTexture(1, 1, 6)
 
 local Environment = { Name = "Environment" }
 
-Environment.Metadata = {
+Environment.Userdata = {
     EmptySkybox = EmptySkybox,
+    EmptyBuffer = lovr.graphics.newBuffer("vec3", 9),
 }
 
 local Indexes = {
@@ -31,7 +32,7 @@ local Mt = {
     __index = function(self, k)
         if Indexes[k] then
             if Indexes[k] >= Indexes.Ambient and Indexes[k] <= Indexes.Ambient + 8 then
-                return vec3(self[Indexes[k]]):mul(256)
+                return vec3(self[Indexes[k]]):mul(255)
             end
             return self[Indexes[k]]
         end
@@ -56,7 +57,7 @@ local Mt = {
             self[2] = not not v
             self.__UpdateBuffers = self[2]
         elseif Key >= Indexes.Ambient and Key <= Indexes.Ambient + 8 then
-            v = v / 256
+            v = v / 255
 
             self[Key]:set(v)
             self.UserHarmonics:setData(self, 1, Indexes.Ambient, 9)
@@ -69,7 +70,7 @@ local Mt = {
 
 local Format = { "vec3", layout = "std430" }
 
-Environment.Metadata.__create = function(Data, Entity)
+Environment.New = function(Data, Entity)
     local self = {}
 
     if not Component.GetComponent(Entity, "Camera") then
@@ -94,6 +95,11 @@ Environment.Metadata.__create = function(Data, Entity)
     self.UserHarmonics = lovr.graphics.newBuffer(Format, 9)
 
     return setmetatable(self, Mt)
+end
+
+Environment.Destroy = function(self)
+    self.__EnvHarmonics:release()
+    self.UserHarmonics:release()
 end
 
 return Environment

@@ -2,7 +2,7 @@ if not meta.getdefined("Audio", "Active") then
     return nil
 end
 
-local AudioMesh = { Name = "AudioMesh", Metadata = {} }
+local AudioMesh = { Name = "AudioMesh" }
 
 local AudioMeshType = Enum({
     Inherited = 1,
@@ -11,7 +11,7 @@ local AudioMeshType = Enum({
 
 ---@class AudioMesh: Component
 
-AudioMesh.Metadata.__create = function(Data, Ent)
+AudioMesh.New = function(Data, Ent)
     local t = {}
 
     return t

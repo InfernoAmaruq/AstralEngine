@@ -4,7 +4,6 @@ local Component = GetService("Component")
 
 local DOF = {}
 DOF.Name = "DepthOfFieldFX"
-DOF.Metadata = {}
 
 local FieldToId = {
     FocusRadius = x,
@@ -28,7 +27,7 @@ local MT = {
     end,
 }
 
-DOF.Metadata.__create = function(Input, Entity)
+DOF.New = function(Input, Entity)
     if not Component.GetComponent(Entity, "Camera") then
         AstralEngine.Log("Camera component missing! DepthOfFieldFX will not work!", "warn", "FX")
     end

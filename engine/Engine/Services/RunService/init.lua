@@ -1,46 +1,5 @@
 local bit = bit
 
--- define FENV for our coroutines
-local FENV = setmetatable({
-    task = {
-        spawn = task and task.spawn,
-        defer = task and task.defer,
-        wait = function()
-            error("CANNOT CALL 'wait' IN RUNSERVICE ROUTINE")
-        end,
-    },
-    coroutine = {
-        resume = coroutine.resume,
-        wrap = coroutine.wrap,
-        create = coroutine.create,
-        running = coroutine.running,
-        status = coroutine.status,
-    },
-}, {
-    __index = _G,
-    __newindex = function(_, k, v)
-        _G[k] = v
-    end,
-})
-
-local function AllocRoutine(fn)
-    if not FENV.task.spawn and task and task.spawn then
-        FENV.task.spawn = task.spawn
-        FENV.task.defer = task.defer
-    end
-
-    local YIELD = coroutine.yield
-    setfenv(fn, FENV)
-    local f = function()
-        while true do
-            fn(YIELD(-1))
-        end
-    end
-    local c = coroutine.create(f)
-    coroutine.resume(c)
-    return c
-end
-
 -- RunService logic
 
 local Data = {}
@@ -99,8 +58,7 @@ Data.__UNBIND_TEMP = function(F, P)
 end
 
 Data.Flags = {
-    Raw = 1,
-    Contextless = 2,
+    Contextless = 1,
 }
 
 Data.BindToStep = function(Name, Priority, F, Flag)
@@ -108,12 +66,7 @@ Data.BindToStep = function(Name, Priority, F, Flag)
     Priority = type(Priority) == "number" and Priority or Priority.Value
     assert(math.floor(Priority) == Priority, Priority .. " NOT AN INT")
 
-    local BindRaw = bit.band(Flag, Data.Flags.Raw) ~= 0
     local Contextless = bit.band(Flag, Data.Flags.Contextless) ~= 0
-
-    if type(F) == "function" and not BindRaw then
-        F = AllocRoutine(F)
-    end
 
     local IsUsed = Data.__UsedNames[Name]
     if IsUsed then

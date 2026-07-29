@@ -7,12 +7,10 @@ end
 local SignalLib = require("Lib/Signal")
 local Controller = {}
 
-local Type = bit.bor(SignalLib.Type.RTC, SignalLib.Type.NoCtx)
-
 Controller.MAX_CONTROLLERS = MAX_CONTROLLERS
 
-Controller.ControllerAdded = SignalLib.new(Type)
-Controller.ControllerRemoved = SignalLib.new(Type)
+Controller.ControllerAdded = SignalLib.new(true)
+Controller.ControllerRemoved = SignalLib.new(true)
 
 Controller.IsPresent = lovr.system.controllerPresent
 Controller.GetName = lovr.system.controllerGetName
@@ -157,9 +155,9 @@ Controller.__Finalise = function()
         end
 
         if State then
-            Controller.ControllerAdded:Fire(Id)
+            Controller.ControllerAdded:FireRTC(Id)
         else
-            Controller.ControllerRemoved:Fire(Id)
+            Controller.ControllerRemoved:FireRTC(Id)
         end
     end
 

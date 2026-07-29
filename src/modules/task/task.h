@@ -29,6 +29,7 @@ typedef enum {
 
 struct Task {
   bool complete;
+  bool canYield;
   bool dequeued;
   WaitType waiting;
   atomic_uint deps;

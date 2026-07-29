@@ -4,7 +4,6 @@ local Component = GetService("Component")
 
 local Fog = {}
 Fog.Name = "FogFX"
-Fog.Metadata = {}
 
 local BufferFormat = {
     { "fogColor",     "vec4" },
@@ -15,7 +14,7 @@ local BufferFormat = {
 
 local MT = {}
 
-Fog.Metadata.__create = function(Input, Entity)
+Fog.New = function(Input, Entity)
     if not Component.GetComponent(Entity, "Camera") then
         AstralEngine.Log("Camera component missing! FogFX will not work!", "warn", "FX")
     end

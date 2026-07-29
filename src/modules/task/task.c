@@ -88,6 +88,7 @@ Task* lovrTaskCreate(struct lua_State* T) {
   }
 
   task->T = T;
+  task->canYield = true;
   return task;
 }
 

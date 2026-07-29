@@ -24,8 +24,8 @@ end
 --\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
 
 -- signals
-TagService.TagAdded = SignalLib.new(SignalLib.Type.RTC)
-TagService.TagRemoved = SignalLib.new(SignalLib.Type.RTC)
+TagService.TagAdded = SignalLib.new()
+TagService.TagRemoved = SignalLib.new()
 
 -- virtualized to entity
 function TagService.HasTag(Entity, Tag)
@@ -67,7 +67,7 @@ function TagService.AddTag(Entity, Tag)
     Registry[Tag] = Registry[Tag] or {}
     Registry[Tag][EntId] = true
 
-    TagService.TagAdded:Fire(EntRef, Tag)
+    TagService.TagAdded:FireRTC(EntRef, Tag)
 end
 
 function TagService.RemoveTag(Entity, Tag)
@@ -85,7 +85,7 @@ function TagService.RemoveTag(Entity, Tag)
     Registry[Tag] = Registry[Tag] or {}
     Registry[Tag][EntId] = nil
 
-    TagService.TagRemoved:Fire(EntRef, Tag)
+    TagService.TagRemoved:FireRTC(EntRef, Tag)
 end
 
 function TagService.ClearTags(Entity)
@@ -103,7 +103,7 @@ function TagService.ClearTags(Entity)
     for Tag, Reg in pairs(Registry) do
         if Reg[EntId] then
             Reg[EntId] = nil
-            TagService.TagRemoved:Fire(EntRef, Tag)
+            TagService.TagRemoved:FireRTC(EntRef, Tag)
         end
     end
 end

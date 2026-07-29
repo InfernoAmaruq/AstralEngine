@@ -4,9 +4,8 @@ local Component = GetService("Component")
 
 local Bloom = {}
 Bloom.Name = "BloomFX"
-Bloom.Metadata = {}
 
-Bloom.Metadata.__create = function(Input, Entity)
+Bloom.New = function(Input, Entity)
     if not Component.GetComponent(Entity, "Camera") then
         AstralEngine.Log("Camera component missing! BloomFX will not work!", "warn", "FX")
     end

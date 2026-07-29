@@ -4,11 +4,11 @@ local Comp = GetService("Component")
 local Material = {}
 
 Material.Name = "Material"
-Material.Metadata = {}
+Material.Userdata = {}
 
 local MaterialFitMode = Enum({ Stretch = 0, Tile = 1, Crop = 2 }, "MaterialFitMode")
 
-Material.Metadata.EmptyMatrix = Mat4(
+Material.Userdata.EmptyMatrix = Mat4(
     0,
     0, -- uv offset
     1,
@@ -104,7 +104,7 @@ local Mt = {
     end,
 }
 
-Material.Metadata.__create = function(Data, Ent)
+Material.New = function(Data, Ent)
     local Storage = {}
 
     local Mat = Data and Data.Material

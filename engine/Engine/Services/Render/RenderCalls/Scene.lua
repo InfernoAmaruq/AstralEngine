@@ -29,6 +29,14 @@ local BlurShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "Ca
 
 local FinalShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "Camera/Finalise.glsl")
 
+local MainShader = ShaderService.NewShader(Enum.ShaderType.Graphics, "Camera/Camera.glsl", {
+    Defines = {
+        Fragment = {
+            MAX_LIGHTS = 256,
+        },
+    },
+})
+
 --- > COMPUTE SHADERS
 
 local Data = { Raw = true, Defines = { USE_ATOMICS = true } }
@@ -55,8 +63,6 @@ SSAO_Noise_Image:release()
 local BlurSampler = lovr.graphics.newSampler({ wrap = "clamp" })
 
 -- > MAIN SHADER METHODS
-
-local MainShader
 
 local BFI_Transform = "mat4"
 local BFI_Material = "mat4"
@@ -222,13 +228,7 @@ Renderer.GetMainShader = function()
     return MainShader
 end
 
-Renderer.SetMainShader = function(Shader)
-    MainShader = Shader
-
-    Renderer.SetMainShader = nil
-
-    Renderer.BindShaderPipeline("__PRIMARY_GEOMETRY_PIPELINE", Shader)
-end
+Renderer.BindShaderPipeline("__PRIMARY_GEOMETRY_PIPELINE", MainShader)
 
 -- Geometry/Register
 
@@ -355,7 +355,7 @@ local function Populate(Table, From)
     local CompReg = Component.Components
     local C_Transform, C_Material = CompReg.Transform.Storage, CompReg.Material.Storage
 
-    local EmptyMatrix = CompReg.Material.Metadata.EmptyMatrix
+    local EmptyMatrix = CompReg.Material.Userdata.EmptyMatrix
 
     for EntId = From, Table.Top do
         local Ent = Table[EntId]
@@ -404,7 +404,7 @@ local function DrawTableFix(Table, Where, Key, Shader)
         local CompReg = Component.Components
         local C_Transform, C_Material = CompReg.Transform.Storage, CompReg.Material.Storage
 
-        local EmptyMatrix = CompReg.Material.Metadata.EmptyMatrix
+        local EmptyMatrix = CompReg.Material.Userdata.EmptyMatrix
 
         local ShaderUpdated = Manifest.EntityChanged
 
@@ -616,133 +616,137 @@ local function GetDrawFunc(IsSolid)
             local EntId = Cameras[CamId]
             local Camera = CSCamera[EntId]
 
-            local Pass = Camera[IsSolid and 32 or 33]
+            if Camera[48] then
+                local Pass = Camera[IsSolid and 32 or 33]
 
-            local Projection = Camera[37]
-            local CamTransform = CSTransform[EntId]
-            local TransformMatrix = CamTransform[3]
-            local Culling = Camera[44] and "back"
+                local Projection = Camera[37]
+                local CamTransform = CSTransform[EntId]
+                local TransformMatrix = CamTransform[3]
+                local Culling = Camera[44] and "back"
 
-            -- ASSIGN PASS VARIABLES
-
-            if IsSolid then
-                Camera[31]:reset()
-                Pass:reset()
-                Camera[33]:reset()
-            end
-
-            Pass:setViewPose(1, TransformMatrix)
-            Pass:setProjection(1, Projection)
-            Pass:setFaceCull(Culling)
-            Pass:setViewCull(Camera[45])
-
-            local EnvComponent = CSEnv[EntId]
-            local Buff1, Buff2, Skybox
-
-            if IsTransparent then
-                Pass:setDepthWrite(false)
-                Pass:setDepthTest(">=")
-                Pass:setBlendMode(1, "add", "premultiplied")
-                Pass:setBlendMode(2, "add", "premultiplied")
-            end
-
-            if EnvComponent then
-                -- draw skybox only on solid pass
-
-                Buff1 = EnvComponent.UserHarmonics
-                Buff2 = EnvComponent.__EnvHarmonics
-                Skybox = EnvComponent[1]
-
-                -- recalculate SH if we need to
-
-                if EnvComponent.__UpdateBuffers then
-                    Pass:setShader(ExtractSHShader)
-                    Pass:send("envMap", Skybox)
-                    Pass:send("SHBuffer", Buff2)
-
-                    local Size = Skybox:getHeight()
-
-                    local x, y = ExtractSHShader:getWorkgroupSize()
-
-                    Pass:compute((Size + x - 1) / x, (Size + y - 1) / y, 6)
-
-                    Pass:setShader()
-
-                    EnvComponent.__UpdateBuffers = false
-                end
+                -- ASSIGN PASS VARIABLES
 
                 if IsSolid then
-                    Pass:skybox(Skybox)
-                end
-                -- uses a unique shader so we draw it first
-            else
-                EnvComponent = ComponentRegistry.Environment.Metadata.EmptySkybox
-            end
-
-            -- CONFIGURE SHADER
-
-            for i = 1, ShaderListTop do
-                local Shader, Manifest = ShaderList[i], ShaderManifest[i]
-
-                Pass:push("state")
-
-                Pass:setShader(Shader)
-                Pass:send("Transparent", IsTransparent)
-
-                if Manifest.SendDirectLightingData then
-                    Pass:send("Light_LightCount", Lighting.LightCount)
-                    Pass:send("Lighting_Data", Lighting.LightBuffer)
-                    Pass:send("Lighting_LTC", Lighting.LTCTexture)
-                    Pass:send("Lighting_LTC_Amp", Lighting.LTCAmp)
-                    Pass:send("CamTransform", TransformMatrix)
+                    Camera[31]:reset()
+                    Pass:reset()
+                    Camera[33]:reset()
                 end
 
-                if Manifest.SendIndirectLightingData and EnvComponent then
-                    Pass:send("PBR_SphericalHarmonics_User", Buff1)
-                    Pass:send("PBR_SphericalHarmonics", Buff2)
-                    Pass:send("PBR_EnvMap", Skybox)
+                Pass:setViewPose(1, TransformMatrix)
+                Pass:setProjection(1, Projection)
+                Pass:setFaceCull(Culling)
+                Pass:setViewCull(Camera[45])
+
+                local EnvComponent = CSEnv[EntId]
+                local Buff1, Buff2, Skybox
+
+                if IsTransparent then
+                    Pass:setDepthWrite(false)
+                    Pass:setDepthTest(">=")
+                    Pass:setBlendMode(1, "add", "premultiplied")
+                    Pass:setBlendMode(2, "add", "premultiplied")
                 end
 
-                local CanBeInstanced = Manifest.CanBeInstanced
+                if EnvComponent then
+                    -- draw skybox only on solid pass
 
-                if Manifest.Setter then
-                    Manifest.Setter(Pass, Shader, IsSolid, Camera, CamTransform)
+                    Buff1 = EnvComponent.UserHarmonics
+                    Buff2 = EnvComponent.__EnvHarmonics
+                    Skybox = EnvComponent[1]
+
+                    -- recalculate SH if we need to
+
+                    if EnvComponent.__UpdateBuffers then
+                        Pass:setShader(ExtractSHShader)
+                        Pass:send("envMap", Skybox)
+                        Pass:send("SHBuffer", Buff2)
+
+                        local Size = Skybox:getHeight()
+
+                        local x, y = ExtractSHShader:getWorkgroupSize()
+
+                        Pass:compute((Size + x - 1) / x, (Size + y - 1) / y, 6)
+
+                        Pass:setShader()
+
+                        EnvComponent.__UpdateBuffers = false
+                    end
+
+                    if IsSolid then
+                        Pass:skybox(Skybox)
+                    end
+                    -- uses a unique shader so we draw it first
+                else
+                    Skybox = ComponentRegistry.Environment.Userdata.EmptySkybox
+                    Buff1 = ComponentRegistry.Environment.Userdata.EmptyBuffer
+                    Buff2 = Buff1
                 end
 
-                local Geom = Stack[Shader]
-                if Geom then
-                    for Material, GeometryList in pairs(Geom) do
-                        Pass:setMaterial(Material or nil)
+                -- CONFIGURE SHADER
 
-                        for DrawHash, GeometryTable in pairs(GeometryList) do
-                            Pass:push("state")
+                for i = 1, ShaderListTop do
+                    local Shader, Manifest = ShaderList[i], ShaderManifest[i]
 
-                            --local ShouldDrop = (GeometryTable.State == GTS_READY) and false or DrawTableFix(GeometryTable)
-                            local ShouldContinue = GeometryTable.State == GTS_READY
-                                or DrawTableFix(GeometryTable, GeometryList, DrawHash, Shader)
+                    Pass:push("state")
 
-                            if ShouldContinue then
-                                local Functions = FunctionRegistry[GeometryTable.Type]
-                                if CanBeInstanced and GeometryTable.IsInstanced and Functions.Bulk then
-                                    Pass:send("IsInstanced", true)
+                    Pass:setShader(Shader)
+                    Pass:send("Transparent", IsTransparent)
 
-                                    Pass:send("INSTANCE_Transform", GeometryTable.GPU_Transform)
-                                    Pass:send("INSTANCE_Material", GeometryTable.GPU_Material)
-                                    Pass:send("INSTANCE_Scale", GeometryTable.GPU_Scale)
+                    if Manifest.SendDirectLightingData then
+                        Pass:send("Light_LightCount", Lighting.LightCount)
+                        Pass:send("Lighting_Data", Lighting.LightBuffer)
+                        Pass:send("Lighting_LTC", Lighting.LTCTexture)
+                        Pass:send("Lighting_LTC_Amp", Lighting.LTCAmp)
+                        Pass:send("CamTransform", TransformMatrix)
+                    end
 
-                                    Functions.Bulk(Pass, GeometryTable, DrawHash)
-                                else
-                                    Pass:send("IsInstanced", false)
-                                    Functions.Single(Pass, GeometryTable, DrawHash)
+                    if Manifest.SendIndirectLightingData and EnvComponent then
+                        Pass:send("PBR_SphericalHarmonics_User", Buff1)
+                        Pass:send("PBR_SphericalHarmonics", Buff2)
+                        Pass:send("PBR_EnvMap", Skybox)
+                    end
+
+                    local CanBeInstanced = Manifest.CanBeInstanced
+
+                    if Manifest.Setter then
+                        Manifest.Setter(Pass, Shader, IsSolid, Camera, CamTransform)
+                    end
+
+                    local Geom = Stack[Shader]
+                    if Geom then
+                        for Material, GeometryList in pairs(Geom) do
+                            Pass:setMaterial(Material or nil)
+
+                            for DrawHash, GeometryTable in pairs(GeometryList) do
+                                Pass:push("state")
+
+                                --local ShouldDrop = (GeometryTable.State == GTS_READY) and false or DrawTableFix(GeometryTable)
+                                local ShouldContinue = GeometryTable.State == GTS_READY
+                                    or DrawTableFix(GeometryTable, GeometryList, DrawHash, Shader)
+
+                                if ShouldContinue then
+                                    local Functions = FunctionRegistry[GeometryTable.Type]
+                                    if CanBeInstanced and GeometryTable.IsInstanced and Functions.Bulk then
+                                        Pass:send("IsInstanced", true)
+
+                                        Pass:send("INSTANCE_Transform", GeometryTable.GPU_Transform)
+                                        Pass:send("INSTANCE_Material", GeometryTable.GPU_Material)
+                                        Pass:send("INSTANCE_Scale", GeometryTable.GPU_Scale)
+
+                                        Functions.Bulk(Pass, GeometryTable, DrawHash)
+                                    else
+                                        Pass:send("IsInstanced", false)
+                                        Functions.Single(Pass, GeometryTable, DrawHash)
+                                    end
                                 end
-                            end
 
-                            Pass:pop("state")
+                                Pass:pop("state")
+                            end
                         end
                     end
-                end
 
-                Pass:pop("state")
+                    Pass:pop("state")
+                end
             end
         end
     end
@@ -899,13 +903,13 @@ function Renderer.Composite()
             MainPass:send("exposure", Env[13])
         end
 
-        MainPass:fill()
+        MainPass:fill(Camera[29])
     end
 end
 
 Renderer.Late[#Renderer.Late + 1] = function()
     local RS = GetService("RunService")
-    local Flag = bit.bor(RS.Flags.Raw, RS.Flags.Contextless)
+    local Flag = RS.Flags.Contextless
 
     RS.BindToStep("_REND_SCENE_SOLID", Enum.StepPriority.RenderSceneSolid.Value, Renderer.DrawSolid, Flag)
     RS.BindToStep(

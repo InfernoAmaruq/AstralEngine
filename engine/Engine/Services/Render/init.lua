@@ -116,19 +116,6 @@ for _, File in ipairs(lovr.filesystem.getAliasedFiles("RenderCalls")) do
     end
 end
 
-local SignalLib = require("Lib/Signal")
-AstralEngine.Signals.OnMainShaderChanged = SignalLib.new(SignalLib.Type.RTC)
-
-local Shader = ShaderService.NewShader(Enum.ShaderType.Graphics, "Camera/Camera.glsl", {
-    Defines = {
-        Fragment = {
-            MAX_LIGHTS = 256,
-        },
-    },
-})
-
-Renderer.SetMainShader(Shader)
-
 Renderer.Lighting = loadfile("Lighting")(Renderer)
 
 GetService.AddService("Renderer", Renderer)

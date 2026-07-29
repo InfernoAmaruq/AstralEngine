@@ -2348,6 +2348,12 @@ ConvexShape* lovrConvexShapeClone(ConvexShape* parent, float* scale) {
   return shape;
 }
 
+void lovrConvexShapeSetScale(ConvexShape* convex, float* scale){
+  const JPH_Shape* hull = JPH_DecoratedShape_GetInnerShape((const JPH_DecoratedShape*) convex->handle);
+  JPH_Shape* scaledHull = (JPH_Shape*) JPH_ScaledShape_Create(hull, vec3_toJolt(scale));
+  lovrShapeReplace(convex, scaledHull);
+}
+
 uint32_t lovrConvexShapeGetPointCount(ConvexShape* shape) {
   const JPH_ConvexHullShape* hull = (const JPH_ConvexHullShape*) JPH_DecoratedShape_GetInnerShape((const JPH_DecoratedShape*) shape->handle);
   return JPH_ConvexHullShape_GetNumPoints(hull);
@@ -2433,6 +2439,12 @@ void lovrMeshShapeGetScale(MeshShape* shape, float* scale) {
   JPH_Vec3 v;
   JPH_ScaledShape_GetScale((JPH_ScaledShape*) shape->handle, &v);
   vec3_fromJolt(scale, &v);
+}
+
+void lovrMeshShapeSetScale(MeshShape* shape, float* scale){
+  const JPH_Shape* mesh = JPH_DecoratedShape_GetInnerShape((const JPH_DecoratedShape*) shape->handle);
+  JPH_Shape* scaledMesh = (JPH_Shape*) JPH_ScaledShape_Create(mesh, vec3_toJolt(scale));
+  lovrShapeReplace(shape, scaledMesh);
 }
 
 TerrainShape* lovrTerrainShapeCreate(float* vertices, uint32_t n, float scaleXZ, float scaleY) {

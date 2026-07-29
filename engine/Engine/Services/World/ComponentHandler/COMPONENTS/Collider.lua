@@ -7,8 +7,6 @@ local WorldSer = GetService("Entity")
 local Signal = require(package.ENG_PATH.."/Lib/Signal.lua")
 local bit = bit
 
-local mt = {}
-
 local INHM = Enum({
     None = 0,
     Root = 1,
@@ -16,11 +14,10 @@ local INHM = Enum({
 
 local Collider = {
     Name = "Collider",
-    Pattern = {},
-    Metadata = mt,
+    Userdata = {},
 }
 
-Collider.Metadata.HardDependency = {
+Collider.Userdata.HardDependency = {
     Transform = true
 }
 
@@ -223,7 +220,7 @@ local METATAB = {
     end
 }
 
-function mt.__create(DATA, e)
+function Collider.New(DATA, e)
     local Transform = assert(Component.GetComponent(e, "Transform"), "NO COMPONENT TYPE OF 'Transform' PRESENT, CANNOT ADD COLLIDER!")
 
     local EntPtr = WorldSer.GetEntityFromId(e)
@@ -239,11 +236,36 @@ function mt.__create(DATA, e)
 
     local InheritanceMethod = DATA.InheritanceMethod or INHM.Root
 
-    local Shapes = DATA.Shapes or {DATA.Shape or Physics.Shapes.NewShape(Enum.ColliderShape.Box)}
-    local Size = Transform.Scale
+    local Shapes = DATA.Shapes or (DATA.Shape and {DATA.Shape})
 
-    if bit.band(InheritanceMethod.Value, INHM.Root.Value) ~= 0 then
-        Shapes[1]:SetSize(Size:abs())
+    local Size = Transform.Scale:abs()
+
+    local ShouldSetSize = bit.band(InheritanceMethod.Value, INHM.Root.Value) ~= 0
+
+    if not Shapes then
+        local Type = DATA.ShapeType
+        local MeshComponent = Component.GetComponent(e, "Mesh")
+        local Mesh = DATA.Mesh or ( MeshComponent and MeshComponent.Mesh )
+
+        if not Type then
+            if Mesh then
+                Type = Enum.ColliderShape.Convex
+            else
+                Type = Enum.ColliderShape.Box
+            end
+        end
+
+        if Type.Value > 4 then
+            AstralEngine.Assert(Mesh, "No mesh provided for mesh collider!","COLLIDER")
+        end
+
+        local Config = {Mesh = Mesh, Size = ShouldSetSize and Size or nil}
+
+        Shapes = {Physics.Shapes.NewShape(Type,Config)}
+    end
+
+    if ShouldSetSize then
+        Shapes[1]:SetSize(Size)
     end
 
     for _,v in ipairs(Shapes) do
@@ -260,8 +282,8 @@ function mt.__create(DATA, e)
         IsStatic = IsStatic,
         [&IDX_T_DOF] = DATA.TranslationDOF or "xyz",
         [&IDX_R_DOF] = DATA.RotationDOF or "xyz",
-        Touched = Signal.new(Signal.Type.Default),
-        TouchEnded = Signal.new(Signal.Type.Default),
+        Touched = Signal.new(),
+        TouchEnded = Signal.new(),
         Entity = EntPtr,
         InheritanceMethod = InheritanceMethod
     }
@@ -286,7 +308,7 @@ function mt.__create(DATA, e)
     return T
 end
 
-function mt.__remove(self)
+function Collider.Destroy(self)
     Physics.__DequeueToSyncLTJ(self)
     Physics.__UnbindCollider(self.World,self.ColRef)
 

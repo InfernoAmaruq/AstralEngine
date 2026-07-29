@@ -14,16 +14,24 @@ local DEADMT = {
 }
 
 local MTCACHE = setmetatable({}, { __mode = "v" })
-local CBaseMT = { __type = "ComponentPrefab" }
 
-Component.ComponentAdded = SignalLib.new(bit.bor(SignalLib.Type.RTC, SignalLib.Type.NoCtx))
-Component.ComponentRemoved = SignalLib.new(bit.bor(SignalLib.Type.RTC, SignalLib.Type.NoCtx))
+Component.ComponentAdded = SignalLib.new(true)
+Component.ComponentRemoved = SignalLib.new(true)
 
-function Component.NewComponent(Name, Pattern, Metadata, FastFetch)
+local BaseVTable = require("ComponentBase")
+Component.BaseVTable = BaseVTable
+
+function Component.NewComponent(Name, Userdata, New, Destroy)
     assert(not Component.Components[Name], "Component already exists: " .. Name)
-    Component.Components[Name] =
-        setmetatable({ Storage = {}, Name = Name, Pattern = Pattern, Metadata = Metadata }, CBaseMT)
+    Component.Components[Name] = {
+        Storage = {},
+        Name = Name,
+        Userdata = Userdata,
+        New = AstralEngine.Assert(New, "Components must have a constructor!", "COMPONENT"),
+        Destroy = Destroy,
+    }
 
+    local FastFetch = Userdata and Userdata.FastFetch
     if FastFetch then
         for _, Obj in pairs(FastFetch) do
             Component.FastFetch[Obj] = Name
@@ -71,10 +79,10 @@ end
 
 ---@param e AnyEntity
 ---@param id string Component name
----@param DATA table?
+---@param Input table?
 ---@param ShouldSink boolean? Skip dependency resolution
 ---@return Component?
-function Component.AddComponent(e, id, DATA, ShouldSink)
+function Component.AddComponent(e, id, Input, ShouldSink)
     if kind(e) == "astrobj" then
         e = e.Id
     end
@@ -90,7 +98,7 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
     if not ShouldSink then
         -- hard dep check
 
-        local HardDependency = t.Metadata and t.Metadata.HardDependency
+        local HardDependency = t.Userdata and t.Userdata.HardDependency
         if HardDependency then
             for Name in pairs(HardDependency) do
                 AstralEngine.Assert(
@@ -103,7 +111,7 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
 
         -- exclusion check
 
-        local Exclusion = t.Metadata and t.Metadata.HardExclusion
+        local Exclusion = t.Userdata and t.Userdata.HardExclusion
         if Exclusion then
             for Name in pairs(Exclusion) do
                 AstralEngine.Assert(
@@ -119,20 +127,7 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
 
     -- set
 
-    if t.Metadata and t.Metadata.__create then
-        D = t.Metadata.__create(DATA or {}, e, ShouldSink)
-    elseif DATA then
-        D = {}
-        for i, v in pairs(DATA) do
-            if t.Pattern[i] then
-                D[i] = v
-            end
-        end
-
-        if t.Metadata and t.Metadata.__mt then
-            setmetatable(D, t.Metadata.__mt)
-        end
-    end
+    D = t.New(Input or {}, e, ShouldSink)
 
     local MT = getmetatable(D)
     rawset(D, ".CONTEXT", _G.CONTEXTGEN or 0)
@@ -154,8 +149,8 @@ function Component.AddComponent(e, id, DATA, ShouldSink)
     Component.SetComponents[e][id] = D
 
     local Ent = GetService("Entity").GetEntityFromId(e)
-    Component.ComponentAdded:Fire(Ent, id, D)
-    Ent.ComponentAdded:Fire(id, D)
+    Component.ComponentAdded:FireRTC(Ent, id, D)
+    Ent.ComponentAdded:FireRTC(id, D)
 
     rawset(D, "IsNull", false)
 
@@ -182,7 +177,7 @@ local function KillComponent(e, id, Force)
     if not Force then
         for Name, UserComp in pairs(Component.SetComponents[e]) do
             if v ~= UserComp then
-                local UCMeta = Component.Components[Name].Metadata
+                local UCMeta = Component.Components[Name].Userdata
                 if UCMeta and UCMeta.HardDependency and UCMeta.HardDependency[id] then
                     AstralEngine.Error(
                         "CANNOT REMOVE COMPONENT " .. id .. " BECAUSE COMPONENT " .. Name .. " DEPENDS ON IT!",
@@ -196,19 +191,23 @@ local function KillComponent(e, id, Force)
 
     if not Force then
         local Ent = GetService("Entity").GetEntityFromId(e)
-        Component.ComponentRemoved:Fire(Ent, id, Component.SetComponents[e][id])
-        Ent.ComponentRemoving:Fire(id, Component.SetComponents[e][id])
-    end
-
-    if Comp.Metadata and Comp.Metadata.__remove then
-        Comp.Metadata.__remove(CompInst, e, Force) -- weirdly, error lower occurs only when this method is called (it destroys another component), but it should not occur cause it doesnt touch CompInst
-    end
-
-    for i in pairs(CompInst) do -- ERROR HERE?
-        CompInst[i] = nil
+        Component.ComponentRemoved:FireRTC(Ent, id, Component.SetComponents[e][id])
+        Ent.ComponentRemoving:FireRTC(id, Component.SetComponents[e][id])
     end
 
     rawset(CompInst, "IsNull", true)
+
+    if Comp.Destroy then
+        Comp.Destroy(CompInst, e, Force)
+    end
+
+    setmetatable(CompInst, nil)
+
+    for i in pairs(CompInst) do
+        CompInst[i] = nil
+    end
+
+    CompInst.IsNull = true
 
     setmetatable(CompInst, DEADMT)
 
@@ -308,7 +307,7 @@ function Component.LoadComponents()
                     File = Res
                 end
 
-                Component.NewComponent(File.Name, File.Pattern, File.Metadata, File.FastFetch)
+                Component.NewComponent(File.Name, File.Userdata, File.New, File.Destroy)
                 table.insert(FinalProcessing, File.FinalProcessing)
             else
                 AstralEngine.Log("FAILED TO LOAD COMPONENT: " .. f, "warn", "COMPONENT")
@@ -318,7 +317,7 @@ function Component.LoadComponents()
         ::continue::
     end
 
-    local ANSI = AstralEngine.Plugins.ANSIColor or {}
+    local ANSI = AstralEngine.Plugins.ANSIColor
 
     if AstralEngine.Config.Astral.Debug then
         for i in pairs(Component.Components) do

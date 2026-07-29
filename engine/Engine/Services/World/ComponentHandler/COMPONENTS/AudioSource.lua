@@ -2,7 +2,7 @@ if not meta.getdefined("Audio", "Active") then
     return nil
 end
 
-local AudioSource = { Name = "AudioSource", Metadata = {} }
+local AudioSource = { Name = "AudioSource" }
 
 local Methods = {
     Play = function(self, SoundId, Volume, Start) end,
@@ -20,7 +20,7 @@ local Mt = {
 
 ---@class AudioSource: Component
 
-AudioSource.Metadata.__create = function(Data, Ent)
+AudioSource.New = function(Data, Ent)
     local t = {}
 
     t.__sourceRegister = {}

@@ -2,6 +2,7 @@
 
 local Renderer = GetService("Renderer")
 local Component = GetService("Component")
+local Scheduler = GetService("Scheduler")
 
 -- CONSTANTS
 
@@ -30,7 +31,6 @@ local CAMERA_PROJECTION = Enum({
 
 local Camera = {
     Name = "Camera",
-    Metadata = {},
 }
 
 local Indexes = {
@@ -74,11 +74,87 @@ local Indexes = {
     NearestSampler = 46,
 
     RebuildCallback = 47,
+
+    Active = 48,
 }
 
-local function RawViewToRay(self, Vector) end
+local function RawViewToRay(self, Vector)
+    local EntPtr = self.__EntityPtr
+    local Transform = EntPtr.Transform
 
-local function RawWorldToview(self, Pos) end
+    local NDCx = Vector.x * 2 - 1
+    local NDCy = 1 - Vector.y * 2
+
+    local Aspect = self.Aspect
+
+    local Forward, Right, Up = Transform.ForwardVector, Transform.RightVector, Transform.UpVector
+
+    local Dir
+
+    if self.ProjectionType == CAMERA_PROJECTION.Perspective then
+        local FOV = math.rad(self.FieldOfView)
+        local TanHalf = math.tan(FOV * 0.5)
+
+        local x = NDCx * TanHalf * Aspect
+        local y = NDCy * TanHalf
+
+        Dir = vec3(Forward + Right * x + Up * y):normalize()
+    else
+        local Res = self.Resolution / 2
+        local XWorld = NDCx * Res.x * Aspect
+        local YWorld = NDCy * Res.y
+
+        local NearDist = self.Near or 0
+        local Origin = Transform.Position + Right * XWorld + Up * YWorld + Forward * -NearDist
+
+        return Origin, vec3(Forward):normalize()
+    end
+
+    return Transform.Position, Dir
+end
+
+local function RawWorldToView(self, Pos)
+    local Transform = self.__EntityPtr.Transform
+
+    local CamPos = Transform.Position
+    local CamRot = Transform.Orientation
+
+    local LocalPos = Pos - CamPos
+
+    local View = CamRot:conjugate() * LocalPos
+
+    if self.ProjectionType == CAMERA_PROJECTION.Perspective then
+        if View.z >= 0 then
+            return nil
+        end
+
+        local Aspect = self.Aspect
+        local TanHalf = math.tan(math.rad(self.FieldOfView) * 0.5)
+
+        local NDCx = (View.x / -View.z) / (TanHalf * Aspect)
+        local NDCy = (View.y / -View.z) / TanHalf
+
+        local UVX = NDCx * 0.5 + 0.5
+        local UVY = 1 - (NDCy * 0.5 + 0.5)
+        return vec2(UVX, UVY)
+    else
+        local Near = self.Near
+        local Far = self.Far
+
+        if View.z > -Near or View.z < -Far then
+            return nil
+        end
+
+        local Res = self.Resolution
+
+        local NDCx = View.x / Res.x
+        local NDCy = View.y / Res.y
+
+        local UVX = NDCx * 0.5 + 0.5
+        local UVY = 1 - (NDCy * 0.5 + 0.5)
+        return vec2(UVX, UVY)
+    end
+end
 
 local function RebuildTextures(self, w, h, d)
     d = d or AstralEngine.Window.GetWindowDensity()
@@ -119,7 +195,7 @@ local function RebuildTextures(self, w, h, d)
     self[41], self[42] = w, h
 
     if self[43] ~= CAMERA_PROJECTION.Other then
-        self:ReconstructProjectionMatrix()
+        self:ResetProjectionMatrix()
     end
 end
 
@@ -130,16 +206,35 @@ local Methods = {
         end
     end,
 
-    ScreenPointToRay = function(self, V1, V2) end,
-    ViewpointToRay = function(self, V1, V2) end,
+    ScreenPointToRay = function(self, V1, V2)
+        local Vector = typeof(V1) == "Vec2" and V1 or vec2(V1, V2)
+        local Res = self.Resolution
+        Vector = vec2(Vector.x / Res.x, Vector.y / Res .. y)
 
-    WorldToViewpoint = function(self, Pos) end,
-    WorldToScreenPoint = function(self, Pos) end,
+        return RawViewToRay(self, Vector)
+    end,
+    ViewpointToRay = function(self, V1, V2)
+        local Vector = typeof(V1) == "Vec2" and V1 or vec2(V1, V2)
+        return RawViewToRay(self, Vector)
+    end,
+    WorldToViewpoint = function(self, Pos)
+        return RawWorldToView(self, Pos)
+    end,
+    WorldToScreenPoint = function(self, Pos)
+        local V = RawWorldToView(self, Pos)
 
-    ReconstructProjectionMatrix = function(self)
+        if not V then
+            return nil
+        end
+
+        return V * self.Resolution
+    end,
+
+    ResetProjectionMatrix = function(self, Matrix)
         local Type = self[43]
 
         if Type == CAMERA_PROJECTION.Other then
+            self[37]:set(Matrix)
             return
         end
 
@@ -152,7 +247,7 @@ local Methods = {
             CurrentMatrix:perspective(FOV, Aspect, Near, Far)
         else
             local HalfRes = vec2(W, H):div(2)
-            CurrentMatrix:orthographic(-HalfRes.x, HalfRes.x, -HalfRes.y, HalfRes.y, Far == 0 and 1000000 or Far, Near)
+            CurrentMatrix:orthographic(-HalfRes.x, HalfRes.x, HalfRes.y, -HalfRes.y, Far == 0 and 10000 or Far, Near)
         end
     end,
 }
@@ -180,19 +275,15 @@ local Metatable = {
     __newindex = function(self, k, v)
         local Key = Indexes[k]
 
-        print("WRITE TO:", Key, k)
-
         if Key then
             if k == "ProjectionMatrix" then
                 self[Key]:set(v)
             elseif k == "IsPrimary" then
                 Renderer.SetPrimaryCamera(v and self or nil)
             elseif Key > Indexes.ProjectionMatrix and Key <= Indexes.ProjectionType then
-                rawset(self, Key, v)
-                print("SET NEW CAM FIELD")
+                rawset(self, Key, v or false)
                 if self[Indexes.ProjectionType] ~= CAMERA_PROJECTION.Other then
-                    print("UPD MAT")
-                    Methods.ReconstructProjectionMatrix(self)
+                    Methods.ResetProjectionMatrix(self)
                 end
             else
                 rawset(self, Key, v or false)
@@ -213,7 +304,8 @@ local Temp = {} -- temp table we use so we can write hash keys here and convert 
 
 local EventBound = false
 
-Camera.Metadata.__create = function(Input, Entity, Sink)
+Camera.New = function(Input, Entity, Sink)
+    Scheduler.PushSyncBlock()
     if not EventBound then
         AstralEngine.Signals.OnWindowResize:Connect(function(w, h, d)
             d = d or AstralEngine.Window.GetWindowDensity()
@@ -309,8 +401,10 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
     end
 
     Temp.BackfaceCulling = Input.BackfaceCulling == nil and true or Input.BackfaceCulling
-    Temp.NearestSampler = Input.NearestSampler == nil and false or Input.NearestSampler
-    Temp.ViewCulling = Input.ViewCulling == nil and false or Input.ViewCulling
+    Temp.NearestSampler = Input.NearestSampler ~= nil and Input.NearestSampler or false
+    Temp.ViewCulling = Input.ViewCulling ~= nil and Input.ViewCulling or false
+
+    Temp.Active = Input.Active == nil and true or Input.Active
 
     -- // SET REBUILDS
 
@@ -331,21 +425,41 @@ Camera.Metadata.__create = function(Input, Entity, Sink)
         Temp[i] = nil
     end
 
+    self.__EntityPtr = Entity
+
     setmetatable(self, Metatable)
 
     if Input.ProjectionMatrix then
         self[Indexes.ProjectionType] = CAMERA_PROJECTION.Other
     else
-        Methods.ReconstructProjectionMatrix(self)
+        Methods.ResetProjectionMatrix(self)
     end
 
     if IsPrimary then
         Renderer.SetPrimaryCamera(self)
     end
 
+    Scheduler.PopSyncBlock()
+
     return self
 end
 
-Camera.Metadata.__remove = function() end
+Camera.Destroy = function(self, Entity)
+    for i = Indexes.PassMain, Indexes.PassMain + 5 do
+        local Pass = self[i]
+        Renderer.PassStorage.RemovePass(Pass)
+        Pass:release()
+    end
+
+    for i = FIRST_TEXTURE, FINAL_TEXTURE, 2 do
+        self[i]:release()
+    end
+
+    Renderer.RemoveCamera(Entity)
+
+    if Renderer.GetPrimaryCamera() == self then
+        Renderer.SetPrimaryCamera()
+    end
+end
 
 return Camera

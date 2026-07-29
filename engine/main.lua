@@ -3,7 +3,7 @@ local CONFIG = CONF
 local Signal = require("Lib/Signal")
 local AnsiColorLib = require("Lib/ANSIText")
 
-local MainScheduler, World, Renderer, RunService, SS
+local Scheduler, World, Renderer, RunService, SS
 
 AstralEngine.CurrentFrame = 0
 AstralEngine.CurrentTick = 0
@@ -46,11 +46,7 @@ function lovr.load()
 
     -- LOADING ALL OTHER SERVICES
 
-    local CentralScheduler = require("Engine/Services/Scheduler")
-    MainScheduler = CentralScheduler.New(lovr.timer.getTime)
-
-    Signal.Scheduler = MainScheduler
-    Signal.Clock = lovr.timer.getTime
+    Scheduler = require("Engine/Services/Scheduler")
 
     Renderer = require("Engine/Services/Render")
 
@@ -73,8 +69,6 @@ function lovr.load()
     Comp.__RunPostPass()
 
     -- now that everything is loaded, bridge it
-    Bridge.VirtualiseScheduler(MainScheduler)
-
     Bridge.ConnectDevices()
     Bridge.LoadRandom()
     Bridge.LoadWindow()
@@ -87,14 +81,14 @@ function lovr.load()
     GetService.Disable() -- Disable GetService so it errors when you try to index a non-existant service
 end
 
-local QuitSig = Signal.new(Signal.Type.RTC)
+local QuitSig = Signal.new(true)
 function lovr.quit(...)
     local ShouldAbort = false
     if AstralEngine.Callbacks.OnQuit then ShouldAbort = AstralEngine.Callbacks.OnQuit(...) end
 
     if ShouldAbort then return false end
 
-    QuitSig:Fire(...)
+    QuitSig:FireRTC(...)
 
     return true
 end
@@ -153,10 +147,11 @@ function lovr.run()
     end
 
     local Ok, Err = pcall(loadfile,package.GAME_PATH.."/launch.lua")
+    local Sched = GetService"Scheduler"
 
     if Ok then
         if Err then
-            task.spawn(Err)
+            Sched.Spawn(Err)
         end
     else
         AstralEngine.Log("File 'launch.lua' encountered an error!\n > "..tostring(Err),"FATAL")
@@ -210,6 +205,9 @@ function lovr.run()
             SyncState(MainPhysWorld)
             local l = MainPhysWorld.LovrWorld
             l:update(Time)
+            @ifdef<Physics.Interpolate>{
+                l:interpolate(0)
+            }
             Phys.__GetEvents(MainPhysWorld)
             UpdTrans(MainPhysWorld)
         end)
@@ -330,7 +328,7 @@ function lovr.run()
                 return "if lovr.headset.isActive() then XRDT = lovr.headset.update() end"
             end
         }
-        MainScheduler:Update()
+        Scheduler.Update()
         RunService.__TICK(0,500,&DT * TimeScale)
 
         @ifdef<Audio.Active>{
@@ -415,7 +413,7 @@ function lovr.run()
         TICK = TICK + DT
         COUNTER = COUNTER + 1
         if TICK > 1 then
-            local osc, cpuc = os.clock(), debug.cpuclock()
+            local osc, cpuc = TIME, os.clock()
             print("TPS:",COUNTER,osc,cpuc,cpuc/osc*100,cpuc-LASTCPUT,collectgarbage"count")
             TICK = 0
             COUNTER = 0

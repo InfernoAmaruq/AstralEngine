@@ -5846,6 +5846,7 @@ Mesh* lovrModelGetMesh(Model* model, uint32_t index) {
     uint32_t offset = data->vertexOffset * sizeof(ModelVertex);
     uint32_t extent = data->vertexCount * sizeof(ModelVertex);
     Buffer* vertexBuffer = offset ? lovrBufferCreateView(model->vertexBuffer, offset, extent) : model->vertexBuffer;
+
     Mesh* mesh = lovrMeshCreate(&(MeshInfo) { .vertexBuffer = vertexBuffer, .storage = MESH_GPU }, NULL);
 
     if (!mesh) {

@@ -4,8 +4,6 @@ local SignalLib = require("Lib/Signal")
 
 local InputService = {}
 
-local RTC = SignalLib.Type.RTC
-
 -- load mouse
 local Pos = lovr.system.getMousePosition
 
@@ -16,10 +14,10 @@ InputService.Mouse = {
     GrabMouse = lovr.system.setMouseGrabbed,
     IsMouseGrabbed = lovr.system.isMouseGrabbed,
 
-    MouseButtonDown = SignalLib.new(RTC),
-    MouseButtonUp = SignalLib.new(RTC),
-    MouseMoved = SignalLib.new(RTC),
-    WheelMoved = SignalLib.new(RTC),
+    MouseButtonDown = SignalLib.new(true),
+    MouseButtonUp = SignalLib.new(true),
+    MouseMoved = SignalLib.new(true),
+    WheelMoved = SignalLib.new(true),
 }
 
 setmetatable(InputService.Mouse, {
@@ -32,9 +30,9 @@ setmetatable(InputService.Mouse, {
 
 -- load kb
 InputService.Keyboard = {
-    KeyPressed = SignalLib.new(RTC),
-    KeyReleased = SignalLib.new(RTC),
-    TextInput = SignalLib.new(RTC),
+    KeyPressed = SignalLib.new(true),
+    KeyReleased = SignalLib.new(true),
+    TextInput = SignalLib.new(true),
 }
 
 if lovr.system.controllerPresent then

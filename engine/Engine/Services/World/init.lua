@@ -26,17 +26,15 @@ function Entity.GetEntityFromId(Id)
 end
 
 -- Parent, Child, "add"|"remove"
-Entity.OnAncestryChanged = SignalLib.new(SignalLib.Type.RTC)
-Entity.EntityAdded = SignalLib.new(SignalLib.Type.RTC)
-Entity.EntityRemoving = SignalLib.new(SignalLib.Type.RTC)
-Entity.OnTransformChanged = SignalLib.new(SignalLib.Type.RTC)
+Entity.OnAncestryChanged = SignalLib.new(true)
+Entity.EntityAdded = SignalLib.new(true)
+Entity.EntityRemoving = SignalLib.new(true)
+Entity.OnTransformChanged = SignalLib.new(true)
 
 local function ALLOC(Use)
     Entity.Capacity = Entity.Capacity + 1
     local ID = Entity.Capacity
     local Gen = Use and 1 or 0
-
-    local Flag = bit.bor(SignalLib.Type.NoCtx, SignalLib.Type.RTC)
 
     local t = setmetatable({
         Id = ID,
@@ -44,9 +42,9 @@ local function ALLOC(Use)
         UniqueId = bit.band(bit.lshift(Gen, SHIFT), ID),
         IsNull = true,
         __context = _G.CONTEXT and _G.CONTEXT.Gen or 0,
-        Destroying = SignalLib.new(Flag),
-        ComponentAdded = SignalLib.new(Flag),
-        ComponentRemoving = SignalLib.new(Flag),
+        Destroying = SignalLib.new(true),
+        ComponentAdded = SignalLib.new(true),
+        ComponentRemoving = SignalLib.new(true),
     }, InstMeta)
 
     Entity.Alive[Entity.Capacity] = t
@@ -109,7 +107,7 @@ function Entity.New(Name, ...)
 
     NewEntity.IsNull = false
 
-    Entity.EntityAdded:Fire(NewEntity)
+    Entity.EntityAdded:FireRTC(NewEntity)
 
     return NewEntity
 end
@@ -142,8 +140,8 @@ local function DestroyEntity(Ent)
         end
     end
 
-    Entity.EntityRemoving:Fire(Ent)
-    Ent.Destroying:Fire()
+    Entity.EntityRemoving:FireRTC(Ent)
+    Ent.Destroying:FireRTC()
 
     Ent.Destroying:Clear()
     Ent.ComponentAdded:Clear()

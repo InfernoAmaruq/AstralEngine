@@ -8,7 +8,6 @@ local World = GetService("Entity")
 local LightEnum = Enum.LightType
 
 Light.Name = "Light"
-Light.Metadata = {}
 
 local KeyMap = {
     Color = 1,
@@ -56,7 +55,7 @@ local MetaTable = {
     end,
 }
 
-Light.Metadata.__create = function(Input, Ent)
+Light.New = function(Input, Ent)
     local L = {}
 
     local EntRef = World.GetEntityFromId(Ent)
@@ -84,7 +83,7 @@ Light.Metadata.__create = function(Input, Ent)
     return L
 end
 
-Light.Metadata.__remove = function(self)
+Light.Destroy = function(self)
     LightService.RemoveLight(self[6])
 end
 

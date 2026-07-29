@@ -10,10 +10,10 @@ return function(ScriptService, Ctx)
 
     local SceneManager = {}
 
-    SceneManager.OnLoadEnd = Signal.new(Signal.Type.RTC)
-    SceneManager.OnLoadBegin = Signal.new(Signal.Type.RTC)
-    SceneManager.OnUnloadEnd = Signal.new(Signal.Type.RTC)
-    SceneManager.OnUnloadBegin = Signal.new(Signal.Type.RTC)
+    SceneManager.OnLoadEnd = Signal.new(true)
+    SceneManager.OnLoadBegin = Signal.new(true)
+    SceneManager.OnUnloadEnd = Signal.new(true)
+    SceneManager.OnUnloadBegin = Signal.new(true)
 
     local AssetMapLoader = require("./AssetMap")
     local ScriptLoader = require("./Scripts")
@@ -33,7 +33,7 @@ return function(ScriptService, Ctx)
             AstralEngine.Log("Scene " .. Scene .. " already loaded", "Warning", "SCENEMANAGER")
         end
 
-        SceneManager.OnLoadBegin:Fire(Scene)
+        SceneManager.OnLoadBegin:FireRTC(Scene)
 
         local SceneFile
         local HasScene = Scene:find("%.scene")
@@ -69,7 +69,7 @@ return function(ScriptService, Ctx)
             AstralEngine.Log({ "Failed to load scene file:", Scene, "at path:", SceneFile, "\n > with error:", err })
         end
 
-        SceneManager.OnLoadEnd:Fire(Scene, err)
+        SceneManager.OnLoadEnd:FireRTC(Scene, err)
 
         -- all done, time to load the files
 
@@ -107,11 +107,11 @@ return function(ScriptService, Ctx)
             AstralEngine.Log("Scene " .. Scene .. " is not loaded", "Warning", "SCENEMANAGER")
         end
 
-        SceneManager.OnUnloadBegin:Fire(Scene, LoadedScenes[Scene].Context)
+        SceneManager.OnUnloadBegin:FireRTC(Scene, LoadedScenes[Scene].Context)
 
         LoadedScenes[Scene].Context:KillAll()
         LoadedScenes[Scene] = nil
-        SceneManager.OnUnload:Fire(Scene)
+        SceneManager.OnUnload:FireRTC(Scene)
     end
 
     function SceneManager.ReloadScene(Scene)

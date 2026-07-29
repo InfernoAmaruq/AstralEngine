@@ -7,6 +7,7 @@ local ST = Enum({
     Cylinder = 3,
     Capsule = 4,
     Convex = 5,
+    Mesh = 6,
 }, "ColliderShape")
 
 local TypeToShapeName = {
@@ -14,6 +15,8 @@ local TypeToShapeName = {
     [ST.Sphere] = "SphereShape",
     [ST.Cylinder] = "CylinderShape",
     [ST.Capsule] = "CapsuleShape",
+    [ST.Convex] = "ConvexShape",
+    [ST.Mesh] = "MeshShape",
 }
 
 local StrToFunc = {
@@ -25,9 +28,9 @@ local StrToFunc = {
             Self.__ShapePtr:setRadius(type(NewSize) == "number" and NewSize or math.max(NewSize:unpack()))
         elseif T == ST.Capsule or T == ST.Cylinder then
             Self.__ShapePtr:setLength(NewSize.y)
-            Self.__ShapePtr:setLength(NewSize.x)
-        else
-            error("SHAPES: INCOMPLETE API")
+            Self.__ShapePtr:setRadius(NewSize.x)
+        elseif T == ST.Mesh or T == ST.Convex then
+            Self.__ShapePtr:setScale(NewSize)
         end
     end,
     SetRotation = function(self, Rotation)
@@ -56,9 +59,6 @@ local StrToFunc = {
         local _, _, _, a, ax, ay, az = self.__ShapePtr:getOffset()
         self.__ShapePtr:setOffset(Position.x, Position.y, Position.z, a, ax, ay, az)
     end,
-    SetMass = function(self, NewMass)
-        self.__ShapePtr:setMass(NewMass)
-    end,
     SetDensity = function(self, Density)
         self.__ShapePtr:setDensity(Density)
     end,
@@ -86,8 +86,12 @@ local StrToFunc = {
             return vec3(self.__ShapePtr:getDimensions())
         elseif T == ST.Sphere then
             return vec3(self.__ShapePtr:getRadius())
-        else
-            error("SHAPE API INCOMPLETE")
+        elseif T == ST.Cylinder or T == ST.Capsule then
+            local ptr = self.__ShapePtr
+            local Rad = ptr:getRadius()
+            return vec3(Rad, ptr:getLength(), Rad)
+        elseif T == ST.Mesh or T == ST.Convex then
+            return vec3(self.__ShapePtr:getScale())
         end
     end,
 
@@ -130,11 +134,15 @@ local UDMeta = {
 
 function Shapes.NewShape(ShapeType, Config)
     local Shape
+    local IsMesh = false
 
     if ShapeType.Value <= 4 then
         Shape = RawPhys["new" .. TypeToShapeName[ShapeType]]()
-    elseif ShapeType == ST.Convex then
-        AstralEngine.Error("CURRENTLY NO HANDLER FOR CONVEX SHAPES FOR COLLIDERS!", "PHYSICS")
+    else
+        local Mesh = Config.Mesh
+        IsMesh = true
+
+        Shape = RawPhys["new" .. TypeToShapeName[ShapeType]](Mesh, Config.Size)
     end
 
     AstralEngine.Assert(Shape, "Failed to create shape!", "PHYSICS")
@@ -148,7 +156,7 @@ function Shapes.NewShape(ShapeType, Config)
     Shape:setUserData(UD)
 
     if Config then
-        if Config.Size then
+        if Config.Size and not IsMesh then
             UD:SetSize(Config.Size)
         end
         if Config.OffsetPosition or Config.OffsetRotation then

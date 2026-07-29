@@ -8,7 +8,7 @@ local Entity = GetService("Entity")
 
 RendTarget.Name = "RenderTarget"
 RendTarget.Pattern = {}
-RendTarget.Metadata = {}
+RendTarget.Userdata = {}
 
 local FIELDS = {
     __RenderMask = 1,
@@ -30,7 +30,7 @@ local RenderFlags = {
     Stack_Both = 3,
 }
 
-RendTarget.Metadata.Flags = RenderFlags
+RendTarget.Userdata.Flags = RenderFlags
 
 local Methods = {
     GetMaterial = function(self)
@@ -139,7 +139,7 @@ local mt = {
         return (k == "Flags" and RenderFlags) or Methods[k] or (v and rawget(self, v))
     end,
     __newindex = function(self, k, v)
-        if k == "Enabled" then
+        if k == "__Enabled" then
             local Old = self[FIELDS.__Enabled]
             local Bool = not not v
             self[FIELDS.__Enabled] = Bool
@@ -169,7 +169,7 @@ local mt = {
     end,
 }
 
-RendTarget.Metadata.__create = function(In, Entity)
+RendTarget.New = function(In, Entity)
     local RM = Renderer.CamMask
 
     local Data = setmetatable({
@@ -181,6 +181,7 @@ RendTarget.Metadata.__create = function(In, Entity)
         [4] = false,
         [5] = false,
         [6] = false,
+        [7] = false,
         __E = Entity,
     }, mt)
 
@@ -198,7 +199,7 @@ RendTarget.Metadata.__create = function(In, Entity)
         if Material then
             Stack = IsSolid and RenderFlags.Stack_Both or RenderFlags.Stack_Transparent
         else
-            Stack = IsSolid and RenderFlags.Stack_Solid or RenderFlags.Stack_Transparent
+            Stack = IsSolid and RenderFlags.Stack_Both or RenderFlags.Stack_Transparent
         end
     end
 
@@ -209,7 +210,7 @@ RendTarget.Metadata.__create = function(In, Entity)
     return Data
 end
 
-RendTarget.Metadata.__remove = function(self, Entity)
+RendTarget.Destroy = function(self, Entity)
     local Solid, Mat, Hash = unpack(self, 2, 4)
 
     local HadTransparent, HadSolid =

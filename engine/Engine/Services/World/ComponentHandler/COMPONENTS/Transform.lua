@@ -6,24 +6,15 @@ local World = GetService("Entity")
 local Transform = {}
 
 Transform.Name = "Transform"
-
-Transform.FastFetch = {
-    "Position",
-    "Orientation",
-    "Rotation",
-    "Matrix",
-    "Scale",
+Transform.Userdata = {
+    FastFetch = {
+        "Position",
+        "Orientation",
+        "Rotation",
+        "Matrix",
+        "Scale",
+    },
 }
-
-Transform.Pattern = {
-    Position = Vec3,
-    Orientation = Quat,
-    Rotation = Vec3,
-    Scale = Vec3,
-    Matrix = Mat4,
-}
-
-Transform.Metadata = {}
 
 local RadToDeg = 180 / math.pi
 
@@ -39,11 +30,12 @@ end
 local function GetMatrix(Comp)
     local m = Comp[3]
     m:set(Comp[1], Comp[5], Comp[2])
-    World.OnTransformChanged:Fire(World.GetEntityFromId(Comp[6]), m)
+    World.OnTransformChanged:FireRTC(World.GetEntityFromId(Comp[6]), m)
     return m
 end
 
 local function SetMatrix(Comp, Matrix, IsTransform)
+    local m = Comp[3]
     m:set(Matrix)
     Comp[1]:set(Matrix:getPosition())
     Comp[2]:set(Matrix:getOrientation())
@@ -52,7 +44,7 @@ local function SetMatrix(Comp, Matrix, IsTransform)
     if not IsTransform then
         Comp[5]:set(Matrix:getScale())
     end
-    World.OnTransformChanged:Fire(World.GetEntityFromId(Comp[6]), m)
+    World.OnTransformChanged:FireRTC(World.GetEntityFromId(Comp[6]), m)
 end
 
 local function FromPose(T, x, y, z, a, ax, ay, az)
@@ -67,7 +59,7 @@ local function FromPose(T, x, y, z, a, ax, ay, az)
     local ex, ey, ez = O:getEuler()
     R:set(ex, ey, ez)
 
-    World.OnTransformChanged:Fire(World.GetEntityFromId(Comp[6]), M)
+    World.OnTransformChanged:FireRTC(World.GetEntityFromId(T[6]), M)
 end
 
 local function GetVector(self, Type)
@@ -152,42 +144,35 @@ end
 
 local MT = { __index = MTIndex, __newindex = MTNewIndex }
 
-Transform.Metadata.__remove = function(self)
-    for i in pairs(self) do
-        self[i] = nil
-    end
-end
+Transform.New = function(Data, Entity)
+    local Ret = {
+        [1] = Vec3(),
+        [2] = Quat(),
+        [3] = Mat4(),
+        [4] = Vec3(),
+        [5] = Vec3(Data.Scale or 1),
+        [6] = Entity,
+    }
 
-Transform.Metadata.__create = function(DATA, Entity)
-    local Ret = { [6] = Entity }
+    local RebuildMatrix = false
 
-    if DATA then
-        for i, v in pairs(DATA) do
-            if Transform.Pattern[i] and IndexFields[i] then
-                local Type = typeof(v)
-                local Wrap = Type == "Vec3" or Type == "Quat" or Type == "Mat4"
+    if Data.Matrix then
+        SetMatrix(Ret, Data.Matrix, false)
+    elseif Data.TransformMatrix then
+        SetMatrix(Ret, Data.TransformMatrix, true)
+    else
+        Ret[1]:set(Data.Position)
 
-                Ret[IndexFields[i]] = Wrap and Transform.Pattern[i](v) or v
-            end
+        if Data.Orientation then
+            Ret[2]:set(Data.Orientation)
+            Ret[4]:set(Ret[2]:getEuler())
+        else
+            Ret[4]:set(Data.Rotation)
+            GetOrientation(Ret)
         end
-    end
 
-    for i, v in pairs(Transform.Pattern) do
-        if IndexFields[i] and Ret[IndexFields[i]] then
-            goto continue
-        end
-        if IndexFields[i] then
-            if i == "Scale" then
-                Ret[IndexFields[i]] = Vec3(1, 1, 1)
-            else
-                Ret[IndexFields[i]] = type(v) == "function" and v() or v
-            end
-        end
-        ::continue::
+        GetMatrix(Ret)
     end
-
-    GetOrientation(Ret)
-    GetMatrix(Ret)
 
     local Col = Component.GetComponent(Ret[6], "Collider")
     if Col then
@@ -196,6 +181,12 @@ Transform.Metadata.__create = function(DATA, Entity)
     end
 
     return setmetatable(Ret, MT)
+end
+
+Transform.Destroy = function(self)
+    for i in pairs(self) do
+        self[i] = nil
+    end
 end
 
 return Transform

@@ -45,8 +45,11 @@ local FAST_ADD_CHILD = table.insert -- used to be a macro, changed to function r
 local Ancestry = {}
 
 Ancestry.Name = "Ancestry"
-Ancestry.FastFetch = { "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById", "GetChildren", "GetChildrenIds", "IterChildren" }
-Ancestry.Metadata = {}
+Ancestry.Userdata = {
+    FastFetch = {
+        "Parent", "FindFirstChild", "FindFirstAncestor", "FindFirstChildWithComponent", "FindFirstAncestorWithComponent", "FindFirstChildById", "GetChildren", "GetChildrenIds", "IterChildren"
+    }
+}
 
 local function ITERATOR(self,idx)
     idx = idx + 1
@@ -118,16 +121,16 @@ local PublicMethods = {
         local SelfRef = World.GetEntityFromId(self[&SELF_PTR])
 
         if TornDown and Rebuilt then
-            World.OnAncestryChanged:Fire(
+            World.OnAncestryChanged:FireRTC(
                 TornDown,SelfRef,"remove",
                 Rebuilt,SelfRef,"add"
             )
         elseif TornDown then
-            World.OnAncestryChanged:Fire(
+            World.OnAncestryChanged:FireRTC(
                 TornDown,SelfRef,"remove"
             )
         elseif Rebuilt then
-            World.OnAncestryChanged:Fire(
+            World.OnAncestryChanged:FireRTC(
                 Rebuilt,SelfRef,"add"
             )
         end
@@ -301,7 +304,7 @@ local Metatable = {
 --              CONSTRUCTOR
 --\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//
 
-Ancestry.Metadata.__create = function(_, Entity)
+Ancestry.New = function(_, Entity)
     local Comp = {}
     Comp[&PARENT_PTR] = false -- false so array is linear
     Comp[&CHILD_PTR] = {}
@@ -312,7 +315,7 @@ Ancestry.Metadata.__create = function(_, Entity)
     return Comp
 end
 
-Ancestry.Metadata.__remove = function(self, EId, Forced)
+Ancestry.Destroy = function(self, EId, Forced)
     local Temp = {}
 
     local PtrSelf = self[&SELF_PTR]
@@ -342,7 +345,7 @@ Ancestry.Metadata.__remove = function(self, EId, Forced)
         Temp[#self + 1] = "remove"
     end
 
-    World.OnAncestryChanged:Fire(unpack(Temp))
+    World.OnAncestryChanged:FireRTC(unpack(Temp))
 end
 
 return Ancestry

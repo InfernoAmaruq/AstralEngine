@@ -8,7 +8,11 @@ local Index = {
     AddService = function(Name, Val)
         WaitList[Name] = nil
         Services[Name] = Val
-        AstralEngine.Log("Registered service: " .. Name .. "; WITH TIME: " .. os.clock(), "SUCCESS", "SERVICE MANAGER")
+        AstralEngine.Log(
+            "Registered service: " .. Name .. "; WITH TIME: " .. lovr.timer.getTime(),
+            "SUCCESS",
+            "SERVICE MANAGER"
+        )
     end,
     Disable = function()
         Active = false

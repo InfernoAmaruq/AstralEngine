@@ -162,7 +162,7 @@ Meta.__index = function(t, k)
     local v = W and W[k]
 
     if k == "Gravity" then
-        return t.LovrWorld:getGravity()
+        return vec3(t.LovrWorld:getGravity())
     end
 
     if type(v) == "function" then
@@ -175,7 +175,12 @@ end
 
 Meta.__newindex = function(t, k, v)
     if k == "Gravity" then
-        t.LovrWorld:setGravity(v)
+        local Val = v
+        if type(v) == "number" then
+            Val = vec3(0, v, 0)
+        end
+
+        t.LovrWorld:setGravity(Val)
         return
     end
     error("CANNOT WRITE TO WORLD", 2)

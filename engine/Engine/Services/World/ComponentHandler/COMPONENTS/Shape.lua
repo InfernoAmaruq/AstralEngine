@@ -33,7 +33,7 @@ local function GenerateProcessors(f, Offset) -- offset to last arg
         local TransformStorage = Comp.Transform.Storage
         local M = Comp.Material
         local MatStorage = M.Storage
-        local EmptyMatrix = M.Metadata.EmptyMatrix
+        local EmptyMatrix = M.Userdata.EmptyMatrix
 
         local P_Send = P_Send
 
@@ -120,8 +120,8 @@ local MT = {
     end,
 }
 
-Shape.Metadata = {}
-Shape.Metadata.__create = function(DATA, e, ShouldSink)
+Shape.Userdata = {}
+Shape.New = function(DATA, e, ShouldSink)
     AstralEngine.Assert(
         not Component.GetComponent(e, "RenderTarget"),
         "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!",
@@ -138,7 +138,7 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
 
     local RT = Component.AddComponent(e, "RenderTarget", {
         Shader = false,
-        Stack = Component.Components.RenderTarget.Metadata.Flags.Stack_Solid,
+        Stack = Component.Components.RenderTarget.Userdata.Flags.Stack_Solid,
         GeometryType = Val,
         GeometryHash = Val,
         Material = false,
@@ -154,16 +154,16 @@ Shape.Metadata.__create = function(DATA, e, ShouldSink)
     return setmetatable(Comp, MT)
 end
 
-Shape.Metadata.__remove = function(_, e)
+Shape.Destroy = function(_, e)
     if Component.GetComponent(e, "RenderTarget") then
         Component.RemoveComponent(e, "RenderTarget", true)
     end
 end
 
-Shape.Metadata.HardExclusion = {
+Shape.Userdata.HardExclusion = {
     RenderTarget = true,
 }
-Shape.Metadata.SoftDependency = {
+Shape.Userdata.SoftDependency = {
     Transform = true,
 }
 

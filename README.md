@@ -7,8 +7,8 @@ The engine is designed around easy extensibility, most engine systems (renderer,
 You can easily append new features that the engine will treat as native, such as, adding new component types to the ECS, Rendering steps, etc
 Astral is designed to be minimal, a lot of features will be intentionally missing but easy to implement/have libraries made to add them
 ## Language
-Currently, Astral runs on LuaJIT or Lua5.2 (must have goto statement currently), however the goal is to soon remove 'goto' reliant code to allow Lua5.1 to be used and other dialects of 5.1\n
-Despite Lua version, Astral includes a Lua metaprogramming library thats entirely optional to use in game code. It is used to slightly optimise certain engine code\n
+Currently, Astral runs on LuaJIT or Lua5.2 (must have goto statement currently), however the goal is to soon remove 'goto' reliant code to allow Lua5.1 to be used and other dialects of 5.1
+Despite Lua version, Astral includes a Lua metaprogramming library thats entirely optional to use in game code. It is used to slightly optimise certain engine code
 Astral also includes some GLSL QOL improvements for scripting GPU code
 
 Haxe and Teal supports are planned within the future!

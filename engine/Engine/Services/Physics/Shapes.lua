@@ -72,7 +72,7 @@ local StrToFunc = {
     end,
     GetWorldTransform = function(self)
         local x, y, z, a, ax, ay, az = self.__ShapePtr:getPose()
-        local Q = quat(a, ax, ay, ax)
+        local Q = quat(a, ax, ay, az)
         return vec3(x, y, z), vec3(Q:getEuler()), Q
     end,
     GetOffset = function(self)
@@ -80,8 +80,8 @@ local StrToFunc = {
         local Q = quat(a, ax, ay, ax)
         return vec3(x, y, z), vec3(Q:getEuler()), Q
     end,
-    GetSize = function(Self)
-        local T = Self.Type
+    GetSize = function(self)
+        local T = self.Type
         if T == ST.Box then
             return vec3(self.__ShapePtr:getDimensions())
         elseif T == ST.Sphere then

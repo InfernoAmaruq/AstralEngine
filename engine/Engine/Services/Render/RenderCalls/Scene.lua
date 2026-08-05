@@ -19,15 +19,15 @@ local Component = GetService("Component")
 local mat4 = mat4
 
 -- > LOAD SHADERS
-local ShaderService = GetService "ShaderService"
+local ShaderService = GetService("ShaderService")
 
 --- > GRAPHICS SHADERS
 
-local OITExtractShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "Camera/CameraComposite.glsl")
+local OITExtractShader = ShaderService.NewShader(Enum.ShaderType.Graphics, "fill", "Camera/CameraComposite.glsl")
 
-local BlurShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "Camera/BlurPass.glsl")
+local BlurShader = ShaderService.NewShader(Enum.ShaderType.Graphics, "fill", "Camera/BlurPass.glsl")
 
-local FinalShader = ShaderService.NewShader(Enum.ShaderType.Graphics, 'fill', "Camera/Finalise.glsl")
+local FinalShader = ShaderService.NewShader(Enum.ShaderType.Graphics, "fill", "Camera/Finalise.glsl")
 
 local MainShader = ShaderService.NewShader(Enum.ShaderType.Graphics, "Camera/Camera.glsl", {
     Defines = {
@@ -143,7 +143,11 @@ local ShaderManifest = {}
 local ShaderListTop = 0
 
 local BASE_MANIFEST = {
-    TransparentPipeline = true, SolidPipeline = true, SendDirectLightingData = true, SendIndirectLightingData = true, CanBeInstanced = true
+    TransparentPipeline = true,
+    SolidPipeline = true,
+    SendDirectLightingData = true,
+    SendIndirectLightingData = true,
+    CanBeInstanced = true,
 }
 
 local function SortFunc(a, b)
@@ -176,9 +180,11 @@ function Renderer.BindShaderPipeline(Name, Shader, Config)
 
     Name = AstralEngine.Assert(tostring(Name), "Cannot bind an unnamed shader pipeline!", "Renderer")
 
-    AstralEngine.Assert(ShaderRegistry[Shader] == nil,
+    AstralEngine.Assert(
+        ShaderRegistry[Shader] == nil,
         "Shader pipeline with shader: " .. tostring(Shader) .. " already exists!",
-        "Renderer")
+        "Renderer"
+    )
 
     local Manifest
 
@@ -214,8 +220,11 @@ function Renderer.UnbindShaderPipeline(Name)
             ShaderRegistry[i] = nil
 
             if DrawTable.Solid[v.Shader] or DrawTable.Transparent[v.Shader] then
-                AstralEngine.Log("Unbound shader pipeline with geometry bound to shader. Geometry will be ignored",
-                    "warn", "Renderer")
+                AstralEngine.Log(
+                    "Unbound shader pipeline with geometry bound to shader. Geometry will be ignored",
+                    "warn",
+                    "Renderer"
+                )
             end
 
             SortShaders()
@@ -273,13 +282,20 @@ function DrawTable.AddToStack(Entity, IsSolid, Material, GeometryHash, DrawType,
     local LookUpShader = ShaderRegistry[Shader]
     if not LookUpShader then
         AstralEngine.Log(
-            "Shader " ..
-            tostring(Shader) .. " is missing from shader registy. Objects with this shader will not be drawn",
-            "warn", "Renderer")
+            "Shader "
+            .. tostring(Shader)
+            .. " is missing from shader registy. Objects with this shader will not be drawn",
+            "warn",
+            "Renderer"
+        )
 
         local Manifest = Shader.Manifest
-        if IsSolid and not Manifest.SolidPipeline then return end
-        if not IsSolid and not Manifest.TransparentPipeline then return end
+        if IsSolid and not Manifest.SolidPipeline then
+            return
+        end
+        if not IsSolid and not Manifest.TransparentPipeline then
+            return
+        end
     end
 
     local ShaderTable = SubTable[Shader] or {}
@@ -290,8 +306,8 @@ function DrawTable.AddToStack(Entity, IsSolid, Material, GeometryHash, DrawType,
     local MatTable = ShaderTable[Material] or {}
     ShaderTable[Material] = MatTable
 
-    local GeometryTable = MatTable[GeometryHash] or
-        { Top = 0, Type = DrawType, Hash = GeometryHash, Queue = table.new(10, 50) }
+    local GeometryTable = MatTable[GeometryHash]
+        or { Top = 0, Type = DrawType, Hash = GeometryHash, Queue = table.new(10, 50) }
 
     MatTable[GeometryHash] = GeometryTable
 
@@ -302,7 +318,7 @@ function DrawTable.Invalidate(Shader, Material, GeometryHash)
     Material = Material or false
 
     for i = 1, 2 do
-        local t1 = DrawTable[i == 1 and "Solid" or "Transparent"][Shader]
+        local t1 = DrawTable[i == 1 and "Solid" or "Transparent"][Shader or MainShader]
 
         if not t1 then
             goto continue
@@ -334,17 +350,23 @@ function DrawTable.RemoveFromStack(Entity, IsSolid, Material, GeometryHash, Shad
 
     local ShaderTable = SubTable[Shader]
 
-    if not ShaderTable then return end
+    if not ShaderTable then
+        return
+    end
 
     Material = Material or false
 
     local MatTable = ShaderTable[Material]
 
-    if not MatTable then return end
+    if not MatTable then
+        return
+    end
 
     local GeometryTable = MatTable[GeometryHash]
 
-    if not GeometryTable then return end
+    if not GeometryTable then
+        return
+    end
 
     Dequeue(GeometryTable, Entity)
 end
@@ -487,7 +509,9 @@ local function DrawTableFix(Table, Where, Key, Shader)
             Table.Material_MatrixInstanced = nil
             Table.AllocatorState = ALLOCATOR_STATE_NONE
 
-            if Manifest.InstFree then Manifest.InstFree(Table) end
+            if Manifest.InstFree then
+                Manifest.InstFree(Table)
+            end
         end
 
         if State == GTS_NEEDS_FREE_FULL then
@@ -534,7 +558,9 @@ local function DrawTableFix(Table, Where, Key, Shader)
             Table.GPU_Scale:setData(Table.Material_ObjectScaleInstanced)
         end
 
-        if Manifest.InstRealloc then Manifest.InstRealloc(Table, Alloc, OldSize) end
+        if Manifest.InstRealloc then
+            Manifest.InstRealloc(Table, Alloc, OldSize)
+        end
     elseif State == GTS_NEEDS_ALLOC then
         local New = table.new
         local NewBuffer = lovr.graphics.newBuffer
@@ -561,7 +587,9 @@ local function DrawTableFix(Table, Where, Key, Shader)
         Table.State = GTS_NEEDS_UPDATE
         Table.AllocatorState = ALLOCATOR_STATE_NEEDS_FILL
 
-        if Manifest.InstAlloc then Manifest.InstAlloc(Table, Alloc) end
+        if Manifest.InstAlloc then
+            Manifest.InstAlloc(Table, Alloc)
+        end
 
         return true
         -- we can only update it NEXT frame since more performance friendly
@@ -759,8 +787,8 @@ Renderer.DrawTransparent = GetDrawFunc(false)
 function Renderer.Composite()
     local Cameras = Cams
     local ComponentRegistry = Component.Components
-    local CSCamera, CSTransform, CSEnv = ComponentRegistry.Camera.Storage, ComponentRegistry.Transform.Storage,
-        ComponentRegistry.Environment.Storage
+    local CSCamera, CSTransform, CSEnv =
+        ComponentRegistry.Camera.Storage, ComponentRegistry.Transform.Storage, ComponentRegistry.Environment.Storage
 
     local mat4 = mat4
 
@@ -912,13 +940,16 @@ Renderer.Late[#Renderer.Late + 1] = function()
     local Flag = RS.Flags.Contextless
 
     RS.BindToStep("_REND_SCENE_SOLID", Enum.StepPriority.RenderSceneSolid.Value, Renderer.DrawSolid, Flag)
-    RS.BindToStep(
-        "_REND_SCENE_TRANS",
-        Enum.StepPriority.RenderSceneTransparent.Value,
-        Renderer.DrawTransparent,
-        Flag
-    )
+    RS.BindToStep("_REND_SCENE_TRANS", Enum.StepPriority.RenderSceneTransparent.Value, Renderer.DrawTransparent, Flag)
     RS.BindToStep("_REND_SCENE_COMPOSITE", Enum.StepPriority.RenderSceneComposite.Value, Renderer.Composite, Flag)
 end
 
-function Renderer.__OnRenderTargetReady() end
+function Renderer.__OnRenderTargetReady()
+    local ES = GetService("Entity")
+    ES.OnTransformChanged:Connect(function(Ent)
+        local RT = Ent.RenderTarget
+        if RT then
+            RT:Invalidate()
+        end
+    end)
+end

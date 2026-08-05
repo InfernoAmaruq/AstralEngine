@@ -101,10 +101,6 @@ local SHAREDT = {
         self.ColRef:moveKinematic(Pos,Quat,dt)
     end,
 
-    __TransformMoved = function(self,pos,quat)
-        self.ColRef:setPose(pos,quat)
-    end,
-
     OnObjectResize = function(self,v)
         if self.OnResize then
             self:OnResize(v)
@@ -115,6 +111,8 @@ local SHAREDT = {
         end
     end
 }
+
+local Bound = false
 
 local function CALLFUNC(self, ...)
     return self[".NEXTCALL"](self.ColRef, ...)
@@ -222,6 +220,16 @@ local METATAB = {
 
 function Collider.New(DATA, e)
     local Transform = assert(Component.GetComponent(e, "Transform"), "NO COMPONENT TYPE OF 'Transform' PRESENT, CANNOT ADD COLLIDER!")
+
+    if not Bound then
+        WorldSer.OnTransformChanged:Connect(function(Ent,Mat)
+            local Col = Ent.Collider
+            if Col and not Col.World.SyncState then
+                Col.ColRef:setPose(Mat:getPose())
+            end
+        end)
+        Bound = true
+    end
 
     local EntPtr = WorldSer.GetEntityFromId(e)
 

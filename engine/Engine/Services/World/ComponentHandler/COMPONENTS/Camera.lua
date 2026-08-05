@@ -78,9 +78,12 @@ local Indexes = {
     Active = 48,
 }
 
+local abs = math.abs
+local ceil = math.ceil
+
 local function RawViewToRay(self, Vector)
     local EntPtr = self.__EntityPtr
-    local Transform = EntPtr.Transform
+    local Transform = Component.Components.Transform.Storage[EntPtr]
 
     local NDCx = Vector.x * 2 - 1
     local NDCy = 1 - Vector.y * 2
@@ -100,8 +103,12 @@ local function RawViewToRay(self, Vector)
 
         Dir = vec3(Forward + Right * x + Up * y):normalize()
     else
-        local Res = self.Resolution / 2
-        local XWorld = NDCx * Res.x * Aspect
+        local Matrix = self.ProjectionMatrix
+        local Width = ceil(2 / abs(Matrix[1]))
+        local Height = ceil(2 / abs(Matrix[6]))
+
+        local Res = vec2(Width, Height):div(2)
+        local XWorld = NDCx * Res.x
         local YWorld = NDCy * Res.y
 
         local NearDist = self.Near or 0
@@ -145,7 +152,7 @@ local function RawWorldToView(self, Pos)
             return nil
         end
 
-        local Res = self.Resolution
+        local Res = vec2(self[1]:getDimensions())
 
         local NDCx = View.x / Res.x
         local NDCy = View.y / Res.y
@@ -209,7 +216,7 @@ local Methods = {
     ScreenPointToRay = function(self, V1, V2)
         local Vector = typeof(V1) == "Vec2" and V1 or vec2(V1, V2)
         local Res = self.Resolution
-        Vector = vec2(Vector.x / Res.x, Vector.y / Res .. y)
+        Vector = vec2(Vector.x / Res.x, Vector.y / Res.y)
 
         return RawViewToRay(self, Vector)
     end,
@@ -262,9 +269,9 @@ local Metatable = {
             else
                 return self[Key]
             end
-        elseif Key == "Resolution" then
+        elseif k == "Resolution" then
             return vec2(self[41], self[42])
-        elseif Key == "Aspect" then
+        elseif k == "Aspect" then
             return self[41] / self[42]
         elseif k == "IsPrimary" then
             return Renderer.GetPrimaryCamera() == self

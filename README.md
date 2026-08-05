@@ -1,19 +1,26 @@
-# Astral Engine - IN PROGRESS
+# STILL IN DEVELOPMENT! UNSTABLE AND UNRELIABLE IN CERTAIN CASES
+
+# Astral Engine
 Astral Engine is an open-source extensible Lua-based game engine built from a modified fork of LOVR, the goal of which is to provide its users with mechanisms, not policies
 ## Philosophy
-The engine is designed around easy extensibility, most engine systems (renderer, ECS, scheduler) being scripted in performance-oriented Lua
-You can easily append new features that the engine will treat as native, such as, adding new component types to the ECS or new Lua compiler directives
+The engine is designed around easy extensibility, most engine systems (renderer, ECS, scheduler) being written in very performant Lua
+You can easily append new features that the engine will treat as native, such as, adding new component types to the ECS, Rendering steps, etc
+Astral is designed to be minimal, a lot of features will be intentionally missing but easy to implement/have libraries made to add them
 ## Language
-The engine uses Aspera for scripting, a dialect of Lua 5.1 centred around metaprogramming.
-Features:
-- Bit operators (>>, |, &) (as well as 'and', 'or' aliasing with && and ||)
-- Metaprogramming via macros and compile-time execute blocks (@macro, @define, @ifdef, @execute)
-- Easily extensible metaprogramming dialect. Adding a new `@directive` is just a single Lua file!
-The Aspera compiler does a quick parse over files as they are loaded, checking for macro symbols or '@'. The compilers effect on boot time is minimal
-
-A lightweight GLSL shader pipeline is also included that makes compiling shaders easier
+Currently, Astral runs on LuaJIT or Lua5.2 (must have goto statement currently), however the goal is to soon remove 'goto' reliant code to allow Lua5.1 to be used and other dialects of 5.1
+Despite Lua version, Astral includes a Lua metaprogramming library thats entirely optional to use in game code. It is used to slightly optimise certain engine code
+Astral also includes some GLSL QOL improvements for scripting GPU code
 
 Haxe and Teal supports are planned within the future!
+## Features
+- API inspired by Roblox Studio, meant to be easy to use
+- Vector library, including temporary vectors without garbage
+- ECS
+- A PBR renderer pipeline
+- Jolt physics engine
+- Input handling with contorller support
+## Platforms
+Runs on MacOS, Windows 10/11 and Linux. Other platforms may work but are untested
 ## Building
 You need CMake to build the engine, the command flow would be something like:
 ```bash

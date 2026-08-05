@@ -116,6 +116,17 @@ static int luax_release(lua_State* L) {
 }
 
 void _luax_registertype(lua_State* L, int type, const char* name, void (*destructor)(void*), const luaL_Reg* functions) {
+  if (TotalTypes != AllocatedTypes){
+      AllocatedTypes = TotalTypes;
+
+      if (lovrTypeInfo != NULL) {
+          lovrTypeInfo = lovrRealloc(lovrTypeInfo, sizeof(TypeInfo) * AllocatedTypes);
+      }
+      else {
+          lovrTypeInfo = lovrMalloc(sizeof(TypeInfo) * AllocatedTypes);
+      }
+  }
+
   lovrTypeInfo[type] = (TypeInfo) { name, destructor };
 
   // Push metatable

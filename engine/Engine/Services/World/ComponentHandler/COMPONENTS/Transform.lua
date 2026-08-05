@@ -154,8 +154,6 @@ Transform.New = function(Data, Entity)
         [6] = Entity,
     }
 
-    local RebuildMatrix = false
-
     if Data.Matrix then
         SetMatrix(Ret, Data.Matrix, false)
     elseif Data.TransformMatrix then

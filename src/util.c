@@ -371,7 +371,13 @@ float32 float16to32(float16 f) {
 }
 
 // Types
-TypeInfo lovrTypeInfo[T_COUNT];
+TypeInfo* lovrTypeInfo = NULL;
+uint8_t TotalTypes = T_BASE_COUNT;
+uint8_t AllocatedTypes = 0;
+
+const int lovrTypeGetNextId(){
+    return TotalTypes++;
+}
 
 void lovrVariantDestroy(Variant* variant) {
   switch (variant->type) {

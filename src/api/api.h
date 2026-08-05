@@ -109,6 +109,7 @@ typedef struct {
 #endif
 
 #define luax_registertype(L, T) _luax_registertype(L, T_ ## T, #T, lovr ## T ## Destroy, lovr ## T)
+
 #define luax_totype(L, i, T) (T*) _luax_totype(L, i, T_ ## T)
 #define luax_checktype(L, i, T) (T*) _luax_checktype(L, i, T_ ## T)
 #define luax_pushtype(L, T, o) _luax_pushtype(L, T_ ## T, o)

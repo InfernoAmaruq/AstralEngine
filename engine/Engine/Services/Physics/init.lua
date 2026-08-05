@@ -137,6 +137,7 @@ function Physics.NewWorld(Parameters)
         TagLookUp = {},
         StaticTags = StaticTags,
         Tags = Tags,
+        SyncState = false,
         __NativeId = PhysNative.RegisterWorld(W)
     }
 

@@ -193,7 +193,7 @@ typedef enum {
   T_Thread,
   T_Channel,
   T_CStruct,
-  T_COUNT
+  T_BASE_COUNT
 } ObjectType;
 
 typedef struct {
@@ -201,7 +201,15 @@ typedef struct {
   void (*destructor)(void*);
 } TypeInfo;
 
-extern TypeInfo lovrTypeInfo[T_COUNT];
+extern uint8_t AllocatedTypes;
+extern uint8_t TotalTypes;
+extern TypeInfo* lovrTypeInfo;
+
+const int lovrTypeGetNextId();
+
+#define LOVR_NULL_TYPE -1
+#define lovrType(t) uint8_t T_##t = LOVR_NULL_TYPE
+#define lovrTypeCast(t) T_##t = lovrTypeGetNextId()
 
 // Variant
 typedef enum {

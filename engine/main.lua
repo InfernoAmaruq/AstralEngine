@@ -9,6 +9,7 @@ AstralEngine.CurrentFrame = 0
 AstralEngine.CurrentTick = 0
 
 AstralEngine.Callbacks = {}
+AstralEngine.Timer = { TimeScale = 1, GetTime = lovr.timer.getTime }
 
 -- LOAD
 
@@ -179,11 +180,6 @@ function lovr.run()
     local PhysTime = 0
     local PhysicsRate = 1/CONFIG.PHYSRATE
 
-    local Timer = {}
-    AstralEngine.Timer = Timer
-
-    Timer.TimeScale = 1
-
     @ifdef<Audio.Active>
     {
         local Audio = lovr.audio
@@ -202,6 +198,7 @@ function lovr.run()
         local LastPhysTime = -1
 
         GetService"RunService".BindToStep("__PHYSICS_UPD_STEP",Enum.StepPriority.Physics,function(Time)
+            MainPhysWorld.SyncState = true
             SyncState(MainPhysWorld)
             local l = MainPhysWorld.LovrWorld
             l:update(Time)
@@ -210,6 +207,7 @@ function lovr.run()
             }
             Phys.__GetEvents(MainPhysWorld)
             UpdTrans(MainPhysWorld)
+            MainPhysWorld.SyncState = false
         end)
 
         @macro<L,!USEBRACK>{M_PHYSTICK(&TIMER) =
@@ -229,9 +227,11 @@ function lovr.run()
             @macro<L,!USEBRACK>{PHYSICS_INTERPOLATE() = 
                 -- get alpha, world and whatnot, interpolate
                 if MainPhysWorld then
-                    local Alpha = math.min(PhysicsRate > 0 and (PhysTime / (PhysicsRate * TimeScale)) or 1,1)
+                    MainPhysWorld.SyncState = true
+                    local Alpha = math.min(PhysicsRate > 0 and (PhysTime / (PhysicsRate)) or 1,1)
                     MainPhysWorld.LovrWorld:interpolate(Alpha)
                     UpdTrans(MainPhysWorld)
+                    MainPhysWorld.SyncState = false
                 end
             }
         }
@@ -396,6 +396,7 @@ function lovr.run()
     local TICK = 0
 
     local LASTCPUT = 0
+    local Timer = AstralEngine.Timer
 
     -- DEFINE LOOP FUNC
 

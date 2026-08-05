@@ -16,7 +16,7 @@ Haxe and Teal supports are planned within the future!
 - API inspired by Roblox Studio, meant to be easy to use
 - Vector library, including temporary vectors without garbage
 - ECS
-- A PBR renderer pipeline
+- A PBR renderer pipeline with instancing
 - Jolt physics engine
 - Input handling with contorller support
 ## Platforms

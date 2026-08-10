@@ -446,14 +446,6 @@ static int l_lovrSystemMessageBox(lua_State* L){
     return 0;
 }
 
-static int l_lovrSystemSetPreciseMouse(lua_State* L){
-    int Bool = lua_toboolean(L,1);
-
-    lua_pushboolean(L,lovrSystemSetPreciseMouse(Bool));
-
-    return 1;
-}
-
 #ifdef LOVR_ENABLE_CONTROLLER
 static int l_lovrControllerPresent(lua_State* L){
     int id = lua_tointeger(L,1) - 1;
@@ -552,7 +544,6 @@ static const luaL_Reg lovrSystem[] = {
   { "_getScrollDelta", l_lovrSystemGetScrollDelta },
   { "setWindowSize", l_lovrSystemSetWindowSize },
   { "setCursorIcon", l_lovrSystemSetCursorIcon },
-  { "setPreciseMouse", l_lovrSystemSetPreciseMouse },
   { "messageBox", l_lovrSystemMessageBox },
 #ifdef LOVR_ENABLE_CONTROLLER
   { "controllerPresent", l_lovrControllerPresent },

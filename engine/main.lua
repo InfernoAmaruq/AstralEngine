@@ -286,7 +286,7 @@ function lovr.run()
         &Time = &Time + &DT
 
         if &Time >= &Tickrate then
-            &Time = &Time - &Tickrate
+            &Time = 0
             &CALL(&CV1)
         end
 

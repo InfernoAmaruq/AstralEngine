@@ -282,10 +282,6 @@ void lovrMessageBox(const char* message){
     os_window_message_box(message);
 }
 
-int lovrSystemSetPreciseMouse(int Bool){
-    return os_set_precise_mouse(Bool);
-}
-
 #ifdef LOVR_ENABLE_CONTROLLER
 
 bool lovrSystemControllerPresent(int at){

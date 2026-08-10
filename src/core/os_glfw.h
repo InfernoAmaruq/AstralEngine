@@ -105,8 +105,6 @@ void os_set_window_size(uint w, uint h){return;}
 
 void os_set_cursor_icon(os_cursor_icon Cursor){return;}
 
-int os_set_precise_mouse(int Bool){return 0;}
-
 #else
 
 
@@ -693,21 +691,14 @@ void os_set_mouse_mode(os_mouse_mode mode) {
   if (glfwState.window) {
     int m = (mode == MOUSE_MODE_GRABBED) ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL;
     glfwSetInputMode(glfwState.window, GLFW_CURSOR, m);
+
+    if (glfwRawMouseMotionSupported()) glfwSetInputMode(glfwState.window,GLFW_RAW_MOUSE_MOTION,mode ? GLFW_TRUE : GLFW_FALSE);
   }
 }
 
 void os_set_cursor_icon(os_cursor_icon Cursor){
     glfwSetCursor(glfwState.window, glfwState.cursors[Cursor]);
     glfwState.current_cursor = Cursor;
-}
-
-int os_set_precise_mouse(int State){
-    int supported = glfwRawMouseMotionSupported();
-
-    if (supported)
-        glfwSetInputMode(glfwState.window,GLFW_RAW_MOUSE_MOTION,State ? GLFW_TRUE : GLFW_FALSE);
-
-    return supported;
 }
 
 #if defined(_WIN32)

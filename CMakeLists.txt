@@ -977,7 +977,7 @@ function(build_lua_module SRC)
     get_filename_component(SRC_ABS "${SRC}" ABSOLUTE)
 
     file(RELATIVE_PATH REL_PATH
-         "${CMAKE_SOURCE_DIR}/engine"
+        "${CMAKE_CURRENT_SOURCE_DIR}/engine"
          "${SRC_ABS}")
 
     get_filename_component(REL_DIR "${REL_PATH}" DIRECTORY)

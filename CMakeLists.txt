@@ -1015,21 +1015,21 @@ function(build_lua_module SRC)
     if (MSVC)
         target_compile_options(${MODULE_NAME} PRIVATE /wd4244 /experimental:c11atomics)
         target_compile_options(${MODULE_NAME} PRIVATE
-          /FI"${CMAKE_SOURCE_DIR}/etc/astral_api.h"
+		/FI"${CMAKE_CURRENT_SOURCE_DIR}/etc/astral_api.h"
       )
     else()
       target_compile_options(${MODULE_NAME} PRIVATE
-          -include "${CMAKE_SOURCE_DIR}/etc/astral_api.h"
+	      -include "${CMAKE_CURRENT_SOURCE_DIR}/etc/astral_api.h"
       )
     endif()
 
     target_include_directories(${MODULE_NAME} PRIVATE
         ${LUA_INCLUDE_DIR}
-	    ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/engine
-        ${CMAKE_SOURCE_DIR}/src/core
-        ${CMAKE_SOURCE_DIR}/src/api
-        ${CMAKE_SOURCE_DIR}/src/modules
+	${CMAKE_CURRENT_SOURCE_DIR}/src
+	${CMAKE_CURRENT_SOURCE_DIR}/engine
+	${CMAKE_CURRENT_SOURCE_DIR}/src/core
+	${CMAKE_CURRENT_SOURCE_DIR}/src/api
+	${CMAKE_CURRENT_SOURCE_DIR}/src/modules
     )
 
     if(WIN32)

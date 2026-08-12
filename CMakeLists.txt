@@ -1070,6 +1070,6 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cleanup.cmake")
 		POST_BUILD
 		    COMMAND ${CMAKE_COMMAND}
 			-DCLEANUP_DIR=$<TARGET_FILE_DIR:astral>/Engine
-			-P ${CMAKE_SOURCE_DIR}/cleanup.cmake
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cleanup.cmake
 	)
 endif()

@@ -1062,7 +1062,14 @@ add_custom_command(
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 	${CMAKE_SOURCE_DIR}/engine
 	$<TARGET_FILE_DIR:astral>/Engine
-    COMMAND ${CMAKE_COMMAND}
-        -DCLEANUP_DIR=$<TARGET_FILE_DIR:astral>/Engine
-        -P ${CMAKE_SOURCE_DIR}/cleanup.cmake
 )
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/cleanup.cmake")
+	add_custom_command(
+		TARGET astral
+		POST_BUILD
+		    COMMAND ${CMAKE_COMMAND}
+			-DCLEANUP_DIR=$<TARGET_FILE_DIR:astral>/Engine
+			-P ${CMAKE_SOURCE_DIR}/cleanup.cmake
+	)
+endif()

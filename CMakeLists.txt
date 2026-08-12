@@ -972,7 +972,7 @@ elseif(UNIX)
 endif()
 
 file(GLOB_RECURSE ENGINE_C_FILES "${CMAKE_SOURCE_DIR}/engine/*.c")
-set(LUA_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/deps/lua")
+set(LUA_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/lua")
 function(build_lua_module SRC)
     get_filename_component(SRC_ABS "${SRC}" ABSOLUTE)
 

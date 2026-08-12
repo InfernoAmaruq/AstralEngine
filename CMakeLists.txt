@@ -126,13 +126,13 @@ if(LOVR_USE_LUAJIT AND NOT EMSCRIPTEN)
 	set(BUILD_SHARED_LIBS ON)
 	add_subdirectory(deps/luajit luajit EXCLUDE_FROM_ALL)
 
-    MOVE_LUACONF(/deps/luajit/src/luaconf.h)
+    #    MOVE_LUACONF(/deps/luajit/src/luaconf.h)
 
-    file(READ ${CMAKE_BINARY_DIR}/luaconf_patched/luaconf.h LUACONF)
-    string(REPLACE "#define LUA_IDSIZE\t60" "#define LUA_IDSIZE\t200" LUACONF "${LUACONF}")
-    file(WRITE ${CMAKE_BINARY_DIR}/luaconf_patched/luaconf.h "${LUACONF}")
+    #    file(READ ${CMAKE_BINARY_DIR}/luaconf_patched/luaconf.h LUACONF)
+    #    string(REPLACE "#define LUA_IDSIZE\t60" "#define LUA_IDSIZE\t200" LUACONF "${LUACONF}")
+    #    file(WRITE ${CMAKE_BINARY_DIR}/luaconf_patched/luaconf.h "${LUACONF}")
 
-    target_include_directories(luajit BEFORE PRIVATE ${CMAKE_BINARY_DIR}/luaconf_patched)
+    #    target_include_directories(luajit BEFORE PRIVATE ${CMAKE_BINARY_DIR}/luaconf_patched)
 
 	if(MSVC)
 		target_compile_definitions(libluajit PRIVATE _CRT_SECURE_NO_WARNINGS)

@@ -763,7 +763,7 @@ elseif(APPLE)
       RESOURCE "${PROJECT_SOURCE_DIR}/etc/lovr.icns"
     )
   else()
-    set(EXE_DIR ${PROJECT_BINARY_DIR}/bin)
+      set(EXE_DIR ${CMAKE_BINARY_DIR}/bin)
     set_target_properties(${ASTRAL_TARGET} PROPERTIES
 	RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 	RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"

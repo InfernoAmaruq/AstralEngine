@@ -145,7 +145,7 @@ LVRB.ConnectDevices = function()
 
         local Terminated = CAS.__CALL(Code, Data)
 
-        Mouse.MouseButtonDown:FireRTC(E, x, y, Terminated)
+        Mouse.MouseButtonUp:FireRTC(E, x, y, Terminated)
     end
 
     function lovr.textinput(Char, Code)

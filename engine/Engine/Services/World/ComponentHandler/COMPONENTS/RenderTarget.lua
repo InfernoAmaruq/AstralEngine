@@ -213,6 +213,8 @@ end
 RendTarget.Destroy = function(self, Entity)
     local Solid, Mat, Hash = unpack(self, 2, 4)
 
+    print("REMOVE RT")
+
     local HadTransparent, HadSolid =
         bit.band(Solid, RenderFlags.Stack_Transparent) ~= 0, bit.band(Solid, RenderFlags.Stack_Solid) ~= 0
     local DrawTable = Renderer.DrawTable

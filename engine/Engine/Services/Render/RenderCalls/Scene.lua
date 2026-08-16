@@ -332,7 +332,7 @@ function DrawTable.Invalidate(Shader, Material, GeometryHash)
 
         local t3 = t2[GeometryHash]
 
-        if not t2 then
+        if not t3 then
             goto continue
         end
 

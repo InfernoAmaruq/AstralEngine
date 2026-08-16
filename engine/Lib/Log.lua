@@ -80,8 +80,6 @@ function AstralEngine.Error(Msg, Tag, Layer)
     local IsNum = type(Tag) == "number"
     if IsNum then
         Layer = Tag
-    elseif not Tag then
-        IsNum = true
     end
     Layer = Layer or 1
 

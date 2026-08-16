@@ -9,7 +9,7 @@ buffer readonly PBR_SphericalHarmonics_User { vec3 PBR_SH_U[9]; };
 Surface PBR_GetSurface(inout vec4 CurrentColor){
     Surface s = getMaterialSurface();
 
-    CurrentColor = vec4(0,0,0,1);
+    CurrentColor = vec4(0,0,0,s.baseColor.a);
 
     CurrentColor.rgb += lighting_getLights(s);
 

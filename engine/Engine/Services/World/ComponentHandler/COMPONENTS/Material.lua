@@ -120,9 +120,11 @@ Material.New = function(Data, Ent)
     Storage[8] = Ent
     Storage[9] = Mat4() -- allocate matrix for it
 
-    local InGlowColor = Data and Data.GlowColor or vec4(0, 0, 0, 255)
+    print("MAT WITH COLOR:", Color)
+
+    local InGlowColor = Data and Data.GlowColor or vec4(0, 0, 0, 0)
     R, G, B, A = InGlowColor:unpack()
-    local GlowColor = Vec4(R, G, B, A or 1):div(255)
+    local GlowColor = Vec4(R, G, B, A or 0):div(255)
 
     Storage[10] = GlowColor
 

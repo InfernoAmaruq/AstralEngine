@@ -7,7 +7,7 @@ vec4 DoOIT(vec4 CurrentColor){
         if (a < 0.02) discard;
 
         if (Transparent){
-            if (a > 0.95) discard;
+            if (a > 0.99) discard;
             
             float z = clamp(gl_FragCoord.z,0.0,1.0);
             float DepthWeight = min(pow(z,1.5),0.8);
@@ -19,7 +19,7 @@ vec4 DoOIT(vec4 CurrentColor){
         }
         else
         {
-            if (a < 0.95) discard;
+            if (a < 0.99) discard;
             return vec4(CurrentColor.rgb,1);
         }
 }

@@ -748,7 +748,6 @@ local function GetDrawFunc(IsSolid)
                             for DrawHash, GeometryTable in pairs(GeometryList) do
                                 Pass:push("state")
 
-                                --local ShouldDrop = (GeometryTable.State == GTS_READY) and false or DrawTableFix(GeometryTable)
                                 local ShouldContinue = GeometryTable.State == GTS_READY
                                     or DrawTableFix(GeometryTable, GeometryList, DrawHash, Shader)
 

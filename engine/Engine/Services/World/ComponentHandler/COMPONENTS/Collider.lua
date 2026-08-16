@@ -45,7 +45,7 @@ local SHAREDT = {
         self.ColRef:setTag(v)
 
         local IsStatic = self.World:IsStaticTag(v)
-        Physics.__UpdateSyncField(w.WorldId,self.ColRef,"Static",IsStatic)
+        Physics.__UpdateSyncField(self.World.WorldId,self.ColRef,"Static",IsStatic)
     end,
 
     ResetMass = function(self)

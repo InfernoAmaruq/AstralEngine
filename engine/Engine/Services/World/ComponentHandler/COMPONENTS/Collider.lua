@@ -317,6 +317,7 @@ function Collider.New(DATA, e)
 end
 
 function Collider.Destroy(self)
+    print"DESTROY COLLIDER"
     Physics.__DequeueToSyncLTJ(self)
     Physics.__UnbindCollider(self.World,self.ColRef)
 

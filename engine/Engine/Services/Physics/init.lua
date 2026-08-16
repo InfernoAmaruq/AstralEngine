@@ -252,7 +252,7 @@ function Physics.UpdateTransforms(World)
 end
 
 function Physics.__DequeueToSyncLTJ(Col)
-    local t = LuaToJoltToSync[Col.WId]
+    local t = LuaToJoltToSync[Col.WorldId]
     Col = Col.ColRef
 
     local SelfPtr = nil

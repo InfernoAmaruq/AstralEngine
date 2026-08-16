@@ -67,9 +67,5 @@ return function(Components)
         return tostring(a) .. tostring(b)
     end
 
-    function Instance.__eq(a, b)
-        return a.UniqueId == b.UniqueId
-    end
-
     return Instance, INSTMETHODS
 end

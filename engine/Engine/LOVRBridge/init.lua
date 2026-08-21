@@ -253,13 +253,11 @@ LVRB.LoadWindow = function()
 
     AstralEngine.Signals.OnWindowResize = Sig.new(true)
 
-    local Sched = AstralEngine.Scheduler
+    local Sched = GetService"Scheduler"
     function lovr.resize(w, h)
-        Sched.PushSyncBlock()
         AstralEngine.Signals.OnWindowResize:FireRTC(w, h)
         GetService("Renderer").PassStorage.RebuildPassTable()
         collectgarbage("collect")
-        Sched.PopSyncBlock()
     end
 
     -- FINALLY OPEN THE WINDOW

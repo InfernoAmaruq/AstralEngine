@@ -25,4 +25,23 @@ pkgs.mkShell {
     libxcb
     curl
   ];
+
+  LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
+    vulkan-loader
+    libGL
+    alsa-lib
+    pipewire
+    libpulseaudio
+  ];
+
+  packages = with pkgs; [
+    alsa-lib
+    libpulseaudio
+    pipewire
+
+    vulkan-loader
+    vulkan-headers
+    vulkan-tools
+    mesa
+  ];
 }

@@ -253,7 +253,6 @@ LVRB.LoadWindow = function()
 
     AstralEngine.Signals.OnWindowResize = Sig.new(true)
 
-    local Sched = GetService"Scheduler"
     function lovr.resize(w, h)
         AstralEngine.Signals.OnWindowResize:FireRTC(w, h)
         GetService("Renderer").PassStorage.RebuildPassTable()

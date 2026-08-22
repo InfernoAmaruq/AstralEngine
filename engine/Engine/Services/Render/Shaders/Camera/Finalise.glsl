@@ -10,6 +10,7 @@ uniform bool DoBloom;
 
 vec4 lovrmain(){
     vec3 c = getPixel(ColorTex,UV).rgb;
+    return vec4(c,1);
     float ao = getPixel(AO,UV).r;
 
     c *= ao;

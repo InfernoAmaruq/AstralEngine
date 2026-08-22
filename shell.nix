@@ -28,7 +28,6 @@ pkgs.mkShell {
 
   LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
     vulkan-loader
-    libGL
     alsa-lib
     pipewire
     libpulseaudio

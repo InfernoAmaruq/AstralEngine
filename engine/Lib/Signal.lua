@@ -112,7 +112,7 @@ function Signal:FireRTC(...)
     for i = 1, ConLen do
         local s, err = pcall(Con[i], ...)
         if not s then
-            AstralEngine.Error("SIGNAL ERROR: ", debug.traceback(err), "SIGNAL")
+            AstralEngine.Error("SIGNAL ERROR: ".. debug.traceback(err), "SIGNAL", 2)
         end
     end
 end

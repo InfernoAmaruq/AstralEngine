@@ -102,10 +102,9 @@ function lovr.errhand(message)
         v = AstralEngine.Callbacks.ErrorHandler(message)
     end
 
-    AstralEngine.Log("ASTRAL HAS TO QUIT WITH MESSAGE:\n"..message,"fail")
+    AstralEngine.Log("ASTRAL HAS TO QUIT WITH MESSAGE:\n"..message,"fail",nil,2)
 
     lovr.system.messageBox("ASTRAL HAS TO QUIT:\n"..message)
-
 
     if CONF.LOGCRASH then
         local ExeDir = lovr.filesystem.getExecutablePath()

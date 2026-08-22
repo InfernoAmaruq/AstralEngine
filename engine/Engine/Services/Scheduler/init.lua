@@ -91,7 +91,7 @@ Scheduler.CallOnThread = lovr.thread.call
 
 -- Other
 
-Scheduler.Resume = TASK.resume
+Scheduler.Resume = RESUME
 
 Scheduler.Yield = TASK.yield
 
@@ -109,7 +109,8 @@ local AsyncBlocks = setmetatable({}, getmetatable(Escaped))
 
 function Scheduler.CanAsync(t)
     t = t or coroutine.running()
-    return (not AsyncBlocks[t]) and TASK.isYieldable(t)
+    local x,y = pcall(TASK.isYieldable,t)
+    return (not AsyncBlocks[t]) and (x and y)
 end
 
 function Scheduler.PushSyncBlock(t)

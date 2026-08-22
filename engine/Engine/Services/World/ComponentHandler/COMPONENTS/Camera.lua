@@ -10,7 +10,7 @@ local PASS_PRIORITY_GEOM = 10000
 local PASS_PRIORITY_COMMIT = 10100
 
 local FIRST_TEXTURE = 1
-local FINAL_TEXTURE
+local FINAL_TEXTURE = 29
 
 local TEX_DATA_CAMERA_TEXTURE = { samples = 1, usage = { "render", "sample" }, mipmaps = false, format = "rgba8" }
 
@@ -164,6 +164,11 @@ local function RawWorldToView(self, Pos)
 end
 
 local function RebuildTextures(self, w, h, d)
+    local IsAsync = Scheduler.CanAsync()
+    if IsAsync then
+        Scheduler.PushAsyncBlock()
+    end
+
     d = d or AstralEngine.Window.GetWindowDensity()
 
     w = w * d
@@ -203,6 +208,10 @@ local function RebuildTextures(self, w, h, d)
 
     if self[43] ~= CAMERA_PROJECTION.Other then
         self:ResetProjectionMatrix()
+    end
+
+    if IsAsync then
+        Scheduler.PopAsyncBlock()
     end
 end
 
@@ -361,10 +370,6 @@ Camera.New = function(Input, Entity, Sink)
     local Blurred_Color_2 = GetTexture(self, W, H, TEX_DATA_CAMERA_TEXTURE, Indexes.TextureBlurColor2)
 
     -- In the self table textures are stored as a tuple (Texture, TEX_DATA*)
-
-    if not FINAL_TEXTURE then
-        FINAL_TEXTURE = #self - 1
-    end -- Last texture, ignoring its config. We can use this for rebuilds to skip indexing cost
 
     -- // ALLOCATE PASSES
 

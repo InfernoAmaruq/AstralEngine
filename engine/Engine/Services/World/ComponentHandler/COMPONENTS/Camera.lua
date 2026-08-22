@@ -166,7 +166,7 @@ end
 local function RebuildTextures(self, w, h, d)
     local IsAsync = Scheduler.CanAsync()
     if IsAsync then
-        Scheduler.PushAsyncBlock()
+        Scheduler.PushSyncBlock()
     end
 
     d = d or AstralEngine.Window.GetWindowDensity()
@@ -174,11 +174,14 @@ local function RebuildTextures(self, w, h, d)
     w = w * d
     h = h * d
 
+    print("NEW SIZE:",w,h,d)
+
     local NewTex = AstralEngine.Graphics.NewTexture
 
     for i = FIRST_TEXTURE, FINAL_TEXTURE, 2 do
         self[i]:release()
         self[i] = NewTex(w, h, self[i + 1]) -- our texture config is kept at i + 1 always
+        print("REBUILD:",i,table.find(Indexes,i), self[i])
     end
 
     local Canvas = { samples = 1, depth = false }
@@ -189,19 +192,22 @@ local function RebuildTextures(self, w, h, d)
 
     Canvas[1], Canvas[2], Canvas[3] = self[13], self[15], self[17]
     self[34]:setCanvas(Canvas)
-    Canvas[1], Canvas[2], Canvas[3] = self[19], self[21], self[23]
+    Canvas[1], Canvas[2], Canvas[3] = self[27], self[23], self[19]
     self[35]:setCanvas(Canvas)
-    Canvas[1], Canvas[2], Canvas[3] = self[25], self[27], self[29]
+    Canvas[1], Canvas[2], Canvas[3] = self[29], self[25], self[21]
     self[36]:setCanvas(Canvas)
 
     -- geometry canvases
+
     Canvas.samples = 4
     Canvas.depth = self[9]
     Canvas[3] = nil
 
     Canvas[1], Canvas[2] = self[5], self[11]
+    print("CANVAS:",Canvas,Canvas.samples,Canvas.depth,Canvas[1],Canvas[2])
     self[32]:setCanvas(Canvas)
     Canvas[1], Canvas[2] = self[3], self[7]
+    print("CANVAS:",Canvas,Canvas.samples,Canvas.depth,Canvas[1],Canvas[2])
     self[33]:setCanvas(Canvas)
 
     self[41], self[42] = w, h
@@ -211,7 +217,7 @@ local function RebuildTextures(self, w, h, d)
     end
 
     if IsAsync then
-        Scheduler.PopAsyncBlock()
+        Scheduler.PopSyncBlock()
     end
 end
 

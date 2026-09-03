@@ -4,7 +4,10 @@
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.flake-utils.url = "github:numtide/flake-utils";
 
-  outputs = { self, nixpkgs, flake-utils }:
+  inputs.astralengine.url = "git+https://github.com/infernoamaruq/astralengine?submodules=1";
+  inputs.astralengine.flake = false;
+
+  outputs = { self, nixpkgs, flake-utils, astralengine }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f:
@@ -50,13 +53,14 @@
       packages = forAllSystems (pkgs: {
         default = pkgs.stdenv.mkDerivation {
           name = "AstralEngine";
-            src = builtins.fetchGit {
-              url = "https://github.com/infernoamaruq/astralengine";
-              submodules = true;
-            };
+            src =  astralengine;
 
           nativeBuildInputs = commonNativeBuildInputs pkgs;
           buildInputs = commonBuildInputs pkgs;
+
+          configurePhase = "cmake -B build";
+          buildPhase = "cmake --build build";
+          installPhase = "cmake --install build --prefix $out";
         };
       });
       devShells = forAllSystems (pkgs: {

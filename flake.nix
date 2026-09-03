@@ -20,6 +20,7 @@
         gnumake
         pkg-config
         python3
+        git
       ];
       
       commonBuildInputs = pkgs: with pkgs; [

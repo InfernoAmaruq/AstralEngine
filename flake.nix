@@ -62,7 +62,7 @@
           nativeBuildInputs = commonNativeBuildInputs pkgs;
           buildInputs = commonBuildInputs pkgs;
 
-          configurePhase = "cmake -B build -DJOLT_PHYSICS_ROOT=${joltphysics}";
+          configurePhase = "cmake -B build -DCMAKE_BUILD_TYPE=Release -DJOLT_PHYSICS_ROOT=${joltphysics}";
           buildPhase = "cmake --build build";
           installPhase = "cmake --install build --prefix $out";
         };

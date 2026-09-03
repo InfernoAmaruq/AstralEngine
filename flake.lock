@@ -1,5 +1,23 @@
 {
   "nodes": {
+    "astralengine": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788450153,
+        "narHash": "sha256-CYJKUz3/hp4y5UOdVP2s8CoaDPKNaRpiPj9nRLERKn0=",
+        "ref": "refs/heads/main",
+        "rev": "604796a97fc5c86e04746ee7f99a65b0ec1abc8a",
+        "revCount": 6989,
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/infernoamaruq/astralengine"
+      },
+      "original": {
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/infernoamaruq/astralengine"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -15,6 +33,23 @@
       "original": {
         "owner": "numtide",
         "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "joltphysics": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1766927235,
+        "narHash": "sha256-OQ3kqpd0NBKA0e/YRNCKaSR0wKIto1mcZ+X93CuJ+Dc=",
+        "owner": "jrouwe",
+        "repo": "JoltPhysics",
+        "rev": "23dadd0e603f1b321142d4c74df07fce85064989",
+        "type": "github"
+      },
+      "original": {
+        "owner": "jrouwe",
+        "ref": "v5.5.0",
+        "repo": "JoltPhysics",
         "type": "github"
       }
     },
@@ -36,7 +71,9 @@
     },
     "root": {
       "inputs": {
+        "astralengine": "astralengine",
         "flake-utils": "flake-utils",
+        "joltphysics": "joltphysics",
         "nixpkgs": "nixpkgs"
       }
     },

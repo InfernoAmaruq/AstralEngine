@@ -5,3 +5,5 @@ build_here*
 *.dll
 ignore*
 .luarc.json
+flake.lock
+.direnv*

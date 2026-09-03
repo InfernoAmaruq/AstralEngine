@@ -7,7 +7,10 @@
   inputs.astralengine.url = "git+https://github.com/infernoamaruq/astralengine?submodules=1";
   inputs.astralengine.flake = false;
 
-  outputs = { self, nixpkgs, flake-utils, astralengine }:
+  inputs.joltphysics.url = "github:jrouwe/JoltPhysics/v5.5.0";
+  inputs.joltphysics.flake = false;
+
+  outputs = { self, nixpkgs, flake-utils, astralengine, joltphysics }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f:
@@ -59,7 +62,7 @@
           nativeBuildInputs = commonNativeBuildInputs pkgs;
           buildInputs = commonBuildInputs pkgs;
 
-          configurePhase = "cmake -B build";
+          configurePhase = "cmake -B build -DJOLT_PHYSICS_ROOT=${joltphysics}";
           buildPhase = "cmake --build build";
           installPhase = "cmake --install build --prefix $out";
         };

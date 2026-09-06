@@ -54,6 +54,21 @@
       ];
 
     in {
+      lib = forAllSystems (pkgs: {
+        mkAstralGame = { src, name, cmakeFlags ? [] }:
+          pkgs.stdenv.mkDerivation {
+          inherit name src;
+          nativeBuildInputs = commonNativeBuildInputs pkgs;
+          buildInputs = commonBuildInputs pkgs ++ runtimePackages pkgs;
+          # game's own CMakeLists.txt does add_subdirectory(astral) or similar,
+          # pointing at ASTRAL_ROOT
+          cmakeFlags = [ "-DASTRAL_ROOT=${astralengine}" "-DJOLT_PHYSICS_ROOT=${joltphysics}" ] ++ cmakeFlags;
+          installPhase = ''
+            mkdir -p $out/bin
+            find build -maxdepth 1 -type f -executable -exec cp {} $out/bin/ \;
+          '';
+        };
+      });
       packages = forAllSystems (pkgs: {
         default = pkgs.stdenv.mkDerivation {
           name = "AstralEngine";

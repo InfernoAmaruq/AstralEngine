@@ -148,6 +148,13 @@ typedef enum {
   OS_PERMISSION_AUDIO_CAPTURE
 } os_permission;
 
+#if defined(__linux__) && !defined(__ANDROID__)
+typedef enum {
+  OS_LINUX_PLATFORM_WAYLAND,
+  OS_LINUX_PLATFORM_X11
+} os_linux_platform;
+#endif
+
 typedef void fn_quit(void);
 typedef void fn_visible(bool visible);
 typedef void fn_focus(bool focused);
@@ -220,8 +227,11 @@ uintptr_t os_get_win32_instance(void);
 
 uintptr_t os_get_ca_metal_layer(void);
 
+os_linux_platform os_get_linux_platform(void);
 uintptr_t os_get_xcb_connection(void);
 uintptr_t os_get_xcb_window(void);
+uintptr_t os_get_wayland_display(void);
+uintptr_t os_get_wayland_surface(void);
 
 void os_set_window_size(uint32_t width, uint32_t height);
 void os_set_cursor_icon(os_cursor_icon icon);

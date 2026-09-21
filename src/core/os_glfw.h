@@ -124,10 +124,7 @@ void os_set_cursor_icon(os_cursor_icon Cursor){return;}
 
 #ifdef __linux__
 
-#ifdef LOVR_GLFW_WAY_COMPAT
-#include "x11_compat.c"
-#endif
-
+#define GLFW_EXPOSE_NATIVE_WAYLAND
 #define GLFW_EXPOSE_NATIVE_X11
 #include <X11/Xlib-xcb.h>
 #endif
@@ -347,12 +344,6 @@ void os_set_clipboard_text(const char* text) {
 void os_poll_events(double timeout) {
 
   if (glfwState.window) {
-#ifdef LOVR_GLFW_WAY_COMPAT
-
-  xcb_poll_events(timeout);
-
-#else
-
     if (timeout == 0.) {
       glfwPollEvents();
     } else if (timeout < 0. || isinf(timeout)) {
@@ -360,10 +351,6 @@ void os_poll_events(double timeout) {
     } else {
       glfwWaitEventsTimeout(timeout);
     }
-
-    // still need GLFW for controllers
-#endif
-
   }
 }
 
@@ -377,7 +364,7 @@ bool os_window_open(const os_window_config* config) {
   glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
 #endif
 #ifdef __linux__
-  glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+  //glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_WAYLAND);
 #endif
   if (!glfwInit()) {
     return false;
@@ -386,7 +373,7 @@ bool os_window_open(const os_window_config* config) {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, config->resizable);
 
-  bool center = config->centered && !config->fullscreen;
+  bool center = config->centered && !config->fullscreen && os_get_linux_platform() == OS_LINUX_PLATFORM_X11; // not supported on wayland
 
   if (center) {
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -453,10 +440,6 @@ bool os_window_open(const os_window_config* config) {
   glfwState.height = config->height;
   glfwState.fullscreen = config->fullscreen;
   glfwState.focused = glfwGetWindowAttrib(glfwState.window, GLFW_FOCUSED);
-
-#ifdef LOVR_GLFW_WAY_COMPAT
-  xcb_helper_init(&glfwState.onQuitRequest, &glfwState.width);
-#endif
 
   return true;
 }
@@ -566,31 +549,22 @@ void os_get_mouse_position(double* x, double* y) {
 }
 
 os_mouse_mode os_get_mouse_mode(void) {
-#ifdef LOVR_GLFW_WAY_COMPAT
-  os_mouse_mode mouseMode;
-#else
   if (glfwGetInputMode(glfwState.window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
     return MOUSE_MODE_GRABBED;
   } else {
     return MOUSE_MODE_NORMAL;
   }
-#endif
 }
 
 void os_set_mouse_mode(os_mouse_mode mode) {
   if (glfwState.window) {
-#ifdef LOVR_GLFW_WAY_COMPAT
-    xcb_set_mouse_mode(mode);
-#else
     int m = (mode == MOUSE_MODE_GRABBED) ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL;
 
     glfwSetInputMode(glfwState.window, GLFW_CURSOR, m);
 
     if (glfwRawMouseMotionSupported()){
-      printf("GLFW RAW MOTION SUPPORTED\n");
       glfwSetInputMode(glfwState.window,GLFW_RAW_MOUSE_MOTION,mode ? GLFW_TRUE : GLFW_FALSE);
     }
-#endif
   }
 }
 
@@ -619,6 +593,10 @@ uintptr_t os_get_ca_metal_layer(void) {
   return (uintptr_t) layer;
 }
 #elif defined(__linux__) && !defined(__ANDROID__)
+os_linux_platform os_get_linux_platform(void){
+  return glfwGetPlatform() == GLFW_PLATFORM_WAYLAND ? OS_LINUX_PLATFORM_WAYLAND : OS_LINUX_PLATFORM_X11;
+}
+
 uintptr_t os_get_xcb_connection(void) {
   return (uintptr_t) XGetXCBConnection(glfwGetX11Display());
 }
@@ -626,6 +604,13 @@ uintptr_t os_get_xcb_connection(void) {
 uintptr_t os_get_xcb_window(void) {
   return (uintptr_t) glfwGetX11Window(glfwState.window);
 }
+
+uintptr_t os_get_wayland_display(void) {
+  return (uintptr_t) glfwGetWaylandDisplay();
+};
+uintptr_t os_get_wayland_surface(void) {
+  return (uintptr_t) glfwGetWaylandWindow(glfwState.window);
+};
 #endif
 
 void os_window_message_box(const char* message) {

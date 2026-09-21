@@ -31,6 +31,13 @@ size_t gpu_sizeof_tally(void);
 
 typedef uint64_t gpu_address;
 
+#if defined(__linux__) && !defined(__ANDROID__)
+typedef enum {
+  GPU_PLATFORM_WAYLAND,
+  GPU_PLATFORM_X11
+} gpu_linux_platform;
+#endif
+
 // Buffer
 
 typedef enum {
@@ -286,9 +293,18 @@ typedef struct {
       uintptr_t layer;
     } macos;
     struct {
-      uintptr_t connection;
-      uintptr_t window;
-    } xcb;
+      int platform;
+      union {
+        struct {
+          uintptr_t display;
+          uintptr_t surface;
+        } wayland;
+        struct {
+          uintptr_t connection;
+          uintptr_t window;
+        } xcb;
+      };
+    } lin;
   };
 } gpu_surface_info;
 

@@ -728,12 +728,18 @@ void os_set_mouse_mode(os_mouse_mode mode) {
   }
 }
 
+iont os_get_linux_platform
+
 uintptr_t os_get_xcb_connection(void) {
   return (uintptr_t) state.connection;
 }
 
 uintptr_t os_get_xcb_window(void) {
   return (uintptr_t) state.window;
+}
+
+os_linux_platform os_get_linux_platform(void){
+  return OS_LINUX_PLATFORM_X11;
 }
 #endif
 

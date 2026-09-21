@@ -21,6 +21,7 @@
 #define VK_USE_PLATFORM_METAL_EXT
 #elif defined(__linux__) && !defined(__ANDROID__)
 #define VK_USE_PLATFORM_XCB_KHR
+#define VK_USE_PLATFORM_WAYLAND_KHR
 #endif
 
 #define VK_NO_PROTOTYPES
@@ -1033,16 +1034,31 @@ bool gpu_surface_init(gpu_surface_info* info) {
     return false;
   }
 #elif defined(__linux__) && !defined(__ANDROID__)
-  VkXcbSurfaceCreateInfoKHR surfaceInfo = {
-    .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
-    .connection = (xcb_connection_t*) info->xcb.connection,
-    .window = (xcb_window_t) info->xcb.window
-  };
-  GPU_DECLARE(vkCreateXcbSurfaceKHR);
-  GPU_LOAD_INSTANCE(vkCreateXcbSurfaceKHR);
-  VK(vkCreateXcbSurfaceKHR(state.instance, &surfaceInfo, NULL, &surface->handle), "vkCreateXcbSurfaceKHR") {
-    return false;
+  if (info->lin.platform == GPU_PLATFORM_X11){
+    VkXcbSurfaceCreateInfoKHR surfaceInfo = {
+      .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
+      .connection = (xcb_connection_t*) info->lin.xcb.connection,
+      .window = (xcb_window_t) info->lin.xcb.window
+    };
+    GPU_DECLARE(vkCreateXcbSurfaceKHR);
+    GPU_LOAD_INSTANCE(vkCreateXcbSurfaceKHR);
+    VK(vkCreateXcbSurfaceKHR(state.instance, &surfaceInfo, NULL, &surface->handle), "vkCreateXcbSurfaceKHR") {
+      return false;
+    }
   }
+  else{
+    VkWaylandSurfaceCreateInfoKHR surfaceInfo = {
+      .sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
+      .display = (void*)info->lin.wayland.display,
+      .surface = (void*)info->lin.wayland.surface
+    };
+    GPU_DECLARE(vkCreateWaylandSurfaceKHR);
+    GPU_LOAD_INSTANCE(vkCreateWaylandSurfaceKHR);
+    VK(vkCreateWaylandSurfaceKHR(state.instance, &surfaceInfo, NULL, &surface->handle), "vkCreateWaylandSurfaceKHR"){
+      return false;
+    }
+  }
+
 #endif
 
   VkBool32 presentable;
@@ -3004,6 +3020,7 @@ bool gpu_init(gpu_config* config) {
       { "VK_EXT_metal_surface", true, &state.extensions.surfaceOS },
 #elif defined(__linux__) && !defined(__ANDROID__)
       { "VK_KHR_xcb_surface", true, &state.extensions.surfaceOS },
+      { "VK_KHR_wayland_surface", true, &state.extensions.surfaceOS },
 #endif
     };
 

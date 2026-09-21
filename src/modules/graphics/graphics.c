@@ -2473,11 +2473,22 @@ bool lovrGraphicsGetWindowTexture(Texture** texture) {
       .win32.instance = os_get_win32_instance()
 #elif defined(__APPLE__)
       .macos.layer = os_get_ca_metal_layer()
-#elif defined(__linux__) && !defined(__ANDROID__)
-      .xcb.connection = os_get_xcb_connection(),
-      .xcb.window = os_get_xcb_window()
 #endif
     };
+
+
+#if defined(__linux__) && !defined(__ANDROID__)
+    os_linux_platform plat = os_get_linux_platform();
+    info.lin.platform = plat == OS_LINUX_PLATFORM_WAYLAND ? GPU_PLATFORM_WAYLAND : GPU_PLATFORM_X11;
+
+    if (plat == OS_LINUX_PLATFORM_WAYLAND){
+      info.lin.wayland.display = os_get_wayland_display();
+      info.lin.wayland.surface = os_get_wayland_surface();
+    } else {
+      info.lin.xcb.connection = os_get_xcb_connection();
+      info.lin.xcb.window = os_get_xcb_window();
+    }
+#endif
 
     if (!gpu_surface_init(&info)) {
       lovrFree(state.window);

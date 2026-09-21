@@ -47,6 +47,9 @@
 
         xwayland
 
+        wayland-scanner
+        wayland
+
         curl
       ];
       
@@ -59,6 +62,9 @@
         vulkan-tools
         mesa
         xwayland
+
+        wayland
+        wayland-scanner
       ];
 
     in {
@@ -103,6 +109,9 @@
             pipewire
             libpulseaudio
             xwayland
+
+            wayland
+            wayland-scanner
           ];
         };
       });

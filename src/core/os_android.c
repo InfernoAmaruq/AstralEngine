@@ -277,6 +277,10 @@ void os_set_clipboard_text(const char* text) {
   //
 }
 
+void os_set_cursor_icon(os_cursor_icon Cursor){
+  //
+}
+
 void* os_vm_init(size_t size) {
   return mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 }

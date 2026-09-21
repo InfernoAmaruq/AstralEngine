@@ -5,6 +5,10 @@
 #include <stdatomic.h>
 #include <string.h>
 
+#ifdef LOVR_ENABLE_CONTROLLER
+#include "core/glfw_controller.h"
+#endif
+
 static atomic_uint ref;
 
 static struct {
@@ -131,8 +135,7 @@ bool lovrSystemInit(void) {
   os_get_mouse_position(&state.mouseX, &state.mouseY);
 
 #ifdef LOVR_ENABLE_CONTROLLER
-  os_set_joystick_callback(onControllerChanged);
-  os_set_joystick_button_callback(onControllerButton);
+  os_controller_set_callbacks(onControllerButton, onControllerChanged);
 #endif
 
   lovrModuleReady(&ref);
@@ -205,6 +208,9 @@ void lovrSystemPollEvents(double timeout) {
   memcpy(state.prevMouseState, state.mouseState, sizeof(state.mouseState));
   state.scrollDelta = 0.;
   os_poll_events(timeout);
+#ifdef LOVR_ENABLE_CONTROLLER
+  os_controller_poll();
+#endif
 }
 
 bool lovrSystemIsKeyDown(int keycode) {
@@ -285,31 +291,31 @@ void lovrMessageBox(const char* message){
 #ifdef LOVR_ENABLE_CONTROLLER
 
 bool lovrSystemControllerPresent(int at){
-    return os_is_joystick_active(at);
+    return os_controller_is_active(at);
 }
 
 const char* lovrSystemControllerGetName(int at){
-    return os_joystick_get_name(at);
+    return os_controller_get_name(at);
 }
 
 void lovrSystemControllerUpdateMappings(const char* m){
-    os_joystick_update_mappings(m);
+    os_controller_update_mappings(m);
 }
 
 bool lovrSystemControllerIsButtonDown(int at, int button){
-    return os_joystick_get_button_down(at, button);
+    return os_controller_get_button_down(at, button);
 }
 
 bool lovrSystemControllerWasButtonPressed(int at, int button){
-    return os_joystick_button_pressed(at, button);
+    return os_controller_button_pressed(at, button);
 }
 
 bool lovrSystemControllerWasButtonReleased(int at, int button){
-    return os_joystick_button_released(at, button);
+    return os_controller_button_released(at, button);
 }
 
 int lovrSystemControllerGetAxis(float* to, int at, int axis){
-    return os_joystick_get_axes(to, at, axis);
+    return os_controller_get_axes(to, at, axis);
 }
 
 #endif

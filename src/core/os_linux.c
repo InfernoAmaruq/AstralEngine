@@ -15,10 +15,13 @@
 #include <xcb/xcb.h>
 #include <xcb/xkb.h>
 #include <xcb/xinput.h>
+#include <X11/Xcursor/Xcursor.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-x11.h>
 #include <xkbcommon/xkbcommon-compose.h>
 #include <math.h>
+
+#define INTERN_ATOM(name) xcb_intern_atom(state.connection, 0, strlen(name), name)
 
 static struct {
   xcb_connection_t* connection;
@@ -31,7 +34,9 @@ static struct {
   uint8_t xkbCode;
   xcb_window_t window;
   xcb_cursor_t hiddenCursor;
-  xcb_intern_atom_reply_t* deleteWindow;
+  xcb_intern_atom_reply_t* wmState;
+  xcb_intern_atom_reply_t* wmStateFullscreen;
+  xcb_intern_atom_reply_t* wmDeleteWindow;
   fn_quit* onQuit;
   fn_visible* onVisible;
   fn_focus* onFocus;
@@ -45,12 +50,15 @@ static struct {
   uint32_t height;
   bool keyDown[OS_KEY_COUNT];
   os_mouse_mode mouseMode;
-  int16_t mouseX;
-  int16_t mouseY;
-  int16_t grabX;
-  int16_t grabY;
+  float mouseX;
+  float mouseY;
+  int32_t grabX;
+  int32_t grabY;
+  xcb_cursor_t cursors[OS_CURSOR_COUNT];
+  os_cursor_icon currentCursor;
   bool visible;
   bool focused;
+  bool shouldFullscreen;
 } state;
 #endif
 
@@ -60,9 +68,11 @@ bool os_init(void) {
 
 void os_destroy(void) {
 #ifdef LOVR_USE_GLFW
-  glfwTerminate();
+  glfw_close();
 #else
-  free(state.deleteWindow);
+  free(state.wmDeleteWindow);
+  free(state.wmState);
+  free(state.wmStateFullscreen);
   if (state.hiddenCursor) xcb_free_cursor(state.connection, state.hiddenCursor);
   xkb_compose_state_unref(state.compose);
   xkb_compose_table_unref(state.composeTable);
@@ -276,7 +286,7 @@ void os_poll_events(double timeout) {
 
     switch (type) {
       case XCB_CLIENT_MESSAGE:
-        if (event.message->data.data32[0] == state.deleteWindow->atom && state.onQuit) {
+        if (event.message->data.data32[0] == state.wmDeleteWindow->atom && state.onQuit) {
           state.onQuit();
         }
         break;
@@ -355,8 +365,12 @@ void os_poll_events(double timeout) {
 
           if (state.onMouseMove && (mask[0] & 0x3) == 0x3) {
             xcb_input_fp3232_t* values = xcb_input_raw_button_press_axisvalues(event.raw);
-            state.mouseX += values[0].integral;
-            state.mouseY += values[1].integral;
+
+            float mouseX = (float)values[0].integral + (float)values[0].frac / (1LL << 32);
+            float mouseY = (float)values[1].integral + (float)values[1].frac / (1LL << 32);
+
+            state.mouseX += mouseX;
+            state.mouseY += mouseY;
             state.onMouseMove(state.mouseX, state.mouseY);
           }
         }
@@ -366,6 +380,13 @@ void os_poll_events(double timeout) {
       case XCB_UNMAP_NOTIFY:
         state.visible = type == XCB_MAP_NOTIFY;
         if (state.onVisible) state.onVisible(state.visible);
+        break;
+
+      case XCB_VISIBILITY_NOTIFY:
+        if(state.shouldFullscreen){
+          os_window_set_fullscreen(true);
+          state.shouldFullscreen = false;
+        }
         break;
 
       case XCB_FOCUS_IN:
@@ -414,10 +435,6 @@ void os_set_window_size(uint32_t width, uint32_t height){
 
 void os_on_visible(fn_visible* callback) {
   state.onVisible = callback;
-}
-
-void os_on_focus(fn_focus* callback) {
-  state.onFocus = callback;
 }
 
 void os_on_resize(fn_resize* callback) {
@@ -504,19 +521,18 @@ bool os_window_open(const os_window_config* config) {
 
   state.screen = xcb_setup_roots_iterator(xcb_get_setup(state.connection)).data;
 
-  bool fullscreen = (config->width == 0 && config->height == 0) || config->fullscreen;
-
   uint8_t depth = XCB_COPY_FROM_PARENT;
   state.window = xcb_generate_id(state.connection);
   xcb_window_t parent = state.screen->root;
-  uint16_t w = fullscreen ? state.screen->width_in_pixels : config->width;
-  uint16_t h = fullscreen ? state.screen->height_in_pixels : config->height;
+  uint16_t w = config->width;
+  uint16_t h = config->height;
   uint16_t border = 0;
   xcb_window_class_t class = XCB_WINDOW_CLASS_INPUT_OUTPUT;
   xcb_visualid_t visual = state.screen->root_visual;
   uint32_t keys = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
   uint32_t values[] = {
     state.screen->black_pixel,
+    XCB_EVENT_MASK_VISIBILITY_CHANGE |
     XCB_EVENT_MASK_STRUCTURE_NOTIFY |
     XCB_EVENT_MASK_KEY_PRESS |
     XCB_EVENT_MASK_KEY_RELEASE |
@@ -532,13 +548,11 @@ bool os_window_open(const os_window_config* config) {
   xcb_create_window(state.connection, depth, state.window, parent, 0, 0, w, h, border, class, visual, keys, values);
 
   // Close event
-  xcb_intern_atom_cookie_t protocols = xcb_intern_atom(state.connection, 1, 12, "WM_PROTOCOLS");
-  xcb_intern_atom_cookie_t delete = xcb_intern_atom(state.connection, 1, 16, "WM_DELETE_WINDOW");
-  xcb_intern_atom_reply_t* protocolReply = xcb_intern_atom_reply(state.connection, protocols, NULL);
-  xcb_intern_atom_reply_t* deleteReply = xcb_intern_atom_reply(state.connection, delete, NULL);
-  xcb_change_property(state.connection, XCB_PROP_MODE_REPLACE, state.window, protocolReply->atom, 4, 32, 1, &deleteReply->atom);
-  state.deleteWindow = deleteReply;
-  free(protocolReply);
+  xcb_intern_atom_reply_t* protocols = xcb_intern_atom_reply(state.connection, INTERN_ATOM("WM_PROTOCOLS"), NULL);
+  xcb_intern_atom_reply_t* deleteWindow = xcb_intern_atom_reply(state.connection, INTERN_ATOM("WM_DELETE_WINDOW"), NULL);
+  xcb_change_property(state.connection, XCB_PROP_MODE_REPLACE, state.window, protocols->atom, 4, 32, 1, &deleteWindow->atom);
+  state.wmDeleteWindow = deleteWindow;
+  free(protocols);
 
   // Title
   xcb_change_property(state.connection, XCB_PROP_MODE_REPLACE, state.window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, strlen(config->title), config->title);
@@ -568,13 +582,30 @@ bool os_window_open(const os_window_config* config) {
   }
 
   // Fullscreen
-  if (fullscreen) {
-    xcb_intern_atom_cookie_t wmState = xcb_intern_atom(state.connection, 0, 13, "_NET_WM_STATE");
-    xcb_intern_atom_cookie_t wmFullscreen = xcb_intern_atom(state.connection, 0, 24, "_NET_WM_STATE_FULLSCREEN");
-    xcb_intern_atom_reply_t* stateReply = xcb_intern_atom_reply(state.connection, wmState, NULL);
-    xcb_intern_atom_reply_t* fullscreenReply = xcb_intern_atom_reply(state.connection, wmFullscreen, NULL);
-    xcb_change_property(state.connection, XCB_PROP_MODE_REPLACE, state.window, stateReply->atom, 4, 32, 1, &fullscreenReply->atom);
+  state.wmState = xcb_intern_atom_reply(state.connection, INTERN_ATOM("_NET_WM_STATE"), NULL);
+  state.wmStateFullscreen = xcb_intern_atom_reply(state.connection, INTERN_ATOM("_NET_WM_STATE_FULLSCREEN"), NULL);
+  bool fullscreen = config->fullscreen || (config->width == 0 && config->height == 0);
+  state.shouldFullscreen = fullscreen; // Need to wait for window to be visible before requesting fullscreen
+
+  // Cursors
+  const char* cursorNames[] = {
+    "arrow","text","crosshair","hand","sb_h_double_arrow","sb_v_double_arrow"
+  };
+
+  // what the fuck
+  // also remove xcursor shit from CMake if imma scrap it
+  Display* display = XOpenDisplay(NULL);
+
+  for (int i = 0; i < OS_CURSOR_COUNT; i++) {
+    state.cursors[i] = XcursorLibraryLoadCursor(
+      display,
+      cursorNames[i]
+    );
   }
+
+  XCloseDisplay(display);
+    
+  state.currentCursor = OS_ARROW_CURSOR;
 
   // Show window and flush messages
   xcb_map_window(state.connection, state.window);
@@ -595,11 +626,40 @@ bool os_window_is_focused(void) {
 }
 
 bool os_window_is_fullscreen(void) {
-  return false; // TODO
+  if (!state.connection || !state.wmState || !state.wmStateFullscreen) return false;
+
+  xcb_get_property_cookie_t cookie = xcb_get_property(state.connection, 0, state.window, state.wmState->atom, XCB_ATOM_ATOM, 0, 256);
+  xcb_get_property_reply_t* reply = xcb_get_property_reply(state.connection, cookie, NULL);
+  if (!reply || reply->type != XCB_ATOM_ATOM) return false;
+
+  xcb_atom_t* atoms = xcb_get_property_value(reply);
+  int count = xcb_get_property_value_length(reply) / sizeof(xcb_atom_t);
+  for (int i = 0; i < count; i++) {
+    if (atoms[i] == state.wmStateFullscreen->atom) {
+      free(reply);
+      return true;
+    }
+  }
+
+  free(reply);
+  return false;
 }
 
 void os_window_set_fullscreen(bool fullscreen) {
-  // TODO
+  if (!state.connection || !state.wmState || !state.wmStateFullscreen) return;
+
+  xcb_client_message_event_t message = {
+    .response_type = XCB_CLIENT_MESSAGE,
+    .type = state.wmState->atom,
+    .format = 32,
+    .window = state.window,
+    .data.data32[0] = fullscreen ? 1 : 0,
+    .data.data32[1] = state.wmStateFullscreen->atom
+  };
+
+  uint32_t mask = XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY;
+  xcb_send_event(state.connection, 0, state.screen->root, mask, (const char*) &message);
+  xcb_flush(state.connection);
 }
 
 void os_window_get_size(uint32_t* width, uint32_t* height) {
@@ -613,6 +673,14 @@ float os_window_get_pixel_density(void) {
 
 void os_window_message_box(const char* message) {
   //
+}
+
+void os_set_cursor_icon(os_cursor_icon cursor){
+  state.currentCursor = cursor;
+  uint32_t mask = XCB_CW_CURSOR;
+  uint32_t values[] = { state.cursors[cursor] };
+  xcb_change_window_attributes(state.connection, state.window, mask, values);
+  xcb_flush(state.connection);
 }
 
 void os_get_mouse_position(double* x, double* y) {

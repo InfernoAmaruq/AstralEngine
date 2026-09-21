@@ -174,14 +174,11 @@ local function RebuildTextures(self, w, h, d)
     w = w * d
     h = h * d
 
-    print("NEW SIZE:",w,h,d)
-
     local NewTex = AstralEngine.Graphics.NewTexture
 
     for i = FIRST_TEXTURE, FINAL_TEXTURE, 2 do
         self[i]:release()
         self[i] = NewTex(w, h, self[i + 1]) -- our texture config is kept at i + 1 always
-        print("REBUILD:",i,table.find(Indexes,i), self[i])
     end
 
     local Canvas = { samples = 1, depth = false }
@@ -204,10 +201,8 @@ local function RebuildTextures(self, w, h, d)
     Canvas[3] = nil
 
     Canvas[1], Canvas[2] = self[5], self[11]
-    print("CANVAS:",Canvas,Canvas.samples,Canvas.depth,Canvas[1],Canvas[2])
     self[32]:setCanvas(Canvas)
     Canvas[1], Canvas[2] = self[3], self[7]
-    print("CANVAS:",Canvas,Canvas.samples,Canvas.depth,Canvas[1],Canvas[2])
     self[33]:setCanvas(Canvas)
 
     self[41], self[42] = w, h

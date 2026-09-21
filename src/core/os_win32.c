@@ -168,6 +168,10 @@ void os_set_clipboard_text(const char* text) {
   // TODO
 }
 
+void os_set_cursor_icon(os_cursor_icon Cursor){
+
+}
+
 void* os_set_window_size(uint32_t w, uint32_ h){}
 #endif
 

@@ -287,6 +287,17 @@ static int l_lovrSystemGetWindowDimensions(lua_State* L) {
   return 2;
 }
 
+static int l_lovrSystemSetWindowSize(lua_State* L)
+{
+    lua_Number h,w;
+    h = lua_tonumber(L,1);
+    w = lua_tonumber(L,2);
+
+    lovrSystemSetWindowSize(h,w);
+
+    return 0;
+}
+
 static int l_lovrSystemGetWindowDensity(lua_State* L) {
   lua_pushnumber(L, lovrSystemGetWindowDensity());
   return 1;
@@ -417,17 +428,6 @@ static int l_lovrSystemSetClipboardText(lua_State* L) {
 
 static int l_lovrSystemGetScrollDelta(lua_State* L) {
   return lua_pushnumber(L, lovrSystemGetScrollDelta()), 1;
-}
-
-static int l_lovrSystemSetWindowSize(lua_State* L)
-{
-    lua_Number h,w;
-    h = lua_tonumber(L,1);
-    w = lua_tonumber(L,2);
-
-    lovrSystemSetWindowSize(h,w);
-
-    return 0;
 }
 
 static int l_lovrSystemSetCursorIcon(lua_State* L){

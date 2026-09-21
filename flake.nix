@@ -24,6 +24,10 @@
         pkg-config
         python3
         git
+
+        xwayland
+
+        libdecor
       ];
       
       commonBuildInputs = pkgs: with pkgs; [
@@ -40,6 +44,9 @@
         libxdamage
         libxtst
         libxcb
+
+        xwayland
+
         curl
       ];
       
@@ -51,6 +58,7 @@
         vulkan-headers
         vulkan-tools
         mesa
+        xwayland
       ];
 
     in {
@@ -89,10 +97,12 @@
           packages = runtimePackages pkgs;
 
           LD_LIBRARY_PATH = with pkgs; pkgs.lib.makeLibraryPath [
+            libxkbcommon
             vulkan-loader
             alsa-lib
             pipewire
             libpulseaudio
+            xwayland
           ];
         };
       });

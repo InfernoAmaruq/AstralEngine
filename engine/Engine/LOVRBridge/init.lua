@@ -102,8 +102,8 @@ LVRB.ConnectDevices = function()
         Mouse.WheelMoved:FireRTC(...)
     end
 
-    function lovr.mousemoved(x, y, ...)
-        Mouse.MouseMoved:FireRTC(x, y, ...)
+    function lovr.mousemoved(...)
+        Mouse.MouseMoved:FireRTC(...)
     end
 
     function lovr.mousepressed(x, y, c)
@@ -266,6 +266,7 @@ LVRB.LoadWindow = function()
     lovr.system.openWindow({
         width = W,
         height = H,
+        centered = true,
         fullscreen = AstralEngine.Config.Game.Window.Fullscreen,
         resizable = AstralEngine.Config.Game.Window.Resizable,
         title = AstralEngine.Config.Game.Window.Name,

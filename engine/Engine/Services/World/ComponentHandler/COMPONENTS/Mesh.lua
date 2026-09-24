@@ -63,7 +63,7 @@ Mesh.New = function(Data, Ent, ShouldSink)
     self[1] = Data.Mesh or false
 
     -- we wanna put this onto both just incase since meshes can have transparent vertices due to vertex colors
-    local Stack = Component.Components.RenderTarget.Userdata.Flags.Stack_Both
+    local Stack = Component.Components.RenderTarget.Userdata.Flags.Stack_Solid
 
     self.__RenderTypePtr = Component.AddComponent(Ent, "RenderTarget", {
         Shader = false,

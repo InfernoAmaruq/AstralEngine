@@ -1,6 +1,5 @@
 #include "api.h"
 #include "math/math.h"
-#include "l_math.lua.h"
 #include "util.h"
 #include <threads.h>
 #include <string.h>

@@ -113,6 +113,7 @@ local ConfigTable
 local CoreConfig = require("coreconf")
 
 local function RecursiveAssign(t1, t2)
+    if not t1 or not t2 then return end
     for i, v in pairs(t2) do
         if t1[i] == nil then
             t1[i] = v
@@ -136,11 +137,14 @@ AstralEngine.Config = ConfigTable
 
 function lovr.conf(t)
     -- set lovr config from AstralConfig
-    t.graphics.vsync = AstralEngine.Config.Game.Window.Vsync or false
+
+    local WindowData = AstralEngine.Config.Game.Window
+
+    t.graphics.vsync = WindowData and WindowData.Vsync or false
 
     t.modules.headset = AstralEngine.Config.Astral.Modules.Headset or false
 
-    t.graphics.antialias = AstralEngine.Config.Game.Window.AntiAliasing
+    t.graphics.antialias = WindowData and WindowData.AntiAliasing
     t.graphics.selectGPU = function(GpuData)
         local GpuId = 1
 

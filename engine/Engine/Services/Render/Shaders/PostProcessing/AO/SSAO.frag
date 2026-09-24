@@ -9,7 +9,7 @@ uniform sampler2D SSAO_Noise;
 #define SSAO_Bias 0.0005
 #define SSAO_Samples 16
 #define SSAO_Radius 8
-#define SSAO_Power .7
+#define SSAO_Power .3
 #define SSAO_MaxDist 1
 #define SSAO_Depth 1
 

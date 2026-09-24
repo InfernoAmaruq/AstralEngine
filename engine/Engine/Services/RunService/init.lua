@@ -17,6 +17,7 @@ Data.UnbindFromStep = function(Name)
     end
 
     Data.__BoundToStep[Data.__UsedNames[Name]][Name] = nil
+    Data.__UsedNames[Name] = nil
 end
 
 Data.__RawUnbind = function(Name)
@@ -28,7 +29,7 @@ Data.__RawUnbind = function(Name)
 end
 
 local EnumName = "StepPriority"
-local E = _G["Enum"]({
+_G["Enum"]({
     CPUUpdate = 250,
     RenderSceneSolid = 600,
     RenderSceneTransparent = 700,

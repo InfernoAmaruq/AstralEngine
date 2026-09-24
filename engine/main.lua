@@ -72,7 +72,10 @@ function lovr.load()
     -- now that everything is loaded, bridge it
     Bridge.ConnectDevices()
     Bridge.LoadRandom()
-    Bridge.LoadWindow()
+
+    if AstralEngine.Config.Game.Window then
+      Bridge.LoadWindow()
+    end
 
     Renderer.LateCall()
 

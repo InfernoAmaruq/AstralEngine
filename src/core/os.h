@@ -227,7 +227,9 @@ uintptr_t os_get_win32_instance(void);
 
 uintptr_t os_get_ca_metal_layer(void);
 
+#if defined(__linux__) && !defined(__ANDROID__)
 os_linux_platform os_get_linux_platform(void);
+#endif
 uintptr_t os_get_xcb_connection(void);
 uintptr_t os_get_xcb_window(void);
 uintptr_t os_get_wayland_display(void);

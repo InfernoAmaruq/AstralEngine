@@ -373,7 +373,10 @@ bool os_window_open(const os_window_config* config) {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, config->resizable);
 
-  bool center = config->centered && !config->fullscreen && os_get_linux_platform() == OS_LINUX_PLATFORM_X11; // not supported on wayland
+  bool center = config->centered && !config->fullscreen;
+#if defined(__linux__) && !defined(__ANDROID__)
+  center = center && os_get_linux_platform() == OS_LINUX_PLATFORM_X11; // not supported on wayland
+#endif
 
   if (center) {
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -613,9 +616,11 @@ uintptr_t os_get_wayland_surface(void) {
 };
 #endif
 
+#ifndef _WIN32
 void os_window_message_box(const char* message) {
   //
 }
+#endif
 
 #ifdef _WIN32
 #define OS_DLL_EXPORT __declspec(dllexport)

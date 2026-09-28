@@ -161,7 +161,8 @@ local mt = {
             elseif Old == false and Bool == true then
                 if HadTransparent then
                     DrawTable.AddToStack(Entity, false, OldMaterial, OldGeometryHash, OldDrawType, OldShader)
-                elseif HadSolid then
+                end
+                if HadSolid then
                     DrawTable.AddToStack(Entity, true, OldMaterial, OldGeometryHash, OldDrawType, OldShader)
                 end
             end

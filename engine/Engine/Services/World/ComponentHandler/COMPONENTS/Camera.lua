@@ -76,6 +76,8 @@ local Indexes = {
     RebuildCallback = 47,
 
     Active = 48,
+
+    ClearColor = 49
 }
 
 local abs = math.abs
@@ -302,6 +304,11 @@ local Metatable = {
                 if self[Indexes.ProjectionType] ~= CAMERA_PROJECTION.Other then
                     Methods.ResetProjectionMatrix(self)
                 end
+            elseif k == "ClearColor" then
+              local R,G,B,A = (v or vec4(255)):div(255):unpack()
+              local PassSolid = self[32]
+              PassSolid:setClear({{R,G,B,A},{0,0,0,0}})
+              self[49]:set(R,G,B,A)
             else
                 rawset(self, Key, v or false)
             end
@@ -418,6 +425,10 @@ Camera.New = function(Input, Entity, Sink)
     Temp.ViewCulling = Input.ViewCulling ~= nil and Input.ViewCulling or false
 
     Temp.Active = Input.Active == nil and true or Input.Active
+
+    local R,G,B,A = (Input.ClearColor or vec4(255)):div(255):unpack()
+    Temp.ClearColor = Vec4(R,G,B,A)
+    OIT_SolidPass:setClear({{Temp.ClearColor:unpack()},{0,0,0,0}})
 
     -- // SET REBUILDS
 

@@ -26,6 +26,7 @@ local Indexes = {
 
     Gamma = 12,
     Exposure = 13,
+    Saturation = 14
 }
 
 local Mt = {
@@ -88,6 +89,7 @@ Environment.New = function(Data, Entity)
 
     self[Indexes.Gamma] = Data.Gamma or 1
     self[Indexes.Exposure] = Data.Exposure or 1
+    self[Indexes.Saturation] = Data.Saturation or 1
 
     self.__EnvHarmonics = lovr.graphics.newBuffer(Format, 9)
     self.__UpdateBuffers = Skybox ~= EmptySkybox and true or false

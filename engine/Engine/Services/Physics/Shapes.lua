@@ -27,8 +27,8 @@ local StrToFunc = {
         elseif T == ST.Sphere then
             Self.__ShapePtr:setRadius(type(NewSize) == "number" and NewSize or math.max(NewSize:unpack()))
         elseif T == ST.Capsule or T == ST.Cylinder then
-            Self.__ShapePtr:setLength(NewSize.y)
             Self.__ShapePtr:setRadius(NewSize.x)
+            Self.__ShapePtr:setLength(NewSize.y)
         elseif T == ST.Mesh or T == ST.Convex then
             Self.__ShapePtr:setScale(NewSize)
         end

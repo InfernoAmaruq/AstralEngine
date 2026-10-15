@@ -248,6 +248,10 @@ function Collider.New(DATA, e)
 
     local Size = Transform.Scale:abs()
 
+    if Shapes and typeof(Shapes[1]) == "Enum.ColliderShape" then
+        Shapes[1] = Physics.Shapes.NewShape(Shapes[1])
+    end
+
     local ShouldSetSize = bit.band(InheritanceMethod.Value, INHM.Root.Value) ~= 0
 
     if not Shapes then

@@ -8762,8 +8762,8 @@ bool lovrPassCapsule(Pass* pass, float* transform, uint32_t segments, uint32_t i
 
   float tip = length + radius;
   uint32_t h = vertexCount / 2;
-  vertices[0] = (ShapeVertex) { { 0.f, 0.f, -tip * .5f }, { 0.f, 0.f, -1.f }, { .5f, 0.f } };
-  vertices[h] = (ShapeVertex) { { 0.f, 0.f,  tip * .5f }, { 0.f, 0.f,  1.f }, { .5f, 1.f } };
+  vertices[0] = (ShapeVertex) { { 0.f, 0.f, -tip * 1.f }, { 0.f, 0.f, -1.f }, { .5f, 0.f } };
+  vertices[h] = (ShapeVertex) { { 0.f, 0.f,  tip * 1.f }, { 0.f, 0.f,  1.f }, { .5f, 1.f } };
   vertices++;
 
   for (uint32_t i = 1; i <= rings; i++) {
@@ -8779,8 +8779,8 @@ bool lovrPassCapsule(Pass* pass, float* transform, uint32_t segments, uint32_t i
       float x = costheta * sinphi * .5f;
       float y = sintheta * sinphi * .5f;
       float z = cosphi * .5f;
-      vertices[0] = (ShapeVertex) { { x * radius, y * radius, -(length + z * radius) }, { x, y, -z }, { u, v } };
-      vertices[h] = (ShapeVertex) { { x * radius, y * radius,  (length + z * radius) }, { x, y,  z }, { u, 1.f - v } };
+      vertices[0] = (ShapeVertex) { { x * radius, y * radius, -(length * 2 + z * radius) }, { x, y, -z }, { u, v } };
+      vertices[h] = (ShapeVertex) { { x * radius, y * radius,  (length * 2 + z * radius) }, { x, y,  z }, { u, 1.f - v } };
       vertices++;
     }
   }

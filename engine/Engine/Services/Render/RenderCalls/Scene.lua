@@ -237,6 +237,10 @@ Renderer.GetMainShader = function()
     return MainShader
 end
 
+Renderer.SetMainShader = function(Shader)
+  MainShader = Shader
+end
+
 Renderer.BindShaderPipeline("__PRIMARY_GEOMETRY_PIPELINE", MainShader)
 
 -- Geometry/Register
@@ -928,6 +932,7 @@ function Renderer.Composite()
         if Env then
             MainPass:send("gamma", Env[12])
             MainPass:send("exposure", Env[13])
+            MainPass:send("saturation", Env[14])
         end
 
         MainPass:fill(Camera[29])

@@ -34,7 +34,6 @@ vec4 OIT_Unpack(inout float Depth, inout vec3 Normal){
     Normal = OIT_ResolveRGB(OIT_TexNormal,iUV) * 2 - 1;
     Depth = OIT_ResolveRGB(OIT_TexDepth,iUV).r;
 
-
     vec3 Solid = OIT_ResolveRGB(OIT_TexSolid,iUV);
     vec3 Accum = OIT_ResolveRGB(OIT_TexTransparent,iUV);
     vec2 Reveal = OIT_ResolveRGB(OIT_TexReveal,iUV).rg;

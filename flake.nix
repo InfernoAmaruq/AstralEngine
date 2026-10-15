@@ -25,6 +25,10 @@
         python3
         git
 
+        alsa-lib
+        pipewire
+        libpulseaudio
+
         xwayland
 
         libdecor

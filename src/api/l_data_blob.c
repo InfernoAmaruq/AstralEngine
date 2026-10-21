@@ -92,6 +92,21 @@ static int l_lovrBlobSetU32(lua_State* L) { l_lovrBlobSet(L, uint32_t); }
 static int l_lovrBlobSetF32(lua_State* L) { l_lovrBlobSet(L, float); }
 static int l_lovrBlobSetF64(lua_State* L) { l_lovrBlobSet(L, double); }
 
+static int l_lovrBlobCompare(lua_State* L){
+  Blob* blob0 = luax_checktype(L, 1, Blob);
+  Blob* blob1 = luax_checktype(L, 2, Blob);
+
+  if (blob0->size != blob1->size){
+    lua_pushboolean(L,0);
+    return 1;
+  };
+
+  int ret = memcmp(blob0->data, blob1->data, blob0->size);
+  lua_pushboolean(L,ret == 0 ? 1 : 0);
+  
+  return 1;
+}
+
 const luaL_Reg lovrBlob[] = {
   { "getName", l_lovrBlobGetName },
   { "getPointer", l_lovrBlobGetPointer },
@@ -113,5 +128,6 @@ const luaL_Reg lovrBlob[] = {
   { "setU32", l_lovrBlobSetU32 },
   { "setF32", l_lovrBlobSetF32 },
   { "setF64", l_lovrBlobSetF64 },
+  { "compare", l_lovrBlobCompare },
   { NULL, NULL }
 };

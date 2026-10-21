@@ -1,7 +1,6 @@
 #include "api.h"
 #include "data/blob.h"
 #include "data/modelData.h"
-#include "data/cstruct.h"
 #include "data/rasterizer.h"
 #include "data/sound.h"
 #include "data/image.h"
@@ -223,20 +222,6 @@ static int luax_pushsound(lua_State* L, bool success, void* context) {
   return 1;
 }
 
-static int l_lovrDataNewCStruct(lua_State* L){
-    int Size = luaL_optinteger(L,1,1);
-
-    if (Size < 1) return luaL_argerror(L, 1, "Invalid size for CStruct creation! Size must be 1 or larger");
-
-    CStruct* cstruct = lovrCStructCreate(Size);
-
-    luax_assert(L, cstruct);
-    luax_pushtype(L, CStruct, cstruct);
-    lovrRelease(cstruct, lovrCStructDestroy);
-
-    return 1;
-}
-
 static int l_lovrDataNewSound(lua_State* L) {
   int type = lua_type(L, 1);
 
@@ -284,7 +269,6 @@ static const luaL_Reg lovrData[] = {
   { "newModelData", l_lovrDataNewModelData },
   { "newRasterizer", l_lovrDataNewRasterizer },
   { "newSound", l_lovrDataNewSound },
-  { "newCStruct", l_lovrDataNewCStruct },
   { NULL, NULL }
 };
 
@@ -294,7 +278,6 @@ extern const luaL_Reg lovrImage[];
 extern const luaL_Reg lovrModelData[];
 extern const luaL_Reg lovrRasterizer[];
 extern const luaL_Reg lovrSound[];
-extern const luaL_Reg lovrCStruct[];
 
 int luaopen_lovr_data(lua_State* L) {
   lua_newtable(L);
@@ -304,7 +287,6 @@ int luaopen_lovr_data(lua_State* L) {
   luax_registertype(L, Image);
   luax_registertype(L, ModelData);
   luax_registertype(L, Rasterizer);
-  luax_registertype(L, CStruct);
   luax_registertype(L, Sound);
   float16Init();
   return 1;

@@ -192,7 +192,6 @@ typedef enum {
   T_SliderJoint,
   T_Thread,
   T_Channel,
-  T_CStruct,
   T_BASE_COUNT
 } ObjectType;
 

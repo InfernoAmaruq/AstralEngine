@@ -232,11 +232,11 @@ local Methods = {
 
         return RawViewToRay(self, Vector)
     end,
-    ViewpointToRay = function(self, V1, V2)
+    ViewPointToRay = function(self, V1, V2)
         local Vector = typeof(V1) == "Vec2" and V1 or vec2(V1, V2)
         return RawViewToRay(self, Vector)
     end,
-    WorldToViewpoint = function(self, Pos)
+    WorldToViewPoint = function(self, Pos)
         return RawWorldToView(self, Pos)
     end,
     WorldToScreenPoint = function(self, Pos)

@@ -97,17 +97,17 @@ function Entity.New(Name, ...)
         -- similar thing on memory freeing to move down ptr
     end
 
-    for i = 1, select("#", ...), 2 do
-        local v, Data = select(i, ...)
-        Component.AddComponent(NewEntity.Id, v, Data)
-    end
-
     local CTX = _G.CONTEXT and _G.CONTEXT.Gen
     NewEntity.__context = CTX or NewEntity.__context
 
     NewEntity.IsNull = false
 
     Entity.EntityAdded:FireRTC(NewEntity)
+
+    for i = 1, select("#", ...), 2 do
+        local v, Data = select(i, ...)
+        NewEntity:AddComponent(v,Data)
+    end
 
     return NewEntity
 end

@@ -94,6 +94,7 @@ do
                 Obj.Collider = C
                 Obj.Shape = S
                 Obj.TriId = tri
+                Obj.Fraction = frac
                 Obj.Entity = C and C:getUserData().Entity
                 if Out then
                     Out[#Out + 1] = Obj

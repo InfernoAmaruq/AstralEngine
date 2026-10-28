@@ -38,7 +38,9 @@ local function FNV1A32(Str)
     return string.format("%08x", Hash)
 end
 
-local AssetManager = {}
+local AssetManager = {
+  Shapes = require("./Shapes.lua")
+}
 
 local TypeEnum = Enum({
     ImageData = 1,
@@ -326,7 +328,9 @@ function AssetManager.LoadAsset() end
 function AssetManager.KillCachedAsset() end
 
 -- GETTERS
-function AssetManager.GetDefaultFont() end
+function AssetManager.GetDefaultFont()
+  return lovr.graphics.getDefaultFont()
+end
 
 -- UTIL
 function AssetManager.Alias() end

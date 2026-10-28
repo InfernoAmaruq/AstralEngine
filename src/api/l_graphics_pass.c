@@ -1129,14 +1129,29 @@ static int l_lovrPassDrawPart(lua_State* L) {
 
 static int l_lovrPassMesh(lua_State* L) {
   Pass* pass = luax_checktype(L, 1, Pass);
-  Buffer* vertices = (!lua_toboolean(L, 2) || lua_type(L, 2) == LUA_TNUMBER) ? NULL : luax_checktype(L, 2, Buffer);
+  Mesh* mesh;
+  Buffer* vertices;
   Buffer* indices = luax_totype(L, 3, Buffer);
-  Buffer* indirect = luax_totype(L, 4, Buffer);
+
+  if (!lua_toboolean(L, 2) || lua_type(L, 2) == LUA_TNUMBER) {
+    vertices = NULL;
+  } else {
+    vertices = luax_totype(L,2,Buffer);
+    if (!vertices)
+      mesh = luax_checktype(L,2,Mesh);
+  }
+
+  Buffer* indirect = luax_totype(L, vertices ? 4 : 3, Buffer);
   if (indirect) {
     uint32_t count = luax_optu32(L, 5, 1);
     uint32_t offset = luax_optu32(L, 6, 0);
     uint32_t stride = luax_optu32(L, 7, 0);
-    luax_assert(L, lovrPassMeshIndirect(pass, vertices, indices, indirect, count, offset, stride));
+
+    if (mesh){
+      luax_assert(L, lovrPassMeshIndirectFromMesh(pass, mesh, indirect, count, offset, stride));
+    } else {
+      luax_assert(L, lovrPassMeshIndirect(pass, vertices, indices, indirect, count, offset, stride));
+    }
   } else {
     float transform[16];
     int index = luax_readmat4(L, indices ? 4 : 3, transform, 1);
@@ -1147,7 +1162,12 @@ static int l_lovrPassMesh(lua_State* L) {
     if (count == ~0u && lua_type(L, 2) == LUA_TNUMBER) {
       count = lua_tointeger(L, 2);
     }
-    luax_assert(L, lovrPassMesh(pass, vertices, indices, transform, start, count, instances, baseVertex));
+
+    if (mesh){
+      luaL_error(L, "Pass:mesh() can only accept a Mesh parameter for an Indirect draw call. Use Pass:draw()");
+    } else {
+      luax_assert(L, lovrPassMesh(pass, vertices, indices, transform, start, count, instances, baseVertex));
+    }
   }
   return 0;
 }

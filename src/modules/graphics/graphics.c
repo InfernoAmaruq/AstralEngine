@@ -8717,7 +8717,7 @@ bool lovrPassCapsule(Pass* pass, float* transform, uint32_t segments, uint32_t i
   float sx = vec3_length(transform + 0);
   float sy = vec3_length(transform + 4);
   float sz = vec3_length(transform + 8);
-  float length = sz * .5f;
+  float length = sz * .25f;
   float radius = sx;
 
   if (length == 0.f) {
@@ -8760,10 +8760,10 @@ bool lovrPassCapsule(Pass* pass, float* transform, uint32_t segments, uint32_t i
     return true;
   }
 
-  float tip = length + radius;
+  float tip = radius;
   uint32_t h = vertexCount / 2;
-  vertices[0] = (ShapeVertex) { { 0.f, 0.f, -tip * 1.f }, { 0.f, 0.f, -1.f }, { .5f, 0.f } };
-  vertices[h] = (ShapeVertex) { { 0.f, 0.f,  tip * 1.f }, { 0.f, 0.f,  1.f }, { .5f, 1.f } };
+  vertices[0] = (ShapeVertex) { { 0.f, 0.f, -tip }, { 0.f, 0.f, -1.f }, { .5f, 0.f } };
+  vertices[h] = (ShapeVertex) { { 0.f, 0.f,  tip }, { 0.f, 0.f,  1.f }, { .5f, 1.f } };
   vertices++;
 
   for (uint32_t i = 1; i <= rings; i++) {
@@ -9300,6 +9300,10 @@ bool lovrPassMeshIndirect(Pass* pass, Buffer* vertices, Buffer* indices, Buffer*
   lovrRetain(draw->material);
   lovrRetain(shader);
   return true;
+}
+
+bool lovrPassMeshIndirectFromMesh(Pass* pass, Mesh* mesh, Buffer* draws, uint32_t count, uint32_t offset, uint32_t stride){
+  return lovrPassMeshIndirect(pass, mesh->vertexBuffer, mesh->indexBuffer, draws, count, offset, stride);
 }
 
 bool lovrPassBeginTally(Pass* pass, uint32_t* index) {

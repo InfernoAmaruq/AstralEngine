@@ -29,7 +29,6 @@ AstralEngine.Graphics = {
     GetBackgroundColor = lovr.graphics.getBackgroundColor,
     EnableTiming = lovr.graphics.setTimingEnabled,
     IsTimingEnabled = lovr.graphics.isTimingEnabled,
-    GetDefaultFont = lovr.graphics.getDefaultFont,
 }
 
 AstralEngine.Graphics.GPU = require("DeviceQuery")

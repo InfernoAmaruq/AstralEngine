@@ -114,7 +114,7 @@ Material.New = function(Data, Ent)
 
     local InColor = Data and Data.Color or vec4(255, 255, 255, 255)
     local R, G, B, A = InColor:unpack()
-    local Color = Vec4(R, G, B, A or 1):div(255)
+    local Color = Vec4(R, G, B, A or 255):div(255)
     Storage[4] = Color
     Storage[7] = Mat
     Storage[8] = Ent

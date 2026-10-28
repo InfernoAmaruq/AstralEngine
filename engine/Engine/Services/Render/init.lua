@@ -8,7 +8,6 @@ local PassTable = {}
 local CONSTOFFSET = lovr.headset and 2 or 1
 -- Allocate an AO texture
 Renderer.PassStorage = {
-    __CORE = {},
     PassTable = PassTable,
     PreTable = {},
     PostTable = {},
@@ -29,7 +28,7 @@ function Renderer.PassStorage.RemovePass(Pass)
         for _, T in pairs(Renderer.PassStorage[Search]) do
             for j, P in pairs(T) do
                 if P == Pass then
-                    Renderer.PassStorage[Search][j] = nil
+                    T[j] = nil
                     break
                 end
             end

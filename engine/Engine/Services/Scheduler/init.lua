@@ -80,7 +80,7 @@ function Scheduler.Defer(f, ...)
     end, ...)
 end
 
-function Scheduler.Delay(f, ...)
+function Scheduler.Delay(n, f, ...)
     return Scheduler.Spawn(function(...)
         Scheduler.Wait(n)
         f(...)

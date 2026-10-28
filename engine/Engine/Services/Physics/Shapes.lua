@@ -27,8 +27,8 @@ local StrToFunc = {
         elseif T == ST.Sphere then
             Self.__ShapePtr:setRadius(type(NewSize) == "number" and NewSize or math.max(NewSize:unpack()))
         elseif T == ST.Capsule or T == ST.Cylinder then
-            Self.__ShapePtr:setRadius(NewSize.x)
-            Self.__ShapePtr:setLength(NewSize.y)
+            Self.__ShapePtr:setRadius(NewSize.x / 2)
+            Self.__ShapePtr:setLength(NewSize.z)
         elseif T == ST.Mesh or T == ST.Convex then
             Self.__ShapePtr:setScale(NewSize)
         end
@@ -88,8 +88,8 @@ local StrToFunc = {
             return vec3(self.__ShapePtr:getRadius())
         elseif T == ST.Cylinder or T == ST.Capsule then
             local ptr = self.__ShapePtr
-            local Rad = ptr:getRadius()
-            return vec3(Rad, ptr:getLength(), Rad)
+            local Rad = ptr:getRadius() * 2
+            return vec3(Rad, Rad, ptr:getLength())
         elseif T == ST.Mesh or T == ST.Convex then
             return vec3(self.__ShapePtr:getScale())
         end

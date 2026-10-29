@@ -1,7 +1,7 @@
 ---@class Shape: Component
 
 local Component = GetService("Component", "Component")
-local Render = GetService("Renderer")
+local ShapeManager = GetService("AssetService").Shapes
 
 local Shape = {}
 
@@ -14,161 +14,104 @@ local E = Enum({
 }, "ShapeType")
 
 local WeakMt = {__mode = "v"}
-local MeshRegistry = {
-  [E.Box] = setmetatable({},WeakMt),
-  [E.Capsule] = setmetatable({},WeakMt),
-  [E.Cylinder] = setmetatable({},WeakMt),
-  [E.Sphere] = setmetatable({},WeakMt),
-  [E.Plane] = setmetatable({},WeakMt)
-}
-
-local P_Box, P_Sphere, P_Capsule, P_Plane, P_Cylinder
-do
-    local TMPPASS = AstralEngine.Graphics.NewPass()
-    P_Box = TMPPASS.box
-    P_Sphere = TMPPASS.sphere
-    P_Capsule = TMPPASS.capsule
-    P_Plane = TMPPASS.plane
-    P_Cylinder = TMPPASS.cylinder
-    P_Send = TMPPASS.send
-end
-
-local function GenerateProcessors(f, Offset) -- offset to last arg
-    local Comp = Component.Components
-
-    local P_Send = P_Send
-
-    local function Single(Pass, Geometry)
-        local TransformStorage = Comp.Transform.Storage
-        local M = Comp.Material
-        local MatStorage = M.Storage
-        local EmptyMatrix = M.Userdata.EmptyMatrix
-
-        local P_Send = P_Send
-
-        local f = f
-
-        for i = 1, Geometry.Top do
-            local Ent = Geometry[i]
-            local Mat = MatStorage[Ent]
-            local Transform = TransformStorage[Ent]
-
-            if Mat then
-                P_Send(Pass, "Material_Matrix", Mat[9])
-                P_Send(Pass, "Material_ObjectScale", Transform[5])
-            else
-                P_Send(Pass, "Material_Matrix", EmptyMatrix)
-            end
-
-            f(Pass, Transform[3])
-        end
-    end
-
-    local Bulk
-
-    if Offset == 3 then
-        Bulk = function(Pass, Geometry)
-            f(Pass, nil, nil, Geometry.Top)
-        end
-    elseif Offset == 4 then
-        Bulk = function(Pass, Geometry)
-            f(Pass, nil, nil, nil, Geometry.Top)
-        end
-    elseif Offset == 5 then
-        Bulk = function(Pass, Geometry)
-            f(Pass, nil, nil, nil, nil, Geometry.Top)
-        end
-    end
-
-    return Single, Bulk
-end
-
-local BoxId, SphereId, CapsuleId, PlaneId, CylinderId
-BoxId = Render.NewGeometryType(GenerateProcessors(P_Box, 3))
-SphereId = Render.NewGeometryType(GenerateProcessors(P_Sphere, 4))
-CapsuleId = Render.NewGeometryType(GenerateProcessors(P_Capsule, 3))
-PlaneId = Render.NewGeometryType(GenerateProcessors(P_Plane, 5))
-CylinderId = Render.NewGeometryType(GenerateProcessors(P_Cylinder, 5))
-
-local LookupTable = {
-    [E.Box] = BoxId,
-    [E.Capsule] = CapsuleId,
-    [E.Plane] = PlaneId,
-    [E.Cylinder] = CylinderId,
-    [E.Sphere] = SphereId,
-}
+local MeshRegistry = setmetatable({},WeakMt)
 
 Shape.Name = "Shape"
 
-local IdxFields = {
-    Mesh = 1,
-    Shape = 2,
-    -- 3-5 reserved for special data thats based off of the Shape type
-}
+local function GetShape(Type,x,y,z,SegX,SegY)
+  local Key = Type.Value.."-"..x..":"..y..":"..z..":"..(SegX or -1)..":"..(SegY or -1)
+
+  local Mesh = MeshRegistry[Key]
+  if not Mesh then
+    if Type == E.Box then
+      Mesh = ShapeManager.NewBox(x,y,z)
+    elseif Type == E.Capsule then
+      Mesh = ShapeManager.NewCapsule(x,y,z,SegX)
+    elseif Type == E.Cylinder then
+      Mesh = ShapeManager.NewCylinder(x,y,z,nil,nil,nil,SegX)
+    elseif Type == E.Plane then
+      Mesh = ShapeManager.NewPlane(x,y,SegX,SegY)
+    else
+      Mesh = ShapeManager.NewSphere(x,y,z,SegX,SegY)
+    end
+  end
+
+  return Key, Mesh
+end
 
 local MT = {
     __index = function(self, k)
-        return self[IdxFields[k]]
+      if k == "Shape" then
+        return self.__Shape
+      end
     end,
     __newindex = function(Comp, k, v)
-        local RT = Comp.__RenderTypePtr
-        if k == "Shape" then
-            assert(
-                typeof(v) == "Enum.ShapeType",
-                "Attempt to set 'Shape' field of component "
-                .. tostring(Comp)
-                .. ": "
-                .. debug.getaddress(Comp)
-                .. " to non-enum"
-            )
+      local MeshCmp = Component.GetComponent(Comp.__Owner, "Mesh")
+      AstralEngine.Assert(MeshCmp, "Attempt to edit 'Shape' component with a dead Mesh component!","Shape")
+      if k == "Shape" then
+        assert(
+          typeof(v) == "Enum.ShapeType",
+          "Attempt to set 'Shape' field of component "
+          .. tostring(Comp)
+          .. ": "
+          .. debug.getaddress(Comp)
+          .. " to non-enum"
+        )
 
-            local Conversion = LookupTable[v]
+        if v == Comp.__Shape then return end
 
-            Comp[IdxFields.Shape] = v
-            local Flags = RT.Flags
-            RT:Update(Flags.Param_Old, Flags.Param_Old, Conversion, Conversion, Flags.Param_Old)
-        end
+        Comp.__Shape = v
+        local Key, NewShape = GetShape(v,Comp.__x,Comp.__y,Comp.__z,Comp.__SegX,Comp.__SegY)
+        MeshCmp.Mesh = NewShape
+        Comp.__Key = Key
+      end
     end,
 }
 
 Shape.Userdata = {}
 Shape.New = function(DATA, e, ShouldSink)
     AstralEngine.Assert(
-        not Component.GetComponent(e, "RenderTarget"),
-        "Entity already has RenderTarget component. Cannot bind more than 1 RenderTarget to an entity!",
+        (not Component.GetComponent(e, "RenderTarget") and not Component.GetComponent(e,"Mesh")),
+        "Entity already has RenderTarget/Mesh component. Cannot bind more than 1 RenderTarget/Mesh to an entity!",
         "Shape"
     )
-    local ShapeEnum = (DATA.Shape or E.Box)
 
-    local Val = LookupTable[ShapeEnum]
-    AstralEngine.Assert(Val, "No valid shape type provided!", "Shape")
+    local ShapeEnum = (DATA.Shape or E.Box)
 
     if not Component.GetComponent(e, "Transform") and not ShouldSink then
         Component.AddComponent(e, "Transform")
     end
 
-    local RT = Component.AddComponent(e, "RenderTarget", {
-        Shader = false,
-        Stack = Component.Components.RenderTarget.Userdata.Flags.Stack_Solid,
-        GeometryType = Val,
-        GeometryHash = Val,
-        Material = false,
+    local Scale = DATA.Scale or vec3(1,1,1)
+    local SegX, SegY = DATA.SegX or nil, DATA.SegY or nil
+
+    local Key, ObjMesh = GetShape(ShapeEnum,Scale.x,Scale.y,Scale.z,SegX,SegY)
+
+    Component.AddComponent(e, "Mesh", {
+      Mesh = ObjMesh
     })
 
     local Comp = {
-        [IdxFields.Shape] = ShapeEnum,
+        __Owner = e,
+        __Mesh = ObjMesh,
+        __Shape = ShapeEnum,
+        __x = Scale.x,
+        __y = Scale.y,
+        __z = Scale.z,
+        __SegX = SegX,
+        __SegY = SegY,
+        __Key = Key
     }
-
-    Comp.__RenderTypePtr = RT
-    Comp.__Ent = e
 
     return setmetatable(Comp, MT)
 end
 
-Shape.Destroy = function(_, e)
-    if Component.GetComponent(e, "RenderTarget") then
-        Component.RemoveComponent(e, "RenderTarget", true)
-    end
+Shape.Destroy = function(self,e)
+  local MeshCmp = Component.GetComponent(e,"Mesh")
+  if MeshCmp and MeshCmp.Mesh == self.__Mesh then
+    MeshCmp.Mesh = nil
+    Component.RemoveComponent(e,"Mesh")
+  end
 end
 
 Shape.Userdata.HardExclusion = {

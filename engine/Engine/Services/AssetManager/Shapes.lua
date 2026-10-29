@@ -128,10 +128,6 @@ function Shapes.NewCylinder(x, y, z, capped, angle1, angle2, segments)
       Ind[#Ind + 1] = b + 1
       Ind[#Ind + 1] = c + 1
     end
-
-    print(Ind[#Ind],#Ind)
-    print(#Vert)
-
   end
 
   local Mesh = lovr.graphics.newMesh(Vert)

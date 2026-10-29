@@ -13,6 +13,15 @@ local E = Enum({
     Plane = 5,
 }, "ShapeType")
 
+local WeakMt = {__mode = "v"}
+local MeshRegistry = {
+  [E.Box] = setmetatable({},WeakMt),
+  [E.Capsule] = setmetatable({},WeakMt),
+  [E.Cylinder] = setmetatable({},WeakMt),
+  [E.Sphere] = setmetatable({},WeakMt),
+  [E.Plane] = setmetatable({},WeakMt)
+}
+
 local P_Box, P_Sphere, P_Capsule, P_Plane, P_Cylinder
 do
     local TMPPASS = AstralEngine.Graphics.NewPass()
@@ -92,7 +101,9 @@ local LookupTable = {
 Shape.Name = "Shape"
 
 local IdxFields = {
-    Shape = 1,
+    Mesh = 1,
+    Shape = 2,
+    -- 3-5 reserved for special data thats based off of the Shape type
 }
 
 local MT = {

@@ -1164,7 +1164,7 @@ static int l_lovrPassMesh(lua_State* L) {
     }
 
     if (mesh){
-      luaL_error(L, "Pass:mesh() can only accept a Mesh parameter for an Indirect draw call. Use Pass:draw()");
+      luax_assert(L, lovrPassMeshFromMesh(pass, mesh, transform, start, count, instances, baseVertex));
     } else {
       luax_assert(L, lovrPassMesh(pass, vertices, indices, transform, start, count, instances, baseVertex));
     }

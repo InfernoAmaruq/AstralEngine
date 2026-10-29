@@ -751,6 +751,7 @@ bool lovrPassDrawPart(Pass* pass, Model* model, uint32_t mesh, uint32_t part, fl
 bool lovrPassDrawMesh(Pass* pass, Mesh* mesh, float* transform, uint32_t instances);
 bool lovrPassDrawTexture(Pass* pass, Texture* texture, float* transform);
 bool lovrPassMesh(Pass* pass, Buffer* vertices, Buffer* indices, float* transform, uint32_t start, uint32_t count, uint32_t instances, uint32_t baseVertex);
+bool lovrPassMeshFromMesh(Pass* pass, Mesh* mesh, float* transform, uint32_t start, uint32_t count, uint32_t instances, uint32_t baseVertex);
 bool lovrPassMeshIndirect(Pass* pass, Buffer* vertices, Buffer* indices, Buffer* indirect, uint32_t count, uint32_t offset, uint32_t stride);
 bool lovrPassMeshIndirectFromMesh(Pass* pass, Mesh* mesh, Buffer* draws, uint32_t count, uint32_t offset, uint32_t stride);
 

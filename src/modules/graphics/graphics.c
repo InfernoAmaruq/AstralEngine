@@ -9245,6 +9245,10 @@ bool lovrPassMesh(Pass* pass, Buffer* vertices, Buffer* indices, float* transfor
   });
 }
 
+bool lovrPassMeshFromMesh(Pass* pass, Mesh* mesh, float* transform, uint32_t start, uint32_t count, uint32_t instances, uint32_t baseVertex){
+  return lovrPassMesh(pass, mesh->vertexBuffer, mesh->indexBuffer, transform, start, count, instances, baseVertex);
+}
+
 bool lovrPassMeshIndirect(Pass* pass, Buffer* vertices, Buffer* indices, Buffer* draws, uint32_t count, uint32_t offset, uint32_t stride) {
   stride = stride ? stride : (indices ? 20 : 16);
   Shader* shader = pass->pipeline->shader;

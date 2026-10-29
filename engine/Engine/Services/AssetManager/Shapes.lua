@@ -224,27 +224,114 @@ function Shapes.NewSphere(x,y,z,sh,sv)
   return Mesh
 end
 
-function Shapes.NewCapsule(scaleX,scaleY,len,segments)
-  segments = segments or MULTI_SEGMENT_RES
+function Shapes.NewCapsule(scaleX,scaleY,len,Segments)
+  Segments = Segments or MULTI_SEGMENT_RES
 
   local Length = (len or 1) * 0.25
-  local Radius = (scaleX or 1) * 0.5
+  local RadiusX = (scaleX or 1) * 0.5
+  local RadiusY = (scaleY or scaleX or 1) * 0.5
 
   if Length == 0 then
-    return Shapes.NewSphere(x,y,z,MULTI_SEGMENT_RES,nil)
+    return Shapes.NewSphere(scaleX,nil,nil,MULTI_SEGMENT_RES,nil)
   end
 
-  local Rings = segments / 2
-  local Tip = Radius
-  local VertCount = 2 * (1 + Rings * (segments + 1))
+  local Rings = Segments / 2
+  local Tip = RadiusX + Length * 2
+  local VertCount = 2 * (1 + Rings * (Segments + 1))
+  local IdxCount = 2 * (3 * Segments + 6 * Segments * (Rings - 1)) + 6 * Segments
 
   local Vert, Ind = {}, {}
 
+  local h = VertCount / 2 + 1
+
   Vert[1] = { 0, 0, -Tip, 0, 0, -1, 0.5, 0 }
-  Vert[VertCount / 2 + 1] = { 0, 0, Tip, 0, 0, 1, 0.5, 1 }
+  Vert[h] = { 0, 0,  Tip, 0, 0,  1, 0.5, 1 }
+  local Offset = 1
+
+  local sin,cos = math.sin,math.cos
+
+  for i = 1, Rings do
+    local v = i / Rings
+    local Phi = v * PI / 2
+    local SinPhi = sin(Phi)
+    local CosPhi = cos(Phi)
+
+    for j = 0, Segments do
+      local u = j / Segments
+      local Theta = u * PI * 2
+      local SinTheta = sin(Theta)
+      local CosTheta = cos(Theta)
+
+      local x = CosTheta * SinPhi
+      local y = SinTheta * SinPhi
+      local z = CosPhi
+
+      Vert[1 + Offset] = { x * RadiusX, y * RadiusY, -(Length * 2 + z * RadiusX), x, y, -z, u, v }
+      Vert[h + Offset] = { x * RadiusX, y * RadiusY, (Length * 2 + z * RadiusX), x, y,  z, u, 1 - v }
+      Offset = Offset + 1
+    end
+  end
+
+  local i1 = 1
+  local i2 = (IdxCount - 6 * Segments) / 2 + 1
+
+  for i = 0, Segments - 1 do
+    Ind[i1 + 0] = 1
+    Ind[i1 + 1] = 1 + i + 2
+    Ind[i1 + 2] = 1 + i + 1
+    i1 = i1 + 3
+
+    Ind[i2 + 0] = h
+    Ind[i2 + 1] = h + i + 1
+    Ind[i2 + 2] = h + i + 2
+    i2 = i2 + 3
+  end
+
+  for i = 0, Rings - 2 do
+    for j = 0, Segments - 1 do
+      local a = 1 + i * (Segments + 1) + 0 + j
+      local b = 1 + i * (Segments + 1) + 1 + j
+      local c = 1 + i * (Segments + 1) + 0 + Segments + 1 + j
+      local d = 1 + i * (Segments + 1) + 1 + Segments + 1 + j
+
+      Ind[i1 + 0] = a + 1
+      Ind[i1 + 1] = b + 1
+      Ind[i1 + 2] = c + 1
+      Ind[i1 + 3] = c + 1
+      Ind[i1 + 4] = b + 1
+      Ind[i1 + 5] = d + 1
+
+      i1 = i1 + 6
+
+      Ind[i2 + 0] = h + a
+      Ind[i2 + 1] = h + c
+      Ind[i2 + 2] = h + b
+      Ind[i2 + 3] = h + b
+      Ind[i2 + 4] = h + c
+      Ind[i2 + 5] = h + d
+
+      i2 = i2 + 6
+    end
+  end
+
+  for i = 1, Segments do
+    local a = h - Segments - 1 + i - 1
+    local b = h - Segments - 1 + i + 1 - 1
+    local c = VertCount - Segments - 1 + i
+    local d = VertCount - Segments - 1 + i + 1
+
+    Ind[i2 + 0] = a
+    Ind[i2 + 1] = b
+    Ind[i2 + 2] = c
+    Ind[i2 + 3] = c
+    Ind[i2 + 4] = b
+    Ind[i2 + 5] = d
+    i2 = i2 + 6
+  end
 
   local Mesh = lovr.graphics.newMesh(Vert)
   Mesh:setIndices(Ind)
+  Mesh:setBoundingBox(-RadiusX, RadiusX, -RadiusY, RadiusY, -Tip, Tip)
 
   return Mesh
 end

@@ -438,7 +438,10 @@ local function DrawTableFix(Table, Where, Key, Shader)
             ShaderUpdated(Table, Queue, i, v)
         end
 
+        local RT = CompReg.RenderTarget.Storage
+
         for i, v in pairs(Queue) do
+            local NewObj = RT[i]
             if v then
                 Top = Top + 1
                 Table[Top] = i
@@ -448,6 +451,7 @@ local function DrawTableFix(Table, Where, Key, Shader)
 
                     T_Transform[Top] = Transform[3]
                     T_Scale[Top] = Transform[5]
+                    NewObj[9] = Top
 
                     if Material then
                         T_Mat[Top] = Material[9]
@@ -456,21 +460,41 @@ local function DrawTableFix(Table, Where, Key, Shader)
                     end
                 end
             else
-                for j = 1, Top do
-                    if Table[j] == i then -- remove
-                        local TopEnt = Table[Top]
-                        Table[Top] = nil
 
-                        Table[j] = TopEnt
+                local Idx = NewObj and NewObj[9] or -1
 
-                        if Inst then
-                            T_Transform[Top], T_Transform[j] = nil, T_Transform[Top]
-                            T_Mat[Top], T_Mat[j] = nil, T_Mat[Top]
-                            T_Scale[Top], T_Scale[j] = nil, T_Scale[Top]
-                        end
+                if Idx == -1 then
+                  for j = 1, Top do
+                      if Table[j] == i then -- remove
+                          Idx = j
+                          break
+                      end
+                  end
+                end
 
-                        Top = Top - 1
+                if NewObj then
+                    NewObj[9] = -1
+                end
+
+                if Idx == Top then
+                    Table[Top] = nil
+                    T_Transform[Top] = nil
+                    T_Mat[Top] = nil
+                    T_Scale[Top] = nil
+                else
+                    local TopEnt = Table[Top]
+                    Table[Top] = nil
+
+                    Table[Idx] = TopEnt
+                    RT[TopEnt][9] = Idx
+
+                    if Inst then
+                        T_Transform[Top], T_Transform[Idx] = nil, T_Transform[Top]
+                        T_Mat[Top], T_Mat[Idx] = nil, T_Mat[Top]
+                        T_Scale[Top], T_Scale[Idx] = nil, T_Scale[Top]
                     end
+
+                    Top = Top - 1
                 end
             end
 

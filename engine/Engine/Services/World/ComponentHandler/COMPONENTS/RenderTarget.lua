@@ -4,7 +4,7 @@ local RendTarget = {}
 
 local Component = GetService("Component", "Component")
 local Renderer = GetService("Renderer")
-local Entity = GetService("Entity")
+local EntitySer = GetService("Entity")
 
 RendTarget.Name = "RenderTarget"
 RendTarget.Pattern = {}
@@ -19,10 +19,11 @@ local FIELDS = {
     __Shader = 6,
     __ShaderLock = 7,
     __Enabled = 8,
+    __StorageIdx = 9
 }
 
 local RenderFlags = {
-    Param_Old = -1, -- sent when we don't know the parameter. Like if we have a Material but Shape is submitting it
+    Param_Old = -1, -- sent when we don't know the parameter. Like if we have a Material but Mesh is submitting it
 
     Stack_None = 0,
     Stack_Solid = 1,
@@ -126,7 +127,7 @@ local Methods = {
     end,
 }
 
-Entity.OnTransformChanged:Connect(function(Ent)
+EntitySer.OnTransformChanged:Connect(function(Ent)
     local rt = Component.Components.RenderTarget.Storage[Ent.Id]
     if rt then
         Methods.Invalidate(rt)
@@ -183,6 +184,7 @@ RendTarget.New = function(In, Entity)
         [5] = false,
         [6] = false,
         [7] = false,
+        [9] = -1,
         __E = Entity,
     }, mt)
 

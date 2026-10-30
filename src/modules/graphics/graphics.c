@@ -9215,7 +9215,7 @@ bool lovrPassDrawTexture(Pass* pass, Texture* texture, float* transform) {
   return true;
 }
 
-bool lovrPassMesh(Pass* pass, Buffer* vertices, Buffer* indices, float* transform, uint32_t start, uint32_t count, uint32_t instances, uint32_t baseVertex) {
+bool lovrPassMesh(Pass* pass, Buffer* vertices, Buffer* indices, float* bounds, float* transform, uint32_t start, uint32_t count, uint32_t instances, uint32_t baseVertex) {
   lovrCheck(!indices || indices->info.format, "Buffer must have been created with a format to use it as a%s buffer", "n index");
   lovrCheck(!vertices || vertices->info.format, "Buffer must have been created with a format to use it as a%s buffer", " vertex");
   lovrCheck(!vertices || vertices->supportsMesh, "Vertex buffer has invalid format (can not contain nested structs/arrays, or matrix/index types)");
@@ -9238,6 +9238,7 @@ bool lovrPassMesh(Pass* pass, Buffer* vertices, Buffer* indices, float* transfor
     .vertex.buffer = vertices,
     .index.buffer = indices,
     .transform = transform,
+    .bounds = bounds,
     .start = start,
     .count = count,
     .instances = instances,
@@ -9246,7 +9247,10 @@ bool lovrPassMesh(Pass* pass, Buffer* vertices, Buffer* indices, float* transfor
 }
 
 bool lovrPassMeshFromMesh(Pass* pass, Mesh* mesh, float* transform, uint32_t start, uint32_t count, uint32_t instances, uint32_t baseVertex){
-  return lovrPassMesh(pass, mesh->vertexBuffer, mesh->indexBuffer, transform, start, count, instances, baseVertex);
+  if (!lovrMeshFlush(mesh)) {
+    return false;
+  }
+  return lovrPassMesh(pass, mesh->vertexBuffer, mesh->indexBuffer, mesh->bounds, transform, start, count, instances, baseVertex);
 }
 
 bool lovrPassMeshIndirect(Pass* pass, Buffer* vertices, Buffer* indices, Buffer* draws, uint32_t count, uint32_t offset, uint32_t stride) {
@@ -9307,6 +9311,9 @@ bool lovrPassMeshIndirect(Pass* pass, Buffer* vertices, Buffer* indices, Buffer*
 }
 
 bool lovrPassMeshIndirectFromMesh(Pass* pass, Mesh* mesh, Buffer* draws, uint32_t count, uint32_t offset, uint32_t stride){
+  if (!lovrMeshFlush(mesh)) {
+    return false;
+  }
   return lovrPassMeshIndirect(pass, mesh->vertexBuffer, mesh->indexBuffer, draws, count, offset, stride);
 }
 

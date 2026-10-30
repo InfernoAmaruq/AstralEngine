@@ -34,15 +34,21 @@ local function GetShape(Type,x,y,z,SegX,SegY)
     else
       Mesh = ShapeManager.NewSphere(x,y,z,SegX,SegY)
     end
+    MeshRegistry[Key] = Mesh
   end
 
   return Key, Mesh
+end
+
+local function Rebuild()
 end
 
 local MT = {
     __index = function(self, k)
       if k == "Shape" then
         return self.__Shape
+      elseif k == "Rebuild" then
+        return Rebuild
       end
     end,
     __newindex = function(Comp, k, v)

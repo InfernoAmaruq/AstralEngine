@@ -437,12 +437,12 @@ Camera.New = function(Input, Entity, Sink)
     -- // REGISTER WITH THE RENDERER
 
     Renderer.AddCamera(Entity)
-    Renderer.PassStorage.AddPass(false, OIT_SolidPass, PASS_PRIORITY_GEOM, true)
-    Renderer.PassStorage.AddPass(false, OIT_TransparentPass, PASS_PRIORITY_GEOM + 1, true)
-    Renderer.PassStorage.AddPass(false, CompositePass, PASS_PRIORITY_GEOM + 10, true)
-    Renderer.PassStorage.AddPass(false, BlurPassH, PASS_PRIORITY_GEOM + 13, true)
-    Renderer.PassStorage.AddPass(false, BlurPassV, PASS_PRIORITY_GEOM + 16, true)
-    Renderer.PassStorage.AddPass(false, CameraPass, PASS_PRIORITY_COMMIT, true)
+    Renderer.PassStorage.AddPass(false, OIT_SolidPass, PASS_PRIORITY_GEOM)
+    Renderer.PassStorage.AddPass(false, OIT_TransparentPass, PASS_PRIORITY_GEOM + 1)
+    Renderer.PassStorage.AddPass(false, CompositePass, PASS_PRIORITY_GEOM + 10)
+    Renderer.PassStorage.AddPass(false, BlurPassH, PASS_PRIORITY_GEOM + 13)
+    Renderer.PassStorage.AddPass(false, BlurPassV, PASS_PRIORITY_GEOM + 16)
+    Renderer.PassStorage.AddPass(false, CameraPass, PASS_PRIORITY_COMMIT)
 
     for i, v in pairs(Temp) do
         self[Indexes[i] or i] = v

@@ -12,8 +12,6 @@ vec4 lovrmain(){
     if (!Transparent) // otherwise write to normal buffer
         NormalTexture = vec4((s.normal + 1)/2,1);
 
-    return vec4(UV.x,UV.y,0,1);
-
     return CurrentColor;
 }
 #else

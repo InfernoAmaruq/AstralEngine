@@ -21,7 +21,7 @@ local MeshId = Render.NewGeometryType(function(Pass, Geom)
             Pass:send("Material_Matrix", EmptyMatrix)
         end
 
-        Pass:draw(Mesh, Transform[3])
+        Pass:mesh(Mesh, Transform[3])
     end
 end, function(Pass, Geom)
     Pass:draw(Geom.Hash, nil, Geom.Top)

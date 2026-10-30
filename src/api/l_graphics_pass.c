@@ -1166,7 +1166,7 @@ static int l_lovrPassMesh(lua_State* L) {
     if (mesh){
       luax_assert(L, lovrPassMeshFromMesh(pass, mesh, transform, start, count, instances, baseVertex));
     } else {
-      luax_assert(L, lovrPassMesh(pass, vertices, indices, transform, start, count, instances, baseVertex));
+      luax_assert(L, lovrPassMesh(pass, vertices, indices, NULL, transform, start, count, instances, baseVertex));
     }
   }
   return 0;

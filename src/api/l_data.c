@@ -78,9 +78,18 @@ static int l_lovrDataNewBlob(lua_State* L) {
     data[size] = '\0';
   } else {
     Blob* blob = luax_checktype(L, 1, Blob);
-    size = blob->size;
+    int offset = luaL_optnumber(L,3,1) - 1;
+    luax_check(L, offset >= 0, "Blob offset must be positive");
+
+    size = luaL_optnumber(L,4,blob->size);
+
+    luax_check(L, size > 0, "Blob size must be positive");
+
     data = lovrMalloc(size);
-    memcpy(data, blob->data, size);
+
+    luax_check(L, size + offset <= blob->size, "Blob size + offset cannot be greater than size");
+
+    memcpy(data, blob->data + offset, size);
   }
   const char* name = luaL_optstring(L, 2, "");
   Blob* blob = lovrBlobCreate(data, size, name);

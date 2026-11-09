@@ -2,20 +2,23 @@ layout(location = 1) out vec4 RevealTexture;
 uniform bool Transparent;
 
 #ifdef GL_FRAGMENT_SHADER
+float DoTransparent(float a){
+  float z = clamp(gl_FragCoord.z,0,1);
+  float DepthWeight = min(pow(z,1.5),0.8);
+
+  float Weight = a * (0.2 + 1.5 * DepthWeight);
+  RevealTexture = vec4(-log(1.0-a),Weight,0,0);
+
+  return a * Weight;
+}
+
 vec4 DoOIT(vec4 CurrentColor){
     float a = CurrentColor.a;
         if (a < 0.02) discard;
 
         if (Transparent){
             if (a > 0.99) discard;
-            
-            float z = clamp(gl_FragCoord.z,0.0,1.0);
-            float DepthWeight = min(pow(z,1.5),0.8);
-
-            float Weight = a * (0.2 + 1.5 * DepthWeight);
-
-            RevealTexture = vec4(- log(1.0-a),Weight,0,0);
-            return vec4(CurrentColor.rgb * a * Weight, 1);
+            return vec4(CurrentColor.rgb * DoTransparent(a), 1);
         }
         else
         {

@@ -281,6 +281,7 @@ function Component.__RunPostPass()
     for _, v in pairs(FinalProcessing) do
         v()
     end
+    FinalProcessing = nil
 end
 
 function Component.LoadComponents()

@@ -112,9 +112,9 @@ Shape.New = function(DATA, e, ShouldSink)
     return setmetatable(Comp, MT)
 end
 
-Shape.Destroy = function(self,e)
+Shape.Destroy = function(self,e,Force)
   local MeshCmp = Component.GetComponent(e,"Mesh")
-  if MeshCmp and MeshCmp.Mesh == self.__Mesh then
+  if MeshCmp and MeshCmp.Mesh == self.__Mesh and not Force then
     MeshCmp.Mesh = nil
     Component.RemoveComponent(e,"Mesh")
   end
@@ -123,6 +123,7 @@ end
 Shape.Userdata.HardExclusion = {
     RenderTarget = true,
 }
+
 Shape.Userdata.SoftDependency = {
     Transform = true,
 }

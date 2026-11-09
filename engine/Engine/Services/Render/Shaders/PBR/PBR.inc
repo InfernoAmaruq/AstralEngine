@@ -43,3 +43,20 @@ vec4 PBR_GetColor(){
 
     return CurrentColor;
 }
+
+vec4 PBR_GetColor(const Surface s){
+    vec4 CurrentColor = vec4(s.baseColor.rgb,s.baseColor.a);
+
+    CurrentColor.rgb += lighting_getLights(s);
+
+    vec3 SH[9];
+
+    for (int i = 0; i < 9; ++i)
+        SH[i] = PBR_SH[i] + PBR_SH_U[i];
+
+    CurrentColor.rgb += getIndirectLighting(s, PBR_EnvMap, SH);
+
+    CurrentColor.rgb += s.emissive;
+
+    return CurrentColor;
+}

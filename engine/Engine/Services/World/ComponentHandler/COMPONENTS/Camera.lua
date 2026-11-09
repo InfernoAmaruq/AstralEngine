@@ -171,11 +171,6 @@ local function RebuildTextures(self, w, h, d)
         Scheduler.PushSyncBlock()
     end
 
-    d = d or AstralEngine.Window.GetWindowDensity()
-
-    w = w * d
-    h = h * d
-
     local NewTex = AstralEngine.Graphics.NewTexture
 
     for i = FIRST_TEXTURE, FINAL_TEXTURE, 2 do
@@ -219,9 +214,9 @@ local function RebuildTextures(self, w, h, d)
 end
 
 local Methods = {
-    Resize = function(self, w, h, d)
+    Resize = function(self, w, h)
         if self[47] then
-            self[47](self, w, h, d)
+            self[47](self, w, h)
         end
     end,
 
@@ -332,11 +327,9 @@ Camera.New = function(Input, Entity, Sink)
     Scheduler.PushSyncBlock()
     if not EventBound then
         AstralEngine.Signals.OnWindowResize:Connect(function(w, h, d)
-            d = d or AstralEngine.Window.GetWindowDensity()
-
             for _, v in pairs(Component.Components.Camera.Storage) do
                 if v[47] then
-                    v[47](v, w, h, d)
+                    v[47](v, w, h)
                 end
             end
         end)
@@ -351,9 +344,6 @@ Camera.New = function(Input, Entity, Sink)
     local self = table.new(47, 0)
 
     local W, H = (Input.Resolution or vec2(AstralEngine.Window.GetWindowDimensions())):unpack()
-    local Density = AstralEngine.Window.GetWindowDensity()
-
-    W, H = W * Density, H * Density
 
     -- // ALLOCATE TEXTURES
     local CameraTexture = GetTexture(self, W, H, TEX_DATA_CAMERA_TEXTURE, Indexes.TextureCamera)

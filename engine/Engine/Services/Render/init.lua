@@ -1,4 +1,4 @@
-local ShaderService = require("ShaderService")
+require("ShaderService")
 
 local Renderer = {}
 Renderer.CamMask = bit.bnot(0)

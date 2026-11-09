@@ -15,7 +15,6 @@ Entity.Alive = {}
 Entity.Capacity = 0 -- points to highest id
 Entity.TopPtr = 0   -- points at highest alive object
 
--- fires event on ancestry change in parent-child pairs
 function Entity.GetEntityFromId(Id)
     local E = Entity.Alive[Id]
     if not E then
@@ -25,6 +24,7 @@ function Entity.GetEntityFromId(Id)
     end
 end
 
+-- fires event on ancestry change in parent-child pairs
 -- Parent, Child, "add"|"remove"
 Entity.OnAncestryChanged = SignalLib.new(true)
 Entity.EntityAdded = SignalLib.new(true)
@@ -150,6 +150,7 @@ local function DestroyEntity(Ent)
     TagService_ClearTags(Ent.Id)
 
     Component.__RemoveAllComponents(Ent)
+
     rawset(Ent, "IsNull", true)
 end
 
@@ -172,8 +173,8 @@ Entity.__ConnectDestructors = function()
 
     RS.BindToStep("__DESTRUCTION_FRAME_ENTITY", Enum.StepPriority.EntityDestruction, function()
         for Ent in pairs(ToKill) do
-            DestroyEntity(Ent)
             ToKill[Ent] = nil
+            DestroyEntity(Ent)
         end
     end)
 
